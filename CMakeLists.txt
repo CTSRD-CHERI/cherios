@@ -40,6 +40,18 @@ set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 enable_language(C)
 enable_language(ASM)
 
+# now that we have set up the compile flags
+include(CheckCSourceCompiles)
+check_c_source_compiles([===[
+#if !__has_feature(capabilities)
+#error need compiler with capability support
+#endif
+int main(int argc, char** argv) { return 0; }
+]===] HAVE_CAPABILITIES)
+if(NOT HAVE_CAPABILITIES)
+    message(FATAL_ERROR "Compiler doesn't have capabilities support, set CHERI_SDK_DIR correctly.")
+endif()
+
 include_directories(include)
 
 add_subdirectory(kernel)
