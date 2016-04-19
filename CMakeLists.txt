@@ -3,13 +3,37 @@ cmake_minimum_required(VERSION 3.4)
 # before it checks the C compiler features. We can then use enable_language()
 # to initialize all the C and ASM rules
 project(CheriOS LANGUAGES NONE VERSION 0.0.1)
-find_package(CheriSDK REQUIRED PATHS
+
+# first look for the CheriSDKConfig.cmake file installed by cheribuild.py
+# if not fall back to finding the sdk build by build_sdk.sh
+if(CHERI_SDK_DIR)
+    # CheriSDK_DIR should point to where the CMake config file is stored
+    set(CheriSDK_DIR "${CHERI_SDK_DIR}/share/cmake/CheriSDK")
+    message(STATUS "Looking for CheriSDKConfig.cmake in ${CheriSDK_DIR}")
+endif()
+find_package(CheriSDK QUIET HINTS
     $ENV{HOME}/sdk/sdk
     $ENV{HOME}/cheri/output/sdk
     $ENV{HOME}/cheri/output/sdk256
 )
+if(CheriSDK_FOUND)
+    message(STATUS "Found CheriSDKConfig.cmake in ${CheriSDK_DIR}")
+else()
+    if(NOT CHERI_SDK_DIR)
+        message(FATAL_ERROR "Could not determine location of CHERI SDK. Set CHERI_SDK_DIR to the SDK root directory.")
+    endif()
+    message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
+    set(CheriSDK_SYSROOT_DIR "${CHERI_SDK_DIR}/sysroot")
+    set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
+    set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
+    set(CheriSDK_CXX "${CheriSDK_TOOLCHAIN_DIR}/clang++")
+    if(NOT EXISTS "${CheriSDK_CC}")
+        message(FATAL_ERROR "CHERI_SDK_DIR set but could not find clang at ${CheriSDK_CC}")
+    endif()
+endif()
+
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
-set(CMAKE_ASM_COMPILER_ID "Clang")
+set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
