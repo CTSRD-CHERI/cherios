@@ -88,7 +88,7 @@ add_executable(kernel
     ${KERNEL_SRCS}
     ${KERNEL_ASM_SRCS}
 )
-set(KERNEL_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/ldscripts/kernel.ld")
+set(KERNEL_LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/ldscripts/kernel.ld")
 target_link_libraries(kernel
     -cheri-linker
     "-L${CMAKE_SOURCE_DIR}/ldscripts" # to find the included mips.ld linker script
@@ -98,7 +98,10 @@ target_link_libraries(kernel
     -nostartfiles
     -nodefaultlibs
 )
-set_target_properties(kernel PROPERTIES LINK_DEPENDS ${KERNEL_LINKER_SCRIPT})
+# add the linker scripts as dependencies
+set_target_properties(kernel PROPERTIES
+    LINK_DEPENDS "${KERNEL_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
+)
 add_subdirectory(../libuser ${CMAKE_CURRENT_BINARY_DIR}/../libuser) # HACK: build libuser with the right compiler flags
 target_link_libraries(kernel user)
 
