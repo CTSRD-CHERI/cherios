@@ -101,6 +101,7 @@ target_link_libraries(kernel
 # add the linker scripts as dependencies
 set_target_properties(kernel PROPERTIES
     LINK_DEPENDS "${KERNEL_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
+    OUTPUT_NAME "kernel.elf"
 )
 add_subdirectory(../libuser ${CMAKE_CURRENT_BINARY_DIR}/../libuser) # HACK: build libuser with the right compiler flags
 target_link_libraries(kernel user)
