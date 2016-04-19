@@ -109,4 +109,11 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump
 )
 add_custom_target(kernel_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump)
 
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump
+    DEPENDS kernel
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:kernel>" > "${CMAKE_CURRENT_BINARY_DIR}/kernel.dump"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+add_custom_target(kernel_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump)
+
 
