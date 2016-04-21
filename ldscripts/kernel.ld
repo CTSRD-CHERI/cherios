@@ -66,16 +66,16 @@ SECTIONS
 		*(.MIPS.options)
 	}
 	.ctors ALIGN(CAP_ALIGN) : {
-		KEEP (../obj/kernel/crtbeginC.o(.ctors))
-		KEEP (*(EXCLUDE_FILE (../obj/kernel/crtendC.o) .ctors))
+		KEEP (*/crtbeginC.o(.ctors))
+		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
 		KEEP (*(SORT(.ctors.*)))
-		KEEP (../obj/kernel/crtendC.o(.ctors))
+		KEEP (*/crtendC.o(.ctors))
 	}
 	.dtors ALIGN(CAP_ALIGN) : {
-		KEEP (../obj/kernel/crtbeginC.o(.dtors))
-		KEEP (*(EXCLUDE_FILE (../obj/kernel/crtendC.o) .dtors))
+		KEEP (*/crtbeginC.o(.dtors))
+		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
 		KEEP (*(SORT(.dtors.*)))
-		KEEP (../obj/kernel/crtendC.o(.dtors))
+		KEEP (*/crtendC.o(.dtors))
 	}
 	.preinit_array ALIGN(CAP_ALIGN) : {
 		PROVIDE_HIDDEN (__preinit_array_start = .);
