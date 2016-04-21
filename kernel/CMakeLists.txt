@@ -7,7 +7,7 @@ set(LIBKERNEL_ASM_SRCS
 )
 
 # fs.S depends on the fs.img file
-set_source_files_properties(src/exception.S PROPERTIES
+set_source_files_properties(src/fs.S PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
 )
 # we have to include ${CMAKE_CURRENT_BINARY_DIR} for all files and not just fs.c
