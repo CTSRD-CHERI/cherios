@@ -90,7 +90,7 @@ set_target_properties(kernel PROPERTIES
     LINK_DEPENDS "${KERNEL_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
     OUTPUT_NAME "kernel.elf"
 )
-target_link_libraries(kernel user)
+target_link_libraries(kernel CheriOS::LibUser)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump
     DEPENDS kernel

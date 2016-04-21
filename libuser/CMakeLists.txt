@@ -21,3 +21,4 @@ set(LIBUSER_SRCS
 )
 
 add_library(user STATIC ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
+add_library(CheriOS::LibUser ALIAS user)
