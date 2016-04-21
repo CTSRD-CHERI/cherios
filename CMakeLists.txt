@@ -127,7 +127,6 @@ set(CHERIOS_FILESYSTEM_DIR "${CMAKE_BINARY_DIR}/fs")
 # Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
 function(add_cherios_executable _target)
     cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
-    message(STATUS "add_exe_LINKER_SCRIPT: ${add_exe_LINKER_SCRIPT}")
     if(NOT add_exe_LINKER_SCRIPT)
         message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
     elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
@@ -135,7 +134,7 @@ function(add_cherios_executable _target)
     endif()
     set(_srcs ${add_exe_SOURCES})
     list(LENGTH _srcs _src_count)
-    message("Adding executable ${_target} with ${_src_count} source files")
+    message("Adding executable ${_target} with ${_src_count} source files and linker script ${add_exe_LINKER_SCRIPT}")
     if("${_src_count}" LESS 1)
         message(FATAL_ERROR "No sources passed to add_cherios_executable()")
     endif()
@@ -159,21 +158,19 @@ function(add_cherios_executable _target)
         LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
         OUTPUT_NAME "${_target}.elf"
     )
-    # create the dump file:
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump
-        DEPENDS ${_target}
-        COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-    add_custom_target(${_target}_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump)
     target_link_libraries(${_target} CheriOS::LibUser)
     
     # add it to the filesystem dir if requested
     if(add_exe_ADD_TO_FILESYSTEM)
         set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
-        add_custom_command(TARGET ${_target} POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists
+        add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+            # make sure the directory exists
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
+            # copy the binary to the fs root directory
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
+            # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
+            COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+
         )
         # Using a CACHE INTERNAL variable ensures that changes are globally visible
         set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
