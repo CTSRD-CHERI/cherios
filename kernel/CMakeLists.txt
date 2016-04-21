@@ -30,6 +30,18 @@ set(LIBKERNEL_ASM_SRCS
     src/fs.S
     src/init.S
 )
+
+# fs.S depends on the fs.img file
+set_source_files_properties(src/exception.S PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
+)
+# we have to include ${CMAKE_CURRENT_BINARY_DIR} for all files and not just fs.c
+# because CMake strips include paths from the COMPILE_FLAGS source file property
+include_directories(${CMAKE_CURRENT_BINARY_DIR}) # to find fs.img
+# set_source_files_properties(src/exception.S PROPERTIES
+#     COMPILE_FLAGS "-I${CMAKE_CURRENT_BINARY_DIR}/foo"
+# )
+
 set(LIBKERNEL_SRCS
     src/ccall.c
     src/cp0.c
@@ -120,4 +132,8 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump
 )
 add_custom_target(kernel_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump)
 
-
+# TODO: actually create fs.img
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img
+    COMMAND echo 123456 > "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
