@@ -171,14 +171,12 @@ function(add_cherios_executable _target)
     # add it to the filesystem dir if requested
     if(add_exe_ADD_TO_FILESYSTEM)
         set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
-        add_custom_command(OUTPUT ${_fs_target_path} DEPENDS ${_target}
+        add_custom_command(TARGET ${_target} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
-            # COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/fs.stamp
         )
-        set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_fs_target_path} CACHE INTERNAL "dependencies for filesystem")
-        set(CHERIOS_FILESYSTEM_DEPENDS_TARGETS ${CHERIOS_FILESYSTEM_DEPENDS_TARGETS} ${_target} CACHE INTERNAL "targets for filesystem")
-
+        # Using a CACHE INTERNAL variable ensures that changes are globally visible
+        set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
     endif()
 endfunction()
 
