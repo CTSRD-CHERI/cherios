@@ -66,12 +66,37 @@ set(ASM_COMPILER_FLAGS
 set(C_COMPILER_FLAGS
     ${ASM_COMPILER_FLAGS}
     -nostdinc
-    -O2
+    -O2 # TODO: make this depend on the configuration
     -G0
     -mxgot
     -Werror
+    -std=c11
 )
-# Use strange CMake generator expressions to set per-language compile flags
+set(C_WARNING_FLAGS
+    -Wall
+    -Wextra
+    -Wdisabled-optimization
+    -Wformat=2
+    -Winit-self
+    -Winline
+    -Wpointer-arith
+    -Wredundant-decls
+    -Wswitch-default
+    -Wswitch-enum
+    -Wundef
+    -Wwrite-strings
+    -Wshadow
+#    -Wcast-align
+#    -Wcast-qual
+#    -Wconversion
+
+    -Wno-error=unused-function
+    -Wno-error=unused-variable
+    -Wno-error=unused-parameter
+)
+set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
+
+# Use the strange CMake generator expressions to set per-language compile flags
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_COMPILER_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 
