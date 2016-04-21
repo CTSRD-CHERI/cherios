@@ -43,16 +43,6 @@ set(LINKKERNEL_SRCS
     src/crtendC.c
 )
 
-#
-# Configure a console driver at compile time.  Default to the UART found in
-# the MALTA reference board ("malta").  Other options are "altera" for the
-# ALTERA JTAG UART used for BERI on FPGA, and "gxemul" for the GXemul
-# low-level console device.
-#
-set(CONSOLE "malta" CACHE STRING 
-"The console driver to use. Defaults to the UART found in the MALTA reference \
-board (\"malta\").  Other options are \"altera\" for the ALTERA JTAG UART \
-used for BERI on FPGA, and \"gxemul\" for the GXemul low-level console device.")
 if("${CONSOLE}" STREQUAL "malta")
     list(APPEND LIBKERNEL_SRCS src/uart_malta.c)
 elseif("${CONSOLE}" STREQUAL "altera")
@@ -63,14 +53,12 @@ else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
 
-add_cherios_executable(cherios LINKER_SCRIPT kernel.ld
+add_cherios_executable(cherios LINKER_SCRIPT kernel.ld SOURCES
     ${LIBKERNEL_SRCS}
     ${LIBKERNEL_ASM_SRCS}
     ${KERNEL_SRCS}
     ${KERNEL_ASM_SRCS}
 )
-target_link_libraries(cherios CheriOS::LibUser)
-
 
 # TODO: actually create fs.img
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img

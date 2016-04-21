@@ -104,16 +104,22 @@ add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 # for now we always want it
 add_compile_options(-g)
 
+# Usage: add_cherios_executable(target LINKERSCRIPT sandbox.ld SOURCES src1...)
 function(add_cherios_executable _target)
-    cmake_parse_arguments(add_exe "" "LINKER_SCRIPT" "" ${ARGN})
+    cmake_parse_arguments(add_exe "" "LINKER_SCRIPT" "SOURCES" ${ARGN})
     message(STATUS "add_exe_LINKER_SCRIPT: ${add_exe_LINKER_SCRIPT}")
-    set(_srcs ${add_exe_UNPARSED_ARGUMENTS})
-    message("Adding executable ${_target} sources: ${_srcs}")
     if(NOT add_exe_LINKER_SCRIPT)
         message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
     elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
         message(FATAL_ERROR "Chosen LINKER_SCRIPT ${add_exe_LINKER_SCRIPT} does not exist!")
     endif()
+    set(_srcs ${add_exe_SOURCES})
+    list(LENGTH _srcs _src_count)
+    message("Adding executable ${_target} with ${_src_count} source files")
+    if("${_src_count}" LESS 1)
+        message(FATAL_ERROR "No sources passed to add_cherios_executable()")
+    endif()
+
     add_executable(${_target} ${_srcs})
     # Tell the compiler to use the specified linker script
     target_link_libraries(${_target}
@@ -140,7 +146,22 @@ function(add_cherios_executable _target)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
     add_custom_target(${_target}_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump)
+    target_link_libraries(${_target} CheriOS::LibUser)
 endfunction()
 
+#
+# Configure a console driver at compile time.  Default to the UART found in
+# the MALTA reference board ("malta").  Other options are "altera" for the
+# ALTERA JTAG UART used for BERI on FPGA, and "gxemul" for the GXemul
+# low-level console device.
+#
+set(CONSOLE "malta" CACHE STRING
+"The console driver to use. Defaults to the UART found in the MALTA reference \
+board (\"malta\").  Other options are \"altera\" for the ALTERA JTAG UART \
+used for BERI on FPGA, and \"gxemul\" for the GXemul low-level console device.")
+
 add_subdirectory(libuser)
+add_subdirectory(prga)
+add_subdirectory(sockets)
+add_subdirectory(uart)
 add_subdirectory(kernel)
