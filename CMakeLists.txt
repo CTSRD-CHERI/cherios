@@ -11,6 +11,13 @@ if(CHERI_SDK_DIR)
     set(CheriSDK_DIR "${CHERI_SDK_DIR}/share/cmake/CheriSDK")
     message(STATUS "Looking for CheriSDKConfig.cmake in ${CheriSDK_DIR}")
 endif()
+
+set(GUESSED_CHERISDK_LOCATIONS
+    $ENV{HOME}/sdk/sdk
+    $ENV{HOME}/cheri/output/sdk
+    $ENV{HOME}/cheri/output/sdk256
+)
+
 find_package(CheriSDK QUIET HINTS
     $ENV{HOME}/sdk/sdk
     $ENV{HOME}/cheri/output/sdk
@@ -20,6 +27,15 @@ if(CheriSDK_FOUND)
     message(STATUS "Found CheriSDKConfig.cmake in ${CheriSDK_DIR}")
 else()
     if(NOT CHERI_SDK_DIR)
+        # try to find clang in one of the guessed locations
+        foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
+            if(EXISTS "${guess}/bin/clang")
+                set(CHERI_SDK_DIR ${guess})
+                break()
+            endif()
+        endforeach()
+    endif()
+    if(NOT CHERI_SDK_DIR)
         message(FATAL_ERROR "Could not determine location of CHERI SDK. Set CHERI_SDK_DIR to the SDK root directory.")
     endif()
     message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
@@ -27,7 +43,9 @@ else()
     set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
     set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
     set(CheriSDK_CXX "${CheriSDK_TOOLCHAIN_DIR}/clang++")
-    if(NOT EXISTS "${CheriSDK_CC}")
+    if(EXISTS "${CheriSDK_CC}")
+        message(STATUS "Found CHERI Clang: ${CheriSDK_CC}")
+    else()
         message(FATAL_ERROR "CHERI_SDK_DIR set but could not find clang at ${CheriSDK_CC}")
     endif()
 endif()
@@ -40,7 +58,6 @@ set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 enable_language(C)
 enable_language(ASM)
 
-# now that we have set up the compile flags
 include(CheckCSourceCompiles)
 check_c_source_compiles([===[
 #if !__has_feature(capabilities)
