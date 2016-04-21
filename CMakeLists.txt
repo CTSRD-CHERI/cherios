@@ -123,6 +123,7 @@ add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 add_compile_options(-g)
 
 set(CHERIOS_FILESYSTEM_DIR "${CMAKE_BINARY_DIR}/fs")
+set(CHERIOS_FILESYSTEM_DEPENDS "" CACHE INTERNAL "dependencies for filesystem")
 
 # Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
 function(add_cherios_executable _target)
