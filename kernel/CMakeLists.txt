@@ -68,7 +68,7 @@ message(STATUS "Filesystem requires ${_fs_dep_count} files: ${CHERIOS_FILESYSTEM
 if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     # Don't make the fs too large, it might break the whole elf without warning
     # Max tested ok: 1M TODO:find limit TODO:remove limit
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS}
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} VERBATIM
         COMMAND mkdir -p "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists first
         # create the timestamp file
         COMMAND date > "${CHERIOS_FILESYSTEM_DIR}/t1"
@@ -78,7 +78,7 @@ if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
     )
 else()
     message(WARNING "Cannot create file system on non-FreeBSD (yet)!")
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS}
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} VERBATIM
         COMMAND echo "WARNING: cannot create file system on non-FreeBSD (yet)!"
         # create a dummy file
         COMMAND echo 123456 > "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
