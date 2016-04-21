@@ -63,48 +63,14 @@ else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
 
-# add_library(libkernel STATIC ${LIBKERNEL_SRCS})
-# # CMake prepends "lib" to library names but in this case we
-# # don't want that as we add an executable called kernel
-# # XXX: we could also call the executable cherios_kernel or similar
-# set_target_properties(libkernel PROPERTIES PREFIX "")
-
-add_executable(kernel
+add_cherios_executable(cherios LINKER_SCRIPT kernel.ld
     ${LIBKERNEL_SRCS}
     ${LIBKERNEL_ASM_SRCS}
     ${KERNEL_SRCS}
     ${KERNEL_ASM_SRCS}
 )
-set(KERNEL_LINKER_SCRIPT "${CMAKE_SOURCE_DIR}/ldscripts/kernel.ld")
-target_link_libraries(kernel
-    -cheri-linker
-    "-L${CMAKE_SOURCE_DIR}/ldscripts" # to find the included mips.ld linker script
-    -Wl "-T${KERNEL_LINKER_SCRIPT}"
-    -G0
-    -mxgot
-    -nostartfiles
-    -nodefaultlibs
-)
-# add the linker scripts as dependencies
-set_target_properties(kernel PROPERTIES
-    LINK_DEPENDS "${KERNEL_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
-    OUTPUT_NAME "kernel.elf"
-)
-target_link_libraries(kernel CheriOS::LibUser)
+target_link_libraries(cherios CheriOS::LibUser)
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump
-    DEPENDS kernel
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:kernel>" > "${CMAKE_CURRENT_BINARY_DIR}/kernel.dump"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-add_custom_target(kernel_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump)
-
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump
-    DEPENDS kernel
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:kernel>" > "${CMAKE_CURRENT_BINARY_DIR}/kernel.dump"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
-add_custom_target(kernel_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump)
 
 # TODO: actually create fs.img
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img
