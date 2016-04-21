@@ -60,8 +60,30 @@ add_cherios_executable(cherios LINKER_SCRIPT kernel.ld SOURCES
     ${KERNEL_ASM_SRCS}
 )
 
-# TODO: actually create fs.img
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img
-    COMMAND echo 123456 > "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-)
+# Create the file system
+# HACK to make sure that file system is rebuilt after one of the targets changes
+list(LENGTH CHERIOS_FILESYSTEM_DEPENDS _fs_dep_count)
+message(STATUS "Filesystem requires ${_fs_dep_count} files: ${CHERIOS_FILESYSTEM_DEPENDS}")
+
+if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
+    # Don't make the fs too large, it might break the whole elf without warning
+    # Max tested ok: 1M TODO:find limit TODO:remove limit
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${CHERIOS_FILESYSTEM_DEPENDS_TARGETS}
+        COMMAND mkdir -p "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists first
+        # create the timestamp file
+        COMMAND date > "${CHERIOS_FILESYSTEM_DIR}/t1"
+        # now build the file system
+        COMMAND makefs -s 256k -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+else()
+    message(WARNING "Cannot create file system on non-FreeBSD (yet)!")
+    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS "${CMAKE_BINARY_DIR}/fs.stamp"
+        COMMAND echo "WARNING: cannot create file system on non-FreeBSD (yet)!"
+        # create a dummy file
+        COMMAND echo 123456 > "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    )
+endif()
+
+add_custom_target(filesystem DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fs.img)

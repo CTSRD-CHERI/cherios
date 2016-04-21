@@ -7,4 +7,4 @@ set(PRGA_SRCS
     src/sockets.c
 )
 
-add_cherios_executable(prga LINKER_SCRIPT sandbox.ld SOURCES ${PRGA_SRCS})
+add_cherios_executable(prga ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${PRGA_SRCS})

@@ -58,6 +58,7 @@ set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 enable_language(C)
 enable_language(ASM)
 
+include(CMakeParseArguments)
 include(CheckCSourceCompiles)
 check_c_source_compiles([===[
 #if !__has_feature(capabilities)
@@ -121,9 +122,11 @@ add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 # for now we always want it
 add_compile_options(-g)
 
-# Usage: add_cherios_executable(target LINKERSCRIPT sandbox.ld SOURCES src1...)
+set(CHERIOS_FILESYSTEM_DIR "${CMAKE_BINARY_DIR}/fs")
+
+# Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
 function(add_cherios_executable _target)
-    cmake_parse_arguments(add_exe "" "LINKER_SCRIPT" "SOURCES" ${ARGN})
+    cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
     message(STATUS "add_exe_LINKER_SCRIPT: ${add_exe_LINKER_SCRIPT}")
     if(NOT add_exe_LINKER_SCRIPT)
         message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
@@ -164,6 +167,19 @@ function(add_cherios_executable _target)
     )
     add_custom_target(${_target}_dump ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump)
     target_link_libraries(${_target} CheriOS::LibUser)
+    
+    # add it to the filesystem dir if requested
+    if(add_exe_ADD_TO_FILESYSTEM)
+        set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
+        add_custom_command(OUTPUT ${_fs_target_path} DEPENDS ${_target}
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
+            # COMMAND ${CMAKE_COMMAND} -E touch ${CMAKE_BINARY_DIR}/fs.stamp
+        )
+        set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_fs_target_path} CACHE INTERNAL "dependencies for filesystem")
+        set(CHERIOS_FILESYSTEM_DEPENDS_TARGETS ${CHERIOS_FILESYSTEM_DEPENDS_TARGETS} ${_target} CACHE INTERNAL "targets for filesystem")
+
+    endif()
 endfunction()
 
 #

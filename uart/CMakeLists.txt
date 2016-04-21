@@ -18,4 +18,4 @@ else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
 
-add_cherios_executable(uart LINKER_SCRIPT sandbox.ld SOURCES ${UART_SRCS})
+add_cherios_executable(uart ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${UART_SRCS})

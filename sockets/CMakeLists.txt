@@ -7,4 +7,4 @@ set(SOCKETS_SRCS
     src/sockets.c
 )
 
-add_cherios_executable(sockets LINKER_SCRIPT sandbox.ld SOURCES ${SOCKETS_SRCS})
+add_cherios_executable(sockets ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${SOCKETS_SRCS})
