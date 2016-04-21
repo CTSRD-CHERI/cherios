@@ -1,28 +1,3 @@
-set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
-set(ASM_COMPILER_FLAGS
-    -mcpu=mips4
-    -mabi=sandbox
-    -cheri-linker
-    -integrated-as
-    -msoft-float
-    # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
-)
-set(C_COMPILER_FLAGS
-    ${ASM_COMPILER_FLAGS}
-    -nostdinc
-    -O2
-    -G0
-    -mxgot
-    -Werror
-)
-# Use strange CMake generator expressions to set per-language compile flags
-add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_COMPILER_FLAGS}>")
-add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
-
-# TODO: only add -g when CMAKE_BUILD_TYPE == Debug
-# for now we always want it
-add_compile_options(-g)
-
 include_directories(include)
 
 set(LIBKERNEL_ASM_SRCS
@@ -115,7 +90,6 @@ set_target_properties(kernel PROPERTIES
     LINK_DEPENDS "${KERNEL_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
     OUTPUT_NAME "kernel.elf"
 )
-add_subdirectory(../libuser ${CMAKE_CURRENT_BINARY_DIR}/../libuser) # HACK: build libuser with the right compiler flags
 target_link_libraries(kernel user)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.dump
