@@ -123,6 +123,7 @@ add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 add_compile_options(-g)
 
 set(CHERIOS_FILESYSTEM_DIR "${CMAKE_BINARY_DIR}/fs")
+add_custom_target(filesystem_binaries)
 
 # Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
 function(add_cherios_executable _target)
@@ -172,8 +173,7 @@ function(add_cherios_executable _target)
             COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
 
         )
-        # Using a CACHE INTERNAL variable ensures that changes are globally visible
-        set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
+        add_dependencies(filesystem_binaries ${_target})
     endif()
 endfunction()
 
