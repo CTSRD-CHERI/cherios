@@ -79,6 +79,7 @@ set(ASM_COMPILER_FLAGS
     -cheri-linker
     -integrated-as
     -msoft-float
+    -fcolor-diagnostics
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
 set(C_COMPILER_FLAGS
