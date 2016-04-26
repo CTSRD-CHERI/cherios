@@ -54,7 +54,27 @@ set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
-set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
+# make sure we compile for cheri:
+set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
+# sysroot should not be needed as we are in a freestanding environment
+# set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
+
+# For some reason ranlib doesn't like our static library:
+#   ranlib: libuser.a: File format is ambiguous
+#   ranlib: Matching formats: elf64-tradbigmips ecoff-bigmips ecoff-littlemips
+#   libuser/CMakeFiles/user.dir/build.make:468: recipe for target 'libuser/libuser.a' failed
+# As it is not required we can simply use /usr/bin/true instead
+set(CMAKE_RANLIB "/bin/true" CACHE INTERNAL "ranlib string" FORCE)
+
+# If we don't set -nostartfiles -nodefaultlibs in CMAKE_EXE_LINKER_FLAGS,
+# CMake will try to link ctr1.o into the executable and this might not exist
+# We don't need it as we are building in a freestanding environment here anyway
+# adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
+set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -G0 -mxgot"
+    CACHE INTERNAL "Flags used by the linker" FORCE)
+cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 enable_language(C)
 enable_language(ASM)
 
@@ -72,7 +92,6 @@ endif()
 
 include_directories(include)
 # set up the right flags for C and ASM sources
-set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
 set(ASM_COMPILER_FLAGS
     -mcpu=mips4
     -mabi=sandbox
