@@ -79,9 +79,10 @@ if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
 else()
     message(WARNING "Cannot create file system on non-FreeBSD (yet)!")
     add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} VERBATIM
-        COMMAND echo "WARNING: cannot create file system on non-FreeBSD (yet)!"
+        COMMAND echo "WARNING: cannot create a UFS2 file system on non-FreeBSD (yet)!"
+        COMMAND echo "WARNING: Creating a simple TAR archive instead!"
         # create a dummy file
-        COMMAND echo 123456 > "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
+        COMMAND tar cf "${CMAKE_CURRENT_BINARY_DIR}/fs.img" -C "${CHERIOS_FILESYSTEM_DIR}" "."
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     )
 endif()
