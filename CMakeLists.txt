@@ -64,6 +64,13 @@ set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
 # sysroot should not be needed as we are in a freestanding environment
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
+
+# For some reason ranlib doesn't like our static library:
+#   ranlib: libuser.a: File format is ambiguous
+#   ranlib: Matching formats: elf64-tradbigmips ecoff-bigmips ecoff-littlemips
+#   libuser/CMakeFiles/user.dir/build.make:468: recipe for target 'libuser/libuser.a' failed
+# As it is not required we can simply use /usr/bin/true instead
+set(CMAKE_RANLIB "/usr/bin/true" CACHE INTERNAL "ranlib string" FORCE)
 enable_language(C)
 enable_language(ASM)
 
