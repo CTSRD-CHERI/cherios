@@ -54,7 +54,16 @@ set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
-set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
+# If we don't set this it will attempt to compile a test program that links agains cheribsd stuff
+# This might not be installed yet and is not required. Just having the CHERI clang should be enough
+set(CMAKE_C_COMPILER_WORKS TRUE)
+set(CMAKE_CXX_COMPILER_WORKS TRUE)
+set(CMAKE_ASM_COMPILER_WORKS TRUE)
+# make sure we compile for cheri:
+set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
+# sysroot should not be needed as we are in a freestanding environment
+# set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 enable_language(C)
 enable_language(ASM)
 
@@ -72,7 +81,6 @@ endif()
 
 include_directories(include)
 # set up the right flags for C and ASM sources
-set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
 set(ASM_COMPILER_FLAGS
     -mcpu=mips4
     -mabi=sandbox
