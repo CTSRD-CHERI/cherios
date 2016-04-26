@@ -54,11 +54,6 @@ set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
-# If we don't set this it will attempt to compile a test program that links agains cheribsd stuff
-# This might not be installed yet and is not required. Just having the CHERI clang should be enough
-set(CMAKE_C_COMPILER_WORKS TRUE)
-set(CMAKE_CXX_COMPILER_WORKS TRUE)
-set(CMAKE_ASM_COMPILER_WORKS TRUE)
 # make sure we compile for cheri:
 set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
@@ -71,6 +66,14 @@ set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
 #   libuser/CMakeFiles/user.dir/build.make:468: recipe for target 'libuser/libuser.a' failed
 # As it is not required we can simply use /usr/bin/true instead
 set(CMAKE_RANLIB "/usr/bin/true" CACHE INTERNAL "ranlib string" FORCE)
+
+# If we don't set -nostartfiles -nodefaultlibs in CMAKE_EXE_LINKER_FLAGS,
+# CMake will try to link ctr1.o into the executable and this might not exist
+# We don't need it as we are building in a freestanding environment here anyway
+# adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
+set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -G0 -mxgot"
+    CACHE INTERNAL "Flags used by the linker" FORCE)
+cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 enable_language(C)
 enable_language(ASM)
 
