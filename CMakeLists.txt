@@ -55,6 +55,7 @@ set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this 
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # make sure we compile for cheri:
+set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
 # sysroot should not be needed as we are in a freestanding environment
@@ -136,6 +137,9 @@ set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 # Use the strange CMake generator expressions to set per-language compile flags
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_COMPILER_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
+# CMAKE_ASM_COMPILER_TARGET seems to be ignored:
+add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:--target=cheri-unknown-freebsd>")
+
 
 # TODO: only add -g when CMAKE_BUILD_TYPE == Debug
 # for now we always want it
