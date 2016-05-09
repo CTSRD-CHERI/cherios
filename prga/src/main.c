@@ -166,7 +166,7 @@ main(int argc, __attribute__((unused)) char *argv[])
 	/* Initialize functions from libuser_init that are CCalls */
 	libuser_init(0);
 
-	/* Use the UART module to print an Hello Zolrd */
+	/* Use the UART module to print an Hello World */
 	void * u_cb = get_object(1);
 	void ** u_methods = get_methods(1);
 	assert(u_cb != NULL);
@@ -178,7 +178,7 @@ main(int argc, __attribute__((unused)) char *argv[])
 	printf("OK done!\n");
 	ssleep(-1);
 	#endif
-
+	
 	/* Initialize CCalls to the sockets module */
 	s_cb = get_object(2);
 	s_methods = get_methods(2);

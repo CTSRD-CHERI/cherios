@@ -91,7 +91,6 @@ __init_heap(size_t pagesz)
 void *
 __rederive_pointer(void *ptr)
 {
-	size_t i;
 	caddr_t addr, base;
 
 	addr = cheri_getbase(ptr) + cheri_getoffset(ptr);

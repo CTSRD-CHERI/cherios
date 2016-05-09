@@ -65,26 +65,15 @@ add_cherios_executable(cherios LINKER_SCRIPT kernel.ld SOURCES
 list(LENGTH CHERIOS_FILESYSTEM_DEPENDS _fs_dep_count)
 message(STATUS "Filesystem requires ${_fs_dep_count} files: ${CHERIOS_FILESYSTEM_DEPENDS}")
 
-if(CMAKE_SYSTEM_NAME MATCHES "FreeBSD")
-    # Don't make the fs too large, it might break the whole elf without warning
-    # Max tested ok: 1M TODO:find limit TODO:remove limit
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} VERBATIM
-        COMMAND mkdir -p "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists first
-        # create the timestamp file
-        COMMAND date > "${CHERIOS_FILESYSTEM_DIR}/t1"
-        # now build the file system
-        COMMAND makefs -s 256k -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-else()
-    message(WARNING "Cannot create file system on non-FreeBSD (yet)!")
-    add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} VERBATIM
-        COMMAND echo "WARNING: cannot create a UFS2 file system on non-FreeBSD (yet)!"
-        COMMAND echo "WARNING: Creating a simple TAR archive instead!"
-        # create a dummy file
-        COMMAND tar cf "${CMAKE_CURRENT_BINARY_DIR}/fs.img" -C "${CHERIOS_FILESYSTEM_DIR}" "."
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    )
-endif()
+# Don't make the fs too large, it might break the whole elf without warning
+# Max tested ok: 1M TODO:find limit TODO:remove limit
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} VERBATIM
+    COMMAND mkdir -p "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists first
+    # create the timestamp file
+    COMMAND date > "${CHERIOS_FILESYSTEM_DIR}/t1"
+    # now build the file system
+    COMMAND makefs -s 256k -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
 
 add_custom_target(filesystem DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fs.img)

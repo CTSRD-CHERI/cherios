@@ -208,4 +208,12 @@ cheri_zerocap(void)
 	   cheri_getlen(cap),						\
 	   cheri_getoffset(cap))
 
+#define CHERI_PRINT_CAP_LITE(cap)					\
+	printf("t:%x s:%x b:0x%16jx l:0x%16zx o:0x%jx",			\
+	   cheri_gettag(cap),						\
+	   cheri_getsealed(cap),					\
+	   cheri_getbase(cap),						\
+	   cheri_getlen(cap),						\
+	   cheri_getoffset(cap))
+
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */
