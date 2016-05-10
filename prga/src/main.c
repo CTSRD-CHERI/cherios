@@ -179,6 +179,12 @@ main(int argc, __attribute__((unused)) char *argv[])
 	ssleep(-1);
 	#endif
 	
+	#if 0
+	int * null = NULL;
+	int a = null[0];
+	printf("a:%d\n", a);
+	#endif
+	
 	/* Initialize CCalls to the sockets module */
 	s_cb = get_object(2);
 	s_methods = get_methods(2);

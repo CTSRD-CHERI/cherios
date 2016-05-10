@@ -331,7 +331,7 @@ mips_iowrite_uint32le(vaddr_t vaddr, uint32_t v)
 }
 
 /*
- * Capability versions of 8-bit I/O routines.
+ * Capability versions of I/O routines.
  */
 static inline uint8_t
 mips_cap_ioread_uint8(void * cap, size_t offset)
@@ -348,6 +348,40 @@ mips_cap_iowrite_uint8(void * cap, size_t offset, uint8_t v)
 {
 	__asm__ __volatile__ ("csb %[v], %[offset],  0(%[cap])"
 	              :: [cap] "C" (cap), [offset] "r" (offset), [v] "r" (v));
+}
+
+static inline uint32_t
+mips_cap_ioread_uint32(void * cap, size_t offset)
+{
+	uint32_t v;
+	__asm__ __volatile__ ("clw %[v], %[offset],  0(%[cap])"
+	                      : [v] "=r" (v)
+	                      : [cap] "C" (cap), [offset] "r" (offset));
+	return (v);
+}
+
+static inline void
+mips_cap_iowrite_uint32(void * cap, size_t offset, uint32_t v)
+{
+	__asm__ __volatile__ ("csw %[v], %[offset],  0(%[cap])"
+	              :: [cap] "C" (cap), [offset] "r" (offset), [v] "r" (v));
+}
+
+/*
+ * Capability little-endian versions of 32-bit I/O routines.
+ */
+static inline uint32_t
+mips_cap_ioread_uint32le(void * cap, size_t offset)
+{
+
+	return (byteswap32(mips_cap_ioread_uint32(cap, offset)));
+}
+
+static inline void
+mips_cap_iowrite_uint32le(void * cap, size_t offset, uint32_t v)
+{
+
+	mips_cap_iowrite_uint32(cap, offset, byteswap32(v));
 }
 
 /*

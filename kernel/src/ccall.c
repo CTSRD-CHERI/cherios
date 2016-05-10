@@ -150,11 +150,21 @@ static void * object_register_cap(int nb) {
 	void * cap = NULL;
 	switch(nb) {
 		case 1:{}
-			#define	MALTA_UART_BASE	0x180003f8
-			void * malta_cap = __builtin_memcap_global_data_get();
-			malta_cap = __builtin_memcap_offset_set(malta_cap, mips_phys_to_uncached(MALTA_UART_BASE));
-			malta_cap = __builtin_memcap_bounds_set(malta_cap, 0x400);
-			cap = malta_cap; //TODO:other uarts
+			#ifdef CONSOLE_malta
+				#define	UART_BASE	0x180003f8
+				#define	UART_SIZE	0x40
+
+
+			#elif defined(CONSOLE_altera)
+				#define	UART_BASE	0x7f000000
+				#define	UART_SIZE	0x08
+			#else
+			#error UART type not found
+			#endif
+			cap = cheri_getdefault();
+			cap = cheri_setoffset(cap,
+			    mips_phys_to_uncached(UART_BASE));
+			cap = cheri_setbounds(cap, UART_SIZE);
 			break;
 		default:{}
 	}

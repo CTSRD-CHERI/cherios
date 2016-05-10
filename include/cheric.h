@@ -91,7 +91,7 @@
 
 #define	cheri_local(c)		cheri_andperm((c), ~CHERI_PERM_GLOBAL)
 
-#define	cheri_csetbounds(x, y)	__builtin_memcap_bounds_set(		\
+#define	cheri_setbounds(x, y)	__builtin_memcap_bounds_set(		\
 				    __DECONST(__capability void *, (x)), (y))
 
 /*
@@ -118,7 +118,7 @@ cheri_codeptr(const void *ptr, size_t len)
 #endif
 
 	/* Assume CFromPtr without base set, availability of CSetBounds. */
-	return (cheri_csetbounds(c, len));
+	return (cheri_setbounds(c, len));
 }
 
 static __inline __capability void *
@@ -134,7 +134,7 @@ cheri_ptr(const void *ptr, size_t len)
 {
 
 	/* Assume CFromPtr without base set, availability of CSetBounds. */
-	return (cheri_csetbounds((const __capability void *)ptr, len));
+	return (cheri_setbounds((const __capability void *)ptr, len));
 }
 
 static __inline __capability void *
@@ -167,7 +167,7 @@ cheri_maketype(__capability void *root_type, register_t type)
 
 	c = root_type;
 	c = cheri_setoffset(c, type);	/* Set type as desired. */
-	c = cheri_csetbounds(c, 1);	/* ISA implies length of 1. */
+	c = cheri_setbounds(c, 1);	/* ISA implies length of 1. */
 	c = cheri_andperm(c, CHERI_PERM_GLOBAL | CHERI_PERM_SEAL); /* Perms. */
 	return (c);
 }

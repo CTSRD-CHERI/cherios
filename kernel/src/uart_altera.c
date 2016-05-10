@@ -115,6 +115,7 @@ uart_control_read(void)
 	    ALTERA_JTAG_UART_CONTROL_OFF)));
 }
 
+#if 0
 static inline void
 uart_control_write(uint32_t v)
 {
@@ -122,6 +123,7 @@ uart_control_write(uint32_t v)
 	mips_iowrite_uint32le(mips_phys_to_uncached(CHERI_UART_BASE +
 	    ALTERA_JTAG_UART_DATA_OFF), v);
 }
+#endif
 
 int
 uart_writable(void)

@@ -33,6 +33,7 @@
 #include "cp0.h"
 #include "cp2.h"
 #include "cheric.h"
+#include "math.h"
 
 /* We only create tasks for now, no delete */
 struct mips_frame		kernel_exception_framep[MAX_PROCESSES];
@@ -195,14 +196,41 @@ static const char * capcausestr[0x20] = {
 };
 #endif
 
-#define REG_DUMP_M(_reg) \
-        printf("%s: 0x%16X  ", #_reg, kernel_exception_framep[kernel_curr_proc].mf_##_reg)
-        
+#define REG_DUMP_M(_reg) {\
+	register_t reg = kernel_exception_framep[kernel_curr_proc].mf_##_reg; \
+	__REGDUMP(reg, reg, #_reg, 64); \
+	}
+
 #define REG_DUMP_C(_reg) \
-	printf("%s%-3s: ", creg++==reg_num?KBLD KRED:"", #_reg); \
-        CHERI_PRINT_CAP_LITE(kernel_cp2_exception_framep[kernel_curr_proc].cf_##_reg); \
-        printf(KRST"\n");
-        
+	regdump_c(#_reg, creg++==reg_num, \
+		kernel_cp2_exception_framep[kernel_curr_proc].cf_##_reg);
+
+#define __REGDUMP(elem, cond, name, bits) { \
+	printf("%s"name":"KFNT"0x", cond?"":KFNT,elem); \
+	int elem_lead_0 = bits - 3 - slog2(elem); \
+	for(int i=0; i<elem_lead_0; i+=4) { printf("0");} \
+	if(elem) { printf(KREG"%jx ", elem); } else { printf(" "KREG);} \
+	}
+
+static void regdump_c(const char * str_cap, int hl, const void * cap) {
+	printf("%s%-3s:"KREG, hl?KBLD KUND:"", str_cap);
+	int tag  = cheri_gettag(cap);
+	printf("%s", tag?" t:1 ":KFNT" t:0 "KREG);
+	size_t base = cheri_getbase(cap);
+	__REGDUMP(base, base||tag, "b", 64);
+	size_t len = cheri_getlen(cap);
+	__REGDUMP(len, len, "l", 64);
+	size_t offset = cheri_getoffset(cap);
+	__REGDUMP(offset, offset, "o", 64);
+	size_t perm = cheri_getperm(cap);
+	__REGDUMP(perm, perm||tag, "p", 32);
+	int seal = cheri_getsealed(cap);
+	printf("%s", seal?"s:1 ":KFNT"s:0 "KREG);
+	size_t otype = cheri_gettype(cap);
+	__REGDUMP(otype, otype||seal, "otype", 24);
+	printf(KRST"\n");
+}
+
 static void regdump(int reg_num) {
 	int creg = 0;
 	

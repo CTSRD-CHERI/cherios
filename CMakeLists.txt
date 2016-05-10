@@ -90,6 +90,18 @@ if(NOT HAVE_CAPABILITIES)
     message(FATAL_ERROR "Compiler doesn't have capabilities support, set CHERI_SDK_DIR correctly.")
 endif()
 
+#
+# Configure a console driver at compile time.  Default to the UART found in
+# the MALTA reference board ("malta").  Other options are "altera" for the
+# ALTERA JTAG UART used for BERI on FPGA, and "gxemul" for the GXemul
+# low-level console device.
+#
+# FIXME: gxemul is broken
+set(CONSOLE "malta" CACHE STRING
+"The console driver to use. Defaults to the UART found in the MALTA reference \
+board (\"malta\").  Other options are \"altera\" for the ALTERA JTAG UART \
+used for BERI on FPGA, and \"gxemul\" for the GXemul low-level console device.")
+
 include_directories(include)
 # set up the right flags for C and ASM sources
 set(ASM_COMPILER_FLAGS
@@ -109,6 +121,7 @@ set(C_COMPILER_FLAGS
     -mxgot
     -Werror
     -std=c11
+    -DCONSOLE_${CONSOLE}
 )
 set(C_WARNING_FLAGS
     -Wall
@@ -197,17 +210,6 @@ function(add_cherios_executable _target)
         set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
     endif()
 endfunction()
-
-#
-# Configure a console driver at compile time.  Default to the UART found in
-# the MALTA reference board ("malta").  Other options are "altera" for the
-# ALTERA JTAG UART used for BERI on FPGA, and "gxemul" for the GXemul
-# low-level console device.
-#
-set(CONSOLE "malta" CACHE STRING
-"The console driver to use. Defaults to the UART found in the MALTA reference \
-board (\"malta\").  Other options are \"altera\" for the ALTERA JTAG UART \
-used for BERI on FPGA, and \"gxemul\" for the GXemul low-level console device.")
 
 add_subdirectory(libuser)
 add_subdirectory(prga)

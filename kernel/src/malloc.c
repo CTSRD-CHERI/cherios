@@ -151,7 +151,7 @@ kernel_malloc(size_t nbytes)
 	nextf[bucket] = op->ov_next;
 	op->ov_magic = MAGIC;
 	op->ov_index = bucket;
-	return (cheri_csetbounds(op + 1, nbytes));
+	return (cheri_setbounds(op + 1, nbytes));
 }
 
 void *
@@ -209,16 +209,16 @@ morecore(int bucket)
 	 * we could be deriving from heap.
 	 */
 	buf = cheri_setoffset(cheri_getdefault(), pagepool_start);
-	buf = cheri_csetbounds(buf, amt);
+	buf = cheri_setbounds(buf, amt);
 	pagepool_start += amt;
 
 	/*
 	 * Add new memory allocated to that on
 	 * free list for this hash bucket.
 	 */
-	nextf[bucket] = op = cheri_csetbounds(buf, sz);
+	nextf[bucket] = op = cheri_setbounds(buf, sz);
 	while (--nblks > 0) {
-		op->ov_next = (union overhead *)cheri_csetbounds(buf + sz, sz);
+		op->ov_next = (union overhead *)cheri_setbounds(buf + sz, sz);
 		buf += sz;
 		op = op->ov_next;
 	}
@@ -297,12 +297,12 @@ kernel_realloc(void *cp, size_t nbytes)
 	 * to the contents in foo:
 	 * char *foo = malloc(10);
 	 * strcpy(foo, "abcdefghi");
-	 * cheri_csetbouds(foo, 5);
+	 * cheri_setbouds(foo, 5);
 	 * foo = realloc(foo, 10);
 	 */
 	smaller_space = (1 << (op->ov_index + 2)) - sizeof(*op);
 	if (nbytes <= cur_space && nbytes > smaller_space)
-		return (cheri_andperm(cheri_csetbounds(op + 1, nbytes),
+		return (cheri_andperm(cheri_setbounds(op + 1, nbytes),
 		    cheri_getperm(cp)));
 
 	if ((res = kernel_malloc(nbytes)) == NULL)

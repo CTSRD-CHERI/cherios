@@ -52,6 +52,9 @@ start:
 	or		$t0, $t0, $t1
 	mtc0		$t0, $12
 
+	# Wait for capability coprocessor to be enabled for real
+	nop; nop; nop; nop; nop; nop; nop; nop;
+
 	# Clear other capability registers to ensure we don't retain any
 	# executable capabilities: everything but $pcc and $c0.
 	CClearLo	0xfffe

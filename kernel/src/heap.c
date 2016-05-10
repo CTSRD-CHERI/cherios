@@ -79,7 +79,7 @@ __init_heap(size_t pagesz)
 
 	heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
 	heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
-	heap = cheri_csetbounds(heap, heaplen);
+	heap = cheri_setbounds(heap, heaplen);
 	kernel_assert(cheri_getoffset(heap) == 0);
 	kernel_assert(cheri_getlen(heap) == heaplen);
 

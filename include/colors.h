@@ -33,8 +33,11 @@
 #ifdef COLORS
 	#define KRST "\x1B[00m"
 	#define KBLD "\x1B[1m"
+	#define KFNT "\x1B[2m"
 	#define KITC "\x1B[3m"
+	#define KUND "\x1B[4m"
 	#define KBLK "\x1B[5m"
+	#define KREG "\x1B[22m"
 	#define KRED "\x1B[31m"
 	#define KGRN "\x1B[32m"
 	#define KYLW "\x1B[33m"
@@ -45,8 +48,11 @@
 #else
 	#define KRST ""
 	#define KBLD ""
+	#define KFNT ""
 	#define KITC ""
+	#define KUND ""
 	#define KBLK ""
+	#define KREG ""
 	#define KRED ""
 	#define KGRN ""
 	#define KYLW ""
