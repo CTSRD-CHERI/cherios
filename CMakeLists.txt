@@ -16,6 +16,7 @@ set(GUESSED_CHERISDK_LOCATIONS
     $ENV{HOME}/sdk/sdk
     $ENV{HOME}/cheri/output/sdk
     $ENV{HOME}/cheri/output/sdk256
+    $ENV{CHERI_SDK_DIR}
 )
 
 find_package(CheriSDK QUIET HINTS
