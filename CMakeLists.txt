@@ -16,6 +16,7 @@ set(GUESSED_CHERISDK_LOCATIONS
     $ENV{HOME}/sdk/sdk
     $ENV{HOME}/cheri/output/sdk
     $ENV{HOME}/cheri/output/sdk256
+    $ENV{CHERI_SDK_DIR}
 )
 
 find_package(CheriSDK QUIET HINTS
@@ -36,7 +37,7 @@ else()
         endforeach()
     endif()
     if(NOT CHERI_SDK_DIR)
-        message(FATAL_ERROR "Could not determine location of CHERI SDK. Set CHERI_SDK_DIR to the SDK root directory.")
+        message(FATAL_ERROR "Could not determine location of CHERI SDK. Pass -DCHERI_SDK_DIR=/path/to/sdk/root to CMake or set the CHERI_SDK_DIR env var to point to it.")
     endif()
     message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
     set(CheriSDK_SYSROOT_DIR "${CHERI_SDK_DIR}/sysroot")
@@ -65,8 +66,8 @@ set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
 #   ranlib: libuser.a: File format is ambiguous
 #   ranlib: Matching formats: elf64-tradbigmips ecoff-bigmips ecoff-littlemips
 #   libuser/CMakeFiles/user.dir/build.make:468: recipe for target 'libuser/libuser.a' failed
-# As it is not required we can simply use /usr/bin/true instead
-set(CMAKE_RANLIB "/bin/true" CACHE INTERNAL "ranlib string" FORCE)
+# As it is not required we can simply use : instead
+set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 
 # If we don't set -nostartfiles -nodefaultlibs in CMAKE_EXE_LINKER_FLAGS,
 # CMake will try to link ctr1.o into the executable and this might not exist
