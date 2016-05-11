@@ -47,6 +47,11 @@ else()
     message(FATAL_ERROR "CHERI Clang ${CheriSDK_CC} does not exist!")
 endif()
 
+find_program(MAKEFS_PROGRAM makefs)
+if(NOT MAKEFS_PROGRAM)
+    message(FATAL_ERROR "Could not find makefs program, please install it!")
+endif()
+
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})

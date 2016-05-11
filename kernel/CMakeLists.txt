@@ -72,7 +72,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_F
     # create the timestamp file
     COMMAND date > "${CHERIOS_FILESYSTEM_DIR}/t1"
     # now build the file system
-    COMMAND makefs -s 256k -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
+    COMMAND ${MAKEFS_PROGRAM} -s 256k -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 
