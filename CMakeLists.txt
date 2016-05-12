@@ -4,51 +4,52 @@ cmake_minimum_required(VERSION 3.4)
 # to initialize all the C and ASM rules
 project(CheriOS LANGUAGES NONE VERSION 0.0.1)
 
-# first look for the CheriSDKConfig.cmake file installed by cheribuild.py
-# if not fall back to finding the sdk build by build_sdk.sh
-if(CHERI_SDK_DIR)
-    # CheriSDK_DIR should point to where the CMake config file is stored
-    set(CheriSDK_DIR "${CHERI_SDK_DIR}/share/cmake/CheriSDK")
-    message(STATUS "Looking for CheriSDKConfig.cmake in ${CheriSDK_DIR}")
+# Set CHERI_SDK_DIR to the CHERI_SDK_DIR env variable if it is not given yet
+set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
+
+if(NOT CHERI_SDK_DIR)
+    # guess the location of CHERI SDK by looking for CheriSDKConfig and checking some guessed locations
+    set(GUESSED_CHERISDK_LOCATIONS
+        $ENV{HOME}/sdk/sdk
+        $ENV{HOME}/cheri/output/sdk
+        $ENV{HOME}/cheri/output/sdk256
+    )
+    # try to find clang in one of the guessed locations
+    foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
+        if(EXISTS "${guess}/bin/clang")
+            set(CHERI_SDK_DIR ${guess} CACHE PATH "Path to CHERI SDK" FORCE)
+            break()
+        endif()
+    endforeach()
 endif()
 
-set(GUESSED_CHERISDK_LOCATIONS
-    $ENV{HOME}/sdk/sdk
-    $ENV{HOME}/cheri/output/sdk
-    $ENV{HOME}/cheri/output/sdk256
-    $ENV{CHERI_SDK_DIR}
-)
-
-find_package(CheriSDK QUIET HINTS
-    $ENV{HOME}/sdk/sdk
-    $ENV{HOME}/cheri/output/sdk
-    $ENV{HOME}/cheri/output/sdk256
-)
-if(CheriSDK_FOUND)
-    message(STATUS "Found CheriSDKConfig.cmake in ${CheriSDK_DIR}")
-else()
-    if(NOT CHERI_SDK_DIR)
-        # try to find clang in one of the guessed locations
-        foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
-            if(EXISTS "${guess}/bin/clang")
-                set(CHERI_SDK_DIR ${guess})
-                break()
-            endif()
-        endforeach()
-    endif()
-    if(NOT CHERI_SDK_DIR)
-        message(FATAL_ERROR "Could not determine location of CHERI SDK. Pass -DCHERI_SDK_DIR=/path/to/sdk/root to CMake or set the CHERI_SDK_DIR env var to point to it.")
-    endif()
-    message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
-    set(CheriSDK_SYSROOT_DIR "${CHERI_SDK_DIR}/sysroot")
-    set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
-    set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
-    set(CheriSDK_CXX "${CheriSDK_TOOLCHAIN_DIR}/clang++")
-    if(EXISTS "${CheriSDK_CC}")
-        message(STATUS "Found CHERI Clang: ${CheriSDK_CC}")
+message(STATUS "CHERI_SDK_DIR set to: ${CHERI_SDK_DIR}")
+if(CHERI_SDK_DIR)
+    # first look for the CheriSDKConfig.cmake file installed by cheribuild.py
+    # if not fall back to finding the sdk build by build_sdk.sh
+    unset(CheriSDK_DIR) # force find_package() to run again in case we change CHERI_SDK_DIR
+    unset(CheriSDK_FOUND) # force find_package() to run again in case we change CHERI_SDK_DIR
+    find_package(CheriSDK QUIET CONFIG HINTS ${CHERI_SDK_DIR}/share/cmake/CheriSDK NO_DEFAULT_PATH)
+    if(CheriSDK_FOUND)
+        message(STATUS "Found CheriSDKConfig.cmake in ${CheriSDK_DIR}")
     else()
-        message(FATAL_ERROR "CHERI_SDK_DIR set but could not find clang at ${CheriSDK_CC}")
+        # message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
+        set(CheriSDK_SYSROOT_DIR "${CHERI_SDK_DIR}/sysroot")
+        set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
+        set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
+        set(CheriSDK_CXX "${CheriSDK_TOOLCHAIN_DIR}/clang++")
     endif()
+endif()
+
+if(EXISTS "${CheriSDK_CC}")
+    message(STATUS "Found CHERI Clang: ${CheriSDK_CC}")
+else()
+    message(FATAL_ERROR "CHERI Clang ${CheriSDK_CC} does not exist!")
+endif()
+
+find_program(MAKEFS_PROGRAM makefs)
+if(NOT MAKEFS_PROGRAM)
+    message(FATAL_ERROR "Could not find makefs program, please install it!")
 endif()
 
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
@@ -198,18 +199,19 @@ function(add_cherios_executable _target)
     # add it to the filesystem dir if requested
     if(add_exe_ADD_TO_FILESYSTEM)
         set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
-        add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+        add_custom_command(TARGET ${_target} POST_BUILD
             # make sure the directory exists
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
             # copy the binary to the fs root directory
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
-            # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
-            COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-
         )
         # Using a CACHE INTERNAL variable ensures that changes are globally visible
         set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
     endif()
+    # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
+    add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+        COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+    )
 endfunction()
 
 add_subdirectory(libuser)
