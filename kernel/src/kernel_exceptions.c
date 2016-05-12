@@ -96,7 +96,7 @@ void tmp_exec_stuff(size_t pid, size_t base, size_t entry, size_t len) {
 	  , entry)
 	 , 0b11110111);
 	kernel_exception_framep[pid].mf_pc = entry;
-	
+
 	kernel_cp2_exception_framep[pid].cf_c0 =
 	 __builtin_memcap_perms_and(
 	  __builtin_memcap_bounds_set(
@@ -105,9 +105,9 @@ void tmp_exec_stuff(size_t pid, size_t base, size_t entry, size_t len) {
 	   , base )
 	  , len)
 	 , 0b11111101);
-	  
+
 	kernel_exception_framep[pid].mf_a0 = pid;
-	
+
 	kernel_procs[pid].runnable = 1;
 }
 
@@ -119,7 +119,7 @@ int task_create_bare(void) {
 	/* zero everything */
 	memset(kernel_exception_framep     + kernel_next_proc, 0, sizeof(struct mips_frame));
 	memset(kernel_cp2_exception_framep + kernel_next_proc, 0, sizeof(struct cp2_frame ));
-	
+
 	/* set stack */
 	size_t stack_size = 0x10000;
 	void * stack = kernel_malloc(stack_size);
@@ -129,14 +129,14 @@ int task_create_bare(void) {
 	kernel_cp2_exception_framep[kernel_next_proc].cf_c11 = stack;
 	kernel_exception_framep[kernel_next_proc].mf_sp = stack_size;
 
-	/* not runnable yet */	
+	/* not runnable yet */
 	kernel_procs[kernel_next_proc].runnable = 0;
-	
+
 	/* set parent*/
 	kernel_procs[kernel_next_proc].parent = kernel_curr_proc;
-		
+
 	/* do not set c0/c12/pc */
-	
+
 	/* done, update next_proc */
 	kernel_next_proc++;
 	return kernel_next_proc-1;
@@ -233,44 +233,44 @@ static void regdump_c(const char * str_cap, int hl, const void * cap) {
 
 static void regdump(int reg_num) {
 	int creg = 0;
-	
+
 	printf("Regdump:\n");
-	
+
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
-	
+
 	REG_DUMP_M(a0); REG_DUMP_M(a1); REG_DUMP_M(a2); REG_DUMP_M(a3); printf("\n");
 	REG_DUMP_M(a4); REG_DUMP_M(a5); REG_DUMP_M(a6); REG_DUMP_M(a7); printf("\n");
-	
+
 	REG_DUMP_M(t0); REG_DUMP_M(t1); REG_DUMP_M(t2); REG_DUMP_M(t3); printf("\n");
-	
+
 	REG_DUMP_M(s0); REG_DUMP_M(s1); REG_DUMP_M(s2); REG_DUMP_M(s3); printf("\n");
 	REG_DUMP_M(s4); REG_DUMP_M(s5); REG_DUMP_M(s6); REG_DUMP_M(s7); printf("\n");
-	
+
 	REG_DUMP_M(t8); REG_DUMP_M(t9); printf("\n");
-	
+
 	REG_DUMP_M(gp); REG_DUMP_M(sp); REG_DUMP_M(fp); REG_DUMP_M(ra); printf("\n");
-	
+
 	REG_DUMP_M(hi); REG_DUMP_M(lo); printf("\n");
-	
-	REG_DUMP_M(pc); printf("\n");
-	
+
+//	REG_DUMP_M(pc); printf("\n"); //TODO:fix this value
+
 	printf("\n");
-	
+
 	REG_DUMP_C(c0); printf("\n");
-	
+
 	REG_DUMP_C(c1); REG_DUMP_C(c2); printf("\n");
-	
+
 	REG_DUMP_C(c3); REG_DUMP_C(c4); REG_DUMP_C(c5); REG_DUMP_C(c6); printf("\n");
 	REG_DUMP_C(c7); REG_DUMP_C(c8); REG_DUMP_C(c9); REG_DUMP_C(c10); printf("\n");
-	
-	REG_DUMP_C(c11); REG_DUMP_C(c12); REG_DUMP_C(c13);	
+
+	REG_DUMP_C(c11); REG_DUMP_C(c12); REG_DUMP_C(c13);
 	REG_DUMP_C(c14); REG_DUMP_C(c15); printf("\n");
-	
+
 	REG_DUMP_C(c16); REG_DUMP_C(c17);printf("\n");
-	
+
 	REG_DUMP_C(c18); REG_DUMP_C(c19); REG_DUMP_C(c20); REG_DUMP_C(c21); printf("\n");
 	REG_DUMP_C(c22); REG_DUMP_C(c23); REG_DUMP_C(c24); REG_DUMP_C(c25); printf("\n");
-	
+
 	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
 }
 
@@ -279,7 +279,7 @@ static void kernel_exception_capability(void)
 	KERNEL_TRACE("exception", "kernel_capability");
 	register_t capcause = __builtin_cheri_cause_get();
 	int cause = (capcause >> 8) & 0x1F;
-	
+
 	if(cause == 5) { /* give them their own handler */
 		kernel_ccall();
 		return;
@@ -288,7 +288,7 @@ static void kernel_exception_capability(void)
 		kernel_creturn();
 		return;
 	}
-	
+
 	const char * capcausestr[0x20]; /* See above */
 	capcausestr[0x00] = "None";
 	capcausestr[0x01] = "Length Violation";
@@ -322,11 +322,11 @@ static void kernel_exception_capability(void)
 	capcausestr[0x1D] = "Access KR1C Violation";
 	capcausestr[0x1E] = "Access KR2C Violation";
 	capcausestr[0x1F] = "reserved";
-	
+
 	int reg_num = capcause & 0xFF;
 	kernel_printf(KRED "Capability exception catched! (0x%X: %s) [Reg C%d]" KRST"\n",
 		cause, capcausestr[cause], reg_num);
-		
+
 	regdump(reg_num);
 	kernel_freeze();
 }
@@ -345,6 +345,7 @@ static void kernel_exception_interrupt(void)
 static void kernel_exception_data(register_t excode)
 {
 	KERNEL_ERROR("Data abort type '%d'", excode);
+	regdump(-1);
 	kernel_freeze();
 }
 
@@ -352,6 +353,8 @@ static void kernel_exception_data(register_t excode)
 static void kernel_exception_unknown(register_t excode)
 {
 	KERNEL_ERROR("Unknown exception type '%d'", excode);
+	regdump(-1);
+	kernel_freeze();
 }
 
 /*
@@ -363,7 +366,7 @@ kernel_exception(void)
 {
 	static int entered = 0;
 	KERNEL_TRACE("exception", "enters %d", entered++);
-	
+
 	#if 0
 	static int n = 0;
 	if(!((++n) & 0x7FFF)) {
@@ -386,11 +389,11 @@ kernel_exception(void)
 	case MIPS_CP0_EXCODE_SYSCALL:
 		kernel_exception_syscall();
 		break;
-		
+
 	case MIPS_CP0_EXCODE_C2E:
 		kernel_exception_capability();
 		break;
-		
+
 	case MIPS_CP0_EXCODE_TLBL:
 	case MIPS_CP0_EXCODE_TLBS:
 	case MIPS_CP0_EXCODE_ADEL:

@@ -33,6 +33,7 @@
 .set nobopt
 .set noat
 .set CAP_SIZE, (256/8)
+.set REG_SIZE, (64/8)
 
 #
 # Capability-aware exception handler.
@@ -89,40 +90,40 @@ kernel_cp2_exception_handler:
 		#
 		dla	$k0, kernel_cp2_exception_framep_ptr
 		clc	$kr1c, $k0, 0($kdc)
-		
+
 		# store 0;1-25;26;31
 		cgetdefault	$kr2c
 		csc	$kr2c, $0,  0*CAP_SIZE($kr1c)
-		csc	$c1 , $0,  1*CAP_SIZE($kr1c)
-		csc	$c2 , $0,  2*CAP_SIZE($kr1c)
-		csc	$c3 , $0,  3*CAP_SIZE($kr1c)
-		csc	$c4 , $0,  4*CAP_SIZE($kr1c)
-		csc	$c5 , $0,  5*CAP_SIZE($kr1c)
-		csc	$c6 , $0,  6*CAP_SIZE($kr1c)
-		csc	$c7 , $0,  7*CAP_SIZE($kr1c)
-		csc	$c8 , $0,  8*CAP_SIZE($kr1c)
-		csc	$c9 , $0,  9*CAP_SIZE($kr1c)
-		csc	$c10, $0, 10*CAP_SIZE($kr1c)
-		csc	$c11, $0, 11*CAP_SIZE($kr1c)
-		csc	$c12, $0, 12*CAP_SIZE($kr1c)
-		csc	$c13, $0, 13*CAP_SIZE($kr1c)
-		csc	$c14, $0, 14*CAP_SIZE($kr1c)
-		csc	$c15, $0, 15*CAP_SIZE($kr1c)
-		csc	$c16, $0, 16*CAP_SIZE($kr1c)
-		csc	$c17, $0, 17*CAP_SIZE($kr1c)
-		csc	$c18, $0, 18*CAP_SIZE($kr1c)
-		csc	$c19, $0, 19*CAP_SIZE($kr1c)
-		csc	$c20, $0, 20*CAP_SIZE($kr1c)
-		csc	$c21, $0, 21*CAP_SIZE($kr1c)
-		csc	$c22, $0, 22*CAP_SIZE($kr1c)
-		csc	$c23, $0, 23*CAP_SIZE($kr1c)
-		csc	$c24, $0, 24*CAP_SIZE($kr1c)
-		csc	$c25, $0, 25*CAP_SIZE($kr1c)
-		csc	$c26, $0, 26*CAP_SIZE($kr1c)
-		csc	$c31, $0, 27*CAP_SIZE($kr1c)
-		
+		csc	$c1 , $0,   1*CAP_SIZE($kr1c)
+		csc	$c2 , $0,   2*CAP_SIZE($kr1c)
+		csc	$c3 , $0,   3*CAP_SIZE($kr1c)
+		csc	$c4 , $0,   4*CAP_SIZE($kr1c)
+		csc	$c5 , $0,   5*CAP_SIZE($kr1c)
+		csc	$c6 , $0,   6*CAP_SIZE($kr1c)
+		csc	$c7 , $0,   7*CAP_SIZE($kr1c)
+		csc	$c8 , $0,   8*CAP_SIZE($kr1c)
+		csc	$c9 , $0,   9*CAP_SIZE($kr1c)
+		csc	$c10, $0,  10*CAP_SIZE($kr1c)
+		csc	$c11, $0,  11*CAP_SIZE($kr1c)
+		csc	$c12, $0,  12*CAP_SIZE($kr1c)
+		csc	$c13, $0,  13*CAP_SIZE($kr1c)
+		csc	$c14, $0,  14*CAP_SIZE($kr1c)
+		csc	$c15, $0,  15*CAP_SIZE($kr1c)
+		csc	$c16, $0,  16*CAP_SIZE($kr1c)
+		csc	$c17, $0,  17*CAP_SIZE($kr1c)
+		csc	$c18, $0,  18*CAP_SIZE($kr1c)
+		csc	$c19, $0,  19*CAP_SIZE($kr1c)
+		csc	$c20, $0,  20*CAP_SIZE($kr1c)
+		csc	$c21, $0,  21*CAP_SIZE($kr1c)
+		csc	$c22, $0,  22*CAP_SIZE($kr1c)
+		csc	$c23, $0,  23*CAP_SIZE($kr1c)
+		csc	$c24, $0,  24*CAP_SIZE($kr1c)
+		csc	$c25, $0,  25*CAP_SIZE($kr1c)
+		csc	$c26, $0,  26*CAP_SIZE($kr1c)
+		csc	$c31, $0,  27*CAP_SIZE($kr1c)
+
 		ccleartag	$kr2c, $kr2c # make sure we only use capabilities-based instructions
-		csetdefault	$kr2c 
+		csetdefault	$kr2c
 
 		#
 		# Context switch save; step all over k0 and k1 as is usual
@@ -132,44 +133,42 @@ kernel_cp2_exception_handler:
 		dla	$k0, kernel_exception_framep_ptr
 		clc	$kr1c, $k0, 0($kdc)
 
-		csd	$at, $0,   0($kr1c)
-		csd	$v0, $0,   8($kr1c)
-		csd	$v1, $0,  16($kr1c)
-		csd	$a0, $0,  24($kr1c)
-		csd	$a1, $0,  32($kr1c)
-		csd	$a2, $0,  40($kr1c)
-		csd	$a3, $0,  48($kr1c)
-		csd	$a4, $0,  56($kr1c)
-		csd	$a5, $0,  64($kr1c)
-		csd	$a6, $0,  72($kr1c)
-		csd	$a7, $0,  80($kr1c)
-		csd	$t0, $0,  88($kr1c)
-		csd	$t1, $0,  96($kr1c)
-		csd	$t2, $0, 104($kr1c)
-		csd	$t3, $0, 112($kr1c)
-		csd	$s0, $0, 120($kr1c)
-		li	$k1, 128
-		cincoffset	$kr1c, $kr1c, $k1	# Immediate offset for csd is too small
-		csd	$s1, $0,   0($kr1c)
-		csd	$s2, $0,   8($kr1c)
-		csd	$s3, $0,  16($kr1c)
-		csd	$s4, $0,  24($kr1c)
-		csd	$s5, $0,  32($kr1c)
-		csd	$s6, $0,  40($kr1c)
-		csd	$s7, $0,  48($kr1c)
-		csd	$t8, $0,  56($kr1c)
-		csd	$t9, $0,  64($kr1c)
-		csd	$gp, $0,  72($kr1c)
-		csd	$sp, $0,  80($kr1c)
-		csd	$fp, $0,  88($kr1c)
-		csd	$ra, $0,  96($kr1c)
+		csd	$at, $0,  0*REG_SIZE($kr1c)
+		csd	$v0, $0,  1*REG_SIZE($kr1c)
+		csd	$v1, $0,  2*REG_SIZE($kr1c)
+		csd	$a0, $0,  3*REG_SIZE($kr1c)
+		csd	$a1, $0,  4*REG_SIZE($kr1c)
+		csd	$a2, $0,  5*REG_SIZE($kr1c)
+		csd	$a3, $0,  6*REG_SIZE($kr1c)
+		csd	$a4, $0,  7*REG_SIZE($kr1c)
+		csd	$a5, $0,  8*REG_SIZE($kr1c)
+		csd	$a6, $0,  9*REG_SIZE($kr1c)
+		csd	$a7, $0, 10*REG_SIZE($kr1c)
+		csd	$t0, $0, 11*REG_SIZE($kr1c)
+		csd	$t1, $0, 12*REG_SIZE($kr1c)
+		csd	$t2, $0, 13*REG_SIZE($kr1c)
+		csd	$t3, $0, 14*REG_SIZE($kr1c)
+		csd	$s0, $0, 15*REG_SIZE($kr1c)
+		csd	$s1, $0, 16*REG_SIZE($kr1c)
+		csd	$s2, $0, 17*REG_SIZE($kr1c)
+		csd	$s3, $0, 18*REG_SIZE($kr1c)
+		csd	$s4, $0, 19*REG_SIZE($kr1c)
+		csd	$s5, $0, 20*REG_SIZE($kr1c)
+		csd	$s6, $0, 21*REG_SIZE($kr1c)
+		csd	$s7, $0, 22*REG_SIZE($kr1c)
+		csd	$t8, $0, 23*REG_SIZE($kr1c)
+		csd	$t9, $0, 24*REG_SIZE($kr1c)
+		csd	$gp, $0, 25*REG_SIZE($kr1c)
+		csd	$sp, $0, 26*REG_SIZE($kr1c)
+		csd	$fp, $0, 27*REG_SIZE($kr1c)
+		csd	$ra, $0, 28*REG_SIZE($kr1c)
 		mfhi	$k1
-		csd	$k1, $0, 104($kr1c)
+		csd	$k1, $0, 29*REG_SIZE($kr1c)
 		mflo	$k1
-		csd	$k1, $0, 112($kr1c)
+		csd	$k1, $0, 30*REG_SIZE($kr1c)
 		dmfc0	$k1, $14		# EPC
-		csd	$k1, $0, 120($kr1c)
-		
+		csd	$k1, $0, 31*REG_SIZE($kr1c)
+
 		# Set up exception stack
 		# todo:use real stack
 		dla		$t0, __start_stack;
@@ -177,7 +176,7 @@ kernel_cp2_exception_handler:
 		csetoffset	$c11, $c30, $t0
 		csetbounds	$c11, $c11, $t1
 		move		$sp, $t1
-		
+
 		#
 		# Restore the kernel's C0 after returning from the user
 		# context -- this is the only capability used in the kernel
@@ -186,7 +185,7 @@ kernel_cp2_exception_handler:
 		# we'll need to restore other kernel capability context here.
 		#
 		csetdefault	$kdc
-		
+
 		#
 		# Normal function invocation of kernel_exception().
 		#
@@ -195,7 +194,7 @@ kernel_cp2_exception_handler:
 		csetoffset	$c12, $c12, $t0
 		cjalr		$c17, $c12
 		nop
-		
+
 		#
 		# Restore context from exception frame, which may have had
 		# its contents replaced by the kernel.  Notice correspondence
@@ -204,44 +203,42 @@ kernel_cp2_exception_handler:
 		dla	$k0, kernel_exception_framep_ptr
 		clc	$kr1c, $k0, 0($kdc)
 
-		cld	$at, $0,   0($kr1c)
-		cld	$v0, $0,   8($kr1c)
-		cld	$v1, $0,  16($kr1c)
-		cld	$a0, $0,  24($kr1c)
-		cld	$a1, $0,  32($kr1c)
-		cld	$a2, $0,  40($kr1c)
-		cld	$a3, $0,  48($kr1c)
-		cld	$a4, $0,  56($kr1c)
-		cld	$a5, $0,  64($kr1c)
-		cld	$a6, $0,  72($kr1c)
-		cld	$a7, $0,  80($kr1c)
-		cld	$t0, $0,  88($kr1c)
-		cld	$t1, $0,  96($kr1c)
-		cld	$t2, $0, 104($kr1c)
-		cld	$t3, $0, 112($kr1c)
-		cld	$s0, $0, 120($kr1c)
-		li	$k1, 128
-		cincoffset	$kr1c, $kr1c, $k1	# Immediate offset for cld is too small
-		cld	$s1, $0,   0($kr1c)
-		cld	$s2, $0,   8($kr1c)
-		cld	$s3, $0,  16($kr1c)
-		cld	$s4, $0,  24($kr1c)
-		cld	$s5, $0,  32($kr1c)
-		cld	$s6, $0,  40($kr1c)
-		cld	$s7, $0,  48($kr1c)
-		cld	$t8, $0,  56($kr1c)
-		cld	$t9, $0,  64($kr1c)
-		cld	$gp, $0,  72($kr1c)
-		cld	$sp, $0,  80($kr1c)
-		cld	$fp, $0,  88($kr1c)
-		cld	$ra, $0,  96($kr1c)
-		cld	$k1, $0, 104($kr1c)
+		cld	$at, $0,  0*REG_SIZE($kr1c)
+		cld	$v0, $0,  1*REG_SIZE($kr1c)
+		cld	$v1, $0,  2*REG_SIZE($kr1c)
+		cld	$a0, $0,  3*REG_SIZE($kr1c)
+		cld	$a1, $0,  4*REG_SIZE($kr1c)
+		cld	$a2, $0,  5*REG_SIZE($kr1c)
+		cld	$a3, $0,  6*REG_SIZE($kr1c)
+		cld	$a4, $0,  7*REG_SIZE($kr1c)
+		cld	$a5, $0,  8*REG_SIZE($kr1c)
+		cld	$a6, $0,  9*REG_SIZE($kr1c)
+		cld	$a7, $0, 10*REG_SIZE($kr1c)
+		cld	$t0, $0, 11*REG_SIZE($kr1c)
+		cld	$t1, $0, 12*REG_SIZE($kr1c)
+		cld	$t2, $0, 13*REG_SIZE($kr1c)
+		cld	$t3, $0, 14*REG_SIZE($kr1c)
+		cld	$s0, $0, 15*REG_SIZE($kr1c)
+		cld	$s1, $0, 16*REG_SIZE($kr1c)
+		cld	$s2, $0, 17*REG_SIZE($kr1c)
+		cld	$s3, $0, 18*REG_SIZE($kr1c)
+		cld	$s4, $0, 19*REG_SIZE($kr1c)
+		cld	$s5, $0, 20*REG_SIZE($kr1c)
+		cld	$s6, $0, 21*REG_SIZE($kr1c)
+		cld	$s7, $0, 22*REG_SIZE($kr1c)
+		cld	$t8, $0, 23*REG_SIZE($kr1c)
+		cld	$t9, $0, 24*REG_SIZE($kr1c)
+		cld	$gp, $0, 25*REG_SIZE($kr1c)
+		cld	$sp, $0, 26*REG_SIZE($kr1c)
+		cld	$fp, $0, 27*REG_SIZE($kr1c)
+		cld	$ra, $0, 28*REG_SIZE($kr1c)
+		cld	$k1, $0, 29*REG_SIZE($kr1c)
 		mthi	$k1
-		cld	$k1, $0, 112($kr1c)
+		cld	$k1, $0, 30*REG_SIZE($kr1c)
 		mtlo	$k1
-		cld	$k1, $0, 120($kr1c)
+		cld	$k1, $0, 31*REG_SIZE($kr1c)
 		dmtc0	$k1, $14		# EPC
-		
+
 		#
 		# Restore the capability exception frame -- after
 		# general-purpose registers, since the above code is done
@@ -255,33 +252,33 @@ kernel_cp2_exception_handler:
 		# load 0;1-25;26;31
 		clc	$kr2c, $0,  0*CAP_SIZE($kr1c)
 		csetdefault	$kr2c
-		clc	$c1 , $0,  1*CAP_SIZE($kr1c)
-		clc	$c2 , $0,  2*CAP_SIZE($kr1c)
-		clc	$c3 , $0,  3*CAP_SIZE($kr1c)
-		clc	$c4 , $0,  4*CAP_SIZE($kr1c)
-		clc	$c5 , $0,  5*CAP_SIZE($kr1c)
-		clc	$c6 , $0,  6*CAP_SIZE($kr1c)
-		clc	$c7 , $0,  7*CAP_SIZE($kr1c)
-		clc	$c8 , $0,  8*CAP_SIZE($kr1c)
-		clc	$c9 , $0,  9*CAP_SIZE($kr1c)
-		clc	$c10, $0, 10*CAP_SIZE($kr1c)
-		clc	$c11, $0, 11*CAP_SIZE($kr1c)
-		clc	$c12, $0, 12*CAP_SIZE($kr1c)
-		clc	$c13, $0, 13*CAP_SIZE($kr1c)
-		clc	$c14, $0, 14*CAP_SIZE($kr1c)
-		clc	$c15, $0, 15*CAP_SIZE($kr1c)
-		clc	$c16, $0, 16*CAP_SIZE($kr1c)
-		clc	$c17, $0, 17*CAP_SIZE($kr1c)
-		clc	$c18, $0, 18*CAP_SIZE($kr1c)
-		clc	$c19, $0, 19*CAP_SIZE($kr1c)
-		clc	$c20, $0, 20*CAP_SIZE($kr1c)
-		clc	$c21, $0, 21*CAP_SIZE($kr1c)
-		clc	$c22, $0, 22*CAP_SIZE($kr1c)
-		clc	$c23, $0, 23*CAP_SIZE($kr1c)
-		clc	$c24, $0, 24*CAP_SIZE($kr1c)
-		clc	$c25, $0, 25*CAP_SIZE($kr1c)
-		clc	$c26, $0, 26*CAP_SIZE($kr1c)
-		clc	$c31, $0, 27*CAP_SIZE($kr1c)
+		clc	$c1 , $0,   1*CAP_SIZE($kr1c)
+		clc	$c2 , $0,   2*CAP_SIZE($kr1c)
+		clc	$c3 , $0,   3*CAP_SIZE($kr1c)
+		clc	$c4 , $0,   4*CAP_SIZE($kr1c)
+		clc	$c5 , $0,   5*CAP_SIZE($kr1c)
+		clc	$c6 , $0,   6*CAP_SIZE($kr1c)
+		clc	$c7 , $0,   7*CAP_SIZE($kr1c)
+		clc	$c8 , $0,   8*CAP_SIZE($kr1c)
+		clc	$c9 , $0,   9*CAP_SIZE($kr1c)
+		clc	$c10, $0,  10*CAP_SIZE($kr1c)
+		clc	$c11, $0,  11*CAP_SIZE($kr1c)
+		clc	$c12, $0,  12*CAP_SIZE($kr1c)
+		clc	$c13, $0,  13*CAP_SIZE($kr1c)
+		clc	$c14, $0,  14*CAP_SIZE($kr1c)
+		clc	$c15, $0,  15*CAP_SIZE($kr1c)
+		clc	$c16, $0,  16*CAP_SIZE($kr1c)
+		clc	$c17, $0,  17*CAP_SIZE($kr1c)
+		clc	$c18, $0,  18*CAP_SIZE($kr1c)
+		clc	$c19, $0,  19*CAP_SIZE($kr1c)
+		clc	$c20, $0,  20*CAP_SIZE($kr1c)
+		clc	$c21, $0,  21*CAP_SIZE($kr1c)
+		clc	$c22, $0,  22*CAP_SIZE($kr1c)
+		clc	$c23, $0,  23*CAP_SIZE($kr1c)
+		clc	$c24, $0,  24*CAP_SIZE($kr1c)
+		clc	$c25, $0,  25*CAP_SIZE($kr1c)
+		clc	$c26, $0,  26*CAP_SIZE($kr1c)
+		clc	$c31, $0,  27*CAP_SIZE($kr1c)
 
 		#
 		# On general principle, flush the contents of $k0 and $k1
