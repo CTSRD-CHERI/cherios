@@ -50,6 +50,10 @@ start:
 	li		$t1, 0x40000000
 #endif
 	or		$t0, $t0, $t1
+	# Clear ERL
+	li		$t1, 0x4
+	nor		$t1, $t1, $t1
+	and		$t0, $t0, $t1
 	mtc0		$t0, $12
 
 	# Wait for capability coprocessor to be enabled for real
