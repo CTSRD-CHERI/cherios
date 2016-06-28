@@ -28,24 +28,49 @@
  * SUCH DAMAGE.
  */
 
-void * module_register(int nb, int flags, void * data_cap, void * methods, int methods_nb, int * ret);
+#include "mips.h"
+
+extern void * act_self_ctrl;
+extern void * act_self_ref;
+extern void * act_self_id;
+extern void * act_self_cap;
+void *	act_ctrl_get_ref(void * ctrl);
+void *	act_ctrl_get_id(void * ctrl);
+void *	act_get_cap(void);
+
+void	object_init(void * self_ctrl, void * self_cap);
+
 void ctor_null(void);
 void dtor_null(void);
-void * get_own_object(void);
+void * get_curr_cookie(void);
 
-void * get_kernel_object(void);
-void * get_kernel_methods(void);
-void * get_object(int module);
-void ** get_methods(int module);
+void * get_cookie(void * cb, void * cs);
 
-void ccall_c_n(void * cs, void * cb, const void * carg);
-void * ccall_n_c(void * cs, void * cb);
-void * ccall_r_c(void * cs, void * cb, int rarg);
-int ccall_n_r(void * cs, void * cb);
-int ccall_r_r(void * cs, void * cb, int rarg);
-int ccall_rr_r(void * cs, void * cb, int rarg, int rarg2);
-int ccall_rc_r(void * cs, void * cb, int rarg, void * carg);
+typedef struct
+{
+	void * cret;
+	register_t rret;
+}  ret_t;
 
-void creturn_n(void);
-void creturn_r(register_t ret);
-void creturn_c(void * ret);
+#define CCALL(selector, ...) ccall_##selector(__VA_ARGS__)
+ret_t ccall_1(void * cb, void * cs, int method_nb,
+		  register_t rarg1, register_t rarg2, register_t rarg3,
+                  const void * carg1, const void * carg2, const void * carg3);
+
+void	ccall_c_n(void * cb, void * cs, int method_nb, const void * carg);
+void *	ccall_n_c(void * cb, void * cs, int method_nb);
+void *	ccall_r_c(void * cb, void * cs, int method_nb, int rarg);
+void *	ccall_rr_c(void * cb, void * cs, int method_nb, int rarg, int rarg2);
+register_t ccall_n_r(void * cb, void * cs, int method_nb);
+register_t ccall_r_r(void * cb, void * cs, int method_nb, int rarg);
+register_t ccall_c_r(void * cb, void * cs, int method_nb, void * carg);
+register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg, int rarg2);
+register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, void * carg);
+void	ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2);
+void	ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg);
+register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg1, void * carg1, void * carg2);
+void *	ccall_rrrc_c(void * cb, void * cs, int method_nb,
+                    register_t, register_t, register_t, void * carg);
+register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
+                    register_t rarg1, register_t rarg2, void * carg1, void * carg2);
+

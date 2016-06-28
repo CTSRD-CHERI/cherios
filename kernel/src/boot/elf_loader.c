@@ -28,10 +28,10 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
+#include "boot/boot.h"
 #include "klib.h"
-#include "lib.h"
 #include "math.h"
+#include "string.h"
 
 #define TRACE kernel_trace_elf_loader
 #define ERROR TRACE
@@ -174,23 +174,23 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 	return &elf_pheader(hdr)[idx];
 }
 
-void tmp_exec_stuff(size_t pid, size_t base, size_t entry, size_t len);
-
 /* not secure */
-void elf_loader(const char * file) {
+void * elf_loader(const char * file) {
 	int filelen=0;
 	char * addr = load(file, &filelen);
 	if(!addr) {
 		TRACE("Could not read file");
 		kernel_freeze();
-		return;
+		return NULL;
 	}
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(hdr)) {
 		TRACE("ELF File cannot be loaded");
 		kernel_freeze();
-		return;
+		boot_free(addr);
+		return NULL;
 	}
+	Elf64_Addr e_entry = hdr->e_entry;
 	TRACE("e_entry:%lX e_phnum:%d e_shnum:%d", hdr->e_entry, hdr->e_phnum, hdr->e_shnum);
 	size_t allocsize = 0;
 	for(int i=0; i<hdr->e_phnum; i++) {
@@ -204,17 +204,17 @@ void elf_loader(const char * file) {
 			allocsize = imax(allocsize, seg->p_vaddr + seg->p_memsz);
 		}
 	}
-	char *prgmp = kernel_calloc(allocsize, 1); //TODO:align this correctly
-	bzero(prgmp, allocsize);
+	char *prgmp = boot_alloc(allocsize); /* aligned to 4k */
 	if(!prgmp) {
-		TRACE("Malloc failed");
+		KERNEL_ERROR("malloc failed");
 		kernel_freeze();
-		return;
+		return NULL;
 	}
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
 		memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
 	}
-	size_t pid = kernel_exec((uintptr_t)(prgmp + hdr->e_entry), 0x465);
-	tmp_exec_stuff(pid, (size_t)prgmp, hdr->e_entry, allocsize);	
+	boot_free(addr);
+
+	return prgmp + e_entry;
 }

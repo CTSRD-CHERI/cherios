@@ -1,10 +1,14 @@
 #!/bin/sh
 set -e
-
 BUILDDIR=build
-mkdir -p $BUILDDIR
+
+if [ ! -d "$BUILDDIR" ]; then
+	mkdir -p $BUILDDIR
+	ln -s $BUILDDIR/kernel/cherios.elf .
+	cd $BUILDDIR
+	cmake -GNinja ..
+	cd ..
+fi
 cd $BUILDDIR
-cmake -GNinja ..
 ninja
 cd ..
-ln -s $BUILDDIR/kernel/cherios.elf .

@@ -34,52 +34,73 @@
 .set noat
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
-# global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
-# to various startup functions to initialise the C runtime, and then call
-# cherios_main().
+# global and suitable.  Jump to various startup functions to initialise the C
+# runtime, and then call main().
 
 	.text
-	.global start
-	.ent start
-start:
+	.global start_common
+	.ent start_common
+start_common:
+	# Save arguments
 	move		$s0, $a0
 	move		$s1, $a1
-	
+	cmove		$c17, $c3
+	cmove		$c18, $c4
+	cmove		$c19, $c5
+
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
-	
+
 	# Zero BSS.
 	cgetpcc		$c12
 	dla		$t0, crt_init_bss
 	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
+	cjalr		$c12, $c17
 	nop
 
 	# Initialise globals.
 	cgetpcc		$c12
 	dla		$t0, crt_init_globals
 	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
+	cjalr		$c12, $c17
 	nop
 
 	# Call C constructors.
 	cgetpcc		$c12
 	dla		$t0, crt_call_constructors
 	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
+	cjalr		$c12, $c17
 	nop
 
-	# Call main().
+	# Call object init.
+	cmove		$c3, $c19
+	cmove		$c4, $c22
+	cmove		$c5, $c23
+	cmove		$c6, $c24
+	cgetpcc		$c12
+	dla		$t0, libuser_init
+	csetoffset	$c12, $c12, $t0
+	cjalr		$c12, $c17
+	nop
+
+	# Restore arguments
 	move		$a0, $s0
 	move		$a1, $s1
+	cmove		$c3, $c17
+	cmove		$c4, $c18
+
+	# Call main().
 	cgetpcc		$c12
 	dla		$t0, main
 	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
+	cjalr		$c12, $c17
 	nop
-	
-	# main() should never return -- but if it does, get stuck here.
-_loop:
-	b		_loop
+
+	# main() done. creturn to go in waiting state.
+	cfromptr $c1, $c1, $0
+	creturn
+
+	#First 'real' message. Go to appropriate handler
+	j msg_entry
 	nop

@@ -195,7 +195,7 @@ function(add_cherios_executable _target)
         OUTPUT_NAME "${_target}.elf"
     )
     target_link_libraries(${_target} CheriOS::LibUser)
-    
+
     # add it to the filesystem dir if requested
     if(add_exe_ADD_TO_FILESYSTEM)
         set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
@@ -215,6 +215,8 @@ function(add_cherios_executable _target)
 endfunction()
 
 add_subdirectory(libuser)
+add_subdirectory(memmgt)
+add_subdirectory(namespace)
 add_subdirectory(prga)
 add_subdirectory(sockets)
 add_subdirectory(uart)

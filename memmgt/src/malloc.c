@@ -46,18 +46,15 @@ static char *rcsid = "$FreeBSD$";
  */
 
 #include "lib.h"
-#include "klib.h"
 #include "mips.h"
-
 #include "cheric.h"
-
 #include "malloc_heap.h"
 
 #pragma clang diagnostic ignored "-Wsign-compare"
 
 union overhead;
 static void morecore(int);
-static void init_pagebucket(void);
+void init_pagebucket(void);
 
 /*
  * The overhead on a block is one pointer. When free, this space
@@ -85,7 +82,6 @@ union	overhead {
 #define	NBUCKETS 30
 static	union overhead *nextf[NBUCKETS];
 
-static	size_t pagesz;			/* page size */
 static	int pagebucket;			/* page size bucket */
 
 
@@ -97,29 +93,20 @@ botch(char *s)
 {
 	fprintf(stderr, "\r\nassertion botched: %s\r\n", s);
 	(void) fflush(stderr);		/* just in case user buffered it */
-	kernel_panic("%s", __func__);
+	panic("%s", __func__);
 }
 #else
 #define	ASSERT(p)
 #endif
 
 void *
-kernel_malloc(size_t nbytes)
+malloc(size_t nbytes)
 {
 	union overhead *op;
 	int bucket;
 	size_t amt;
 
-	/*
-	 * First time malloc is called, setup page size and
-	 * align break pointer so all data will be page aligned.
-	 */
-	if (pagesz == 0) {
-		pagesz = CHERIOS_PAGESIZE;
-		init_pagebucket();
-		__init_heap(pagesz);
-	}
-	kernel_assert(pagesz != 0);
+	assert(pagesz != 0);
 	/*
 	 * Convert amount of memory requested into closest block size
 	 * stored in hash buckets which satisfies request.
@@ -155,7 +142,7 @@ kernel_malloc(size_t nbytes)
 }
 
 void *
-kernel_calloc(size_t num, size_t size)
+calloc(size_t num, size_t size)
 {
 	void *ret;
 
@@ -164,7 +151,7 @@ kernel_calloc(size_t num, size_t size)
 		return (NULL);
 	}
 
-	if ((ret = kernel_malloc(num * size)) != NULL)
+	if ((ret = malloc(num * size)) != NULL)
 		memset(ret, 0, num * size);
 
 	return (ret);
@@ -204,11 +191,7 @@ morecore(int bucket)
 		if (__morepages(amt/pagesz) == 0)
 			return;
 
-	/*
-	 * XXXRW: For now, depend on a global $c0 -- but shouldn't need to as
-	 * we could be deriving from heap.
-	 */
-	buf = cheri_setoffset(cheri_getdefault(), pagepool_start);
+	buf = cheri_setoffset(pool, pagepool_start);
 	buf = cheri_setbounds(buf, amt);
 	pagepool_start += amt;
 
@@ -234,7 +217,7 @@ find_overhead(void * cp)
 		return (NULL);
 	op = __rederive_pointer(cp);
 	if (op == NULL) {
-		kernel_printf("%s: no region found for %#p\n", __func__, cp);
+		printf("%s: no region found for %#p\n", __func__, cp);
 		return (NULL);
 	}
 	op--;
@@ -248,7 +231,7 @@ find_overhead(void * cp)
 	 * should save all allocation ranges to allow us to find the
 	 * metadata.
 	 */
-	kernel_printf(
+	printf(
 	    "%s: Attempting to free or realloc unallocated memory\n",
 	    __func__);
 	CHERI_PRINT_PTR(cp);
@@ -256,7 +239,7 @@ find_overhead(void * cp)
 }
 
 void
-kernel_free(void *cp)
+free(void *cp)
 {
 	int bucket;
 	union overhead *op;
@@ -273,7 +256,7 @@ kernel_free(void *cp)
 }
 
 void *
-kernel_realloc(void *cp, size_t nbytes)
+realloc(void *cp, size_t nbytes)
 {
 	size_t cur_space;	/* Space in the current bucket */
 	size_t smaller_space;	/* Space in the next smaller bucket */
@@ -281,7 +264,7 @@ kernel_realloc(void *cp, size_t nbytes)
 	char *res;
 
 	if (cp == NULL)
-		return (kernel_malloc(nbytes));
+		return (malloc(nbytes));
 	op = find_overhead(cp);
 	if (op == NULL)
 		return (NULL);
@@ -306,7 +289,7 @@ kernel_realloc(void *cp, size_t nbytes)
 		return (cheri_andperm(cheri_setbounds(op + 1, nbytes),
 		    cheri_getperm(cp)));
 
-	if ((res = kernel_malloc(nbytes)) == NULL)
+	if ((res = malloc(nbytes)) == NULL)
 		return (NULL);
 	/*
 	 * Only copy data the caller had access to even if this is less
@@ -315,12 +298,12 @@ kernel_realloc(void *cp, size_t nbytes)
 	 */
 	memcpy(res, cp, (nbytes <= cheri_getlen(cp)) ? nbytes : cheri_getlen(cp));
 	res = cheri_andperm(res, cheri_getperm(cp));
-	kernel_free(cp);
+	free(cp);
 	return (res);
 }
 
 
-static void
+void
 init_pagebucket(void)
 {
 	int bucket;

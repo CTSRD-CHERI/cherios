@@ -29,155 +29,84 @@
  */
 
 #include "klib.h"
-#include "lib.h"
 
-void syscall_rand() {
-	static int n = 42424242;
-	n = 3*n+685;
-	kernel_exception_framep_ptr->mf_v0 = (n >> 10) & 0xFF;
+/*
+ * These functions abstract the syscall register convention
+ */
+static void syscall_puts() {
+	void * msg = kernel_exception_framep_ptr->cf_c3;
+	printf(KGRN"%s"KRST, msg);
 }
 
-void syscall_putchar() {
-	static size_t offset;
-	const size_t buf_size = 0x100;
-	static char buf[buf_size];
-	char chr = kernel_exception_framep_ptr->mf_a0;
-	kernel_assert(offset < buf_size-1);
-	buf[offset++] = chr;
-	if((chr == '\n') || (offset == buf_size)) {
-		for(size_t i=0; i<offset; i++) {
-			uart_putchar(buf[i], NULL);
-		}
-		offset = 0;
-	}
+static void syscall_act_register(void) {
+	reg_frame_t * frame = kernel_exception_framep_ptr->cf_c3;
+	kernel_exception_framep_ptr->cf_c3 = act_register(frame);
 }
 
-void syscall_puts() {
-	void * msg = kernel_cp2_exception_framep_ptr->cf_c3;
-	printf(KGRN"%s"KRST"\n", msg);
+static void syscall_act_ctrl_get_ref(void) {
+	kernel_exception_framep_ptr->cf_c3 = act_get_ref(kernel_exception_framep_ptr->cf_c3);
 }
 
-/* not secure */
-void syscall_exec(void) {
-	/* return value (-1:fail, n=task nb) */
-
-	kernel_exception_framep_ptr->mf_v0 = -1;
-
-	/* zero everything */
-	memset(kernel_exception_framep     + kernel_next_proc, 0, sizeof(struct mips_frame)    );
-	memset(kernel_cp2_exception_framep + kernel_next_proc, 0, sizeof(struct cp2_frame));
-
-	/* set pc */
-	kernel_proc_set_pc(kernel_exception_framep_ptr->mf_a0, kernel_next_proc);
-
-	/* set stack */
-	size_t stack_size = 0x10000;
-	void * stack = kernel_calloc(stack_size, 1);
-	if(!stack) {
-		return;
-	}
-	kernel_cp2_exception_framep[kernel_next_proc].cf_c11 = stack;
-	kernel_exception_framep[kernel_next_proc].mf_sp = stack_size;
-
-	/* set c12 */
-	kernel_cp2_exception_framep[kernel_next_proc].cf_c12 =
-			kernel_cp2_exception_framep[kernel_next_proc].cf_pcc;
-			
-	/* set c0 */
-	kernel_cp2_exception_framep[kernel_next_proc].cf_c0 = kernel_cp2_exception_framep_ptr->cf_c0;
-
-	/* set a0 */
-	kernel_exception_framep[kernel_next_proc].mf_a0 = kernel_exception_framep_ptr->mf_a1;
-	
-	/* done, update next_proc */
-	KERNEL_TRACE("exception", "Syscall 'exec' OK! addr:'0x%lx' arg:'%lX' stack:'%p'",
-		kernel_exception_framep_ptr->mf_a0, kernel_exception_framep_ptr->mf_a1,
-		kernel_cp2_exception_framep[kernel_next_proc].cf_c11);
-	kernel_exception_framep_ptr->mf_v0 = kernel_next_proc;
-	kernel_next_proc++;
-}
-
-static void syscall_malloc(void) {
-	size_t s = kernel_exception_framep_ptr->mf_a0;
-	void * p = kernel_malloc(s);
-	kernel_cp2_exception_framep_ptr->cf_c3 = p;
-}
-
-static void syscall_free(void) {
-	void * p = kernel_cp2_exception_framep_ptr->cf_c3;
-	kernel_free(p);
+static void syscall_act_ctrl_get_id(void) {
+	kernel_exception_framep_ptr->cf_c3 = act_get_id(kernel_exception_framep_ptr->cf_c3);
 }
 
 static void syscall_sleep(void) {
 	kernel_skip();
 	int time = kernel_exception_framep_ptr->mf_a0;
-	if(time == -1) {
-		kernel_procs[kernel_curr_proc].runnable = 0;
+	if(time != 0) {
+		KERNEL_ERROR("sleep >0 not implemented");
+	} else {
+		kernel_reschedule();
 	}
-	kernel_reschedule();
 }
 
-static void syscall_register(void) {
-	int nb = kernel_exception_framep_ptr->mf_a0;
-	int flags = kernel_exception_framep_ptr->mf_a1;
-	int methods_nb = kernel_exception_framep_ptr->mf_a2;
-	void * methods  = kernel_cp2_exception_framep_ptr->cf_c3;
-	void * data_cap = kernel_cp2_exception_framep_ptr->cf_c4;
+static void syscall_panic(void) { //fixme: temporary
+	kernel_freeze();
+}
 
+static void syscall_gc(void) {
 	kernel_exception_framep_ptr->mf_v0 =
-	  object_register(nb, flags, methods, methods_nb, data_cap);
+	  try_gc(kernel_exception_framep_ptr->cf_c3,
+	         kernel_exception_framep_ptr->cf_c4);
 }
 
-static void syscall_get_kernel_methods(void) {
-	kernel_cp2_exception_framep_ptr->cf_c3 = _syscall_get_kernel_methods();
-}
-
-static void syscall_get_kernel_object(void) {
-	kernel_cp2_exception_framep_ptr->cf_c3 = _syscall_get_kernel_object();
-}
-
-
+/*
+ * Syscall demux
+ */
 void kernel_exception_syscall(void)
 {
 	long sysn = kernel_exception_framep_ptr->mf_v0;
 	KERNEL_TRACE("exception", "Syscall number %ld", sysn);
 	int skip = 1;
 	switch(sysn) {
-		case 5:
-			syscall_register();
-			break;
 		case 13:
 			syscall_sleep();
 			skip = 0;
 			break;
-		case 17:
-			syscall_malloc();
-			break;
-		case 18:
-			syscall_free();
-			break;
 		case 20:
-			syscall_exec();
+			syscall_act_register();
 			break;
-		case 33:
-			syscall_putchar();
+		case 21:
+			syscall_act_ctrl_get_ref();
+			break;
+		case 22:
+			syscall_act_ctrl_get_id();
 			break;
 		case 34:
 			syscall_puts();
 			break;
 		case 42:
-			syscall_rand();
+			syscall_panic();
 			break;
-		case 98:
-			syscall_get_kernel_methods();
-			break;
-		case 99:
-			syscall_get_kernel_object();
+		case 66:
+			syscall_gc();
 			break;
 		default:
 			KERNEL_ERROR("unknown syscall '%d'", sysn);
+			kernel_freeze();
 	}
-	
+
 	if(skip) {
 		kernel_skip();
 	}

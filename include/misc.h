@@ -51,7 +51,9 @@ static inline char itc(uint64_t j) {
 	unsigned char i = ((unsigned char)j) & 0xF;
 	char c = '0' + i;
 	if(i>9) {
-		c = 'A' - 10 + i; 
+		c = 'A' - 10 + i;
 	}
 	return c;
 }
+
+#define countof(a) (sizeof(a) / sizeof(*(a)))

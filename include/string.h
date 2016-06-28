@@ -31,6 +31,8 @@
 #ifndef __STRING_H__
 #define	__STRING_H__
 
+#include "mips.h"
+
 void	bzero(void *, size_t);
 int	memcmp(const void * cs,const void * ct,size_t count);
 void *	memcpy(void *dest, const void *src, size_t n);

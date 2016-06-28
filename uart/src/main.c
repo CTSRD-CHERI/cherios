@@ -33,43 +33,39 @@
 
 void * uart_cap = NULL;
 
-
 static void user_putc(char c) {
 	printf(KGRN KBLD"%c"KRST, c);
-	creturn_n();
 }
 
 static void user_puts(const void * s) {
 	printf(KGRN KBLD"%s"KRST, s);
-	creturn_n();
 }
 
-static void (*methods[]) = {ctor_null, dtor_null, user_putc, user_puts};
+extern void msg_entry;
+void (*msg_methods[]) = {user_putc, user_puts};
+size_t msg_methods_nb = countof(msg_methods);
+void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
+size_t ctrl_methods_nb = countof(ctrl_methods);
 
 int main(void)
 {
-	syscall_puts("UART Hello world");
-	
+	syscall_puts("UART Hello world\n");
+
+	/* Get capability to use uart */
+	uart_cap = act_get_cap();
+	assert(uart_cap != NULL);
+
 	/* Register ourself to the kernel as being the UART module */
-	int ret = -1;
-	uart_cap = module_register(1, 1, __builtin_memcap_global_data_get(),
-	                            methods, 2, &ret);
-	if(ret<0) {
-		syscall_puts("UART: register failed");
+	int ret = namespace_register(1, act_self_ref, act_self_id);
+	if(ret!=0) {
+		printf("UART: register failed\n");
 		return -1;
 	}
-	assert(uart_cap != NULL);
-	
+
 	#if 0
 	uart_init(); /* done during boot process */
 	#endif
-	
-	//TODO:update flag "ready" to 1
-	syscall_puts("UART: register OK");
 
-	/* Init done, ask the kernel not to schedule us anymore.
-	   The UART module will now only be called by CCalls */
-	ssleep(-1);
-
+	syscall_puts("UART: setup OK\n");
 	return 0;
 }

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,43 +28,27 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _CHERIDEMO_CP2_H_
-#define	_CHERIDEMO_CP2_H_
-
 #include "mips.h"
+#include "object.h"
+#include "cheric.h"
+#include "assert.h"
 
-/*
- * Canonical C-language representation of a capability.
- */
-typedef void * capability;
+void * namespace_ref = NULL;
+void * namespace_id  = NULL;
 
-/*
- * Register frame to be preserved on context switching -- very similar to
- * struct mips_frame.  As with mips_frame, the order of save/restore is very
- * important for both reasons of correctness and security.
- */
-struct cp2_frame {
-	/* c0 has special properties for MIPS load/store instructions. */
-	capability	cf_c0;
+void namespace_init(void *ns_ref, void *ns_id) {
+	namespace_ref = ns_ref;
+	namespace_id  = ns_id;
+}
 
-	/*
-	 * General purpose capability registers.
-	 */
-	capability	cf_c1, cf_c2, cf_c3, cf_c4;
-	capability	cf_c5, cf_c6, cf_c7;
-	capability	cf_c8, cf_c9, cf_c10, cf_c11, cf_c12;
-	capability	cf_c13, cf_c14, cf_c15, cf_c16, cf_c17;
-	capability	cf_c18, cf_c19, cf_c20, cf_c21, cf_c22;
-	capability	cf_c23, cf_c24, cf_c25;
+int namespace_register(int nb, void *ref, void *id) {
+	return ccall_rcc_r(namespace_ref, namespace_id, 0, nb, ref, id);
+}
 
-	/*
-	 * Special-purpose capability registers that must be preserved on a
-	 * user context switch.  Note that kernel registers are omitted.
-	 */
-	capability	cf_idc;
+void * namespace_get_ref(int nb) {
+	return ccall_r_c(namespace_ref, namespace_id, 1, nb);
+}
 
-	/* Program counter capability. */
-	capability	cf_pcc;
-};
-
-#endif /* _CHERIDEMO_CP2_H_ */
+void * namespace_get_id(int nb) {
+	return ccall_r_c(namespace_ref, namespace_id, 2, nb);
+}

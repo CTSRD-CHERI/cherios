@@ -40,4 +40,11 @@ extern char	__stop_heap;
 extern void	kernel_exception_trampoline;
 extern void	kernel_exception_trampoline_end;
 
+#define MAX_ACTIVATIONS 16
+
+//#define	TIMER_INTERVAL		400000
+//#define	TIMER_INTERVAL_MIN	30000
+#define	TIMER_INTERVAL		40000000
+#define	TIMER_INTERVAL_MIN	20000000
+
 #endif /* !__KERNEL_H__ */

@@ -33,14 +33,14 @@
 #define	_CHERIOS_KLIB_H_
 
 #include "mips.h"
+#include "assert.h"
 #include "cdefs.h"
-#include "stdarg.h"
-#include "colors.h"
-#include "cp0.h"
-#include "cp2.h"
 #include "cheric.h"
+#include "colors.h"
+#include "stdarg.h"
+#include "activations.h"
 
-#define __TRACE__
+//#define __TRACE__
 
 #ifdef __TRACE__
 	#define KERNEL_TRACE kernel_trace
@@ -57,67 +57,42 @@
 /*
  * Kernel library routines.
  */
-#define printf kernel_printf
-int	kernel_printf(const char *fmt, ...);
-int	kernel_vprintf(const char *fmt, va_list ap);
-void	kernel_panic(const char *fmt, ...) __dead2;
-void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
-void	kernel_trace(const char *context, const char *fmt, ...);
-void	kernel_trace_boot(const char *fmt, ...);
-void	kernel_trace_exception(const char *fmt, ...);
-void	kernel_vtrace(const char *context, const char *fmt, va_list ap);
-void	kernel_sleep(int unit);
-void *	kernel_alloc(size_t s);
-void	kernel_timer_init(void);
-void	kernel_proc_init(void);
-void 	kernel_error(const char *file, const char *func, int line, const char *fmt, ...);
-void	uart_putchar(int c, void *arg);
-void	elf_loader(const char * s);
-void *	load (const char * filename, int * len);
-void	kernel_freeze(void);
-int	kernel_exec(register_t addr, register_t arg);
-void	socket_init(void);
-void	sleep(int n);
-void	kernel_object_init(void);
-void	kernel_methods_init(void);
-
-void	*kernel_calloc(size_t, size_t);
-void	 kernel_free(void *);
-void	*kernel_malloc(size_t);
-void	*kernel_realloc(void *, size_t);
-
-/*
-* Kernel constants.
-*/
-#define	CHERIOS_PAGESIZE	4096
-
-/* Except struct/routines */
-typedef  struct
-{
-	int runnable;
-	int parent;
-	int ccaller;
-}  proc_t;
-#define MAX_PROCESSES 16
-int	task_create_bare(void);
 void	kernel_reschedule(void);
 void	kernel_skip(void);
 void	kernel_skip_pid(int pid);
 void	kernel_ccall(void);
 void	kernel_creturn(void);
 void	kernel_exception_syscall(void);
-void *	_syscall_get_kernel_object(void);
-void *	_syscall_get_kernel_methods(void);
-void 	kernel_proc_set_pc(register_t addr, size_t process);
-int object_register(int nb, int flags, void * methods, int methods_nb, void * data_cap);
+
+void	kernel_timer_init(void);
 void	kernel_timer(void);
 
-extern struct mips_frame	kernel_exception_framep[];
-extern struct cp2_frame		kernel_cp2_exception_framep[];
-extern proc_t			kernel_procs[];
-extern struct mips_frame *	kernel_exception_framep_ptr;
-extern struct cp2_frame *	kernel_cp2_exception_framep_ptr;
-extern int 			kernel_curr_proc;
-extern int			kernel_next_proc;
+#define printf kernel_printf
+int	kernel_printf(const char *fmt, ...);
+int	kernel_vprintf(const char *fmt, va_list ap);
+void	kernel_panic(const char *fmt, ...) __dead2;
+void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
+void	kernel_trace(const char *context, const char *fmt, ...);
+void 	kernel_error(const char *file, const char *func, int line, const char *fmt, ...);
+void	kernel_vtrace(const char *context, const char *fmt, va_list ap);
+
+void	hw_reboot(void) __dead2;
+void	kernel_freeze(void);
+void *	kernel_cap_to_exec(const void * p);
+void *	kernel_seal(const void *p, uint64_t otype);
+void *	kernel_unseal(void *p, uint64_t otype);
+void	regdump(int reg_num);
+
+int	try_gc(void * p, void * pool);
+
+int	msg_push(int dest, int src, void *, void *);
+void	msg_pop(int act);
+status_e msg_try_wait(int act);
+
+void	act_init(void);
+void	act_wait(int act);
+void *	act_register(const reg_frame_t * frame);
+void *	act_get_ref(proc_t * ctrl);
+void *	act_get_id(proc_t * ctrl);
 
 #endif /* _CHERIOS_KLIB_H_ */

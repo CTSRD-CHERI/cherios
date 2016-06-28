@@ -34,7 +34,7 @@
  * $FreeBSD$
  */
 
-#include "mips.h"
+#include "boot/boot.h"
 #include "klib.h"
 
 #ifndef DEV_BSHIFT
@@ -56,8 +56,6 @@ extern u8 __fs_start, __fs_end;
 int dskread(u8 *buf, u_int64_t lba, int nblk) {
 	size_t size  = nblk * DEV_BSIZE;
 	size_t start = lba  * DEV_BSIZE;
-	
-	//KERNEL_TRACE(__func__, "buf:%p lba:%03ld nblk:%ld start:%06lx size:%lx", buf, lba, nblk, start, size);
 
 	u8 * fsp = &__fs_start;
 	for(size_t i=0; i<size; i++) {
@@ -65,7 +63,6 @@ int dskread(u8 *buf, u_int64_t lba, int nblk) {
 		kernel_assert(fsp + start + i < &__fs_end);
 		buf[i] = fsp[start + i];
 	}
-	//KERNEL_TRACE(__func__, "done");
 	return 0;
 }
 
@@ -81,7 +78,7 @@ load(const char *filepath, int *bufsize)
 	DPRINTF("Loading '%s'\n", filepath);
 
 	if ((ino = lookup(filepath)) == 0) {
-		DPRINTF("Failed to lookup '%s' (file not found?)\n", filepath);
+		printf("Failed to lookup '%s' (file not found?)\n", filepath);
 		return NULL;
 	}
 
@@ -90,7 +87,7 @@ load(const char *filepath, int *bufsize)
 		return NULL;
 	}
 
-	void * buf = kernel_calloc(size, 1);
+	void * buf = boot_alloc(size);
 	if (buf == NULL) {
 		printf("Failed to allocate read buffer %zu for '%s'\n",
 		    size, filepath);
@@ -101,7 +98,7 @@ load(const char *filepath, int *bufsize)
 	if ((size_t)read != size) {
 		printf("Failed to read '%s' (%zd != %zu)\n", filepath, read,
 		    size);
-		//free(buf);
+		boot_free(buf);
 		return NULL;
 	}
 

@@ -388,6 +388,7 @@ mips_cap_iowrite_uint32le(void * cap, size_t offset, uint32_t v)
  * Data structure describing a MIPS register frame.  Assembler routines in
  * init.s know about this layout, so great care should be taken.
  */
+#if 0
 struct mips_frame {
 	/*
 	 * General-purpose MIPS registers.
@@ -407,5 +408,6 @@ struct mips_frame {
 	/* Program counter. */
 	register_t	mf_pc;
 };
+#endif
 
 #endif /* _CHERIOS_MIPS_H_ */

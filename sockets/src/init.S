@@ -1,5 +1,4 @@
 #-
-# Copyright (c) 2016 Robert N. M. Watson
 # Copyright (c) 2016 Hadrien Barral
 # All rights reserved.
 #
@@ -33,53 +32,8 @@
 .set nobopt
 .set noat
 
-# Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
-# global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
-# to various startup functions to initialise the C runtime, and then call
-# cherios_main().
-
 	.text
 	.global start
 	.ent start
 start:
-	move		$s0, $a0
-	move		$s1, $a1
-	
-	# Initialise BSS and globals before running C constructors, so that C
-	# constructors can take them (and other aspects of the conventional C
-	# runtime) for granted.
-	
-	# Zero BSS.
-	cgetpcc		$c12
-	dla		$t0, crt_init_bss
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
-	nop
-
-	# Initialise globals.
-	cgetpcc		$c12
-	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
-	nop
-
-	# Call C constructors.
-	cgetpcc		$c12
-	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
-	nop
-
-	# Call main().
-	move		$a0, $s0
-	move		$a1, $s1
-	cgetpcc		$c12
-	dla		$t0, main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c17, $c12
-	nop
-	
-	# main() should never return -- but if it does, get stuck here.
-_loop:
-	b		_loop
-	nop
+	j start_common

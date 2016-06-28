@@ -107,7 +107,6 @@ struct	direct {
  * without the d_name field, plus enough space for the name with a terminating
  * null byte (dp->d_namlen+1), rounded up to a 4 byte boundary.
  *
- * 
  */
 #define	DIRECTSIZ(namlen)						\
 	((__offsetof(struct direct, d_name) +				\

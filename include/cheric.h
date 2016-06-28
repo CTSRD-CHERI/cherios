@@ -94,6 +94,21 @@
 #define	cheri_setbounds(x, y)	__builtin_memcap_bounds_set(		\
 				    __DECONST(__capability void *, (x)), (y))
 
+/* Names for permission bits */
+#define CHERI_PERM_GLOBAL		(1 <<  0)
+#define CHERI_PERM_EXECUTE		(1 <<  1)
+#define CHERI_PERM_LOAD			(1 <<  2)
+#define CHERI_PERM_STORE		(1 <<  3)
+#define CHERI_PERM_LOAD_CAP		(1 <<  4)
+#define CHERI_PERM_STORE_CAP		(1 <<  5)
+#define CHERI_PERM_STORE_LOCAL_CAP	(1 <<  6)
+#define CHERI_PERM_SEAL			(1 <<  7)
+#define CHERI_PERM_ACCESS_SYS_REGS	(1 << 10)
+#define CHERI_PERM_SOFT_1		(1 << 11)
+#define CHERI_PERM_SOFT_2		(1 << 12)
+#define CHERI_PERM_SOFT_3		(1 << 13)
+#define CHERI_PERM_SOFT_4		(1 << 14)
+
 /*
  * Two variations on cheri_ptr() based on whether we are looking for a code or
  * data capability.  The compiler's use of CFromPtr will be with respect to
@@ -197,13 +212,15 @@ cheri_zerocap(void)
 	   cheri_getbase((const __capability void *)(ptr)),		\
 	   cheri_getlen((const __capability void *)(ptr)),		\
 	   cheri_getoffset((const __capability void *)(ptr)))
-	   
+
 #define CHERI_PRINT_CAP(cap)						\
-	printf("%s: %-20s t:%x s:%x b:%016jx l:%016zx o:%jx\n",		\
+	printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
+	       "b:%016jx l:%016zx o:%jx\n",				\
 	   __func__,							\
 	   #cap,							\
 	   cheri_gettag(cap),						\
 	   cheri_getsealed(cap),					\
+	   cheri_getperm(cap),						\
 	   cheri_getbase(cap),						\
 	   cheri_getlen(cap),						\
 	   cheri_getoffset(cap))
@@ -216,4 +233,62 @@ cheri_zerocap(void)
 	   cheri_getlen(cap),						\
 	   cheri_getoffset(cap))
 
+#define CHERI_ELEM(cap, idx)						\
+	cheri_setbounds(cap + idx, sizeof(cap[0]))
+
+/*
+ * Canonical C-language representation of a capability.
+ */
+typedef void * capability;
+
+/*
+ * Register frame to be preserved on context switching. The order of
+ * save/restore is very important for both reasons of correctness and security
+ */
+typedef struct reg_frame {
+	/*
+	 * General-purpose MIPS registers.
+	 */
+	/* No need to preserve $zero. */
+	register_t	mf_at, mf_v0, mf_v1;
+	register_t	mf_a0, mf_a1, mf_a2, mf_a3, mf_a4, mf_a5, mf_a6, mf_a7;
+	register_t	mf_t0, mf_t1, mf_t2, mf_t3;
+	register_t	mf_s0, mf_s1, mf_s2, mf_s3, mf_s4, mf_s5, mf_s6, mf_s7;
+	register_t	mf_t8, mf_t9;
+	/* No need to preserve $k0, $k1. */
+	register_t	mf_gp, mf_sp, mf_fp, mf_ra;
+
+	/* Multiply/divide result registers. */
+	register_t	mf_hi, mf_lo;
+
+	/* Program counter. */
+	register_t	mf_pc;
+
+	/*
+	 * Capability registers.
+	 */
+	/* c0 has special properties for MIPS load/store instructions. */
+	capability	cf_c0;
+
+	/*
+	 * General purpose capability registers.
+	 */
+	capability	cf_c1, cf_c2, cf_c3, cf_c4;
+	capability	cf_c5, cf_c6, cf_c7;
+	capability	cf_c8, cf_c9, cf_c10, cf_c11, cf_c12;
+	capability	cf_c13, cf_c14, cf_c15, cf_c16, cf_c17;
+	capability	cf_c18, cf_c19, cf_c20, cf_c21, cf_c22;
+	capability	cf_c23, cf_c24, cf_c25;
+
+	/*
+	 * Special-purpose capability registers that must be preserved on a
+	 * user context switch.  Note that kernel registers are omitted.
+	 */
+	capability	cf_idc;
+
+	/* Program counter capability. */
+	capability	cf_pcc;
+
+
+} reg_frame_t;
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

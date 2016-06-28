@@ -29,12 +29,13 @@
  * SUCH DAMAGE.
  */
 
+#include "boot/boot.h"
 #include "klib.h"
-#include "lib.h"
 #include "kernel.h"
-#include "uart.h"
 #include "cp0.h"
-#include "cp2.h"
+#include "misc.h"
+#include "object.h"
+#include "string.h"
 
 void print_build_date(void) {
 	int filelen=0;
@@ -48,48 +49,53 @@ void print_build_date(void) {
 }
 
 void load_modules(void) {
-	elf_loader("uart.elf");
-	elf_loader("sockets.elf");
-	/* TODO: Have an init.elf wait for core modules to be ready 
-	   so user sandboxes can assume they are */
-	elf_loader("prga.elf");
-	elf_loader("prga.elf");
+	void * c_memmgt = load_module(m_memmgt, "memmgt.elf",  0);
+	nssleep(3);
+	boot_alloc_enable_system(c_memmgt);
+
+	void * c_ns = load_module(m_namespace, "namespace.elf", 0);
+	nssleep(3);
+	/* glue memmgt to namespace */
+	glue_memmgt(c_memmgt, c_ns);
+
+	load_module(m_uart, "uart.elf",		0);
+	load_module(m_core, "sockets.elf",	0);
+	//load_module(m_core, "zlib.elf",		0);
+	nssleep(3);
+	/* TODO: wait correctly for core modules */
+	load_module(m_user, "prga.elf",		1);
+	load_module(m_user, "prga.elf",		2);
+	//load_module(m_user, "zlib_test.elf",	0);
 }
 
-int
-cherios_main(void)
-{
-	uart_init();
+int cherios_main(void) {
+	/* Init hardware */
+	hw_init();
+
 	kernel_printf("Hello world\n");
-	
-	/* Copy exception trampoline to exception vector */
-	char * all_mem = __builtin_memcap_global_data_get();
-	void *mips_bev0_exception_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
-	memcpy(mips_bev0_exception_vector_ptr, &kernel_exception_trampoline,
-	    (char *)&kernel_exception_trampoline_end - (char *)&kernel_exception_trampoline);
-	void *mips_bev0_ccall_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_CCALL_VECTOR);
-	memcpy(mips_bev0_ccall_vector_ptr, &kernel_exception_trampoline,
-	    (char *)&kernel_exception_trampoline_end - (char *)&kernel_exception_trampoline);
-	cp0_status_bev_set(0);
-	
+
+	/* Init bootloader */
 	kernel_printf("B\n");
-	/* Init several kernel parts */
-	kernel_proc_init();
-	kernel_object_init();
-	kernel_methods_init();
+	boot_alloc_init();
+
+	/* Print fs build date */
 	kernel_printf("C\n");
 	print_build_date();
+
+	/* Init several kernel parts */
 	kernel_printf("D\n");
+	install_exception_vectors();
+	act_init();
+
 	/* Load modules */
+	kernel_printf("E\n");
 	load_modules();
-	kernel_printf("Y\n");
+
 	/* Start timer and activate interrupts */
+	kernel_printf("Y\n");
 	kernel_timer_init();
 	/* Interrupts are ON from here */
 	kernel_printf("Z\n");
-	
-	ssleep(-1);
-	return (0);
+
+	return 0;
 }

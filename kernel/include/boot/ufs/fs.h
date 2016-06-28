@@ -33,7 +33,7 @@
 #ifndef _UFS_FFS_FS_H_
 #define	_UFS_FFS_FS_H_
 
-#include "ufs/dinode.h"
+#include "boot/ufs/dinode.h"
 
 /*
  * Each disk drive contains some number of filesystems.
@@ -354,7 +354,7 @@ struct fs {
 	int32_t  fs_sujfree;		/* SUJ free list */
 	int32_t	 fs_sparecon32[23];	/* reserved for future constants */
 	int32_t  fs_flags;		/* see FS_ flags below */
-	int32_t	 fs_contigsumsize;	/* size of cluster summary array */ 
+	int32_t	 fs_contigsumsize;	/* size of cluster summary array */
 	int32_t	 fs_maxsymlinklen;	/* max length of an internal symlink */
 	int32_t	 fs_old_inodefmt;	/* format of on-disk inodes */
 	u_int64_t fs_maxfilesize;	/* maximum representable file size */

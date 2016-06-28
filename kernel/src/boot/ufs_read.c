@@ -43,12 +43,11 @@
  * purpose.
  */
 
-#include "mips.h"
 #include "klib.h"
-#include "lib.h"
-#include "ufs/dinode.h"
-#include "ufs/dir.h"
-#include "ufs/fs.h"
+#include "boot/ufs/dinode.h"
+#include "boot/ufs/dir.h"
+#include "boot/ufs/fs.h"
+#include "string.h"
 
 #ifndef DEV_BSHIFT
 #define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */

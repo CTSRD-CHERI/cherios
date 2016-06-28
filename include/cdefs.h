@@ -533,7 +533,7 @@
  * the use of non-standard inlining.  In general we should try to avoid
  * using these but GCC-compatible compilers tend to support the extensions
  * well enough to use them in limited cases.
- */ 
+ */
 #if defined(__GNUC_GNU_INLINE__) || defined(__GNUC_STDC_INLINE__)
 #if __GNUC_PREREQ__(4, 3) || __has_attribute(__artificial__)
 #define	__gnu_inline	__attribute__((__gnu_inline__, __artificial__))
@@ -796,7 +796,7 @@
  * Type Safety Checking
  *
  * Clang provides additional attributes to enable checking type safety
- * properties that cannot be enforced by the C type system. 
+ * properties that cannot be enforced by the C type system.
  */
 
 #if __has_attribute(__argument_with_type_tag__) && \

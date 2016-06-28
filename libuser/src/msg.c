@@ -3,7 +3,7 @@
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,7 +28,6 @@
  * SUCH DAMAGE.
  */
 
-extern void *  libuser_kernel_cb;
-extern void ** libuser_kernel_methods;
+#include "mips.h"
 
-register_t libuser_init(register_t flags);
+void * sync_token = NULL;

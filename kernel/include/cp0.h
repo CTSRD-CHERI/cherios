@@ -42,9 +42,12 @@ void	cp0_status_ie_enable(void);
 int	cp0_status_ie_get(void);
 void	cp0_status_im_enable(int mask);
 void	cp0_status_im_disable(int mask);
+register_t	cp0_hwrena_get(void);
+void		cp0_hwrena_set(register_t hwrena);
 register_t	cp0_cause_excode_get(void);
 register_t	cp0_cause_ipending_get(void);
 register_t	cp0_count_get(void);
+register_t	cp0_badvaddr_get(void);
 void	cp0_compare_set(register_t compare);
 
 #endif /* _CHERIDEMO_CP0_H_ */

@@ -28,11 +28,23 @@
  * SUCH DAMAGE.
  */
 
+#ifndef __STDIO_H__
+#define __STDIO_H__
 
+#include "mips.h"
+#include "cdefs.h"
 #include "stdarg.h"
 #include "colors.h"
 
-int kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
-int vsnprintf(char *str, size_t size, const char *format, va_list ap);
-int printf(const char *fmt, ...);
-int puts(const char *s);
+typedef void FILE;
+extern FILE * stderr;
+
+int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
+int	vsprintf(char *buf, const char *cfmt, va_list ap);
+int	vsnprintf(char *str, size_t size, const char *format, va_list ap);
+int	printf(const char *fmt, ...);
+int	fprintf(FILE * f, const char *fmt, ...);
+int	puts(const char *s);
+void	panic(const char *str) __dead2;
+
+#endif /* !__STDIO_H__ */

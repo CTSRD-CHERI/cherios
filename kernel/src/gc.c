@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,15 +28,44 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _CHERIOS_LIB_H_
-#define	_CHERIOS_LIB_H_
+#include "klib.h"
 
-#include "mips.h"
-#include "colors.h"
-#include "misc.h"
-#include "object.h"
-#include "stdarg.h"
-#include "stdio.h"
-#include "string.h"
+/* Experimental. Todo: Needs a good memory model to be made safe */
 
-#endif /* _CHERIOS_LIB_H_ */
+/* takes two tagged pointers */
+static inline register_t derives_of(void * c, void * p) {
+	size_t cb = cheri_getbase(c);
+	size_t pb = cheri_getbase(p);
+	size_t cl = cheri_getlen(c);
+	size_t pl = cheri_getlen(p);
+	size_t ce = cb+cl;
+	size_t pe = pb+pl;
+	if(!((pb<=cb) || (pb>=ce))) {
+		CHERI_PRINT_CAP(c);
+		CHERI_PRINT_CAP(p);
+	}
+	kernel_assert((pb<=cb) || (pb>=ce)); /* cb pb   ce  */
+	kernel_assert(!((pb<=cb) && (cb<=pe) && (pe<ce))); /* pb cb pe ce */
+	if((cb>=pb) && (ce<=pe)) {
+		return 1;
+	}
+	return 0;
+}
+
+int try_gc(void * p, void * pool) {
+	/*todo: (if userspace) we can be prempted here and memory could move */
+	/*todo: also gc saved regs in kernel*/
+	void **gc = pool;
+	size_t len = cheri_getlen(gc) * sizeof(char) / sizeof(void *);
+	for(size_t i=0; i<len; i++) {
+		void * c = gc[i];
+		if(!cheri_gettag(c)) {
+			continue;
+		}
+		if(derives_of(c, p)) {
+			gc[i] = cheri_cleartag(c);
+			//return 0;
+		}
+	}
+	return 1;
+}

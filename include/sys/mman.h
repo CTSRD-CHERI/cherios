@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2014 Robert N. M. Watson
+ * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,12 +28,38 @@
  * SUCH DAMAGE.
  */
 
-typedef unsigned long long mips_function_ptr;
+#include "cdefs.h"
+#include "errno.h"
 
-mips_function_ptr __attribute__((used))
-    __attribute__((section(".ctors")))
-    __CTOR_END__[1] = { (mips_function_ptr)(-1) };
+void *	mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
+int	munmap(void *addr, size_t length);
 
-mips_function_ptr __attribute__((used))
-    __attribute__((section(".dtors")))
-    __DTOR_END__[1] = { (mips_function_ptr)(-1) };
+void	mmap_set_act(void * ref, void * id);
+
+enum mmap_prot
+{
+  PROT_READ		= 1 << 0,
+  PROT_WRITE		= 1 << 1,
+  PROT_NO_READ_CAP	= 1 << 2,
+  PROT_NO_WRITE_CAP	= 1 << 3
+};
+#define PROT_RW (PROT_READ | PROT_WRITE)
+
+enum mmap_flags
+{
+  map_private	= 1 << 0,
+  map_shared	= 1 << 1,
+  map_anonymous	= 1 << 2
+};
+#define MAP_PRIVATE map_private
+#define MAP_ANONYMOUS map_anonymous
+#define MAP_SHARED map_shared
+
+enum mmap_return
+{
+  ENOMEM = 1
+};
+
+#define MAP_FAILED ((void *) -1)
+
+

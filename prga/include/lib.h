@@ -30,11 +30,9 @@
 
 #include "all.h"
 
-void * malloc(size_t n);
-void sleep(int n);
-int socket(void);
-int bind(int socket, int port);
-void * recfrom(int socket);
-int sendto(int socket, void * msg);
-int connect(int socket, int port);
+int	socket(void);
+int	bind(int socket, int port);
+void	* recfrom(int socket);
+int	sendto(int socket, void * msg);
+int	connect(int socket, int port);
 

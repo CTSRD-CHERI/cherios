@@ -31,25 +31,24 @@
 #include "lib.h"
 
 extern void * s_cb;
-extern void ** s_methods;
+extern void * s_cs;
 
 int socket(void) {
-	return ccall_n_r(s_methods[0], s_cb);
+	return ccall_n_r(s_cb, s_cs, 0);
 }
 
 int bind(int socket, int port) {
-	return ccall_rr_r(s_methods[1], s_cb, socket, port);
+	return ccall_rr_r(s_cb, s_cs, 1, socket, port);
 }
 
 int connect(int socket, int port) {
-	return ccall_rr_r(s_methods[2], s_cb, socket, port);
+	return ccall_rr_r(s_cb, s_cs, 2, socket, port);
 }
 
 void * recfrom(int socket) {
-	return ccall_r_c(s_methods[3], s_cb, socket);
+	return ccall_r_c(s_cb, s_cs, 3, socket);
 }
 
 int sendto(int socket, void * msg) {
-	return ccall_rc_r(s_methods[4], s_cb, socket, msg);
+	return ccall_rc_r(s_cb, s_cs, 4, socket, msg);
 }
-

@@ -30,10 +30,11 @@
 
 #include "mips.h"
 #include "stdio.h"
+#include "misc.h"
 
 void __assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
 	printf(KRED"assertion failure in %s at %s:%d: %s"KRST"\n", assert_function,
 			assert_file, assert_lineno, assert_message);
-	for(;;);
+	panic("assert failed");
 }

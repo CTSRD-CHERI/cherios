@@ -46,44 +46,34 @@ static char *rcsid = "$FreeBSD$";
  */
 
 #include "mips.h"
-#include "kernel.h"
 #include "cheric.h"
-#include "klib.h"
 #include "lib.h"
 
 #include "malloc_heap.h"
 
 #pragma clang diagnostic ignored "-Wsign-compare"
 
-caddr_t		 pagepool_start, pagepool_end;
-static void	*pool;
+caddr_t	pagepool_start, pagepool_end;
+char	*pool;
 
 int
 __morepages(int n __unused)
 {
 
-	kernel_panic("%s", __func__);
+	panic(__func__);
 }
 
 void
-__init_heap(size_t pagesz)
+__init_heap(void * heap)
 {
-	size_t heaplen;
-	void *heap;
-
 	/*
 	 * XXXBD: assumes DDC is page aligned.
 	 */
-	kernel_assert((size_t)&__start_heap == roundup2((size_t)&__start_heap,
-	    pagesz));
+	assert((size_t)heap == roundup2((size_t)heap, pagesz));
 
-	heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
-	heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
-	heap = cheri_setbounds(heap, heaplen);
-	kernel_assert(cheri_getoffset(heap) == 0);
-	kernel_assert(cheri_getlen(heap) == heaplen);
-
-	pagepool_start = (size_t)heap;
+	assert(cheri_getoffset(heap) == 0);
+	size_t heaplen = cheri_getlen(heap);
+	pagepool_start = (size_t)0;
 	pagepool_end = pagepool_start + heaplen;
 	pool = heap;
 }

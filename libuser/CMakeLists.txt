@@ -1,6 +1,7 @@
 set(LIBUSER_ASM_SRCS
     src/init.S
     src/memcpy_c.S
+    src/msg.S
 )
 
 set(LIBUSER_SRCS
@@ -9,12 +10,21 @@ set(LIBUSER_SRCS
     src/assert.c
     src/ctype.c
     src/debug.c
+    src/dlmalloc.c
+    src/errno.c
     src/libuser.c
     src/malloc.c
     src/memset.c
+    src/mmap.c
+    src/msg.c
+    src/msg_default.c
+    src/namespace.c
     src/object.c
+    src/panic.c
     src/printf.c
     src/ssleep.c
+    src/stdio.c
+    src/stdlib.c
     src/strcmp.c
     src/strlen.c
     src/subr_prf.c

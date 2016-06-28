@@ -28,254 +28,128 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
 #include "klib.h"
-#include "lib.h"
+#include "kernel.h"
+#include "string.h"
 
-typedef  struct
-{
-	int process_nb;
-	void * object;
-	void * stack;
-	register_t stack_size;
-}  sealed_data_t;
+/*
+ * CCall/CReturn handler
+ */
 
-typedef  struct
-{
-	int proc;
-	int ready;
-	void * ctor;
-	void * dtor;
-	void ** methods;
-	void * data_cap;
-}  bind_t;
-const int bindarrlen = 0x10;
-bind_t bindarr[bindarrlen];
+/* Creates a token for synchronous CCalls. This ensures the anwser is unique. */
+static void * get_sync_token(aid_t ccaller, u_int sealc3) {
+	static uint32_t unique = 0;
+	assert(sealc3 <= 1);
+	unique++;
+	kernel_acts[ccaller].sync_token.expected_reply  = unique;
 
-void kernel_object_init(void) {
-	/* Zero the array of service->pid association */
-	bzero(bindarr, sizeof(bindarr));
-	bindarr[0].proc = 0; //kernel object
-	for(int i=1; i<bindarrlen; i++) {
-		bindarr[i].proc = -1;
-	}
+	uint64_t token_offset = (ccaller << 32) + (sealc3 << 31) + unique;
+	void * sync_token = cheri_setbounds(cheri_getdefault(), 0);
+	sync_token = cheri_setoffset(sync_token, token_offset);
+	return kernel_seal(sync_token, 42000);
 }
 
-/* Create an object for service 'n' */
-void kernel_object_get_object(int nb) {
-	KERNEL_TRACE(__func__, "in");
+static void kernel_ccall_core(int sync) {
+	/* Unseal CCall cs and cb */
+	/* cb is the activation and cs the cookie */
+	void * cs = kernel_exception_framep_ptr->cf_c2;
+	proc_t * cb = kernel_exception_framep_ptr->cf_c1;
+	int otype = cheri_gettype(cb);
+	cs = kernel_unseal(cs, otype);
+	cb = kernel_unseal(cb, otype);
 
-	sealed_data_t *cb = NULL;
+	void * sync_token = NULL;
+	if(sync) {
+		int sealc3 = 0;
+		if(((long)kernel_exception_framep[kernel_curr_proc].mf_v0) == -1) {
+			sealc3 = 1;
+		}
 
-	if((bindarr[nb].proc < 0) || (!bindarr[nb].ready)) {
-		goto end;
+		sync_token = get_sync_token(kernel_curr_proc, sealc3);
 	}
 
-	/* Create a task to anwser CCalls */
-	cb = kernel_calloc(1, sizeof(sealed_data_t));
-	cb->process_nb = task_create_bare();
-	if(cb->process_nb < 0) {
-		KERNEL_ERROR("Could not create task");
-		goto end;
+	/* Push the message on the queue */
+	msg_push(cb->aid, kernel_curr_proc, cs, sync_token);
+
+	if(sync) {
+		kernel_acts[kernel_curr_proc].status = status_sync_block;
+		kernel_reschedule();
 	}
-	cb->stack = kernel_cp2_exception_framep[cb->process_nb].cf_c11;
-	cb->stack_size = kernel_exception_framep[cb->process_nb].mf_sp; //TODO:hack
-	
-	kernel_cp2_exception_framep[cb->process_nb].cf_c0 = bindarr[nb].data_cap;
-	
-	cb->object = NULL;
-
-	void * seal = __builtin_memcap_offset_set(__builtin_memcap_global_data_get(), nb);
-	
-	/* Call the constructor of the module */
-	cb->object = ccall_n_c(bindarr[nb].ctor, __builtin_memcap_seal(cb, seal));
-	
-	/* Seal the object */
-	cb = __builtin_memcap_seal(cb, seal);
-
-	KERNEL_TRACE(__func__, "cb:%p", cb);
-
-	end:
-	creturn_c(cb);
-}
-
-/* Get methods of service 'n' */
-void kernel_object_get_methods(int nb) {
-	KERNEL_TRACE(__func__, "in");
-
-	void * methods = NULL;
-
-	if(bindarr[nb].proc < 0) {
-		goto end;
-	}
-
-	methods = bindarr[nb].methods;
-
-	end:
-	creturn_c(methods);
-}
-
-static void (*kernel_methods[]) = {kernel_object_get_object, kernel_object_get_methods};
-
-void kernel_methods_init(void) {
-	/* Seal kernel methods */
-	kernel_methods[0] = __builtin_memcap_seal(kernel_methods[0], __builtin_memcap_global_data_get());
-	kernel_methods[1] = __builtin_memcap_seal(kernel_methods[1], __builtin_memcap_global_data_get());
-}
-
-void * _syscall_get_kernel_methods(void) {
-	return kernel_methods;
-}
-
-/* Create an object for the kernel service */
-void * _syscall_get_kernel_object(void) {
-	sealed_data_t * cb = kernel_calloc(1, sizeof(sealed_data_t));
-	cb->process_nb = task_create_bare();
-	if(cb->process_nb < 0) {
-		kernel_freeze();
-	}
-	cb->stack = kernel_cp2_exception_framep[cb->process_nb].cf_c11;
-	cb->stack_size = kernel_exception_framep[cb->process_nb].mf_sp; //TODO:hack
-	
-	kernel_cp2_exception_framep[cb->process_nb].cf_c0 = __builtin_memcap_global_data_get();
-	
-	/* Kernel does not need constructors */
-	cb->object = NULL;
-
-	return __builtin_memcap_seal(cb, __builtin_memcap_global_data_get());
-}
-
-/* Return the capability needed by service 'n' */ 
-static void * object_register_cap(int nb) {
-	void * cap = NULL;
-	switch(nb) {
-		case 1:{}
-			#ifdef CONSOLE_malta
-				#define	UART_BASE	0x180003f8
-				#define	UART_SIZE	0x40
-
-
-			#elif defined(CONSOLE_altera)
-				#define	UART_BASE	0x7f000000
-				#define	UART_SIZE	0x08
-			#else
-			#error UART type not found
-			#endif
-			cap = cheri_getdefault();
-			cap = cheri_setoffset(cap,
-			    mips_phys_to_uncached(UART_BASE));
-			cap = cheri_setbounds(cap, UART_SIZE);
-			break;
-		default:{}
-	}
-	return cap;
-}
-
-/* Register a module a service 'nb' */
-static int object_register_core(int nb, int flags, void **methods, int methods_nb, void *data_cap) {
-	if(bindarr[nb].proc != -1) {
-		KERNEL_ERROR("port already used");
-		return -1;
-	}
-	
-	/* Seal the methods */
-	void ** meths = kernel_malloc(methods_nb*sizeof(void *));
-	if(meths == NULL) {
-		KERNEL_ERROR("malloc failed");
-		return -1;
-	}
-	
-	void * seal = __builtin_memcap_offset_set(__builtin_memcap_global_data_get(), nb);
-	
-	void * ctor = __builtin_memcap_seal(methods[0], seal);
-	void * dtor = __builtin_memcap_seal(methods[1], seal);
-	for(int i=0; i<methods_nb; i++) {
-		meths[i] = __builtin_memcap_seal(methods[i+2], seal);
-	}
-
-	bindarr[nb].proc = kernel_curr_proc;
-	bindarr[nb].ctor = ctor;
-	bindarr[nb].dtor = dtor;
-	bindarr[nb].methods = meths;
-	bindarr[nb].data_cap  = data_cap;
-	
-	if(flags) {
-		bindarr[nb].ready = 1;
-	}
-	
-	/* Give the service a specific capability if needed */
-	kernel_cp2_exception_framep_ptr->cf_c3 = object_register_cap(nb);
-	
-	return 0;
-}
-
-int object_register(int nb, int flags, void * methods, int methods_nb, void * data_cap) {
-	int ret = -1;
-	switch(nb) {
-		case 1:
-		case 2:
-			ret = object_register_core(nb, flags, methods, methods_nb, data_cap);
-			break;
-		default:
-			KERNEL_ERROR("unknown port");
-			kernel_freeze();
-	}
-	return ret;
 }
 
 void kernel_ccall(void) {
 	KERNEL_TRACE(__func__, "in");
-	
-	/* Unseal CCall cs and cb */
-	void * cs = kernel_cp2_exception_framep_ptr->cf_c1;
-	sealed_data_t * cb = kernel_cp2_exception_framep_ptr->cf_c2;
-	char * all_mem = __builtin_memcap_global_data_get();
-	int otype = __builtin_memcap_type_get(cs);
-	cs = __builtin_memcap_unseal(cs, all_mem + otype);
-	cb = __builtin_memcap_unseal(cb, all_mem + otype);
 
-	/* Set-up the CCallee process */
-	kernel_procs[cb->process_nb].runnable = 1;
-	kernel_procs[cb->process_nb].ccaller = kernel_curr_proc;
-	
-	/* Set pc */
-	kernel_cp2_exception_framep[cb->process_nb].cf_pcc = cs;
-	kernel_exception_framep[cb->process_nb].mf_pc = __builtin_memcap_offset_get(cs);
-	kernel_cp2_exception_framep[cb->process_nb].cf_c12 = cs;
-	
-	/* Set object */
-	kernel_cp2_exception_framep[cb->process_nb].cf_idc = cb->object;
-	
-	/* Set stack */
-	kernel_cp2_exception_framep[cb->process_nb].cf_c11 = cb->stack;
-	kernel_exception_framep[cb->process_nb].mf_sp = cb->stack_size;
-	
-	/* Copy arguments */
-	kernel_cp2_exception_framep[cb->process_nb].cf_c3 =
-	  kernel_cp2_exception_framep[kernel_curr_proc].cf_c3;
-	kernel_exception_framep[cb->process_nb].mf_a0 =
-	  kernel_exception_framep[kernel_curr_proc].mf_a0;
-	kernel_exception_framep[cb->process_nb].mf_a1 =
-	  kernel_exception_framep[kernel_curr_proc].mf_a1;
-	  
-	kernel_procs[kernel_curr_proc].runnable = 0; /* Force synchronous mode for now */
-	kernel_reschedule();
+	uint32_t ccall_selector =
+	  *((uint32_t *)kernel_exception_framep[kernel_curr_proc].cf_pcc) & 0x7FF;
+
+	/* Ack ccall instruction */
+	kernel_skip_pid(kernel_curr_proc);
+
+	switch(ccall_selector) {
+		case 1: /* send */
+			kernel_ccall_core(0);
+			break;
+		case 2: /* send & switch */
+			kernel_ccall_core(0);
+			kernel_reschedule();
+			break;
+		case 3: /* send & wait */
+			kernel_ccall_core(0);
+			act_wait(kernel_curr_proc);
+			break;
+		case 4: /* sync call */
+			kernel_ccall_core(1);
+			break;
+		default:
+			KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
+			break;
+	}
 }
 
 void kernel_creturn(void) {
 	KERNEL_TRACE(__func__, "in");
-	int ccaller = kernel_procs[kernel_curr_proc].ccaller;
-	kernel_procs[kernel_curr_proc].runnable = 0;
-	kernel_procs[ccaller].runnable = 1;
-	
+
+	/* Ack creturn instruction */
+	kernel_skip_pid(kernel_curr_proc);
+
+	sync_t * sync_token = kernel_exception_framep[kernel_curr_proc].cf_c1;
+	if(sync_token == NULL) {
+		/* alias to "wait". Used by asynchronous primitives */
+		act_wait(kernel_curr_proc);
+		return;
+	}
+
+	/* Check if we expect this anwser */
+	sync_token = kernel_unseal(sync_token, 42000);
+	size_t sync_offset = cheri_getoffset(sync_token);
+	aid_t ccaller = sync_offset >> 32;
+	uint64_t unique = sync_offset & 0xFFFFFFF;
+	if(kernel_acts[ccaller].sync_token.expected_reply != unique ) {
+		KERNEL_ERROR("bad sync creturn");
+		kernel_freeze();
+	}
+
+	/* Make the caller runnable again */
+	assert(kernel_acts[ccaller].status = status_sync_block);
+	kernel_acts[ccaller].status = status_runnable;
+
+	/* Seal the identifier if needed */
+	int sealc3 = (sync_offset >> 31) & 1;
+	void * toseal = kernel_exception_framep[kernel_curr_proc].cf_c3;
+	if(sealc3) {
+		kernel_exception_framep[kernel_curr_proc].cf_c3 =
+		  kernel_seal(cheri_andperm(toseal, 0b111100011111101), kernel_curr_proc);
+	}
+
 	/* Copy return values */
-	kernel_cp2_exception_framep[ccaller].cf_c3 =
-	   kernel_cp2_exception_framep[kernel_curr_proc].cf_c3;
+	kernel_exception_framep[ccaller].cf_c3 =
+	   kernel_exception_framep[kernel_curr_proc].cf_c3;
 	kernel_exception_framep[ccaller].mf_v0 =
 	   kernel_exception_framep[kernel_curr_proc].mf_v0;
 	kernel_exception_framep[ccaller].mf_v1 =
 	   kernel_exception_framep[kernel_curr_proc].mf_v1;
-	   
-	kernel_skip_pid(ccaller);
-	kernel_reschedule();
+
+	/* Try to set the callee in waiting mode */
+	act_wait(kernel_curr_proc);
 }

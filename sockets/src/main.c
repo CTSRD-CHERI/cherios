@@ -32,35 +32,32 @@
 
 int oid = 3;
 
-void ctor(void) {
+void * new_cookie(void) {
 	int * object = malloc(sizeof(int));
 	assert(object != NULL);
 	*object = oid++;
-	creturn_c(object);
+	return object;
 }
 
-static void (*methods[]) = {ctor, dtor_null,
-                            socket, bind, connect, recfrom, sendto};
+extern void msg_entry;
+void (*msg_methods[]) = {socket, bind, connect, recfrom, sendto};
+size_t msg_methods_nb = countof(msg_methods);
+void (*ctrl_methods[]) = {NULL, new_cookie, dtor_null};
+size_t ctrl_methods_nb = countof(ctrl_methods);
 
 int main(void)
 {
 	printf("Sockets Hello world\n");
-	
+
 	socket_init();
-	
+
 	/* Register ourself to the kernel as being the Sockets module */
-	int ret = -1;
-	module_register(2, 1, __builtin_memcap_global_data_get(),
-	                 methods, 5, &ret);
-	if(ret<0) {
+	int ret = namespace_register(2, act_self_ref, act_self_id);
+	if(ret!=0) {
 		printf("Sockets: register failed\n");
 		return -1;
 	}
 	printf("Sockets: register OK\n");
-	
-	/* Init done, ask the kernel not to schedule us anymore.
-	   The Sockets module will now only be called by CCalls */
-	ssleep(-1);
 
 	return 0;
 }

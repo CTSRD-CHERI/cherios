@@ -28,13 +28,17 @@
  * SUCH DAMAGE.
  */
 
-static inline int imax(int a, int b)
-{
+#include "mips.h"
+
+static inline int imax(int a, int b) {
 	return (a>b ? a : b);
 }
 
-static inline int slog2(size_t s)
-{
+static inline int imin(int a, int b) {
+	return (a<b ? a : b);
+}
+
+static inline int slog2(size_t s) {
 	int i=0;
 	while(s) {
 		i++;

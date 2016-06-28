@@ -32,6 +32,10 @@
 #define	__STDLIB_H__
 
 void *	malloc(size_t n);
+void *	calloc(size_t n, size_t s);
 void 	free(void * p);
+
+void 	abort(void);
+void	exit(int status);
 
 #endif /* !__STDLIB_H__ */

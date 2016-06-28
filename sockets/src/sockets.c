@@ -50,8 +50,8 @@ void socket_init(void) {
 	}
 }
 
-void socket(void) {
-	int * obj = get_own_object();
+int socket(void) {
+	int * obj = get_curr_cookie();
 	assert(obj != NULL);
 	assert(next_socket <= MAX_SOCKET);
 	assert(sockets[next_socket].status == 0);
@@ -61,10 +61,10 @@ void socket(void) {
 	sockets[next_socket].msg = NULL;
 	int ret = next_socket;
 	next_socket++;
-	creturn_r(ret);
+	return ret;
 }
 
-void bind(int socket, int port) {
+int bind(int socket, int port) {
 	int ret = -1;
 	if(socket > MAX_SOCKET || sockets[socket].status == 0) {
 		goto end;
@@ -76,10 +76,10 @@ void bind(int socket, int port) {
 	ret = 0;
 
 	end:
-	creturn_r(ret);
+	return ret;
 }
 
-void connect(int socket, int port) {
+int connect(int socket, int port) {
 	int ret = -1;
 	if(socket > MAX_SOCKET || sockets[socket].status == 0) {
 		goto end;
@@ -94,28 +94,28 @@ void connect(int socket, int port) {
 	sockets[csocket].socksend = socket;
 	sockets[socket].socksend = csocket;
 	ret = 0;
-		
+
 	end:
-	creturn_r(ret);
+	return ret;
 }
 
-void recfrom(int socket) {
+void * recfrom(int socket) {
 	void * ret = NULL;
 	if((socket > MAX_SOCKET) || (sockets[socket].status == 0) ) {
 		goto end;
 	}
-	int * obj = get_own_object();
+	int * obj = get_curr_cookie();
 	assert(obj != NULL);
 	if(sockets[socket].oid == *obj) {
 		ret = sockets[socket].msg;
 		sockets[socket].msg = NULL;
 	}
-	
+
 	end:
-	creturn_c(ret);
+	return ret;
 }
 
-void sendto(int socket, void * msg) {
+int sendto(int socket, void * msg) {
 	int retval = -1;
 	if(socket > MAX_SOCKET) {
 		retval = -2;
@@ -130,7 +130,7 @@ void sendto(int socket, void * msg) {
 		retval = -4;
 		goto end;
 	}
-	int * obj = get_own_object();
+	int * obj = get_curr_cookie();
 	assert(obj != NULL);
 	if((sockets[socket].oid == *obj) && (sockets[socksend].msg == NULL)) {
 		sockets[socksend].msg = msg;
@@ -138,5 +138,5 @@ void sendto(int socket, void * msg) {
 		goto end;
 	}
 	end:
-	creturn_r(retval);
+	return retval;
 }

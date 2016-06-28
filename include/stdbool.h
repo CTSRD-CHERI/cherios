@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2015 SRI International
+ * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,13 +28,6 @@
  * SUCH DAMAGE.
  */
 
-#ifndef __MALLOC_HEAP_H__
-#define	__MALLOC_HEAP_H__
-
-extern	caddr_t	pagepool_start, pagepool_end;
-
-int	__morepages(int n);
-void	__init_heap(size_t pagesz);
-void	*__rederive_pointer(void *ptr);
-
-#endif /* __MALLOC_HEAP_H__ */
+#define bool        _Bool
+#define true        1
+#define false       0

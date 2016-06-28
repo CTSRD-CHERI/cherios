@@ -30,36 +30,63 @@
 
 #include "mips.h"
 #include "object.h"
-#include "libuser.h"
+#include "cheric.h"
+#include "assert.h"
+#include "namespace.h"
 
-void * module_register(int nb, int flags, void * data_cap, void * methods, int methods_nb, int * ret) {
-	void * deleg_cap;
+void * act_self_ctrl = NULL;
+void * act_self_ref  = NULL;
+void * act_self_id   = NULL;
+void * act_self_cap   = NULL;
+
+void object_init(void * self_ctrl, void* self_cap) {
+	assert(self_ctrl != NULL);
+	act_self_ctrl = self_ctrl;
+	act_self_ref  = act_ctrl_get_ref(self_ctrl);
+	act_self_id   = act_ctrl_get_id(self_ctrl);
+
+	act_self_cap = self_cap;
+}
+
+void * act_get_cap(void) {
+	return act_self_cap;
+}
+
+void * act_ctrl_get_ref(void * ctrl) {
+	void * ref;
 	__asm__ (
-		"li    $v0, 5           \n"
-		"move  $a0, %[nb]       \n"
-		"move  $a1, %[flags]       \n"
-		"move  $a2, %[methods_nb]       \n"
-		"cmove $c3, %[methods]  \n"
-		"cmove $c4, %[data_cap] \n"
-		"syscall                \n"
-		"cmove %[deleg_cap], $c3  \n"
-		"move  %[ret], $v0  \n"
-		: [ret]"=r" (*ret), [deleg_cap]"=C" (deleg_cap)
-		: [nb]"r" (nb), [flags]"r" (flags),
-		  [methods]"C" (methods), [methods_nb]"r" (methods_nb), [data_cap]"C" (data_cap)
-		: "v0", "a0", "a1", "a2", "$c3", "$c4");
-	return deleg_cap;
+		"li    $v0, 21      \n"
+		"cmove $c3, %[ctrl] \n"
+		"syscall            \n"
+		"cmove %[ref], $c3  \n"
+		: [ref]"=C" (ref)
+		: [ctrl]"C" (ctrl)
+		: "v0", "$c3");
+	return ref;
+}
+
+void * act_ctrl_get_id(void * ctrl) {
+	void * ref;
+	__asm__ (
+		"li    $v0, 22      \n"
+		"cmove $c3, %[ctrl] \n"
+		"syscall            \n"
+		"cmove %[ref], $c3  \n"
+		: [ref]"=C" (ref)
+		: [ctrl]"C" (ctrl)
+		: "v0", "$c3");
+	return ref;
 }
 
 void ctor_null(void) {
-	creturn_c(NULL);
+	return;
 }
 
 void dtor_null(void) {
-	creturn_n();
+	return;
 }
 
-void * get_own_object(void) {
+void * get_curr_cookie(void) {
 	void * object;
 	__asm__ (
 		"cmove %[object], $c26 \n"
@@ -67,177 +94,123 @@ void * get_own_object(void) {
 	return object;
 }
 
-
-
-void * get_kernel_object(void) {
-	void * cb;
-	__asm__ __volatile__ (
-		"li   $v0, 99 \n"
-		"syscall      \n"
-		"cmove %[cb], $c3   \n"
-		:[cb]"=C" (cb):);
-	return cb;
-}
-
-void * get_kernel_methods(void) {
-	void * methods;
-	__asm__ __volatile__ (
-		"li   $v0, 98 \n"
-		"syscall      \n"
-		"cmove %[methods], $c3   \n"
-		:[methods]"=C" (methods)::"v0");
-	return methods;
-}
-
-void * get_object(int module) {
-	void * object;
-	__asm__ (
-		"cmove $c1, %[cs] \n"
-		"cmove $c2, %[cb] \n"
-		"move    $a0, %[module]     \n"
-		"ccall $c1, $c2   \n"
-		"cmove %[object], $c3   \n"
-		:[object]"=C" (object)
-		:[cs]"C" (libuser_kernel_methods[0]), [cb]"C" (libuser_kernel_cb),
-		 [module]"r" (module)
-		:"$c1","$c2","$c3");
-	return object;
-}
-
-void ** get_methods(int module) {
-	void * methods;
-	__asm__ (
-		"cmove $c1, %[cs] \n"
-		"cmove $c2, %[cb] \n"
-		"move    $a0, %[module]     \n"
-		"ccall $c1, $c2 \n"
-		"cmove %[methods], $c3   \n"
-		:[methods]"=C" (methods)
-		:[cs]"C" (libuser_kernel_methods[1]), [cb]"C" (libuser_kernel_cb),
-		 [module]"r" (module)
-		:"$c1","$c2","$c3");
-	return methods;
+void * get_cookie(void * cb, void * cs) {
+	return ccall_n_c(cb, cs, -1);
 }
 
 /*
  * CCall helpers
  */
- 
-#define CCALL_CLOBS "$c1","$c2","$c3","v0","v1","a0","a1"
-#define CCALL_ASM_CSCB "cmove $c1, %[cs] \n" "cmove $c2, %[cb] \n"
-#define CCALL_ASM_RETC "cmove %[ret], $c3 \n"	: [ret]"=C" (ret)
-#define CCALL_ASM_RETR "move %[ret], $v0 \n"	: [ret]"=r" (ret)
 
-void ccall_c_n(void * cs, void * cb, const void * carg) {
-	__asm__ __volatile__ (
-		CCALL_ASM_CSCB
-		"cmove $c3, %[carg] \n"
-		"ccall $c1, $c2 \n"
-		:
-		: [cs]"C" (cs), [cb]"C" (cb), [carg]"C" (carg)
-		: CCALL_CLOBS);
+#define CCALL_ASM_CSCB "cmove $c1, %[cb] \n" "cmove $c2, %[cs] \n" "move $v0, %[method_nb] \n"
+#define CCALL_INSTR(n) "ccall $c1, $c2, " #n "\n"
+#define CCALL_INOPS [cb]"C" (cb), [cs]"C" (cs), [method_nb]"r" (method_nb)
+#define CCALL_CLOBS "$c1","$c2","$c3","$c4","$c5","v0","v1","a0","a1","a2"
+#define CCALL_TOP \
+	assert(cb != NULL); \
+	ret_t ret; \
+	__asm__ __volatile__ ( \
+		CCALL_ASM_CSCB \
+		"move  $a0, %[rarg1] \n" \
+		"move  $a1, %[rarg2] \n" \
+		"move  $a2, %[rarg3] \n" \
+		"cmove $c3, %[carg1] \n" \
+		"cmove $c4, %[carg2] \n" \
+		"cmove $c5, %[carg3] \n" \
+
+#define CCALL_BOTTOM \
+		"move  %[rret], $v0  \n" \
+		"cmove %[cret], $c3  \n" \
+		: [rret]"=r" (ret.rret), [cret]"=C" (ret.cret) \
+		: CCALL_INOPS, [rarg1]"r" (rarg1), [rarg2]"r" (rarg2), [rarg3]"r" (rarg3), \
+		               [carg1]"C" (carg1), [carg2]"C" (carg2), [carg3]"C" (carg3) \
+		: CCALL_CLOBS); \
+	return ret; \
+
+#define CCALLS(...) CCALL(4, __VA_ARGS__)
+
+ret_t ccall_1(void * cb, void * cs, int method_nb,
+		  register_t rarg1, register_t rarg2, register_t rarg3,
+                  const void * carg1, const void * carg2, const void * carg3) {
+	CCALL_TOP
+		CCALL_INSTR(1)
+	CCALL_BOTTOM
 }
 
-void * ccall_n_c(void * cs, void * cb) {
-	void * ret;
-	__asm__ __volatile__ (
-		CCALL_ASM_CSCB
-		"cfromptr  $c3,$c1,$zero \n"
-		"ccall $c1, $c2 \n"
-		CCALL_ASM_RETC
-		: [cs]"C" (cs), [cb]"C" (cb)
-		: CCALL_CLOBS);
-	return ret;
-}
-
-void * ccall_r_c(void * cs, void * cb, int rarg) {
-	void * ret;
-	__asm__ __volatile__ (
-		CCALL_ASM_CSCB
-		"move $a0, %[rarg] \n"
-		"ccall $c1, $c2 \n"
-		CCALL_ASM_RETC
-		: [cs]"C" (cs), [cb]"C" (cb), [rarg]"r" (rarg)
-		: CCALL_CLOBS);
-	return ret;
-}
-
-int ccall_n_r(void * cs, void * cb) {
-	int ret;
-	__asm__ __volatile__ (
-		CCALL_ASM_CSCB
-		"ccall $c1, $c2 \n"
-		CCALL_ASM_RETR
-		: [cs]"C" (cs), [cb]"C" (cb)
-		: CCALL_CLOBS);
-	return ret;
-}
-
-int ccall_r_r(void * cs, void * cb, int rarg) {
-	int ret;
-	__asm__ __volatile__ (
-		CCALL_ASM_CSCB
-		"move $a0, %[rarg] \n"
-		"ccall $c1, $c2 \n"
-		CCALL_ASM_RETR
-		: [cs]"C" (cs), [cb]"C" (cb), [rarg]"r" (rarg)
-		: CCALL_CLOBS);
-	return ret;
-}
-
-int ccall_rr_r(void * cs, void * cb, int rarg, int rarg2) {
-	int ret;
-	__asm__ __volatile__ (
-		CCALL_ASM_CSCB
-		"move $a0, %[rarg] \n"
-		"move $a1, %[rarg2] \n"
-		"ccall $c1, $c2 \n"
-		CCALL_ASM_RETR
-		: [cs]"C" (cs), [cb]"C" (cb), [rarg]"r" (rarg), [rarg2]"r" (rarg2)
-		: CCALL_CLOBS);
-	return ret;
-}
-
-int ccall_rc_r(void * cs, void * cb, int rarg, void * carg) {
-	int ret;
-	__asm__ __volatile__ (
-		CCALL_ASM_CSCB
-		"move $a0, %[rarg] \n"
-		"cmove $c3, %[carg] \n"
-		"ccall $c1, $c2 \n"
-		CCALL_ASM_RETR
-		: [cs]"C" (cs), [cb]"C" (cb), [rarg]"r" (rarg), [carg]"C" (carg)
-		: CCALL_CLOBS);
-	return ret;
+inline ret_t ccall_4(void * cb, void * cs, int method_nb,
+		  register_t rarg1, register_t rarg2, register_t rarg3,
+                  const void * carg1, const void * carg2, const void * carg3) {
+	CCALL_TOP
+		CCALL_INSTR(4)
+	CCALL_BOTTOM
 }
 
 
-
-/*
- * CReturn helpers
- */
-void creturn_n(void) {
-	__asm__ (
-		"li $v0, 0 \n"
-		"li $v1, 0 \n"
-		"cfromptr  $c3,$c1,$zero \n"
-		"creturn      \n");
+void ccall_c_n(void * cb, void * cs, int method_nb, const void * carg) {
+	CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
 }
 
-void creturn_r(register_t ret) {
-	__asm__ __volatile__ (
-		"move $v0, %[ret] \n"
-		"li $v1, 0 \n"
-		"cfromptr  $c3,$c1,$zero \n"
-		"creturn      \n"
-		::[ret]"r" (ret));
+void * ccall_n_c(void * cb, void * cs, int method_nb) {
+	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, NULL, NULL, NULL);
+	return ret.cret;
 }
 
-void creturn_c(void * ret) {
-	__asm__ __volatile__ (
-		"li $v0, 0 \n"
-		"li $v1, 0 \n"
-		"cmove  $c3, %[ret] \n"
-		"creturn      \n"
-		::[ret]"C" (ret));
+void * ccall_r_c(void * cb, void * cs, int method_nb, int rarg) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, NULL, NULL, NULL);
+	return ret.cret;
+}
+
+void * ccall_rr_c(void * cb, void * cs, int method_nb, int rarg1, int rarg2) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
+	return ret.cret;
+}
+
+register_t ccall_n_r(void * cb, void * cs, int method_nb) {
+	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, NULL, NULL, NULL);
+	return ret.rret;
+}
+
+register_t ccall_r_r(void * cb, void * cs, int method_nb, int rarg) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, NULL, NULL, NULL);
+	return ret.rret;
+}
+
+register_t ccall_c_r(void * cb, void * cs, int method_nb, void * carg) {
+	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
+	return ret.rret;
+}
+
+register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg1, int rarg2) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
+	return ret.rret;
+}
+
+register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, void * carg) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, carg, NULL, NULL);
+	return ret.rret;
+}
+
+void ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg) {
+	CCALLS(cb, cs, method_nb, rarg, 0, 0, carg, NULL, NULL);
+}
+
+void ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2) {
+	CCALLS(cb, cs, method_nb, 0, 0, 0, carg1, carg2, NULL);
+}
+
+register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg, void * carg1, void * carg2) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, carg1, carg2, NULL);
+	return ret.rret;
+}
+
+void * ccall_rrrc_c(void * cb, void * cs, int method_nb,
+                    register_t rarg1, register_t rarg2, register_t rarg3, void * carg) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, carg, NULL, NULL);
+	return ret.cret;
+}
+
+register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
+                    register_t rarg1, register_t rarg2, void * carg1, void * carg2) {
+	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, carg1, carg2, NULL);
+	return ret.rret;
 }

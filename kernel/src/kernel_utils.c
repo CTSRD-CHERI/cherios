@@ -30,15 +30,17 @@
 
 #include "klib.h"
 
+/*
+ * Various util functions
+ */
+
 void __kernel_assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
 	kernel_panic("assertion failure in %s at %s:%d: %s", assert_function,
 			assert_file, assert_lineno, assert_message);
 }
 
-void
-kernel_vtrace(const char *context, const char *fmt, va_list ap)
-{
+void kernel_vtrace(const char *context, const char *fmt, va_list ap) {
 	kernel_printf(KYLW KBLD"%s" KRST KYLW" - ", context);
 	kernel_vprintf(fmt, ap);
 	kernel_printf(KRST"\n");
@@ -58,32 +60,46 @@ void kernel_error(const char *file, const char *func, int line, const char *fmt,
 	kernel_vprintf(fmt, ap);
 	va_end(ap);
 	kernel_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
-	kernel_freeze();
 }
 
 void kernel_freeze(void) {
 	kernel_panic("Freeze");
 }
 
-void kernel_sleep(int unit) __attribute__ ((optnone)) {
-	for(int i=0; i<unit*10; i++);
+void kernel_panic(const char *fmt, ...) {
+	va_list ap;
+
+	kernel_printf(KMAJ"panic: ");
+	va_start(ap, fmt);
+	kernel_vprintf(fmt, ap);
+	va_end(ap);
+	kernel_printf(KRST"\n");
+
+	hw_reboot();
 }
 
-static register_t syscall2(register_t nb, register_t arg0, register_t arg1) {
-	register_t ret;
-
-	__asm__ __volatile__ (
-		"move $v0, %[nb] \n"
-		"move $a0, %[arg0] \n"
-		"move $a1, %[arg1] \n"
-		"syscall      \n"
-		"move %[ret], $v0 \n"
-		: [ret] "=r" (ret)
-		: [nb] "r" (nb), [arg0] "r" (arg0), [arg1] "r" (arg1)
-		: "v0", "a0", "a1");
-	return ret;
+/* Converts RW pointer to RX pointer */
+void * kernel_cap_to_exec(const void * p) {
+	void * c = cheri_getpcc();
+	c = cheri_setoffset(c, cheri_getbase(p));
+	c = cheri_setbounds(c, cheri_getlen(p));
+	return c;
 }
 
-int kernel_exec(register_t addr, register_t arg) {
-	return syscall2(20, addr, arg);
+void * kernel_seal(const void * p, uint64_t otype) {
+	void * seal = cheri_setoffset(cheri_getdefault(), otype);
+	return cheri_seal(p, seal);
+}
+
+void * kernel_unseal(void * p, uint64_t otype) {
+	void * seal = cheri_setoffset(cheri_getdefault(), otype);
+	return cheri_unseal(p, seal);
+}
+
+void hw_reboot(void) {
+	#ifdef CONSOLE_malta
+		/* Used to quit Qemu */
+		mips_iowrite_uint8(mips_phys_to_uncached(0x1f000000 + 0x00500), 0x42);
+	#endif
+	for(;;);
 }

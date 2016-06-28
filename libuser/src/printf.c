@@ -32,13 +32,30 @@
 #include "mips.h"
 #include "stdarg.h"
 #include "stdio.h"
+#include "object.h"
+#include "assert.h"
+#include "namespace.h"
 
-static void syscall_puts(char * str) {
+static void buf_puts(char * str) {
+	#if 1
+	/* Syscall version */
 	__asm__ __volatile__ (
 		"li   $v0, 34 \n"
 		"cmove $c3, %[str] \n"
 		"syscall      \n"
 		:: [str]"C" (str): "v0", "$c3");
+	#else
+	/* CCall version */
+	static void * uart_ref = NULL;
+	static void * uart_id  = NULL;
+	if(uart_ref == NULL) {
+		uart_ref = namespace_get_ref(1);
+		uart_id  = namespace_get_id(1);
+	}
+	assert(uart_ref != NULL);
+	assert(uart_id != NULL);
+	ccall_c_n(uart_ref, uart_id, 1, str);
+	#endif
 }
 
 void buf_putc(char chr) {
@@ -47,10 +64,8 @@ void buf_putc(char chr) {
 	static char buf[buf_size+1];
 	buf[offset++] = chr;
 	if((chr == '\n') || (offset == buf_size)) {
-		if(chr == '\n') {
-			buf[offset-1] = '\0';
-		}
-		syscall_puts(buf);
+		buf[offset] = '\0';
+		buf_puts(buf);
 		offset = 0;
 	}
 }
@@ -83,6 +98,24 @@ int puts(const char *s) {
 int
 printf(const char *fmt, ...)
 {
+	va_list ap;
+	int retval;
+
+	va_start(ap, fmt);
+	retval = vprintf(fmt, ap);
+	va_end(ap);
+
+	return (retval);
+}
+
+/* maps to printf */
+int
+fprintf(FILE *f __unused, const char *fmt, ...)
+{
+	if(f != NULL) {
+		panic("fprintf not implememted");
+	}
+
 	va_list ap;
 	int retval;
 

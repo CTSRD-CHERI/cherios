@@ -32,8 +32,9 @@
 .set noreorder
 .set nobopt
 .set noat
-.set CAP_SIZE, (256/8)
+.set CAP_SIZE, (_MIPS_SZCAP/8)
 .set REG_SIZE, (64/8)
+.set MIPS_FRAME_SIZE, (32*REG_SIZE)
 
 #
 # Capability-aware exception handler.
@@ -85,54 +86,48 @@ kernel_cp2_exception_handler:
 		# relative to KDC.  First save and clear CP2 context, then
 		# move on to general-purpose registers.
 		#
-		# Notice correspondence to the layout of struct cp2_frame.
+		# Notice correspondence to the layout of struct reg_frame.
 		# Notice also that KCC and KDC are not preserved.
-		#
-		dla	$k0, kernel_cp2_exception_framep_ptr
-		clc	$kr1c, $k0, 0($kdc)
-
-		# store 0;1-25;26;31
-		cgetdefault	$kr2c
-		csc	$kr2c, $0,  0*CAP_SIZE($kr1c)
-		csc	$c1 , $0,   1*CAP_SIZE($kr1c)
-		csc	$c2 , $0,   2*CAP_SIZE($kr1c)
-		csc	$c3 , $0,   3*CAP_SIZE($kr1c)
-		csc	$c4 , $0,   4*CAP_SIZE($kr1c)
-		csc	$c5 , $0,   5*CAP_SIZE($kr1c)
-		csc	$c6 , $0,   6*CAP_SIZE($kr1c)
-		csc	$c7 , $0,   7*CAP_SIZE($kr1c)
-		csc	$c8 , $0,   8*CAP_SIZE($kr1c)
-		csc	$c9 , $0,   9*CAP_SIZE($kr1c)
-		csc	$c10, $0,  10*CAP_SIZE($kr1c)
-		csc	$c11, $0,  11*CAP_SIZE($kr1c)
-		csc	$c12, $0,  12*CAP_SIZE($kr1c)
-		csc	$c13, $0,  13*CAP_SIZE($kr1c)
-		csc	$c14, $0,  14*CAP_SIZE($kr1c)
-		csc	$c15, $0,  15*CAP_SIZE($kr1c)
-		csc	$c16, $0,  16*CAP_SIZE($kr1c)
-		csc	$c17, $0,  17*CAP_SIZE($kr1c)
-		csc	$c18, $0,  18*CAP_SIZE($kr1c)
-		csc	$c19, $0,  19*CAP_SIZE($kr1c)
-		csc	$c20, $0,  20*CAP_SIZE($kr1c)
-		csc	$c21, $0,  21*CAP_SIZE($kr1c)
-		csc	$c22, $0,  22*CAP_SIZE($kr1c)
-		csc	$c23, $0,  23*CAP_SIZE($kr1c)
-		csc	$c24, $0,  24*CAP_SIZE($kr1c)
-		csc	$c25, $0,  25*CAP_SIZE($kr1c)
-		csc	$c26, $0,  26*CAP_SIZE($kr1c)
-		csc	$c31, $0,  27*CAP_SIZE($kr1c)
-
-		ccleartag	$kr2c, $kr2c # make sure we only use capabilities-based instructions
-		csetdefault	$kr2c
-
-		#
-		# Context switch save; step all over k0 and k1 as is usual
-		# for MIPS exception handlers.  Notice correspondence to the
-		# layout of struct mips_frame.
 		#
 		dla	$k0, kernel_exception_framep_ptr
 		clc	$kr1c, $k0, 0($kdc)
 
+		# store 0;1-25;26;31
+		cgetdefault	$kr2c
+		csc	$kr2c, $0,  0*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c1 , $0,   1*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c2 , $0,   2*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c3 , $0,   3*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c4 , $0,   4*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c5 , $0,   5*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c6 , $0,   6*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c7 , $0,   7*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c8 , $0,   8*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c9 , $0,   9*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c10, $0,  10*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c11, $0,  11*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c12, $0,  12*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c13, $0,  13*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c14, $0,  14*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c15, $0,  15*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c16, $0,  16*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c17, $0,  17*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c18, $0,  18*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c19, $0,  19*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c20, $0,  20*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c21, $0,  21*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c22, $0,  22*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c23, $0,  23*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c24, $0,  24*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c25, $0,  25*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c26, $0,  26*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		csc	$c31, $0,  27*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+
+		#
+		# Context switch save; step all over k0 and k1 as is usual
+		# for MIPS exception handlers.  Notice correspondence to the
+		# layout of struct reg_frame.
+		#
 		csd	$at, $0,  0*REG_SIZE($kr1c)
 		csd	$v0, $0,  1*REG_SIZE($kr1c)
 		csd	$v1, $0,  2*REG_SIZE($kr1c)
@@ -170,10 +165,9 @@ kernel_cp2_exception_handler:
 		csd	$k1, $0, 31*REG_SIZE($kr1c)
 
 		# Set up exception stack
-		# todo:use real stack
-		dla		$t0, __start_stack;
-		dla		$t1, 0x80000
-		csetoffset	$c11, $c30, $t0
+		dla		$t0, __start_exception_stack
+		dla		$t1, __size_exception_stack
+		csetoffset	$c11, $kdc, $t0
 		csetbounds	$c11, $c11, $t1
 		move		$sp, $t1
 
@@ -192,13 +186,13 @@ kernel_cp2_exception_handler:
 		cgetpcc		$c12
 		dla		$t0, kernel_exception
 		csetoffset	$c12, $c12, $t0
-		cjalr		$c17, $c12
+		cjalr		$c12, $c17
 		nop
 
 		#
 		# Restore context from exception frame, which may have had
 		# its contents replaced by the kernel.  Notice correspondence
-		# to the layout of struct mips_frame.
+		# to the layout of struct reg_frame.
 		#
 		dla	$k0, kernel_exception_framep_ptr
 		clc	$kr1c, $k0, 0($kdc)
@@ -246,39 +240,37 @@ kernel_cp2_exception_handler:
 		# memory access can be done using MIPS load and store
 		# instructions.
 		#
-		dla	$k0, kernel_cp2_exception_framep_ptr
-		clc	$kr1c, $k0, 0($kdc)
 
 		# load 0;1-25;26;31
-		clc	$kr2c, $0,  0*CAP_SIZE($kr1c)
+		clc	$kr2c, $0,  0*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
 		csetdefault	$kr2c
-		clc	$c1 , $0,   1*CAP_SIZE($kr1c)
-		clc	$c2 , $0,   2*CAP_SIZE($kr1c)
-		clc	$c3 , $0,   3*CAP_SIZE($kr1c)
-		clc	$c4 , $0,   4*CAP_SIZE($kr1c)
-		clc	$c5 , $0,   5*CAP_SIZE($kr1c)
-		clc	$c6 , $0,   6*CAP_SIZE($kr1c)
-		clc	$c7 , $0,   7*CAP_SIZE($kr1c)
-		clc	$c8 , $0,   8*CAP_SIZE($kr1c)
-		clc	$c9 , $0,   9*CAP_SIZE($kr1c)
-		clc	$c10, $0,  10*CAP_SIZE($kr1c)
-		clc	$c11, $0,  11*CAP_SIZE($kr1c)
-		clc	$c12, $0,  12*CAP_SIZE($kr1c)
-		clc	$c13, $0,  13*CAP_SIZE($kr1c)
-		clc	$c14, $0,  14*CAP_SIZE($kr1c)
-		clc	$c15, $0,  15*CAP_SIZE($kr1c)
-		clc	$c16, $0,  16*CAP_SIZE($kr1c)
-		clc	$c17, $0,  17*CAP_SIZE($kr1c)
-		clc	$c18, $0,  18*CAP_SIZE($kr1c)
-		clc	$c19, $0,  19*CAP_SIZE($kr1c)
-		clc	$c20, $0,  20*CAP_SIZE($kr1c)
-		clc	$c21, $0,  21*CAP_SIZE($kr1c)
-		clc	$c22, $0,  22*CAP_SIZE($kr1c)
-		clc	$c23, $0,  23*CAP_SIZE($kr1c)
-		clc	$c24, $0,  24*CAP_SIZE($kr1c)
-		clc	$c25, $0,  25*CAP_SIZE($kr1c)
-		clc	$c26, $0,  26*CAP_SIZE($kr1c)
-		clc	$c31, $0,  27*CAP_SIZE($kr1c)
+		clc	$c1 , $0,   1*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c2 , $0,   2*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c3 , $0,   3*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c4 , $0,   4*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c5 , $0,   5*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c6 , $0,   6*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c7 , $0,   7*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c8 , $0,   8*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c9 , $0,   9*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c10, $0,  10*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c11, $0,  11*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c12, $0,  12*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c13, $0,  13*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c14, $0,  14*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c15, $0,  15*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c16, $0,  16*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c17, $0,  17*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c18, $0,  18*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c19, $0,  19*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c20, $0,  20*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c21, $0,  21*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c22, $0,  22*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c23, $0,  23*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c24, $0,  24*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c25, $0,  25*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c26, $0,  26*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+		clc	$c31, $0,  27*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
 
 		#
 		# On general principle, flush the contents of $k0 and $k1

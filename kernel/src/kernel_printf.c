@@ -28,9 +28,8 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
 #include "klib.h"
-#include "lib.h"
+#include "stdio.h"
 #include "uart.h"
 
 /*
@@ -62,18 +61,4 @@ kernel_printf(const char *fmt, ...)
 	va_end(ap);
 
 	return (retval);
-}
-
-void
-kernel_panic(const char *fmt, ...)
-{
-	va_list ap;
-
-	kernel_printf(KMAJ"panic: ");
-	va_start(ap, fmt);
-	kernel_vprintf(fmt, ap);
-	va_end(ap);
-	kernel_printf(KRST"\n");
-
-	for(;;);
 }

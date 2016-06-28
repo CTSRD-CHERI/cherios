@@ -3,7 +3,7 @@
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,18 +28,10 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
-#include "assert.h"
 #include "object.h"
+#include "namespace.h"
 
-void *  libuser_kernel_cb = NULL;
-void ** libuser_kernel_methods = NULL;
-
-register_t libuser_init(register_t flags) {
-	//init all for now
-	libuser_kernel_cb = get_kernel_object();
-	libuser_kernel_methods = get_kernel_methods();
-	assert(libuser_kernel_cb != NULL);
-	assert(libuser_kernel_methods != NULL);
-	return flags;
+void libuser_init(void * self_ctrl, void * self_cap, void * ns_ref, void * ns_id) {
+	object_init(self_ctrl, self_cap);
+	namespace_init(ns_ref, ns_id);
 }

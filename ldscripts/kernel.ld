@@ -33,8 +33,9 @@ INCLUDE "mips.ld"
 __kernel_load_physaddr = 0x100000;
 __kernel_load_virtaddr = __cached_base + __kernel_load_physaddr;
 
-__size_memory = 0x1000000;	/* Start simple: 16M above load address */
-__size_stack = 0x10000;		/* Start simple: 64K */
+__size_memory		= 0x1000000;	/* Start simple: 16M above load address */
+__size_boot_stack	= 0x10000;	/* Start simple: 64K */
+__size_exception_stack	= 0x10000;	/* Start simple: 64K */
 
 CAP_ALIGN = 0x20;
 PAGE_ALIGN = 0x1000;
@@ -115,10 +116,12 @@ SECTIONS
 	 */
 	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
 	__stop_heap = ALIGN((__kernel_load_virtaddr + __size_memory) -
-	    __size_stack, PAGE_ALIGN);
+	    __size_boot_stack - __size_exception_stack, PAGE_ALIGN);
 	__size_heap = __stop_heap - __start_heap;
 
-	__start_stack = __stop_heap;
-	__stop_stack = __start_stack + __size_stack;
-	__rest_of_memory = __stop_stack;
+	__start_boot_stack	= __stop_heap;
+	__stop_boot_stack	= __start_boot_stack + __size_boot_stack;
+	__start_exception_stack	= __stop_boot_stack;
+	__stop_exception_stack	= __start_exception_stack + __size_exception_stack;
+	__rest_of_memory	= __stop_exception_stack;
 }

@@ -29,24 +29,31 @@
  */
 
 #include "mips.h"
+#include "dlmalloc.h"
+
+static mspace mymspace = NULL;
+#define mymalloc(bytes)  mspace_malloc(mymspace, bytes)
+#define mycalloc(elems, size)  mspace_calloc(mymspace, elems, size)
+#define myfree(mem)  mspace_free(mymspace, mem)
+
+static inline void alloc_init() {
+	if(mymspace == NULL) {
+		mymspace = create_mspace(0,0);
+	}
+}
 
 void * malloc(size_t n) {
-	void * ret;
+	alloc_init();
+	return mymalloc(n);
+}
 
-	__asm__ __volatile__ (
-		"li   $v0, 17 \n"
-		"move $a0, %[n] \n"
-		"syscall      \n"
-		"cmove %[ret], $c3 \n"
-		: [ret] "=C" (ret)
-		: [n]"r" (n));
-	return ret;
+void * calloc(size_t n, size_t s) {
+	alloc_init();
+	return mycalloc(n, s);
 }
 
 void free(void * p) {
-	__asm__ __volatile__ (
-		"li   $v0, 18 \n"
-		"cmove $c3, %[p] \n"
-		"syscall      \n"
-		:: [p]"C" (p));
+	assert(mymspace != NULL);
+	myfree(p);
+	return;
 }

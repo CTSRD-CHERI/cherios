@@ -32,8 +32,8 @@
 
 void socket_init(void);
 
-void socket(void);
-void bind(int socket, int port);
-void connect(int socket, int port);
-void recfrom(int socket);
-void sendto(int socket, void * msg);
+int socket(void);
+int bind(int socket, int port);
+int connect(int socket, int port);
+void * recfrom(int socket);
+int sendto(int socket, void * msg);

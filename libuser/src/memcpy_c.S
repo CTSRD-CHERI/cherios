@@ -73,7 +73,8 @@ memcpy_c:
 	CGetOffset $at, $c4
 	dadd     $v1, $v1, $at
 	andi     $12, $v0, CAP_ALIGN_MASK # t4 = dst % CAP_SIZE
-	CToPtr   $v0, $c0, $c3       # Return ptr in integer return
+	CGetDefault $c5
+	CToPtr   $v0, $c5, $c3       # Return ptr in integer return
 	andi     $13, $v1, CAP_ALIGN_MASK # t5 = src % CAP_SIZE
 	daddi    $a1, $zero, 0       # Store 0 in $a1 - we'll use that for the
 	                             # offset later.
