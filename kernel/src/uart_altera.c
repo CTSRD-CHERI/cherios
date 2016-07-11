@@ -160,6 +160,9 @@ void
 uart_write(char ch)
 {
 
+	if(ch == '\n') {
+		uart_data_write('\r');
+	}
 	uart_data_write(ch);
 }
 
