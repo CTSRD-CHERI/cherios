@@ -36,6 +36,11 @@
 #include "misc.h"
 #include "object.h"
 #include "string.h"
+#include "statcounters.h"
+
+statcounters_bank_t theCounterStart;
+statcounters_bank_t theCounterEnd;
+statcounters_bank_t theCounterDiff;
 
 void print_build_date(void) {
 	int filelen=0;
@@ -69,6 +74,13 @@ void load_modules(void) {
 }
 
 int cherios_main(void) {
+    /* Reset the statcounters */
+    reset_statcounters();
+    zero_statcounters(&theCounterStart);
+    zero_statcounters(&theCounterEnd);
+    zero_statcounters(&theCounterDiff);
+    sample_statcounters(&theCounterStart);
+
 	/* Init hardware */
 	hw_init();
 

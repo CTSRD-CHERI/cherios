@@ -29,10 +29,15 @@
  */
 
 #include "klib.h"
+#include "statcounters.h"
 
 /*
  * Various util functions
  */
+
+extern statcounters_bank_t theCounterStart;
+extern statcounters_bank_t theCounterEnd;
+extern statcounters_bank_t theCounterDiff;
 
 void __kernel_assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
@@ -68,6 +73,10 @@ void kernel_freeze(void) {
 
 void kernel_panic(const char *fmt, ...) {
 	va_list ap;
+
+    sample_statcounters(&theCounterEnd);
+    diff_statcounters(&theCounterEnd, &theCounterStart, &theCounterDiff);
+    dump_statcounters_stdout(&theCounterDiff);
 
 	kernel_printf(KMAJ"panic: ");
 	va_start(ap, fmt);

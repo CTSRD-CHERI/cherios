@@ -24,6 +24,7 @@ set(LIBKERNEL_SRCS
     src/syscalls.c
     src/timer.c
     src/uart.c
+    src/statcounters.c
 )
 set(LIBKERNEL_ASM_SRCS
     src/exception.S
