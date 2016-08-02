@@ -97,8 +97,20 @@ start_common:
 	cjalr		$c12, $c17
 	nop
 
-	# main() done. creturn to go in waiting state.
-	cfromptr $c1, $c1, $0
+	# main() done. Exit or CReturn
+	dla		$t0, msg_enable
+	cgetdefault	$c17
+	cld		$t0, $t0, 0($c17)
+	bne		$t0, $zero, to_msg
+	nop
+	dla		$t0, act_self_ctrl
+	clc		$c3, $t0, 0($c17)
+	li		$v0, 26
+	syscall
+
+to_msg:
+	# CReturn to go in waiting state.
+	cfromptr	$c1, $c1, $0
 	creturn
 
 	#First 'real' message. Go to appropriate handler

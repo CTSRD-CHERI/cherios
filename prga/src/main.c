@@ -197,9 +197,9 @@ int main(int argc, __attribute__((unused)) char *argv[]) {
 	syscall_puts("mspace ok\n");
 	#define mymalloc(bytes)  mspace_malloc(mymspace, bytes)
 	#define myfree(mem)  mspace_free(mymspace, mem)
-	void * p = mymalloc(1024*1024);
-	CHERI_PRINT_CAP(p);
-	myfree(p);
+	void * pt1 = mymalloc(1024*1024);
+	//CHERI_PRINT_CAP(pt1);
+	myfree(pt1);
 
 	for(size_t i=0x60; i<0x80; i++) {
 		//printf("L%lx\n", i);
@@ -208,7 +208,7 @@ int main(int argc, __attribute__((unused)) char *argv[]) {
 		//CHERI_PRINT_CAP(q);
 		myfree(q);
 	}
-	syscall_puts(KUND"lin ok\n");
+	syscall_puts("lin ok\n");
 
 	void * oldq = NULL;
 	for(size_t i=0; i<21; i++) {
@@ -222,7 +222,7 @@ int main(int argc, __attribute__((unused)) char *argv[]) {
 		myfree(oldq);
 		oldq = q;
 	}
-	syscall_puts(KUND"range ok\n");
+	syscall_puts("range ok\n");
 	for(size_t i=0; i<10; i++) {
 		void * q = mymalloc(1UL << 19);
 		//CHERI_PRINT_CAP(q);

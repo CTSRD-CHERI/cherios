@@ -32,17 +32,17 @@
 
 int oid = 3;
 
-void * new_cookie(void) {
+void * new_identifier(void) {
 	int * object = malloc(sizeof(int));
 	assert(object != NULL);
 	*object = oid++;
-	return object;
+	return act_seal_id(object);
 }
 
 extern void msg_entry;
 void (*msg_methods[]) = {socket, bind, connect, recfrom, sendto};
 size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, new_cookie, dtor_null};
+void (*ctrl_methods[]) = {NULL, new_identifier, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
 int main(void)
@@ -59,5 +59,6 @@ int main(void)
 	}
 	printf("Sockets: register OK\n");
 
+	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;
 }

@@ -28,12 +28,8 @@
  * SUCH DAMAGE.
  */
 
-INCLUDE "mips.ld"
+INCLUDE "common.ld"
 
-__kernel_load_physaddr = 0x100000;
-__kernel_load_virtaddr = __cached_base + __kernel_load_physaddr;
-
-__size_memory		= 0x1000000;	/* Start simple: 16M above load address */
 __size_boot_stack	= 0x10000;	/* Start simple: 64K */
 __size_exception_stack	= 0x10000;	/* Start simple: 64K */
 
@@ -114,12 +110,7 @@ SECTIONS
 	 * No need to include anything after the following in the binary --
 	 * we just define symbols, and don't move '.'.
 	 */
-	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_heap = ALIGN((__kernel_load_virtaddr + __size_memory) -
-	    __size_boot_stack - __size_exception_stack, PAGE_ALIGN);
-	__size_heap = __stop_heap - __start_heap;
-
-	__start_boot_stack	= __stop_heap;
+	__start_boot_stack	= ALIGN(__stop_bss, PAGE_ALIGN);
 	__stop_boot_stack	= __start_boot_stack + __size_boot_stack;
 	__start_exception_stack	= __stop_boot_stack;
 	__stop_exception_stack	= __start_exception_stack + __size_exception_stack;

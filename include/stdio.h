@@ -43,8 +43,11 @@ int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va
 int	vsprintf(char *buf, const char *cfmt, va_list ap);
 int	vsnprintf(char *str, size_t size, const char *format, va_list ap);
 int	printf(const char *fmt, ...);
+int	vprintf(const char *fmt, va_list ap);
 int	fprintf(FILE * f, const char *fmt, ...);
 int	puts(const char *s);
+int	putc(int character, FILE * stream);
+int	fputc(int character, FILE * stream);
 void	panic(const char *str) __dead2;
 
 #endif /* !__STDIO_H__ */

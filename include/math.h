@@ -28,6 +28,9 @@
  * SUCH DAMAGE.
  */
 
+#ifndef _MATH_H_
+#define _MATH_H_
+
 #include "mips.h"
 
 static inline int imax(int a, int b) {
@@ -38,6 +41,10 @@ static inline int imin(int a, int b) {
 	return (a<b ? a : b);
 }
 
+static inline size_t umax(size_t a, size_t b) {
+	return (a>b ? a : b);
+}
+
 static inline int slog2(size_t s) {
 	int i=0;
 	while(s) {
@@ -46,3 +53,5 @@ static inline int slog2(size_t s) {
 	}
 	return i;
 }
+
+#endif

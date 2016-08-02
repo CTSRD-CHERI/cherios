@@ -59,7 +59,7 @@ static void buf_puts(char * str) {
 }
 
 void buf_putc(char chr) {
-	static size_t offset;
+	static size_t offset = 0;
 	const size_t buf_size = 0x100;
 	static char buf[buf_size+1];
 	buf[offset++] = chr;
@@ -95,6 +95,20 @@ int puts(const char *s) {
 	return 0;
 }
 
+int putc(int character, FILE *f) {
+	return fputc(character, f);
+}
+
+int fputc(int character, FILE *f) {
+	if(f != NULL) {
+		panic("fprintf not implememted");
+	}
+	buf_putc((unsigned char)character);
+	return character;
+}
+
+
+
 int
 printf(const char *fmt, ...)
 {
@@ -110,7 +124,7 @@ printf(const char *fmt, ...)
 
 /* maps to printf */
 int
-fprintf(FILE *f __unused, const char *fmt, ...)
+fprintf(FILE *f, const char *fmt, ...)
 {
 	if(f != NULL) {
 		panic("fprintf not implememted");

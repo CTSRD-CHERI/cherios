@@ -28,7 +28,9 @@
  * SUCH DAMAGE.
  */
 
-#define COLORS
+#ifndef NO_COLORS
+	#define COLORS
+#endif
 
 #ifdef COLORS
 	#define KRST "\x1B[00m"

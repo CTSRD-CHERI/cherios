@@ -32,15 +32,16 @@
 #ifndef _CHERIOS_KLIB_H_
 #define	_CHERIOS_KLIB_H_
 
+#include "kernel.h"
 #include "mips.h"
-#include "assert.h"
+#include "activations.h"
 #include "cdefs.h"
 #include "cheric.h"
 #include "colors.h"
-#include "stdarg.h"
-#include "activations.h"
-
-//#define __TRACE__
+#include "math.h"
+#include "sched.h"
+#include "string.h"
+#include "kutils.h"
 
 #ifdef __TRACE__
 	#define KERNEL_TRACE kernel_trace
@@ -49,50 +50,65 @@
 	#define KERNEL_TRACE(...)
 	#define KERNEL_VTRACE(...)
 #endif
-#define KERNEL_ERROR(...) kernel_error(__FILE__, __func__, __LINE__, __VA_ARGS__)
 
-#define	kernel_assert(e)	((e) ? (void)0 : __kernel_assert(__func__, \
+#ifndef __LITE__
+	#include "stdarg.h"
+	#define	kernel_assert(e)	((e) ? (void)0 : __kernel_assert(__func__, \
 				__FILE__, __LINE__, #e))
+	#define KERNEL_ERROR(...) kernel_error(__FILE__, __func__, __LINE__, __VA_ARGS__)
+#else
+	#define	kernel_assert(e)
+	#define KERNEL_ERROR(...)
+#endif
 
 /*
  * Kernel library routines.
  */
-void	kernel_reschedule(void);
-void	kernel_skip(void);
-void	kernel_skip_pid(int pid);
+void	kernel_skip_instr(int pid);
 void	kernel_ccall(void);
 void	kernel_creturn(void);
 void	kernel_exception_syscall(void);
 
+void	kernel_interrupts_init(int enable_timer);
+void	kernel_interrupt(void);
+int	kernel_interrupt_register(int number);
+int	kernel_interrupt_enable(int number);
+
 void	kernel_timer_init(void);
 void	kernel_timer(void);
 
+void	kernel_puts(const char *s);
+void	kernel_panic(const char *s) __dead2;
+#ifndef __LITE__
 #define printf kernel_printf
 int	kernel_printf(const char *fmt, ...);
 int	kernel_vprintf(const char *fmt, va_list ap);
-void	kernel_panic(const char *fmt, ...) __dead2;
 void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
 void	kernel_trace(const char *context, const char *fmt, ...);
 void 	kernel_error(const char *file, const char *func, int line, const char *fmt, ...);
 void	kernel_vtrace(const char *context, const char *fmt, va_list ap);
+#endif
 
 void	hw_reboot(void) __dead2;
-void	kernel_freeze(void);
-void *	kernel_cap_to_exec(const void * p);
-void *	kernel_seal(const void *p, uint64_t otype);
-void *	kernel_unseal(void *p, uint64_t otype);
-void	regdump(int reg_num);
+void	kernel_freeze(void) __dead2;
 
 int	try_gc(void * p, void * pool);
 
 int	msg_push(int dest, int src, void *, void *);
-void	msg_pop(int act);
-status_e msg_try_wait(int act);
+void	msg_pop(aid_t act);
+void	msg_queue_init(aid_t act);
+int	msg_queue_empty(aid_t act);
 
 void	act_init(void);
-void	act_wait(int act);
-void *	act_register(const reg_frame_t * frame);
-void *	act_get_ref(proc_t * ctrl);
-void *	act_get_id(proc_t * ctrl);
+void	act_wait(int act, aid_t next_hint);
+void *	act_register(const reg_frame_t * frame, const char * name);
+void *	act_get_ref(act_t * ctrl);
+void *	act_get_id(act_t * ctrl);
+int	act_get_status(act_t * ctrl);
+int	act_revoke(act_t * ctrl);
+int	act_terminate(act_t * ctrl);
+void *	act_seal_identifier(void * identifier);
+
+void	regdump(int reg_num);
 
 #endif /* _CHERIOS_KLIB_H_ */

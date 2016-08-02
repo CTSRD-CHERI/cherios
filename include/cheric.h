@@ -36,6 +36,18 @@
 #include "mips.h"
 
 /*
+ * Derive CHERI-flavor from capability size
+ */
+
+#if _MIPS_SZCAP == 256
+	#define _CHERI256_
+#elif _MIPS_SZCAP == 256
+	#define _CHERI128_
+#else
+	#error Unknown capability size
+#endif
+
+/*
  * Programmer-friendly macros for CHERI-aware C code -- requires use of
  * CHERI-aware Clang/LLVM, and full CP2 context switching, so not yet usable
  * in the kernel.
@@ -104,10 +116,10 @@
 #define CHERI_PERM_STORE_LOCAL_CAP	(1 <<  6)
 #define CHERI_PERM_SEAL			(1 <<  7)
 #define CHERI_PERM_ACCESS_SYS_REGS	(1 << 10)
-#define CHERI_PERM_SOFT_1		(1 << 11)
-#define CHERI_PERM_SOFT_2		(1 << 12)
-#define CHERI_PERM_SOFT_3		(1 << 13)
-#define CHERI_PERM_SOFT_4		(1 << 14)
+#define CHERI_PERM_SOFT_1		(1 << 15)
+#define CHERI_PERM_SOFT_2		(1 << 16)
+#define CHERI_PERM_SOFT_3		(1 << 17)
+#define CHERI_PERM_SOFT_4		(1 << 18)
 
 /*
  * Two variations on cheri_ptr() based on whether we are looking for a code or
@@ -236,6 +248,42 @@ cheri_zerocap(void)
 #define CHERI_ELEM(cap, idx)						\
 	cheri_setbounds(cap + idx, sizeof(cap[0]))
 
+#define VCAP_X CHERI_PERM_EXECUTE
+#define VCAP_R CHERI_PERM_LOAD
+#define VCAP_W CHERI_PERM_STORE
+#define VCAP_RW (VCAP_R | VCAP_W)
+
+static inline int VCAP_I(const void * cap, size_t len, unsigned flags, u64 sealed) {
+	if(!cheri_gettag(cap)) {
+		return 0;
+	}
+	if(cheri_getsealed(cap) != sealed) {
+		return 0;
+	}
+	if(cheri_getlen(cap) < len) {
+		return 0;
+	}
+	if((cheri_getperm(cap) & flags) != flags) {
+		return 0;
+	}
+	return 1;
+}
+
+static inline int VCAP(const void * cap, size_t len, unsigned flags) {
+	return VCAP_I(cap, len, flags, 0);
+}
+
+static inline int VCAPS(const void * cap, size_t len, unsigned flags) {
+	return VCAP_I(cap, len, flags, 1);
+}
+
+//todo: have real one in compiler
+#ifdef _CHERI128_
+#define	__sealable	__attribute__((aligned(0x1000)))
+#else
+#define	__sealable
+#endif
+
 /*
  * Canonical C-language representation of a capability.
  */
@@ -243,7 +291,8 @@ typedef void * capability;
 
 /*
  * Register frame to be preserved on context switching. The order of
- * save/restore is very important for both reasons of correctness and security
+ * save/restore is very important for both reasons of correctness and security.
+ * Assembler routines know about this layout, so great care should be taken.
  */
 typedef struct reg_frame {
 	/*

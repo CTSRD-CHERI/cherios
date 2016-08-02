@@ -4564,6 +4564,7 @@ size_t destroy_mspace(mspace msp) {
 */
 
 void* mspace_malloc(mspace msp, size_t bytes) {
+  assert(msp != NULL);
   bytes += sizeof(size_t)*2; //hack related to TWO_SIZE_T_SIZES
   mstate ms = (mstate)msp;
   if (!ok_magic(ms)) {

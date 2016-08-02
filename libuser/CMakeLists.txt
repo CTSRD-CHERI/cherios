@@ -12,6 +12,7 @@ set(LIBUSER_SRCS
     src/debug.c
     src/dlmalloc.c
     src/errno.c
+    src/interrupt.c
     src/libuser.c
     src/malloc.c
     src/memset.c
@@ -23,11 +24,13 @@ set(LIBUSER_SRCS
     src/panic.c
     src/printf.c
     src/ssleep.c
+    src/statcounters.c
     src/stdio.c
     src/stdlib.c
     src/strcmp.c
     src/strlen.c
     src/subr_prf.c
+    src/virtioblk.c
 )
 
 add_library(user STATIC ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})

@@ -29,7 +29,8 @@
  */
 
 #include "klib.h"
-#include "math.h"
+
+#ifndef __LITE__
 
 /*
  * Prints a nice regump
@@ -101,7 +102,7 @@ void regdump(int reg_num) {
 
 	REG_DUMP_C(c1); REG_DUMP_C(c2); printf("\n");
 
-	REG_DUMP_C(c3); REG_DUMP_C(c4); REG_DUMP_C(c5); REG_DUMP_C(c6); printf("\n");
+	REG_DUMP_C(c3); REG_DUMP_C(c4); REG_DUMP_C(c5); REG_DUMP_C(c6);  printf("\n");
 	REG_DUMP_C(c7); REG_DUMP_C(c8); REG_DUMP_C(c9); REG_DUMP_C(c10); printf("\n");
 
 	REG_DUMP_C(c11); REG_DUMP_C(c12); REG_DUMP_C(c13);
@@ -114,4 +115,12 @@ void regdump(int reg_num) {
 
 	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
 }
+
+#else
+
+void regdump(int reg_num __unused) {
+	return;
+}
+
+#endif
 

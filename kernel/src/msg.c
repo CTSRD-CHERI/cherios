@@ -30,28 +30,30 @@
 
 #include "klib.h"
 
+static queue_t msg_queues[MAX_ACTIVATIONS];
+
 /*
  * Routines to handle the message queue
  */
 
 static msg_nb_t safe(msg_nb_t n, msg_nb_t qlen) {
-	assert(qlen > 0);
+	kernel_assert(qlen > 0);
 	return n%(qlen);
 }
 
 static int full(queue_t * queue, msg_nb_t qlen) {
-	assert(qlen > 0);
+	kernel_assert(qlen > 0);
 	return safe(queue->end+1, qlen) == queue->start;
 }
 
-static int empty(queue_t * queue) {
+static inline int empty(queue_t * queue) {
 	return queue->start == queue->end;
 }
 
 int msg_push(int dest, int src, void * identifier, void * sync_token) {
-	queue_t * queue = &kernel_acts[dest].queue;
-	msg_nb_t  qlen  =  kernel_acts[dest].queue_len;
-	assert(qlen > 0);
+	queue_t * queue = msg_queues + dest;
+	msg_nb_t  qlen  = kernel_acts[dest].queue_len;
+	kernel_assert(qlen > 0);
 	int next_slot = queue->end;
 	if(full(queue, qlen)) {
 		kernel_panic("queue full");
@@ -72,18 +74,18 @@ int msg_push(int dest, int src, void * identifier, void * sync_token) {
 
 	queue->end = safe(queue->end+1, qlen);
 
-	if(kernel_acts[dest].status == status_waiting) {
-		kernel_acts[dest].status = status_schedulable;
+	if(kernel_acts[dest].sched_status == sched_waiting) {
+		sched_d2a(dest, sched_schedulable);
 	}
 	return 0;
 }
 
-void msg_pop(int act) {
-	queue_t * queue = &kernel_acts[act].queue;
+void msg_pop(aid_t act) {
+	queue_t * queue = msg_queues + act;
 	msg_nb_t  qlen  =  kernel_acts[act].queue_len;
 
-	assert(kernel_acts[act].status == status_schedulable);
-	assert(!empty(queue));
+	kernel_assert(kernel_acts[act].sched_status == sched_schedulable);
+	kernel_assert(!empty(queue));
 
 	int start = queue->start;
 
@@ -102,11 +104,17 @@ void msg_pop(int act) {
 	queue->start = safe(start+1, qlen);
 }
 
-status_e msg_try_wait(int act) {
-	queue_t * queue = &kernel_acts[act].queue;
+int msg_queue_empty(aid_t act) {
+	queue_t * queue = msg_queues + act;
 	if(empty(queue)) {
-		return status_waiting;
-	} else {
-		return status_schedulable;
+		return 1;
 	}
+	return 0;
+}
+
+void msg_queue_init(aid_t act) {
+	msg_queues[act].start = 0;
+	msg_queues[act].end = 0;
+	msg_queues[act].len = MAX_MSG;
+	//todo: zero queue?
 }

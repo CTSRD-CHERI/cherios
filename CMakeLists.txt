@@ -4,6 +4,14 @@ cmake_minimum_required(VERSION 3.4)
 # to initialize all the C and ASM rules
 project(CheriOS LANGUAGES NONE VERSION 0.0.1)
 
+#
+# Configure hardare at compile time.  Default to "qemu" for CHERI QEMU MALTA.
+# Other option are "fpga" for CHERI on FPGA and "l3" for the L3 simulator.
+#
+set(HARDWARE "qemu" CACHE STRING
+"Configure hardare at compile time.  Default to \"qemu\" for CHERI QEMU MALTA.\
+ Other option are \"fpga\" for CHERI on FPGA and \"l3\" for the L3 simulator.")
+
 # Set CHERI_SDK_DIR to the CHERI_SDK_DIR env variable if it is not given yet
 set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
 
@@ -94,19 +102,22 @@ endif()
 
 #
 # Configure a console driver at compile time.  Default to the UART found in
-# the MALTA reference board ("malta").  Other options are "altera" for the
-# ALTERA JTAG UART used for BERI on FPGA, and "gxemul" for the GXemul
-# low-level console device.
+# the MALTA reference board ("malta").  Other option is "altera" for the
+# ALTERA JTAG UART used for BERI on FPGA.
 #
-# FIXME: gxemul is broken
-set(CONSOLE "malta" CACHE STRING
-"The console driver to use. Defaults to the UART found in the MALTA reference \
-board (\"malta\").  Other options are \"altera\" for the ALTERA JTAG UART \
-used for BERI on FPGA, and \"gxemul\" for the GXemul low-level console device.")
+if("${HARDWARE}" STREQUAL "qemu")
+    set(CONSOLE "malta")
+elseif("${HARDWARE}" STREQUAL "fpga")
+    set(CONSOLE "altera")
+elseif("${HARDWARE}" STREQUAL "l3")
+    set(CONSOLE "altera")
+else()
+    message(FATAL_ERROR "Invalid choice for HARDWARE: ${HARDWARE}")
+endif()
 
 include_directories(include)
 # set up the right flags for C and ASM sources
-set(ASM_COMPILER_FLAGS
+set(ASMC_COMPILER_FLAGS
     -mcpu=mips4
     -mabi=sandbox
     -cheri-linker
@@ -115,14 +126,20 @@ set(ASM_COMPILER_FLAGS
     -fcolor-diagnostics
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
+set(ASM_COMPILER_FLAGS
+    ${ASMC_COMPILER_FLAGS}
+    -mllvm -asm-macro-max-nesting-depth=100
+)
 set(C_COMPILER_FLAGS
-    ${ASM_COMPILER_FLAGS}
+    ${ASMC_COMPILER_FLAGS}
     -nostdinc
     -O2 # TODO: make this depend on the configuration
+    -fomit-frame-pointer # TODO: make this depend on the configuration
     -G0
     -mxgot
     -Werror
     -std=c11
+    -DHARDWARE_${HARDWARE}
     -DCONSOLE_${CONSOLE}
 )
 set(C_WARNING_FLAGS
@@ -135,13 +152,9 @@ set(C_WARNING_FLAGS
     -Wpointer-arith
     -Wredundant-decls
     -Wswitch-default
-    -Wswitch-enum
     -Wundef
     -Wwrite-strings
     -Wshadow
-#    -Wcast-align
-#    -Wcast-qual
-#    -Wconversion
 
     -Wno-error=unused-function
     -Wno-error=unused-variable
@@ -162,6 +175,11 @@ set(CHERIOS_FILESYSTEM_DEPENDS "" CACHE INTERNAL "dependencies for filesystem")
 
 # Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
 function(add_cherios_executable _target)
+	add_cherios_executable_low(${_target} ${ARGN})
+	target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_executable_low _target)
     cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
     if(NOT add_exe_LINKER_SCRIPT)
         message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
@@ -194,7 +212,11 @@ function(add_cherios_executable _target)
         LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
         OUTPUT_NAME "${_target}.elf"
     )
-    target_link_libraries(${_target} CheriOS::LibUser)
+    # TODO: don't hardcode common.ld as an additional file dependency
+    set_target_properties(${_target} PROPERTIES
+        LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/common.ld"
+        OUTPUT_NAME "${_target}.elf"
+    )
 
     # add it to the filesystem dir if requested
     if(add_exe_ADD_TO_FILESYSTEM)
@@ -204,6 +226,9 @@ function(add_cherios_executable _target)
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
             # copy the binary to the fs root directory
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
+            # remove some sections to save place (TODO: make this depend on the configuration)
+            COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
+            COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types "${_fs_target_path}"
         )
         # Using a CACHE INTERNAL variable ensures that changes are globally visible
         set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
@@ -214,10 +239,19 @@ function(add_cherios_executable _target)
     )
 endfunction()
 
+
 add_subdirectory(libuser)
+
+add_subdirectory(fatfs)
+add_subdirectory(hello)
 add_subdirectory(memmgt)
 add_subdirectory(namespace)
 add_subdirectory(prga)
 add_subdirectory(sockets)
 add_subdirectory(uart)
+add_subdirectory(virtio-blk)
+add_subdirectory(zlib)
+add_subdirectory(zlib_test)
+
 add_subdirectory(kernel)
+add_subdirectory(boot)

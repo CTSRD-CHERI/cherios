@@ -42,5 +42,6 @@ int main(void)
 
 	ns_init();
 
+	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;
 }

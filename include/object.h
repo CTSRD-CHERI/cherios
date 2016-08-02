@@ -28,6 +28,9 @@
  * SUCH DAMAGE.
  */
 
+#ifndef _OBJECT_H_
+#define	_OBJECT_H_
+
 #include "mips.h"
 
 extern void * act_self_ctrl;
@@ -36,15 +39,22 @@ extern void * act_self_id;
 extern void * act_self_cap;
 void *	act_ctrl_get_ref(void * ctrl);
 void *	act_ctrl_get_id(void * ctrl);
+int	act_ctrl_revoke(void * ctrl);
+int	act_ctrl_terminate(void * ctrl);
 void *	act_get_cap(void);
+void *	act_seal_id(void * id);
 
 void	object_init(void * self_ctrl, void * self_cap);
 
-void ctor_null(void);
-void dtor_null(void);
-void * get_curr_cookie(void);
+void	ctor_null(void);
+void	dtor_null(void);
+void *	get_curr_cookie(void);
+void	set_curr_cookie(void * cookie);
 
 void * get_cookie(void * cb, void * cs);
+
+extern void * sync_token;
+extern long msg_enable;
 
 typedef struct
 {
@@ -60,12 +70,13 @@ ret_t ccall_1(void * cb, void * cs, int method_nb,
 void	ccall_c_n(void * cb, void * cs, int method_nb, const void * carg);
 void *	ccall_n_c(void * cb, void * cs, int method_nb);
 void *	ccall_r_c(void * cb, void * cs, int method_nb, int rarg);
+void *	ccall_c_c(void * cb, void * cs, int method_nb, const void * carg);
 void *	ccall_rr_c(void * cb, void * cs, int method_nb, int rarg, int rarg2);
 register_t ccall_n_r(void * cb, void * cs, int method_nb);
 register_t ccall_r_r(void * cb, void * cs, int method_nb, int rarg);
 register_t ccall_c_r(void * cb, void * cs, int method_nb, void * carg);
 register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg, int rarg2);
-register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, void * carg);
+register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, const void * carg);
 void	ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2);
 void	ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg);
 register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg1, void * carg1, void * carg2);
@@ -74,3 +85,4 @@ void *	ccall_rrrc_c(void * cb, void * cs, int method_nb,
 register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
                     register_t rarg1, register_t rarg2, void * carg1, void * carg2);
 
+#endif

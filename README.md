@@ -18,7 +18,9 @@ You need a 256-bits Cheri SDK ([LLVM] and [Clang]) to build CheriOS and [cheri-q
 $ git clone https://github.com/CTSRD-CHERI/cherios.git cherios
 $ cd cherios
 $ ./build.sh
-$ qemu-system-cheri -M malta -kernel cherios.elf -nographic -no-reboot -m 2048
+$ dd if=/dev/zero of=disk.img bs=1M count=1
+$ qemu-system-cheri -M malta -kernel cherios.elf -nographic -no-reboot -m 2048 \
+   -drive if=none,file=disk.img,id=drv,format=raw -device virtio-blk-device,drive=drv
 ```
 
 ### Code organisation

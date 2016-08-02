@@ -52,6 +52,7 @@ int main(void) {
 
 	/* Get capability to heap */
 	void * heap = act_get_cap();
+	//CHERI_PRINT_CAP(heap);
 	assert(heap != NULL);
 
 	/*
@@ -71,5 +72,6 @@ int main(void) {
 
 	syscall_puts("memmgt: setup done\n");
 
+	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;
 }

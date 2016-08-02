@@ -4,7 +4,7 @@ BUILDDIR=build
 
 if [ ! -d "$BUILDDIR" ]; then
 	mkdir -p $BUILDDIR
-	ln -s $BUILDDIR/kernel/cherios.elf .
+	ln -sf $BUILDDIR/boot/cherios.elf .
 	cd $BUILDDIR
 	cmake -GNinja ..
 	cd ..

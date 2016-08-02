@@ -29,51 +29,59 @@
  */
 
 #include "klib.h"
-#include "kernel.h"
-#include "string.h"
 
 /*
  * CCall/CReturn handler
  */
 
-/* Creates a token for synchronous CCalls. This ensures the anwser is unique. */
-static void * get_sync_token(aid_t ccaller, u_int sealc3) {
+/* Creates a token for synchronous CCalls. This ensures the answer is unique. */
+static void * get_sync_token(aid_t ccaller) {
 	static uint32_t unique = 0;
-	assert(sealc3 <= 1);
 	unique++;
 	kernel_acts[ccaller].sync_token.expected_reply  = unique;
 
-	uint64_t token_offset = (ccaller << 32) + (sealc3 << 31) + unique;
-	void * sync_token = cheri_setbounds(cheri_getdefault(), 0);
+	uint64_t token_offset = (((u64)ccaller) << 32) + unique;
+	void * sync_token = cheri_andperm(cheri_getdefault(), 0);
+	#ifdef _CHERI256_
+	sync_token = cheri_setbounds(sync_token, 0);
+	#endif
 	sync_token = cheri_setoffset(sync_token, token_offset);
 	return kernel_seal(sync_token, 42000);
 }
 
-static void kernel_ccall_core(int sync) {
+static void kernel_ccall_core(int cflags) {
 	/* Unseal CCall cs and cb */
-	/* cb is the activation and cs the cookie */
+	/* cb is the activation and cs the identifier */
 	void * cs = kernel_exception_framep_ptr->cf_c2;
-	proc_t * cb = kernel_exception_framep_ptr->cf_c1;
+	act_t * cb = kernel_exception_framep_ptr->cf_c1;
 	int otype = cheri_gettype(cb);
 	cs = kernel_unseal(cs, otype);
 	cb = kernel_unseal(cb, otype);
 
-	void * sync_token = NULL;
-	if(sync) {
-		int sealc3 = 0;
-		if(((long)kernel_exception_framep[kernel_curr_proc].mf_v0) == -1) {
-			sealc3 = 1;
-		}
+	if(!(cheri_getperm(cs) & CHERI_PERM_STORE)) {
+		KERNEL_ERROR("Bad identifier: missing store permission");
+		return;
+	}
 
-		sync_token = get_sync_token(kernel_curr_proc, sealc3);
+	if(cb->status != status_alive) {
+		KERNEL_ERROR("Trying to CCall revoked activation %s-%d",
+		             cb->name, cb->aid);
+		return;
+	}
+
+	void * sync_token = NULL;
+	if(cflags & 2) {
+		sync_token = get_sync_token(kernel_curr_act);
 	}
 
 	/* Push the message on the queue */
-	msg_push(cb->aid, kernel_curr_proc, cs, sync_token);
+	msg_push(cb->aid, kernel_curr_act, cs, sync_token);
 
-	if(sync) {
-		kernel_acts[kernel_curr_proc].status = status_sync_block;
-		kernel_reschedule();
+	if(cflags & 2) {
+		sched_a2d(kernel_curr_act, sched_sync_block);
+	}
+	if(cflags & 1) {
+		sched_reschedule(cb->aid);
 	}
 }
 
@@ -81,42 +89,40 @@ void kernel_ccall(void) {
 	KERNEL_TRACE(__func__, "in");
 
 	uint32_t ccall_selector =
-	  *((uint32_t *)kernel_exception_framep[kernel_curr_proc].cf_pcc) & 0x7FF;
+	  *((uint32_t *)kernel_exception_framep_ptr->cf_pcc) & 0x7FF;
 
 	/* Ack ccall instruction */
-	kernel_skip_pid(kernel_curr_proc);
+	kernel_skip_instr(kernel_curr_act);
+
+	int cflags;
 
 	switch(ccall_selector) {
 		case 1: /* send */
-			kernel_ccall_core(0);
+			cflags = 0;
 			break;
 		case 2: /* send & switch */
-			kernel_ccall_core(0);
-			kernel_reschedule();
-			break;
-		case 3: /* send & wait */
-			kernel_ccall_core(0);
-			act_wait(kernel_curr_proc);
+			cflags = 1;
 			break;
 		case 4: /* sync call */
-			kernel_ccall_core(1);
+			cflags = 3;
 			break;
 		default:
 			KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
-			break;
+			return;
 	}
+	kernel_ccall_core(cflags);
 }
 
 void kernel_creturn(void) {
 	KERNEL_TRACE(__func__, "in");
 
 	/* Ack creturn instruction */
-	kernel_skip_pid(kernel_curr_proc);
+	kernel_skip_instr(kernel_curr_act);
 
-	sync_t * sync_token = kernel_exception_framep[kernel_curr_proc].cf_c1;
+	sync_t * sync_token = kernel_exception_framep_ptr->cf_c1;
 	if(sync_token == NULL) {
 		/* alias to "wait". Used by asynchronous primitives */
-		act_wait(kernel_curr_proc);
+		act_wait(kernel_curr_act, 0);
 		return;
 	}
 
@@ -131,25 +137,17 @@ void kernel_creturn(void) {
 	}
 
 	/* Make the caller runnable again */
-	assert(kernel_acts[ccaller].status = status_sync_block);
-	kernel_acts[ccaller].status = status_runnable;
-
-	/* Seal the identifier if needed */
-	int sealc3 = (sync_offset >> 31) & 1;
-	void * toseal = kernel_exception_framep[kernel_curr_proc].cf_c3;
-	if(sealc3) {
-		kernel_exception_framep[kernel_curr_proc].cf_c3 =
-		  kernel_seal(cheri_andperm(toseal, 0b111100011111101), kernel_curr_proc);
-	}
+	kernel_assert(kernel_acts[ccaller].sched_status == sched_sync_block);
+	sched_d2a(ccaller, sched_runnable);
 
 	/* Copy return values */
 	kernel_exception_framep[ccaller].cf_c3 =
-	   kernel_exception_framep[kernel_curr_proc].cf_c3;
+	   kernel_exception_framep_ptr->cf_c3;
 	kernel_exception_framep[ccaller].mf_v0 =
-	   kernel_exception_framep[kernel_curr_proc].mf_v0;
+	   kernel_exception_framep_ptr->mf_v0;
 	kernel_exception_framep[ccaller].mf_v1 =
-	   kernel_exception_framep[kernel_curr_proc].mf_v1;
+	   kernel_exception_framep_ptr->mf_v1;
 
 	/* Try to set the callee in waiting mode */
-	act_wait(kernel_curr_proc);
+	act_wait(kernel_curr_act, ccaller);
 }

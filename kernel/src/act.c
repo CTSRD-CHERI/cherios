@@ -29,8 +29,6 @@
  */
 
 #include "klib.h"
-#include "kernel.h"
-#include "string.h"
 
 /*
  * Routines to handle activations
@@ -39,94 +37,75 @@
 /* We only create activations for now, no delete */
 struct reg_frame		kernel_exception_framep[MAX_ACTIVATIONS];
 struct reg_frame *		kernel_exception_framep_ptr;
-proc_t				kernel_acts[MAX_ACTIVATIONS];
-aid_t 				kernel_curr_proc;
-static aid_t			kernel_next_act;
+act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
+aid_t 				kernel_curr_act;
+aid_t				kernel_next_act;
 
-static int			act_default_id_0;
-static const void *		act_default_id = &act_default_id_0;
+static const void *            act_default_id = NULL;
 
 void act_init(void) {
-	KERNEL_TRACE("boot", "activation init");
-	kernel_curr_proc = 0;
-	kernel_next_act = 1;
-	kernel_acts[kernel_curr_proc].status = status_runnable;
-	kernel_exception_framep_ptr = &kernel_exception_framep[kernel_curr_proc];
+	KERNEL_TRACE("init", "activation init");
+
+	act_default_id = cheri_setbounds(cheri_getdefault(), 0);
+
+	/* kernel activation */
+	kernel_next_act = 0;
+	struct reg_frame dummy_frame;
+	bzero(&dummy_frame, sizeof(struct reg_frame));
+	act_register(&dummy_frame, "kernel");
+	kernel_acts[0].status = status_terminated;
+	kernel_acts[0].sched_status = sched_terminated;
+
+	/* boot activation */
+	kernel_curr_act = 1;
+	kernel_exception_framep_ptr = &kernel_exception_framep[kernel_curr_act];
+	act_register(kernel_exception_framep, "boot");
+	sched_d2a(kernel_curr_act, sched_runnable);
 }
 
-static void act_schedule(aid_t act) {
-	assert(kernel_acts[act].status == status_schedulable);
-	/* Set message */
-	msg_pop(act);
-
-	/* Activation ready to be run */
-	kernel_acts[act].status = status_runnable;
-}
-
-void kernel_reschedule(void) {
-	kernel_assert(kernel_curr_proc < kernel_next_act);
-	#ifdef __TRACE__
-	size_t old_kernel_curr_proc = kernel_curr_proc;
-	#endif
-	int tries = 0;
-	again:
-	if(++kernel_curr_proc == kernel_next_act) {
-		kernel_curr_proc = 0;
-	}
-	tries++;
-	if(tries > MAX_ACTIVATIONS) {
-		KERNEL_ERROR("No activation to schedule");
-		kernel_freeze();
-	}
-	if(kernel_acts[kernel_curr_proc].status == status_schedulable) {
-		act_schedule(kernel_curr_proc);
-	}
-	if(kernel_acts[kernel_curr_proc].status != status_runnable) {
-		goto again;
-	}
-	kernel_exception_framep_ptr = kernel_exception_framep + kernel_curr_proc;
-	KERNEL_TRACE("exception", "Reschedule from task '%ld' to task '%ld'",
-		old_kernel_curr_proc, kernel_curr_proc );
-}
-
-void kernel_skip_pid(int pid) {
+void kernel_skip_instr(int pid) {
 	kernel_exception_framep[pid].mf_pc += 4; //assuming no branch delay slot
 	void * pcc = (void *) kernel_exception_framep[pid].cf_pcc;
 	pcc = __builtin_memcap_offset_increment(pcc, 4);
 	kernel_exception_framep[pid].cf_pcc = pcc;
 }
 
-void kernel_skip(void) {
-	kernel_exception_framep_ptr->mf_pc += 4; //assuming no branch delay slot
-	void * pcc = (void *) kernel_exception_framep_ptr->cf_pcc;
-	pcc = __builtin_memcap_offset_increment(pcc, 4);
-	kernel_exception_framep_ptr->cf_pcc = pcc;
-}
-
 static void * act_create_ref(aid_t aid) {
-	return kernel_seal(kernel_cap_to_exec(CHERI_ELEM(kernel_acts, aid)), aid);
+	return kernel_seal(kernel_cap_to_exec(kernel_acts + aid), aid);
 }
 
 static void * act_create_ctrl_ref(aid_t aid) {
-	return kernel_seal(CHERI_ELEM(kernel_acts, aid), 42001);
+	return kernel_seal(kernel_acts + aid, 42001);
 }
 
-void * act_register(const reg_frame_t * frame) {
+void * act_register(const reg_frame_t * frame, const char * name) {
 	aid_t aid = kernel_next_act;
 
 	/* set aid */
 	kernel_acts[aid].aid = aid;
 
-	/* set parent */
-	kernel_acts[aid].parent = kernel_curr_proc;
+	#ifndef __LITE__
+	/* set name */
+	kernel_assert(ACT_NAME_MAX_LEN > 0);
+	int name_len = 0;
+	if(VCAP(name, 1, VCAP_R)) {
+		name_len = imin(cheri_getlen(name), ACT_NAME_MAX_LEN-1);
+	}
+	for(int i = 0; i < name_len; i++) {
+		char c = name[i];
+		kernel_acts[aid].name[i] = c; /* todo: sanitize the name if we do not trust it */
+	}
+	kernel_acts[aid].name[name_len] = '\0';
+	#endif
+
+	/* set status */
+	kernel_acts[aid].status = status_alive;
 
 	/* set register frame */
 	memcpy(kernel_exception_framep + aid, frame, sizeof(struct reg_frame));
 
 	/* set queue */
-	kernel_acts[aid].queue.start = 0;
-	kernel_acts[aid].queue.end = 0;
-	kernel_acts[aid].queue.len = MAX_MSG;
+	msg_queue_init(aid);
 	kernel_acts[aid].queue_len = MAX_MSG;
 
 	/* set reference */
@@ -135,29 +114,66 @@ void * act_register(const reg_frame_t * frame) {
 	/* set default identifier */
 	kernel_acts[aid].act_default_id = kernel_seal(act_default_id, aid);
 
-	/* set status */
-	kernel_acts[aid].status = status_waiting;
+	/* set scheduling status */
+	sched_create(aid);
 
-	KERNEL_TRACE("exception", "%s OK! ", __func__);
+	KERNEL_TRACE("act", "%s OK! ", __func__);
 	/* done, update next_act */
 	kernel_next_act++;
 	return act_create_ctrl_ref(aid);
 }
 
-void * act_get_ref(proc_t * ctrl) {
+int act_revoke(act_t * ctrl) {
+	ctrl = kernel_unseal(ctrl, 42001);
+	aid_t aid = ctrl->aid;
+	if(kernel_acts[aid].status == status_terminated) {
+		return -1;
+	}
+	kernel_acts[aid].status = status_revoked;
+	return 0;
+}
+
+int act_terminate(act_t * ctrl) {
+	ctrl = kernel_unseal(ctrl, 42001);
+	aid_t act = ctrl->aid;
+	kernel_acts[act].status = status_terminated;
+	sched_delete(act);
+	kernel_acts[act].sched_status = sched_terminated;
+	KERNEL_TRACE("act", "Terminated %s:%d", kernel_acts[act].name, act);
+	if(act == kernel_curr_act) { /* terminated itself */
+		return 1;
+	}
+	return 0;
+}
+
+void * act_get_ref(act_t * ctrl) {
 	ctrl = kernel_unseal(ctrl, 42001);
 	aid_t aid = ctrl->aid;
 	return kernel_acts[aid].act_reference;
 }
 
-void * act_get_id(proc_t * ctrl) {
+void * act_get_id(act_t * ctrl) {
 	ctrl = kernel_unseal(ctrl, 42001);
 	aid_t aid = ctrl->aid;
 	return kernel_acts[aid].act_default_id;
 }
 
-void act_wait(int act) {
-	assert(kernel_acts[act].status == status_runnable);
-	kernel_acts[act].status = msg_try_wait(act);
-	kernel_reschedule();
+int act_get_status(act_t * ctrl) {
+	ctrl = kernel_unseal(ctrl, 42001);
+	aid_t aid = ctrl->aid;
+	return kernel_acts[aid].status;
+}
+
+void act_wait(int act, aid_t next_hint) {
+	kernel_assert(kernel_acts[act].sched_status == sched_runnable);
+	if(msg_queue_empty(act)) {
+		sched_a2d(act, sched_waiting);
+	} else {
+		kernel_acts[act].sched_status = sched_schedulable;
+	}
+	sched_reschedule(next_hint);
+}
+
+void * act_seal_identifier(void * identifier) {
+	return kernel_seal(cheri_andperm(identifier, 0b111100011111101), kernel_curr_act);
 }

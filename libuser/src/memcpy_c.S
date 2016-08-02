@@ -150,6 +150,8 @@ slow_memcpy_loop:                # byte-by-byte copy
 	csb      $a2, $a1, -1($c3)
 	ret                          # Return value remains in c1
 	nop
+memcpy_c_end:
+.size memcpy_c, memcpy_c_end - memcpy_c
 .end memcpy_c
 
 # Use the capability memcpy for normal memcopies. (Not enabled yet)

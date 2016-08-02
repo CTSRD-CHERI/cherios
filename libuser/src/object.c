@@ -78,6 +78,45 @@ void * act_ctrl_get_id(void * ctrl) {
 	return ref;
 }
 
+int act_ctrl_revoke(void * ctrl) {
+	int ret;
+	__asm__ (
+		"li    $v0, 25      \n"
+		"cmove $c3, %[ctrl] \n"
+		"syscall            \n"
+		"move %[ret], $v0   \n"
+		: [ret]"=r" (ret)
+		: [ctrl]"C" (ctrl)
+		: "v0", "$c3");
+	return ret;
+}
+
+int act_ctrl_terminate(void * ctrl) {
+	int ret;
+	__asm__ (
+		"li    $v0, 26      \n"
+		"cmove $c3, %[ctrl] \n"
+		"syscall            \n"
+		"move %[ret], $v0   \n"
+		: [ret]"=r" (ret)
+		: [ctrl]"C" (ctrl)
+		: "v0", "$c3");
+	return ret;
+}
+
+void * act_seal_id(void * id) {
+	void * sid;
+	__asm__ (
+		"li    $v0, 29      \n"
+		"cmove $c3, %[id]   \n"
+		"syscall            \n"
+		"cmove %[sid], $c3  \n"
+		: [sid]"=C" (sid)
+		: [id]"C" (id)
+		: "v0", "$c3");
+	return sid;
+}
+
 void ctor_null(void) {
 	return;
 }
@@ -94,6 +133,12 @@ void * get_curr_cookie(void) {
 	return object;
 }
 
+void set_curr_cookie(void * cookie) {
+	__asm__ (
+		"cmove $c26, %[cookie] \n"
+		:: [cookie]"C" (cookie));
+}
+
 void * get_cookie(void * cb, void * cs) {
 	return ccall_n_c(cb, cs, -1);
 }
@@ -107,7 +152,8 @@ void * get_cookie(void * cb, void * cs) {
 #define CCALL_INOPS [cb]"C" (cb), [cs]"C" (cs), [method_nb]"r" (method_nb)
 #define CCALL_CLOBS "$c1","$c2","$c3","$c4","$c5","v0","v1","a0","a1","a2"
 #define CCALL_TOP \
-	assert(cb != NULL); \
+	assert(VCAPS(cb, 0, VCAP_X)); \
+	assert(VCAPS(cs, 0, VCAP_W)); \
 	ret_t ret; \
 	__asm__ __volatile__ ( \
 		CCALL_ASM_CSCB \
@@ -160,6 +206,12 @@ void * ccall_r_c(void * cb, void * cs, int method_nb, int rarg) {
 	return ret.cret;
 }
 
+void * ccall_c_c(void * cb, void * cs, int method_nb, const void * carg) {
+	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
+	return ret.cret;
+}
+
+
 void * ccall_rr_c(void * cb, void * cs, int method_nb, int rarg1, int rarg2) {
 	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
 	return ret.cret;
@@ -185,7 +237,7 @@ register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg1, int rarg2)
 	return ret.rret;
 }
 
-register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, void * carg) {
+register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, const void * carg) {
 	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, carg, NULL, NULL);
 	return ret.rret;
 }

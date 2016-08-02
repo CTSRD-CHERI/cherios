@@ -30,4 +30,5 @@
 
 #include "mips.h"
 
-void * sync_token = NULL;
+void *	sync_token = NULL;
+long	msg_enable = 0;

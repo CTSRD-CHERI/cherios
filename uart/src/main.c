@@ -53,12 +53,12 @@ int main(void)
 
 	/* Get capability to use uart */
 	uart_cap = act_get_cap();
-	assert(uart_cap != NULL);
+	assert(VCAP(uart_cap, 0, VCAP_RW));
 
 	/* Register ourself to the kernel as being the UART module */
 	int ret = namespace_register(1, act_self_ref, act_self_id);
 	if(ret!=0) {
-		printf("UART: register failed\n");
+		syscall_puts("UART: register failed\n");
 		return -1;
 	}
 
@@ -67,5 +67,7 @@ int main(void)
 	#endif
 
 	syscall_puts("UART: setup OK\n");
+
+	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;
 }

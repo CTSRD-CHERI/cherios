@@ -34,10 +34,12 @@
  * Various util functions
  */
 
+#ifndef __LITE__
 void __kernel_assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
-	kernel_panic("assertion failure in %s at %s:%d: %s", assert_function,
+	kernel_printf(KMAJ"assertion failure in %s at %s:%d: %s"KRST"\n", assert_function,
 			assert_file, assert_lineno, assert_message);
+	kernel_freeze();
 }
 
 void kernel_vtrace(const char *context, const char *fmt, va_list ap) {
@@ -61,43 +63,22 @@ void kernel_error(const char *file, const char *func, int line, const char *fmt,
 	va_end(ap);
 	kernel_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
 }
+#endif
 
 void kernel_freeze(void) {
 	kernel_panic("Freeze");
 }
 
-void kernel_panic(const char *fmt, ...) {
-	va_list ap;
-
-	kernel_printf(KMAJ"panic: ");
-	va_start(ap, fmt);
-	kernel_vprintf(fmt, ap);
-	va_end(ap);
-	kernel_printf(KRST"\n");
+void kernel_panic(const char *s) {
+	kernel_puts(KMAJ"panic: ");
+	kernel_puts(s);
+	kernel_puts(KRST"\n");
 
 	hw_reboot();
 }
 
-/* Converts RW pointer to RX pointer */
-void * kernel_cap_to_exec(const void * p) {
-	void * c = cheri_getpcc();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	return c;
-}
-
-void * kernel_seal(const void * p, uint64_t otype) {
-	void * seal = cheri_setoffset(cheri_getdefault(), otype);
-	return cheri_seal(p, seal);
-}
-
-void * kernel_unseal(void * p, uint64_t otype) {
-	void * seal = cheri_setoffset(cheri_getdefault(), otype);
-	return cheri_unseal(p, seal);
-}
-
 void hw_reboot(void) {
-	#ifdef CONSOLE_malta
+	#ifdef HARDWARE_qemu
 		/* Used to quit Qemu */
 		mips_iowrite_uint8(mips_phys_to_uncached(0x1f000000 + 0x00500), 0x42);
 	#endif

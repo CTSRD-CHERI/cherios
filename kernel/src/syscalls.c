@@ -33,14 +33,19 @@
 /*
  * These functions abstract the syscall register convention
  */
-static void syscall_puts() {
-	void * msg = kernel_exception_framep_ptr->cf_c3;
-	printf(KGRN"%s"KRST, msg);
+static void syscall_sleep(void) {
+	int time = kernel_exception_framep_ptr->mf_a0;
+	if(time != 0) {
+		KERNEL_ERROR("sleep >0 not implemented");
+	} else {
+		sched_reschedule(0);
+	}
 }
 
 static void syscall_act_register(void) {
 	reg_frame_t * frame = kernel_exception_framep_ptr->cf_c3;
-	kernel_exception_framep_ptr->cf_c3 = act_register(frame);
+	char * name = kernel_exception_framep_ptr->cf_c4;
+	kernel_exception_framep_ptr->cf_c3 = act_register(frame, name);
 }
 
 static void syscall_act_ctrl_get_ref(void) {
@@ -51,18 +56,48 @@ static void syscall_act_ctrl_get_id(void) {
 	kernel_exception_framep_ptr->cf_c3 = act_get_id(kernel_exception_framep_ptr->cf_c3);
 }
 
-static void syscall_sleep(void) {
-	kernel_skip();
-	int time = kernel_exception_framep_ptr->mf_a0;
-	if(time != 0) {
-		KERNEL_ERROR("sleep >0 not implemented");
+static void syscall_act_ctrl_get_status(void) {
+	kernel_exception_framep_ptr->mf_v0 = act_get_status(kernel_exception_framep_ptr->cf_c3);
+}
+
+static void syscall_act_revoke(void) {
+	kernel_exception_framep_ptr->mf_v0 = act_revoke(kernel_exception_framep_ptr->cf_c3);
+}
+
+static void syscall_act_terminate(void) {
+	int ret = act_terminate(kernel_exception_framep_ptr->cf_c3);
+	if(ret == 1) {
+		sched_reschedule(0);
 	} else {
-		kernel_reschedule();
+		kernel_exception_framep_ptr->mf_v0 = ret;
 	}
+}
+
+static void syscall_act_seal_identifier(void) {
+	kernel_exception_framep_ptr->cf_c3 = act_seal_identifier(kernel_exception_framep_ptr->cf_c3);
+}
+
+static void syscall_puts() {
+	void * msg = kernel_exception_framep_ptr->cf_c3;
+	#ifndef __LITE__
+	printf(KGRN"%s"KRST, msg);
+	#else
+	kernel_puts(msg);
+	#endif
 }
 
 static void syscall_panic(void) { //fixme: temporary
 	kernel_freeze();
+}
+
+static void syscall_interrupt_register(void) {
+	kernel_exception_framep_ptr->mf_v0 =
+		kernel_interrupt_register(kernel_exception_framep_ptr->mf_a0);
+}
+
+static void syscall_interrupt_enable(void) {
+	kernel_exception_framep_ptr->mf_v0 =
+		kernel_interrupt_enable(kernel_exception_framep_ptr->mf_a0);
 }
 
 static void syscall_gc(void) {
@@ -78,11 +113,11 @@ void kernel_exception_syscall(void)
 {
 	long sysn = kernel_exception_framep_ptr->mf_v0;
 	KERNEL_TRACE("exception", "Syscall number %ld", sysn);
-	int skip = 1;
+
+	aid_t kca = kernel_curr_act;
 	switch(sysn) {
 		case 13:
 			syscall_sleep();
-			skip = 0;
 			break;
 		case 20:
 			syscall_act_register();
@@ -93,11 +128,29 @@ void kernel_exception_syscall(void)
 		case 22:
 			syscall_act_ctrl_get_id();
 			break;
+		case 23:
+			syscall_act_ctrl_get_status();
+			break;
+		case 25:
+			syscall_act_revoke();
+			break;
+		case 26:
+			syscall_act_terminate();
+			break;
+		case 29:
+			syscall_act_seal_identifier();
+			break;
 		case 34:
 			syscall_puts();
 			break;
 		case 42:
 			syscall_panic();
+			break;
+		case 50:
+			syscall_interrupt_register();
+			break;
+		case 51:
+			syscall_interrupt_enable();
 			break;
 		case 66:
 			syscall_gc();
@@ -107,7 +160,5 @@ void kernel_exception_syscall(void)
 			kernel_freeze();
 	}
 
-	if(skip) {
-		kernel_skip();
-	}
+	kernel_skip_instr(kca);
 }

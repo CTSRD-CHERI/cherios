@@ -53,7 +53,7 @@ static page_t * book = NULL;
 
 /* fd and offset are currently unused and discarded in userspace */
 void *__mmap(void *addr, size_t length, int prot, int flags) {
-	int perms = 1<<11; /* can-free perm */
+	int perms = CHERI_PERM_SOFT_1; /* can-free perm */
 	if(addr != NULL) {
 		panic("mmap: addr must be NULL");
 	}
@@ -163,6 +163,9 @@ int __munmap(void *addr, size_t length) {
 		printf(KRED"BAD MUNMAP\n");
 		return -1;
 	}
+
+	bzero(addr, length); /* clear mem */
+
 	length += pagesz; /* fixme: fix for dlmalloc, see above */
 	size_t page = addr2chunk(addr, length);
 
@@ -189,9 +192,9 @@ void minit(char *heap) {
 	pool = cheri_setbounds(heap, pool_len);
 
 	size_t book_len = pages_nb*sizeof(page_t);
-	assert(book_len < length-pool_len);
-	book = cheri_setbounds(heap + pool_len, book_len);
 	//printf("Heaplen:%jx Poollen: %jx, Booklen: %jx\n", length, pool_len, book_len);
+	assert(book_len + pool_len <= length);
+	book = cheri_setbounds(heap + pool_len, book_len);
 
 	book[0].status = page_unused;
 	book[0].len = pages_nb;

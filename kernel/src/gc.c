@@ -30,7 +30,9 @@
 
 #include "klib.h"
 
-/* Experimental. Todo: Needs a good memory model to be made safe */
+/* Experimental. Should not be in kernel.
+ * Todo: Needs a good memory model to be made safe
+ */
 
 /* takes two tagged pointers */
 static inline register_t derives_of(void * c, void * p) {
@@ -40,10 +42,12 @@ static inline register_t derives_of(void * c, void * p) {
 	size_t pl = cheri_getlen(p);
 	size_t ce = cb+cl;
 	size_t pe = pb+pl;
+	#if 0
 	if(!((pb<=cb) || (pb>=ce))) {
 		CHERI_PRINT_CAP(c);
 		CHERI_PRINT_CAP(p);
 	}
+	#endif
 	kernel_assert((pb<=cb) || (pb>=ce)); /* cb pb   ce  */
 	kernel_assert(!((pb<=cb) && (cb<=pe) && (pe<ce))); /* pb cb pe ce */
 	if((cb>=pb) && (ce<=pe)) {
@@ -53,6 +57,10 @@ static inline register_t derives_of(void * c, void * p) {
 }
 
 int try_gc(void * p, void * pool) {
+	#ifndef __LITE__
+	kernel_printf(KBLD KCYN "GC! b:%16lx l:%16lx"KRST"\n",
+	            cheri_getbase(p), cheri_getlen(p));
+	#endif
 	/*todo: (if userspace) we can be prempted here and memory could move */
 	/*todo: also gc saved regs in kernel*/
 	void **gc = pool;

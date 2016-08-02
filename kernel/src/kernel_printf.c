@@ -29,30 +29,31 @@
  */
 
 #include "klib.h"
+#ifndef __LITE__
 #include "stdio.h"
+#endif
 #include "uart.h"
 
 /*
- * Provide a kernel-compatible version of printf, which invokes the UART
- * driver.
+ * Provide a kernel-compatible version of printf and puts, which invokes the
+ * UART driver.
  */
-void
-uart_putchar(int c, __attribute__((unused)) void *arg)
-{
+void kernel_puts(const char *s) {
+	while(*s) {
+		uart_putc(*s++);
+	}
+}
 
+#ifndef __LITE__
+static void uart_putchar(int c, __attribute__((unused)) void *arg) {
 	uart_putc(c);
 }
 
-int
-kernel_vprintf(const char *fmt, va_list ap)
-{
-
+int kernel_vprintf(const char *fmt, va_list ap) {
 	return (kvprintf(fmt, uart_putchar, NULL, 10, ap));
 }
 
-int
-kernel_printf(const char *fmt, ...)
-{
+int kernel_printf(const char *fmt, ...) {
 	va_list ap;
 	int retval;
 
@@ -62,3 +63,6 @@ kernel_printf(const char *fmt, ...)
 
 	return (retval);
 }
+#else
+
+#endif

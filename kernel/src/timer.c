@@ -30,7 +30,6 @@
  */
 
 #include "klib.h"
-#include "kernel.h"
 #include "cp0.h"
 
 static register_t		kernel_last_timer;
@@ -39,15 +38,10 @@ void kernel_timer_init(void) {
 	/*
 	 * Start timer.
 	 */
-	KERNEL_TRACE("boot", "starting timer");
+	KERNEL_TRACE("init", "starting timer");
 	kernel_last_timer = cp0_count_get();
 	kernel_last_timer += TIMER_INTERVAL;
 	cp0_compare_set(kernel_last_timer);
-
-	KERNEL_TRACE("boot", "enabling interrupts");
-	kernel_assert(cp0_status_ie_get() == 0);
-	cp0_status_ie_enable(); //move elsewhere?
-	cp0_status_im_enable(MIPS_CP0_STATUS_IM_TIMER);
 }
 
 static inline register_t TMOD(register_t count) {
@@ -64,7 +58,7 @@ void kernel_timer(void)
 	/*
 	 * Forced context switch of user process.
 	 */
-	kernel_reschedule();
+	sched_reschedule(0);
 
 	/*
 	 * Reschedule timer for a future date -- if we've almost missed a
