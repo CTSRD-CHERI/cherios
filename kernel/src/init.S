@@ -80,8 +80,8 @@ start:
 
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
-	dla		$t0, __start_boot_stack
-	dla		$t1, __size_boot_stack
+	dla		$t0, __start_exception_stack
+	dla		$t1, __size_exception_stack
 	cgetdefault	$c11
 	csetoffset	$c11, $c11, $t0
 	csetbounds	$c11, $c11, $t1

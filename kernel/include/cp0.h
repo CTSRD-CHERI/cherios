@@ -28,8 +28,8 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _CHERIDEMO_CP0_H_
-#define	_CHERIDEMO_CP0_H_
+#ifndef _CHERI_CP0_H_
+#define	_CHERI_CP0_H_
 
 /*
  * CP0 manipulation routines.
@@ -42,13 +42,10 @@ void	cp0_status_ie_enable(void);
 int	cp0_status_ie_get(void);
 void	cp0_status_im_enable(int mask);
 void	cp0_status_im_disable(int mask);
-register_t	cp0_hwrena_get(void);
-void		cp0_hwrena_set(register_t hwrena);
 register_t	cp0_cause_excode_get(void);
 register_t	cp0_cause_ipending_get(void);
 void		cp0_cause_set(register_t cause);
 register_t	cp0_count_get(void);
-register_t	cp0_badvaddr_get(void);
 void	cp0_compare_set(register_t compare);
 
 static inline register_t
@@ -67,4 +64,28 @@ cp0_status_set(register_t status)
 	__asm__ __volatile__ ("dmtc0 %0, $12" : : "r" (status));
 }
 
-#endif /* _CHERIDEMO_CP0_H_ */
+/*
+ * Routines for managing the CP0 BadVAddr register.
+ */
+static inline register_t
+cp0_badvaddr_get(void)
+{
+	register_t badvaddr;
+
+	__asm__ __volatile__ ("dmfc0 %0, $8" : "=r" (badvaddr));
+	return (badvaddr);
+}
+
+/*
+ * Routines for managing the CP0 BadInstr register.
+ */
+static inline register_t
+cp0_badinstr_get(void)
+{
+	register_t badinstr;
+
+	__asm__ __volatile__ ("dmfc0 %0, $8, 1" : "=r" (badinstr));
+	return (badinstr);
+}
+
+#endif /* _CHERI_CP0_H_ */

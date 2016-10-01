@@ -136,7 +136,7 @@ set(C_COMPILER_FLAGS
     -O2 # TODO: make this depend on the configuration
     -fomit-frame-pointer # TODO: make this depend on the configuration
     -G0
-    -mxgot
+#    -mxgot
     -Werror
     -std=c11
     -DHARDWARE_${HARDWARE}
@@ -228,7 +228,7 @@ function(add_cherios_executable_low _target)
             COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
             # remove some sections to save place (TODO: make this depend on the configuration)
             COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
-            COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types "${_fs_target_path}"
+            COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
         )
         # Using a CACHE INTERNAL variable ensures that changes are globally visible
         set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
@@ -248,6 +248,11 @@ add_subdirectory(memmgt)
 add_subdirectory(namespace)
 add_subdirectory(prga)
 add_subdirectory(sockets)
+add_subdirectory(test1a)
+add_subdirectory(test1b)
+add_subdirectory(test2a)
+add_subdirectory(test2b)
+add_subdirectory(test3)
 add_subdirectory(uart)
 add_subdirectory(virtio-blk)
 add_subdirectory(zlib)

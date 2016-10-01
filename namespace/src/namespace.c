@@ -36,7 +36,7 @@ typedef  struct
 	void * act_default_id;
 } bind_t;
 
-const int bind_len = 0x10;
+const int bind_len = 0x80;
 bind_t bind[bind_len];
 
 void ns_init(void) {

@@ -34,7 +34,7 @@
 //#define __TRACE__
 //#define __LITE__
 
-#define MAX_ACTIVATIONS 16
+#define MAX_ACTIVATIONS 32
 
 //#define	TIMER_INTERVAL		400000
 //#define	TIMER_INTERVAL_MIN	30000

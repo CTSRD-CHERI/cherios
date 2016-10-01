@@ -1,5 +1,5 @@
-#define MAX_MSG 16
-
+#define MAX_MSG_B 4
+#define MAX_MSG (1 << MAX_MSG_B)
 typedef size_t msg_nb_t;
 
 typedef struct

@@ -64,7 +64,7 @@
 /*
  * Kernel library routines.
  */
-void	kernel_skip_instr(int pid);
+void	kernel_skip_instr(aid_t act);
 void	kernel_ccall(void);
 void	kernel_creturn(void);
 void	kernel_exception_syscall(void);

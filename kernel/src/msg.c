@@ -36,14 +36,13 @@ static queue_t msg_queues[MAX_ACTIVATIONS];
  * Routines to handle the message queue
  */
 
-static msg_nb_t safe(msg_nb_t n, msg_nb_t qlen) {
-	kernel_assert(qlen > 0);
-	return n%(qlen);
+static inline msg_nb_t safe(msg_nb_t n, msg_nb_t qmask) {
+	return n & qmask;
 }
 
-static int full(queue_t * queue, msg_nb_t qlen) {
-	kernel_assert(qlen > 0);
-	return safe(queue->end+1, qlen) == queue->start;
+static int full(queue_t * queue, msg_nb_t qmask) {
+	kernel_assert(qmask > 0);
+	return safe(queue->end+1, qmask) == queue->start;
 }
 
 static inline int empty(queue_t * queue) {
@@ -52,11 +51,10 @@ static inline int empty(queue_t * queue) {
 
 int msg_push(int dest, int src, void * identifier, void * sync_token) {
 	queue_t * queue = msg_queues + dest;
-	msg_nb_t  qlen  = kernel_acts[dest].queue_len;
-	kernel_assert(qlen > 0);
+	msg_nb_t  qmask  = kernel_acts[dest].queue_mask;
+	kernel_assert(qmask > 0);
 	int next_slot = queue->end;
-	if(full(queue, qlen)) {
-		kernel_panic("queue full");
+	if(full(queue, qmask)) {
 		return -1;
 	}
 
@@ -72,7 +70,7 @@ int msg_push(int dest, int src, void * identifier, void * sync_token) {
 	queue->msg[next_slot].idc = identifier;
 	queue->msg[next_slot].c1  = sync_token;
 
-	queue->end = safe(queue->end+1, qlen);
+	queue->end = safe(queue->end+1, qmask);
 
 	if(kernel_acts[dest].sched_status == sched_waiting) {
 		sched_d2a(dest, sched_schedulable);
@@ -82,7 +80,7 @@ int msg_push(int dest, int src, void * identifier, void * sync_token) {
 
 void msg_pop(aid_t act) {
 	queue_t * queue = msg_queues + act;
-	msg_nb_t  qlen  =  kernel_acts[act].queue_len;
+	msg_nb_t  qmask  =  kernel_acts[act].queue_mask;
 
 	kernel_assert(kernel_acts[act].sched_status == sched_schedulable);
 	kernel_assert(!empty(queue));
@@ -101,7 +99,7 @@ void msg_pop(aid_t act) {
 	kernel_exception_framep[act].cf_idc = queue->msg[start].idc;
 	kernel_exception_framep[act].cf_c1  = queue->msg[start].c1;
 
-	queue->start = safe(start+1, qlen);
+	queue->start = safe(start+1, qmask);
 }
 
 int msg_queue_empty(aid_t act) {

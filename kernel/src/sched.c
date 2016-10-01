@@ -30,6 +30,7 @@
 
 #include "klib.h"
 
+/* turn 'schedulable' activation 'act' in 'runnable' state */
 static void sched_schedule(aid_t act) {
 	kernel_assert(kernel_acts[act].sched_status == sched_schedulable);
 	/* Set message */
@@ -39,17 +40,8 @@ static void sched_schedule(aid_t act) {
 	kernel_acts[act].sched_status = sched_runnable;
 }
 
+/* todo: sleep cpu */
 static void sched_nothing_to_run(void) {
-	size_t cnt = 0;
-	for(aid_t i=0; i<kernel_next_act; i++) {
-		if(kernel_acts[i].sched_status != sched_terminated) {
-			cnt++;
-			//break;
-		}
-	}
-	if(cnt) {
-		KERNEL_ERROR("%d people still alive", cnt);
-	}
 	KERNEL_ERROR("No activation to schedule");
 	kernel_freeze();
 }

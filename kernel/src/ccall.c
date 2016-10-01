@@ -29,6 +29,7 @@
  */
 
 #include "klib.h"
+#include "cp0.h"
 
 /*
  * CCall/CReturn handler
@@ -75,21 +76,33 @@ static void kernel_ccall_core(int cflags) {
 	}
 
 	/* Push the message on the queue */
-	msg_push(cb->aid, kernel_curr_act, cs, sync_token);
+	if(msg_push(cb->aid, kernel_curr_act, cs, sync_token)) {
+		//KERNEL_ERROR("Queue full");
+		if(cflags & 2) {
+			kernel_panic("queue full (csync)");
+		}
+		kernel_exception_framep_ptr->mf_v0 = 0;
+	}
 
 	if(cflags & 2) {
 		sched_a2d(kernel_curr_act, sched_sync_block);
+		sched_reschedule(cb->aid);
 	}
 	if(cflags & 1) {
-		sched_reschedule(cb->aid);
+		act_wait(kernel_curr_act, cb->aid);
 	}
 }
 
 void kernel_ccall(void) {
 	KERNEL_TRACE(__func__, "in");
 
-	uint32_t ccall_selector =
-	  *((uint32_t *)kernel_exception_framep_ptr->cf_pcc) & 0x7FF;
+	register_t ccall_selector =
+	#ifdef HARDWARE_fpga
+	        cp0_badinstr_get();
+	#else
+	        *((uint32_t *)kernel_exception_framep_ptr->cf_pcc);
+	#endif
+	ccall_selector &= 0x7FF;
 
 	/* Ack ccall instruction */
 	kernel_skip_instr(kernel_curr_act);
@@ -104,7 +117,7 @@ void kernel_ccall(void) {
 			cflags = 1;
 			break;
 		case 4: /* sync call */
-			cflags = 3;
+			cflags = 2;
 			break;
 		default:
 			KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
@@ -121,8 +134,9 @@ void kernel_creturn(void) {
 
 	sync_t * sync_token = kernel_exception_framep_ptr->cf_c1;
 	if(sync_token == NULL) {
-		/* alias to "wait". Used by asynchronous primitives */
-		act_wait(kernel_curr_act, 0);
+		/* Used by asynchronous primitives */
+		//act_wait(kernel_curr_act, 0);
+		act_wait(kernel_curr_act, kernel_curr_act);
 		return;
 	}
 

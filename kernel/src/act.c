@@ -46,9 +46,14 @@ static const void *            act_default_id = NULL;
 void act_init(void) {
 	KERNEL_TRACE("init", "activation init");
 
+	/* initialize the default identifier to a known value */
 	act_default_id = cheri_setbounds(cheri_getdefault(), 0);
 
-	/* kernel activation */
+	/*
+	 * create kernel activation
+	 * used to have a 'free' reg frame.
+	 * canot be scheduled: aid 0 is invalid
+	 */
 	kernel_next_act = 0;
 	struct reg_frame dummy_frame;
 	bzero(&dummy_frame, sizeof(struct reg_frame));
@@ -56,18 +61,18 @@ void act_init(void) {
 	kernel_acts[0].status = status_terminated;
 	kernel_acts[0].sched_status = sched_terminated;
 
-	/* boot activation */
+	/* create the boot activation (activation that called us) */
 	kernel_curr_act = 1;
 	kernel_exception_framep_ptr = &kernel_exception_framep[kernel_curr_act];
 	act_register(kernel_exception_framep, "boot");
 	sched_d2a(kernel_curr_act, sched_runnable);
 }
 
-void kernel_skip_instr(int pid) {
-	kernel_exception_framep[pid].mf_pc += 4; //assuming no branch delay slot
-	void * pcc = (void *) kernel_exception_framep[pid].cf_pcc;
+void kernel_skip_instr(aid_t act) {
+	kernel_exception_framep[act].mf_pc += 4; /* assumes no branch delay slot */
+	void * pcc = (void *) kernel_exception_framep[act].cf_pcc;
 	pcc = __builtin_memcap_offset_increment(pcc, 4);
-	kernel_exception_framep[pid].cf_pcc = pcc;
+	kernel_exception_framep[act].cf_pcc = pcc;
 }
 
 static void * act_create_ref(aid_t aid) {
@@ -80,6 +85,10 @@ static void * act_create_ctrl_ref(aid_t aid) {
 
 void * act_register(const reg_frame_t * frame, const char * name) {
 	aid_t aid = kernel_next_act;
+
+	if(aid >= MAX_ACTIVATIONS) {
+		kernel_panic("no act slot");
+	}
 
 	/* set aid */
 	kernel_acts[aid].aid = aid;
@@ -106,7 +115,7 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 
 	/* set queue */
 	msg_queue_init(aid);
-	kernel_acts[aid].queue_len = MAX_MSG;
+	kernel_acts[aid].queue_mask = MAX_MSG-1;
 
 	/* set reference */
 	kernel_acts[aid].act_reference = act_create_ref(aid);

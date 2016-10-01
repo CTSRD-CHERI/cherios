@@ -80,7 +80,7 @@ static void syscall_act_seal_identifier(void) {
 static void syscall_puts() {
 	void * msg = kernel_exception_framep_ptr->cf_c3;
 	#ifndef __LITE__
-	printf(KGRN"%s"KRST, msg);
+	printf(KGRN"%s" KREG KRST, msg);
 	#else
 	kernel_puts(msg);
 	#endif
@@ -113,7 +113,6 @@ void kernel_exception_syscall(void)
 {
 	long sysn = kernel_exception_framep_ptr->mf_v0;
 	KERNEL_TRACE("exception", "Syscall number %ld", sysn);
-
 	aid_t kca = kernel_curr_act;
 	switch(sysn) {
 		case 13:

@@ -67,7 +67,9 @@ static void kernel_interrupt_others(register_t pending) {
 			struct reg_frame * frame = kernel_exception_framep + 0;
 			frame->mf_v0 = -3;
 			frame->mf_a0 = i;
-			msg_push(int_child[i], 0, NULL, NULL);
+			if(msg_push(int_child[i], 0, NULL, NULL)) {
+				kernel_panic("queue full (int)");
+			}
 		}
 	}
 }

@@ -73,7 +73,7 @@ typedef struct
 	aid_t aid;			/* Activation id -- redundant with array index */
 	status_e status;		/* Activation status flags */
 	/* Queue related */
-	msg_nb_t queue_len;		/* Queue len (cannot trust userspace
+	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
 					   which has write access to queue) */
 	/* Scheduling related */
 	sched_status_e sched_status;	/* Current status */

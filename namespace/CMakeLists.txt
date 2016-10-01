@@ -8,3 +8,4 @@ set(NAMESPACE_SRCS
 )
 
 add_cherios_executable(namespace ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${NAMESPACE_SRCS})
+set_target_properties(namespace PROPERTIES COMPILE_FLAGS -mxgot)

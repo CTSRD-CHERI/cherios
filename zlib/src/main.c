@@ -31,7 +31,8 @@
 #include "lib.h"
 #include "zlib.h"
 
-#define CHUNK 0x4000
+#define MAX_CHUNK 0x4000
+static size_t CHUNK = 0;
 
 int oid = 0;
 void * new_identifier(void) {
@@ -110,12 +111,12 @@ static void dispout(FILE * stream) {
    an error reading or writing the files. */
 int def(FILE *source, FILE *dest, int level)
 {
-	printf("def\n");
+    printf("def\n");
     int ret, flush;
     unsigned have;
     z_stream strm;
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
+    unsigned char in[MAX_CHUNK];
+    unsigned char out[MAX_CHUNK];
 
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
@@ -170,8 +171,8 @@ int inf(FILE *source, FILE *dest)
     int ret;
     unsigned have;
     z_stream strm;
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
+    unsigned char in[MAX_CHUNK];
+    unsigned char out[MAX_CHUNK];
 
     /* allocate inflate state */
     strm.zalloc = Z_NULL;
@@ -256,15 +257,23 @@ register_t cp0_count_get(void)
 	return (count & 0xFFFFFFFF);
 }
 
-void selftest(void) {
+
+void selftest(size_t chunk) {
+	assert(chunk <= MAX_CHUNK);
+	CHUNK = chunk;
+	nbufin = 0;
+	nbufout = 0;
+	lastpnbufin = 0;
+
 	int argc = 1;
 	int ret = 0;
 	register_t count = cp0_count_get();
+	__asm("li $0, 0x1337");
 
 	memset(bufin, 0, bufinlen);
 //	bufin[0] = 'A';
-	bufinlen = 1;
-	bufinlen = 32*1024*1024;
+	bufinlen = 512*1024;
+	bufinlen = 4*1024*1024;
 
 	/* do compression if no arguments */
 	if (argc == 1) {
@@ -278,7 +287,9 @@ void selftest(void) {
 	} else {
 		dispout(stdout);
 	}
-	printf("zlib selftest done in %lx (%lx %lx)\n", cp0_count_get()-count, count, cp0_count_get());
+	__asm("li $0, 0x1337");
+	printf("zlib selftest %04lx done in %lx (%lx %lx)\n",
+	       chunk, cp0_count_get()-count, count, cp0_count_get());
 }
 
 /* compress or decompress from stdin to stdout */
@@ -293,7 +304,11 @@ int main(void)
 		return -1;
 	}
 
-	//selftest();
+	#if 0
+	for(int i=0; i<10; i++) {
+		selftest(1<<(5+i));
+	}
+	#endif
 
 	printf("zlib: done\n");
 	msg_enable = 1; /* Go in waiting state instead of exiting */

@@ -34,3 +34,4 @@ add_cherios_executable(kernel ADD_TO_FILESYSTEM LINKER_SCRIPT kernel.ld SOURCES
     ${KERNEL_SRCS}
     ${KERNEL_ASM_SRCS}
 )
+#set_target_properties(kernel PROPERTIES COMPILE_FLAGS "-mllvm -cheri-no-global-bounds")

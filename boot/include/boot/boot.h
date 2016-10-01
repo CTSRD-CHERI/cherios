@@ -17,6 +17,7 @@ typedef enum module_type {
 
 typedef struct boot_elem_s {
 	module_t     type;
+	int          cond;
 	const char * name;
 	register_t   arg;
 	int          daemon;

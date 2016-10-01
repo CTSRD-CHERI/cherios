@@ -170,17 +170,26 @@ void * get_cookie(void * cb, void * cs) {
 		: [rret]"=r" (ret.rret), [cret]"=C" (ret.cret) \
 		: CCALL_INOPS, [rarg1]"r" (rarg1), [rarg2]"r" (rarg2), [rarg3]"r" (rarg3), \
 		               [carg1]"C" (carg1), [carg2]"C" (carg2), [carg3]"C" (carg3) \
-		: CCALL_CLOBS); \
-	return ret; \
+		: CCALL_CLOBS);
 
 #define CCALLS(...) CCALL(4, __VA_ARGS__)
 
-ret_t ccall_1(void * cb, void * cs, int method_nb,
+register_t ccall_1(void * cb, void * cs, int method_nb,
 		  register_t rarg1, register_t rarg2, register_t rarg3,
                   const void * carg1, const void * carg2, const void * carg3) {
 	CCALL_TOP
 		CCALL_INSTR(1)
 	CCALL_BOTTOM
+	return ret.rret;
+}
+
+register_t ccall_2(void * cb, void * cs, int method_nb,
+		  register_t rarg1, register_t rarg2, register_t rarg3,
+                  const void * carg1, const void * carg2, const void * carg3) {
+	CCALL_TOP
+		CCALL_INSTR(2)
+	CCALL_BOTTOM
+	return ret.rret;
 }
 
 inline ret_t ccall_4(void * cb, void * cs, int method_nb,
@@ -189,6 +198,7 @@ inline ret_t ccall_4(void * cb, void * cs, int method_nb,
 	CCALL_TOP
 		CCALL_INSTR(4)
 	CCALL_BOTTOM
+	return ret;
 }
 
 

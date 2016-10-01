@@ -118,27 +118,6 @@ cp0_status_im_disable(int mask)
 }
 
 /*
- * Routines for managing the CP0  HWREna register, used to
- * determine which hardware registers are accessible via the RDHWR
- * instruction
- */
-register_t
-cp0_hwrena_get(void)
-{
-	register_t hwrena;
-
-	__asm__ __volatile__ ("dmfc0 %0, $7" : "=r" (hwrena));
-	return (hwrena & 0xFFFFFFFF);
-}
-
-void
-cp0_hwrena_set(register_t hwrena)
-{
-
-	__asm__ __volatile__ ("dmtc0 %0, $7" : : "r" (hwrena));
-}
-
-/*
  * Routines for managing the CP0 count and compare registers, used to
  * implement cycle counting and timers.
  */
@@ -193,14 +172,4 @@ cp0_cause_set(register_t cause)
 	__asm__ __volatile__ ("dmtc0 %0, $13" : : "r" (cause));
 }
 
-/*
- * Routines for managing the CP0 BadVAddr register.
- */
-register_t
-cp0_badvaddr_get(void)
-{
-	register_t badvaddr;
 
-	__asm__ __volatile__ ("dmfc0 %0, $8" : "=r" (badvaddr));
-	return (badvaddr);
-}

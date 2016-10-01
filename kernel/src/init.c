@@ -50,9 +50,8 @@ static void install_exception_vectors(void) {
 
 	/* Invalidate I-cache */
 	__asm volatile("sync");
-	cache_inv_low((0b100 << 2) +0, MIPS_BEV0_EXCEPTION_VECTOR);
-	cache_inv_low((0b100 << 2) +0, MIPS_BEV0_CCALL_VECTOR);
-	cache_inv_low((0b100 << 2) +0, 0x180);
+	cache_inv_low((0b100<<2)+0, MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF);
+	/* does not work with kseg0 address, hence the `& 0xFFFF` */
 	__asm volatile("sync");
 }
 

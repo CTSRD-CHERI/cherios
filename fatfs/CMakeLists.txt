@@ -9,3 +9,4 @@ set(FATFS_SRCS
 )
 
 add_cherios_executable(fatfs ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${FATFS_SRCS})
+set_target_properties(fatfs PROPERTIES COMPILE_FLAGS -mxgot)

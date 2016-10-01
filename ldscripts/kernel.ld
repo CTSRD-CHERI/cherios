@@ -30,8 +30,7 @@
 
 INCLUDE "common.ld"
 
-__size_boot_stack	= 0x10000;	/* Start simple: 64K */
-__size_exception_stack	= 0x10000;	/* Start simple: 64K */
+__size_exception_stack	= 0x1000;	/* Start simple: 4K */
 
 CAP_ALIGN = 0x20;
 PAGE_ALIGN = 0x1000;
@@ -59,9 +58,6 @@ SECTIONS
 	 * content, it would be much preferable to map into the code segment
 	 * and use $pcc-relative loads, but we are not yet there.
 	 */
-	.MIPS.options ALIGN(PAGE_ALIGN): {
-		*(.MIPS.options)
-	}
 	.ctors ALIGN(CAP_ALIGN) : {
 		KEEP (*/crtbeginC.o(.ctors))
 		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
@@ -74,23 +70,6 @@ SECTIONS
 		KEEP (*(SORT(.dtors.*)))
 		KEEP (*/crtendC.o(.dtors))
 	}
-	.preinit_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__preinit_array_start = .);
-		KEEP (*(.preinit_array))
-		PROVIDE_HIDDEN (__preinit_array_end = .);
-	}
-	.init_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__init_array_start = .);
-		KEEP (*(SORT(.init_array.*)))
-		KEEP (*(.init_array))
-		PROVIDE_HIDDEN (__init_array_end = .);
-	}
-	.fini_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__fini_array_start = .);
-		KEEP (*(.fini_array))
-		KEEP (*(SORT(.fini_array.*)))
-		PROVIDE_HIDDEN (__fini_array_end = .);
-	}
 	.data ALIGN(CAP_ALIGN): {
 		*(.data)
 	}
@@ -100,19 +79,22 @@ SECTIONS
 		*(.got)
 	}
 	.bss ALIGN(CAP_ALIGN): {
+		__start_bss = .;
 		*(.bss)
+		__stop_bss = ALIGN(., CAP_ALIGN);
+	}
+	.stack ALIGN(PAGE_ALIGN): {
+		__start_exception_stack	= .;
+		. += __size_exception_stack;
+		__stop_exception_stack	= .;
 	}
 
-	__start_bss = ADDR(.bss);
-	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
-
-	/*
-	 * No need to include anything after the following in the binary --
-	 * we just define symbols, and don't move '.'.
-	 */
-	__start_boot_stack	= ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_boot_stack	= __start_boot_stack + __size_boot_stack;
-	__start_exception_stack	= __stop_boot_stack;
-	__stop_exception_stack	= __start_exception_stack + __size_exception_stack;
-	__rest_of_memory	= __stop_exception_stack;
+	/* todo: do not discard in debug mode */
+	/DISCARD/ :
+	{
+	   *(.MIPS.options)
+	   *(.MIPS.abiflags)
+	   *(.pdr)
+	   *(.comment)
+	}
 }

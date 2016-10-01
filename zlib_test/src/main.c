@@ -31,7 +31,8 @@
 #include "lib.h"
 #include "zlib.h"
 
-#define CHUNK 0x1000
+#define MAX_CHUNK 0x4000
+static size_t CHUNK = 0;
 
 static int ferror ( FILE * stream __unused) {
 	return 0;
@@ -100,8 +101,8 @@ int def(FILE *source, FILE *dest, int level)
     int ret, flush;
     unsigned have;
     z_stream strm;
-    unsigned char in[CHUNK];
-    unsigned char out[CHUNK];
+    unsigned char in[MAX_CHUNK];
+    unsigned char out[MAX_CHUNK];
 
     /* allocate deflate state */
     strm.zalloc = Z_NULL;
@@ -245,15 +246,22 @@ register_t cp0_count_get(void)
 	return (count & 0xFFFFFFFF);
 }
 
-void synctest(void) {
+void synctest(size_t chunk) {
+	assert(chunk <= MAX_CHUNK);
+	CHUNK = chunk;
+	nbufin = 0;
+	nbufout = 0;
+	lastpnbufin = 0;
+
 	int argc = 1;
 	int ret = 0;
 	register_t count = cp0_count_get();
+	//__asm("li $0, 0x1337");
 
 	memset(bufin, 0, bufinlen);
 //	bufin[0] = 'A';
-//	bufinlen = 1;
 	bufinlen = 512*1024;
+//	bufinlen = 4*1024*1024;
 
 	/* do compression if no arguments */
 	if (argc == 1) {
@@ -267,7 +275,9 @@ void synctest(void) {
 	} else {
 		dispout(stdout);
 	}
-	printf("zlib-test: sync test done in %lx (%lx %lx)\n", cp0_count_get()-count, count, cp0_count_get());
+	//__asm("li $0, 0x1337");
+	printf("zlib-test synctest %04lx done in %lx (%lx %lx)\n",
+	       chunk, cp0_count_get()-count, count, cp0_count_get());
 }
 
 /* compress or decompress from stdin to stdout */
@@ -275,7 +285,13 @@ int main(void)
 {
 	printf("zlib-test Hello world\n");
 
-	synctest();
+	#if 0
+	for(int i=0; i<10; i++) {
+		synctest(1<<(5+i));
+	}
+	#else
+	synctest(1024);
+	#endif
 
 	printf("zlib-test: done\n");
 	return 0;
