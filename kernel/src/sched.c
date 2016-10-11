@@ -93,11 +93,7 @@ static aid_t sched_picknext(void) {
 	if(squeue_a_end == 0) {
 		return 0;
 	}
-	if(squeue_a_idx >= squeue_a_end) {
-		squeue_a_idx = 0;
-	} else {
-		squeue_a_idx = (squeue_a_idx+1) % squeue_a_end;
-	}
+	squeue_a_idx = (squeue_a_idx+1) % squeue_a_end;
 	return squeue_a[squeue_a_idx];
 }
 
