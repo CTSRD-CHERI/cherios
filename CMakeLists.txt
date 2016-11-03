@@ -188,10 +188,28 @@ function(add_to_filesystem _target)
   set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
 endfunction()
 
+function(set_core_ld_deps _target)
+  set_target_properties(${_target} PROPERTIES
+    LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld;;${CMAKE_SOURCE_DIR}/ldscripts/common.ld"
+    )
+endfunction()
+
 # Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
 
 function(add_cherios_executable _target)
   add_cherios_module(${_target} ${ARGN})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_kernel _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_boot _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
   target_link_libraries(${_target} CheriOS::LibUser)
 endfunction()
 
@@ -222,17 +240,8 @@ function(add_cherios_module _target)
     -nostartfiles
     -nodefaultlibs
     )
-  # add the linker scripts as dependencies and set the output file name
-  # TODO: don't hardcode mips.ld as an additional file dependency
-  set_target_properties(${_target} PROPERTIES
-    LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
-    OUTPUT_NAME "${_target}.elf"
-    )
-  # TODO: don't hardcode common.ld as an additional file dependency
-  set_target_properties(${_target} PROPERTIES
-    LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/common.ld"
-    OUTPUT_NAME "${_target}.elf"
-    )
+
+  set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
 
   # add it to the filesystem dir if requested
   if(add_exe_ADD_TO_FILESYSTEM)

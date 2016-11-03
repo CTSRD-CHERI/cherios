@@ -30,7 +30,7 @@ else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
 
-add_cherios_executable(kernel ADD_TO_FILESYSTEM LINKER_SCRIPT kernel.ld SOURCES
+add_cherios_kernel(kernel ADD_TO_FILESYSTEM LINKER_SCRIPT kernel.ld SOURCES
     ${KERNEL_SRCS}
     ${KERNEL_ASM_SRCS}
 )
