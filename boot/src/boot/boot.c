@@ -129,7 +129,7 @@ static void load_modules(void) {
 	}
 }
 
-int cherios_main(void) {
+static void bootloader_main() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	/* Init hardware */
 	hw_init();
@@ -144,10 +144,6 @@ int cherios_main(void) {
 	stats_init();
 	boot_alloc_init();
 
-	/* Print fs build date */
-	boot_printf("Boot:C\n");
-	print_build_date();
-
 	/* Load and init kernel */
 	boot_printf("Boot:D\n");
 	load_kernel();
@@ -161,9 +157,14 @@ int cherios_main(void) {
 
 	/* Interrupts are ON from here */
 	boot_printf("Boot:E\n");
-
 	/* Switch to syscall print */
 	boot_printf_syscall_enable();
+}
+
+static int init_main() {
+	/* Print fs build date */
+	boot_printf("Boot:C\n");
+	print_build_date();
 
 	/* Load modules */
 	boot_printf("Boot:F\n");
@@ -179,5 +180,10 @@ int cherios_main(void) {
 	stats_display();
 	hw_reboot();
 
+}
+
+int cherios_main(void) {
+	bootloader_main();
+	init_main();
 	return 0;
 }
