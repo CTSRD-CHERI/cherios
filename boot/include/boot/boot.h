@@ -61,7 +61,7 @@ void *	elf_loader(const char * s, int direct_map, size_t * maxaddr);
 void *	elf_loader_mem(void * addr, int len, int direct_map, size_t *maxaddr);
 void *	load(const char * filename, int * len);
 
-void	load_kernel(const char * file);
+void	load_kernel();
 void *	load_module(module_t type, const char * file, int arg);
 
 void	hw_init(void);

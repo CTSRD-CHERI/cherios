@@ -129,9 +129,8 @@ static void load_modules(void) {
 	}
 }
 
-extern u8 __kernel_elf_start, __kernel_elf_end;
-
 int cherios_main(void) {
+	extern u8 __kernel_elf_start, __kernel_elf_end;
 	/* Init hardware */
 	hw_init();
 
@@ -151,7 +150,7 @@ int cherios_main(void) {
 
 	/* Load and init kernel */
 	boot_printf("Boot:D\n");
-	load_kernel("kernel.elf");
+	load_kernel();
 	install_exception_vector();
 	boot_printf("Boot:E0\n");
 

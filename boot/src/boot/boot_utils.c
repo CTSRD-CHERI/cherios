@@ -155,9 +155,13 @@ void * load_module(module_t type, const char * file, int arg) {
 	return ctrl;
 }
 
-void load_kernel(const char * file) {
-	size_t maxaddr = 0;
-	char *prgmp = elf_loader(file, 1, &maxaddr);
+void load_kernel() {
+	extern u8 __kernel_elf_start, __kernel_elf_end;
+	size_t maxaddr;
+	char *prgmp = elf_loader_mem(&__kernel_elf_start,
+				     &__kernel_elf_end - &__kernel_elf_start,
+				     1, &maxaddr);
+
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
 		goto err;
