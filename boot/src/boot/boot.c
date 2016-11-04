@@ -129,11 +129,16 @@ static void load_modules(void) {
 	}
 }
 
+extern u8 __kernel_elf_start, __kernel_elf_end;
+
 int cherios_main(void) {
 	/* Init hardware */
 	hw_init();
 
-	boot_printf("Hello world\n");
+	boot_printf("Boot Hello world\n");
+	boot_printf("Kernel elf:  %p - %p (%d bytes)\n",
+		    &__kernel_elf_start, &__kernel_elf_end,
+		    &__kernel_elf_end - &__kernel_elf_start);
 
 	/* Init bootloader */
 	boot_printf("Boot:B\n");
