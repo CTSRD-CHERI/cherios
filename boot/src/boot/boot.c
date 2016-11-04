@@ -153,15 +153,17 @@ static void bootloader_main() {
 		"li    $v0, 0        \n"
 		"syscall             \n"
 		::: "v0");
+}
 
+static int init_main() {
 	/* Interrupts are ON from here */
 	boot_printf("Boot:E\n");
 	/* Switch to syscall print */
 	boot_printf_syscall_enable();
-}
 
-static int init_main() {
+	/* Initialize the memory pool. */
 	boot_alloc_init();
+
 	/* Print fs build date */
 	boot_printf("Boot:C\n");
 	print_build_date();
