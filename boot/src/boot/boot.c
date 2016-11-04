@@ -112,6 +112,7 @@ static void load_modules(void) {
 			continue;
 		}
 		be->ctrl = load_module(be->type, be->name, be->arg);
+		boot_printf("Loaded module %s\n", be->name);
 		switch(boot_list[i].type) {
 			case m_memmgt:
 				nssleep(3);
@@ -135,33 +136,36 @@ int cherios_main(void) {
 	boot_printf("Hello world\n");
 
 	/* Init bootloader */
-	boot_printf("B\n");
+	boot_printf("Boot:B\n");
 	stats_init();
 	boot_alloc_init();
 
 	/* Print fs build date */
-	boot_printf("C\n");
+	boot_printf("Boot:C\n");
 	print_build_date();
 
 	/* Load and init kernel */
-	boot_printf("D\n");
+	boot_printf("Boot:D\n");
 	load_kernel("kernel.elf");
 	install_exception_vector();
+	boot_printf("Boot:E0\n");
+
 	__asm__ __volatile__ (
 		"li    $v0, 0        \n"
 		"syscall             \n"
 		::: "v0");
+
 	/* Interrupts are ON from here */
-	boot_printf("E\n");
+	boot_printf("Boot:E\n");
 
 	/* Switch to syscall print */
 	boot_printf_syscall_enable();
 
 	/* Load modules */
-	boot_printf("F\n");
+	boot_printf("Boot:F\n");
 	load_modules();
 
-	boot_printf("Z\n");
+	boot_printf("Boot:Z\n");
 
 	while(acts_alive(boot_list, boot_list_len)) {
 		ssleep(0);
