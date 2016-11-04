@@ -142,7 +142,6 @@ static void bootloader_main() {
 	/* Init bootloader */
 	boot_printf("Boot:B\n");
 	stats_init();
-	boot_alloc_init();
 
 	/* Load and init kernel */
 	boot_printf("Boot:D\n");
@@ -162,6 +161,7 @@ static void bootloader_main() {
 }
 
 static int init_main() {
+	boot_alloc_init();
 	/* Print fs build date */
 	boot_printf("Boot:C\n");
 	print_build_date();
