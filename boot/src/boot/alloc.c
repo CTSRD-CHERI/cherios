@@ -68,7 +68,7 @@ void boot_alloc_init(void) {
 	pool_start = (char *)(pool);
 	pool_end = pool + pool_size;
 	pool_start = __builtin_memcap_bounds_set(pool_start, pool_size);
-	pool_start = __builtin_memcap_perms_and(pool_start, 0b11111101);
+	pool_start = __builtin_memcap_perms_and(pool_start, 0b11111101); /* Remove eXe perm */
 	pool_next = pool_start;
 	bzero(pool, pool_size);
 	system_alloc = 0;

@@ -100,7 +100,7 @@ load(const char *filepath, int *bufsize)
 		return NULL;
 	}
 
-	boot_printf(KWHT"Load complete\n");
+	boot_printf(KWHT"'%s' loaded\n", filepath);
 
 	*bufsize = (int)size;
 
