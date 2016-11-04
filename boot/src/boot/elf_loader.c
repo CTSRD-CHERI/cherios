@@ -33,7 +33,7 @@
 #include "math.h"
 #include "string.h"
 
-#if 0
+#if 1
 #define TRACE(s, ...) trace_elf_loader(KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
 static void trace_elf_loader(const char *fmt, ...) {
 	va_list ap;
@@ -197,6 +197,11 @@ void * elf_loader(const char * file, int direct_map, size_t * maxaddr) {
 		ERROR("Could not read file");
 		return NULL;
 	}
+	return elf_loader_mem(addr, filelen, direct_map, maxaddr);
+}
+
+void * elf_loader_mem(void * p, int len, int direct_map, size_t * maxaddr) {
+	char *addr = (char *) p;
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(hdr)) {
 		ERROR("ELF File cannot be loaded");
