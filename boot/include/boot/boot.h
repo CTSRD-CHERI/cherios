@@ -57,8 +57,8 @@ int	boot_printf(const char *fmt, ...);
 int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 
-void *	elf_loader(const char * s, int direct_map, size_t * maxaddr);
-void *	elf_loader_mem(void * addr, int len, int direct_map, size_t *maxaddr);
+void *	elf_loader(const char * s, void * (*alloc)(size_t size), size_t * maxaddr);
+void *	elf_loader_mem(void * addr, void * (*alloc)(size_t size), size_t *maxaddr);
 void *	load(const char * filename, int * len);
 
 void	load_kernel();

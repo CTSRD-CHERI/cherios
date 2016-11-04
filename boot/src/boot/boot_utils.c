@@ -126,12 +126,14 @@ static void * ns_ref = NULL;
 static void * ns_id  = NULL;
 
 void * load_module(module_t type, const char * file, int arg) {
-	char *prgmp = elf_loader(file, 0, NULL);
+	char *prgmp = elf_loader(file, &boot_alloc, NULL);
 	if(!prgmp) {
 		assert(0);
 		return NULL;
 	}
+
 	size_t allocsize = cheri_getlen(prgmp);
+	caches_invalidate(prgmp, allocsize);
 
 	size_t stack_size = 0x10000;
 	void * stack = boot_alloc(stack_size);
@@ -155,12 +157,17 @@ void * load_module(module_t type, const char * file, int arg) {
 	return ctrl;
 }
 
+static void *kernel_elf_memory(size_t _size) {
+	/* The kernel is direct-mapped. */
+	(void) _size;
+	return cheri_getdefault();
+}
+
 void load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	size_t maxaddr;
 	char *prgmp = elf_loader_mem(&__kernel_elf_start,
-				     &__kernel_elf_end - &__kernel_elf_start,
-				     1, &maxaddr);
+				     &kernel_elf_memory, &maxaddr);
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");

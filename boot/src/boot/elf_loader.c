@@ -189,18 +189,18 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 }
 
 /* not secure */
-/* direct_map: Load the elf in physical memory (used for the kernel) */
-void * elf_loader(const char * file, int direct_map, size_t * maxaddr) {
+
+void * elf_loader(const char * file, void *(*alloc)(size_t size), size_t * maxaddr) {
 	int filelen=0;
 	char * addr = load(file, &filelen);
 	if(!addr) {
 		ERROR("Could not read file");
 		return NULL;
 	}
-	return elf_loader_mem(addr, filelen, direct_map, maxaddr);
+	return elf_loader_mem(addr, alloc, maxaddr);
 }
 
-void * elf_loader_mem(void * p, int len, int direct_map, size_t * maxaddr) {
+void * elf_loader_mem(void * p, void *(*alloc)(size_t size), size_t * maxaddr) {
 	char *addr = (char *) p;
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(hdr)) {
@@ -225,12 +225,7 @@ void * elf_loader_mem(void * p, int len, int direct_map, size_t * maxaddr) {
 			return NULL;
 		}
 	}
-	char *prgmp = NULL;
-	if(direct_map) {
-		prgmp = cheri_getdefault();
-	} else {
-		prgmp = boot_alloc(allocsize); /* aligned to 4k */
-	}
+	char *prgmp = alloc(allocsize);
 	if(!prgmp) {
 		ERROR("malloc failed");
 		return NULL;
@@ -245,10 +240,6 @@ void * elf_loader_mem(void * p, int len, int direct_map, size_t * maxaddr) {
 
 	if(maxaddr) {
 		*maxaddr = allocsize;
-	}
-
-	if(!direct_map) {
-		caches_invalidate(prgmp, allocsize);
 	}
 
 	return prgmp + e_entry;
