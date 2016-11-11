@@ -30,8 +30,6 @@
 
 INCLUDE "common.ld"
 
-__boot_load_virtaddr = __cached_base + __boot_load_physaddr;
-
 __size_memory		= 0x1000000;	/* Start simple: 16M above load address */
 __size_boot_stack	= 0x10000;	/* Start simple: 64K */
 
