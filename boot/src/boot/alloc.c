@@ -36,13 +36,13 @@
 
 static inline void *align_upwards(void *p, uintptr_t align)
 {
-    align = 1 << align;
-    uint8_t * addr = (uint8_t *)p;
-    uintptr_t offset = (uintptr_t)addr - ((uintptr_t)addr & ~(align-1));
-    if(offset > 0) {
-    addr += align - offset;
-    }
-    return (void *)addr;
+	align = 1 << align;
+	uint8_t * addr = (uint8_t *)p;
+	uintptr_t offset = (uintptr_t)addr - ((uintptr_t)addr & ~(align-1));
+	if(offset > 0) {
+		addr += align - offset;
+	}
+	return (void *)addr;
 }
 
 static const size_t pool_size = 1024*1024;
