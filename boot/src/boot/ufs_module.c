@@ -35,6 +35,7 @@
  */
 
 #include "boot/boot.h"
+#include "init.h"
 #include "debug.h"
 
 #ifndef DEV_BSHIFT
@@ -85,7 +86,7 @@ load(const char *filepath, int *bufsize)
 		return NULL;
 	}
 
-	void * buf = boot_alloc(size);
+	void * buf = init_alloc(size);
 	if (buf == NULL) {
 		boot_printf("Failed to allocate read buffer %zu for '%s'\n",
 		    size, filepath);
@@ -96,7 +97,7 @@ load(const char *filepath, int *bufsize)
 	if ((size_t)read != size) {
 		boot_printf("Failed to read '%s' (%zd != %zu)\n", filepath, read,
 		    size);
-		boot_free(buf);
+		init_free(buf);
 		return NULL;
 	}
 

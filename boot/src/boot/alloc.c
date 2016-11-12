@@ -54,7 +54,7 @@ static char * pool_next = NULL;
 
 static int system_alloc = 0;
 
-static void *boot_alloc_core(size_t s) {
+static void *init_alloc_core(size_t s) {
 	if(pool_next + s >= pool_end) {
 		return NULL;
 	}
@@ -64,7 +64,7 @@ static void *boot_alloc_core(size_t s) {
 	return p;
 }
 
-void boot_alloc_init(void) {
+void init_alloc_init(void) {
 	pool_start = (char *)(pool);
 	pool_end = pool + pool_size;
 	pool_start = __builtin_memcap_bounds_set(pool_start, pool_size);
@@ -74,12 +74,12 @@ void boot_alloc_init(void) {
 	system_alloc = 0;
 }
 
-void boot_alloc_enable_system(void * c_memmgt) {
+void init_alloc_enable_system(void * c_memmgt) {
 	mmap_set_act(act_ctrl_get_ref(c_memmgt), act_ctrl_get_id(c_memmgt));
 	system_alloc = 1;
 }
 
-void *boot_alloc(size_t s) {
+void *init_alloc(size_t s) {
 	if(system_alloc == 1) {
 		void * p = mmap(NULL, s, PROT_RW, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 		if(p == MAP_FAILED) {
@@ -87,12 +87,12 @@ void *boot_alloc(size_t s) {
 		}
 		return p;
 	}
-	return boot_alloc_core(s);
+	return init_alloc_core(s);
 }
 
-void boot_free(void * p __unused) {
+void init_free(void * p __unused) {
 	if(system_alloc == 1) {
 		/* fixme: use munmap */
 	}
-	/* Boot alloc has no free */
+	/* init alloc has no free */
 }

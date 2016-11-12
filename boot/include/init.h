@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2016 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,42 +30,53 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _BOOT_H_
-#define _BOOT_H_
+#ifndef _INIT_H_
+#define _INIT_H_
 
 #include "mips.h"
 #include "cdefs.h"
 #include "stdio.h"
 
-extern void	kernel_trampoline;
-extern void	kernel_trampoline_end;
+typedef enum module_type {
+	m_memmgt,
+	m_namespace,
+	m_uart,
+	m_fs,
+	m_core,
+	m_user,
+	m_fence
+} module_t;
 
-extern void	__boot_load_virtaddr;
-extern void	__kernel_load_virtaddr;
-extern void	__kernel_entry_point;
+typedef struct init_elem_s {
+	module_t     type;
+	int          cond;
+	const char * name;
+	register_t   arg;
+	int          daemon;
+	int          status;
+	void 	   * ctrl;
+} init_elem_t;
 
-//fixme
-#define	kernel_assert(e)	((e) ? (void)0 : __kernel_assert(__func__, \
-				__FILE__, __LINE__, #e))
-void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
-void	kernel_panic(const char *fmt, ...) __dead2;
-#define printf kernel_printf
-int	kernel_printf(const char *fmt, ...);
-void	hw_reboot(void) __dead2;
-int	kernel_vprintf(const char *fmt, va_list ap);
+extern char	__start_heap;
+extern char	__stop_heap;
 
-int	boot_printf(const char *fmt, ...);
-int	boot_vprintf(const char *fmt, va_list ap);
-void	boot_printf_syscall_enable(void);
+/*
+ * Memory routines
+ */
+void	init_alloc_init(void);
+void	init_alloc_enable_system(void * ctrl);
+void *	init_alloc(size_t s);
+void	init_free(void * p);
 
-void *	elf_loader(const char * s, void * (*alloc)(size_t size), void (*free)(void *addr), size_t * maxaddr);
-void *	elf_loader_mem(void * addr, void * (*alloc)(size_t size), void (*free)(void *addr), size_t *maxaddr);
-void *	load(const char * filename, int * len);
+void	glue_memmgt(void * memmgt_ctrl, void* ns_ctrl);
 
-void	load_kernel();
+int	acts_alive(init_elem_t * init_list, size_t  init_list_len);
 
-void	hw_init(void);
-void	install_exception_vector(void);
-void	caches_invalidate(void * addr, size_t size);
+void *	load_module(module_t type, const char * file, int arg);
+
+void	stats_init(void);
+void	stats_display(void);
+
+int init_main(void);
 
 #endif

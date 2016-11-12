@@ -29,6 +29,7 @@
  */
 
 #include "boot/boot.h"
+#include "init.h"
 #include "cheric.h"
 #include "math.h"
 #include "string.h"
@@ -190,22 +191,22 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 
 /* not secure */
 
-void * elf_loader(const char * file, void *(*alloc)(size_t size), size_t * maxaddr) {
+void * elf_loader(const char * file, void *(*alloc)(size_t size), void (*free)(void *addr), size_t * maxaddr) {
 	int filelen=0;
 	char * addr = load(file, &filelen);
 	if(!addr) {
 		ERROR("Could not read file");
 		return NULL;
 	}
-	return elf_loader_mem(addr, alloc, maxaddr);
+	return elf_loader_mem(addr, alloc, free, maxaddr);
 }
 
-void * elf_loader_mem(void * p, void *(*alloc)(size_t size), size_t * maxaddr) {
+void * elf_loader_mem(void * p, void *(*alloc)(size_t size), void (*free)(void *addr), size_t * maxaddr) {
 	char *addr = (char *) p;
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(hdr)) {
 		ERROR("ELF File cannot be loaded");
-		boot_free(addr);
+		free(addr);
 		return NULL;
 	}
 	Elf64_Addr e_entry = hdr->e_entry;
@@ -236,7 +237,7 @@ void * elf_loader_mem(void * p, void *(*alloc)(size_t size), size_t * maxaddr) {
 			memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
 		}
 	}
-	boot_free(addr);
+	free(addr);
 
 	if(maxaddr) {
 		*maxaddr = allocsize;
