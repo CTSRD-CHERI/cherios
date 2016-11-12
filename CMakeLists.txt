@@ -213,6 +213,12 @@ function(add_cherios_boot _target)
   target_link_libraries(${_target} CheriOS::LibUser)
 endfunction()
 
+function(add_cherios_init _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
 function(add_cherios_module _target)
   cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
   if(NOT add_exe_LINKER_SCRIPT)

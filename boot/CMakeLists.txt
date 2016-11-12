@@ -52,6 +52,13 @@ set_source_files_properties(src/boot/kernel_elf.S PROPERTIES
   OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/kernel.elf"
 )
 
+add_cherios_init(init LINKER_SCRIPT boot.ld SOURCES
+    ${LIBKERNEL_SRCS}
+    ${BOOT_SRCS}
+    ${BOOT_ASM_SRCS}
+    ${INIT_SRCS}
+)
+
 add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
     ${LIBKERNEL_SRCS}
     ${BOOT_SRCS}
