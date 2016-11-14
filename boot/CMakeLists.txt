@@ -16,7 +16,6 @@ set(BOOT_SRCS
 )
 
 set(BOOT_ASM_SRCS
-    src/boot/fs.S
     src/boot/init.S
     src/boot/kernel_elf.S
     src/boot/trampoline.S
@@ -25,11 +24,16 @@ set(BOOT_ASM_SRCS
 set(INIT_SRCS
     src/boot/init.c
     src/boot/init_utils.c
+    src/boot/init_main.c
     src/boot/alloc.c
     src/boot/stats.c
     src/boot/ufs_module.c
     src/boot/ufs_read.c
     src/boot/glue.c
+)
+
+set(INIT_ASM_SRCS
+    src/boot/fs.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")
@@ -57,6 +61,7 @@ add_cherios_init(init LINKER_SCRIPT boot.ld SOURCES
     ${BOOT_SRCS}
     ${BOOT_ASM_SRCS}
     ${INIT_SRCS}
+    ${INIT_ASM_SRCS}
 )
 
 add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
@@ -64,6 +69,7 @@ add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
     ${BOOT_SRCS}
     ${BOOT_ASM_SRCS}
     ${INIT_SRCS}
+    ${INIT_ASM_SRCS}
 )
 
 # Create the file system
