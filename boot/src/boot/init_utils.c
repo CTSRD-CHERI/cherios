@@ -108,7 +108,9 @@ static void * get_act_cap(module_t type) {
 			size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
 			void * heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
 			heap = cheri_setbounds(heap, heaplen);
-			cap = cheri_andperm(heap, 0b1111101 | CHERI_PERM_SOFT_1);
+			cap = cheri_andperm(heap, (CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_STORE
+						   | CHERI_PERM_LOAD_CAP | CHERI_PERM_STORE_CAP
+						   | CHERI_PERM_STORE_LOCAL_CAP | CHERI_PERM_SOFT_1));
 			break;
 		case m_fs:{}
 			void * mmio_cap = cheri_setoffset(cheri_getdefault(), mips_phys_to_uncached(0x1e400000));
@@ -145,11 +147,12 @@ void * load_module(module_t type, const char * file, int arg) {
 		return NULL;
 	}
 	void * pcc = cheri_getpcc();
-	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)) , allocsize);
+	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)), allocsize);
 	pcc = cheri_setoffset(pcc, cheri_getoffset(prgmp));
-	pcc = cheri_andperm(pcc, 0b10111);
+	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
+				  | CHERI_PERM_LOAD_CAP));
 	void * ctrl = init_act_create(file, cheri_setoffset(prgmp, 0),
-	              pcc, stack, get_act_cap(type), ns_ref, ns_id, arg);
+				      pcc, stack, get_act_cap(type), ns_ref, ns_id, arg);
 	if(ctrl == NULL) {
 		return NULL;
 	}
