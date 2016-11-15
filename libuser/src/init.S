@@ -44,9 +44,9 @@ start_common:
 	# Save arguments
 	move		$s0, $a0
 	move		$s1, $a1
-	cmove		$c17, $c3
-	cmove		$c18, $c4
-	cmove		$c19, $c5
+	cmove		$c18, $c3
+	cmove		$c19, $c4
+	cmove		$c20, $c5
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -74,7 +74,7 @@ start_common:
 	nop
 
 	# Call object init.
-	cmove		$c3, $c19
+	cmove		$c3, $c20
 	cmove		$c4, $c22
 	cmove		$c5, $c23
 	cmove		$c6, $c24
@@ -87,8 +87,8 @@ start_common:
 	# Restore arguments
 	move		$a0, $s0
 	move		$a1, $s1
-	cmove		$c3, $c17
-	cmove		$c4, $c18
+	cmove		$c3, $c18
+	cmove		$c4, $c19
 
 	# Call main().
 	cgetpcc		$c12
