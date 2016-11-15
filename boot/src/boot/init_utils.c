@@ -44,7 +44,7 @@ static void * init_act_register(reg_frame_t * frame, const char * name) {
 	__asm__ __volatile__ (
 		"li    $v0, 20       \n"
 		"cmove $c3, %[frame] \n"
-		"cmove $c4, %[name] \n"
+		"cmove $c4, %[name]  \n"
 		"syscall             \n"
 		"cmove %[ret], $c3   \n"
 		: [ret] "=C" (ret)
@@ -54,7 +54,8 @@ static void * init_act_register(reg_frame_t * frame, const char * name) {
 }
 
 static void * init_act_create(const char * name, void * c0, void * pcc, void * stack,
-	                 void * act_cap, void * ns_ref, void * ns_id, register_t a0) {
+			      void * act_cap, void * ns_ref, void * ns_id,
+			      register_t rarg, const void * carg) {
 	reg_frame_t frame;
 	memset(&frame, 0, sizeof(reg_frame_t));
 
@@ -81,7 +82,7 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 
 	void * ctrl = init_act_register(&frame, name);
 	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
-	      a0, 0, 0, NULL, NULL, ctrl);
+	      rarg, 0, 0, carg, NULL, ctrl);
 	return ctrl;
 }
 
@@ -128,7 +129,7 @@ static void * get_act_cap(module_t type) {
 static void * ns_ref = NULL;
 static void * ns_id  = NULL;
 
-void * load_module(module_t type, const char * file, int arg) {
+void * load_module(module_t type, const char * file, int arg, const void *carg) {
 	char *prgmp = elf_loader(file, &init_alloc, &init_free, NULL);
 	if(!prgmp) {
 		assert(0);
@@ -152,7 +153,8 @@ void * load_module(module_t type, const char * file, int arg) {
 	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
 				  | CHERI_PERM_LOAD_CAP));
 	void * ctrl = init_act_create(file, cheri_setoffset(prgmp, 0),
-				      pcc, stack, get_act_cap(type), ns_ref, ns_id, arg);
+				      pcc, stack, get_act_cap(type),
+				      ns_ref, ns_id, arg, carg);
 	if(ctrl == NULL) {
 		return NULL;
 	}

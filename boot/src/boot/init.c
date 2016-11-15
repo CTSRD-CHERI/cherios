@@ -111,7 +111,7 @@ static void load_modules(void) {
 			nssleep(3);
 			continue;
 		}
-		be->ctrl = load_module(be->type, be->name, be->arg);
+		be->ctrl = load_module(be->type, be->name, be->arg, NULL);
 		boot_printf("Loaded module %s\n", be->name);
 		switch(init_list[i].type) {
 			case m_memmgt:
