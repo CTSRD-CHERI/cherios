@@ -133,8 +133,10 @@ void * load_module(module_t type, const char * file, int arg) {
 		return NULL;
 	}
 
+	/* Invalidate the whole range; elf_loader only returns a
+	   pointer to the entry point. */
 	size_t allocsize = cheri_getlen(prgmp);
-	caches_invalidate(prgmp, allocsize);
+	caches_invalidate(cheri_setoffset(prgmp, 0), allocsize);
 
 	size_t stack_size = 0x10000;
 	void * stack = init_alloc(stack_size);
