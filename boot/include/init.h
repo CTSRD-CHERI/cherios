@@ -77,6 +77,8 @@ void *	load_module(module_t type, const char * file, int arg, const void *carg);
 void	stats_init(void);
 void	stats_display(void);
 
+void *	load(const char * filename, int * len);
+
 int init_main(void);
 
 #endif

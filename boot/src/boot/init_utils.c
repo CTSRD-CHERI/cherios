@@ -38,6 +38,7 @@
 #include "uart.h"
 #include "assert.h"
 #include "stdio.h"
+#include "elf.h"
 
 static void * init_act_register(reg_frame_t * frame, const char * name) {
 	void * ret;
@@ -128,6 +129,16 @@ static void * get_act_cap(module_t type) {
 
 static void * ns_ref = NULL;
 static void * ns_id  = NULL;
+
+static void * elf_loader(const char * file, void *(*alloc)(size_t size), void (*free)(void *addr), size_t * maxaddr) {
+	int filelen=0;
+	char * addr = load(file, &filelen);
+	if(!addr) {
+		boot_printf("Could not read file %s", file);
+		return NULL;
+	}
+	return elf_loader_mem(addr, alloc, free, maxaddr);
+}
 
 void * load_module(module_t type, const char * file, int arg, const void *carg) {
 	char *prgmp = elf_loader(file, &init_alloc, &init_free, NULL);

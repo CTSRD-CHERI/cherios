@@ -37,6 +37,7 @@
 #include "uart.h"
 #include "assert.h"
 #include "stdio.h"
+#include "elf.h"
 
 static void *kernel_alloc_mem(size_t _size) {
 	/* The kernel is direct-mapped. */
