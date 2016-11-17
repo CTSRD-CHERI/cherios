@@ -1,4 +1,4 @@
-include_directories(include)
+include_directories(include ${CMAKE_SOURCE_DIR}/boot/include/boot)
 
 set(KERNEL_SRCS
     src/act.c
