@@ -66,6 +66,7 @@ void * ns_get_reference(int nb) {
 		return NULL;
 	}
 	/* If service not in use, will already return NULL */
+	printf("%s: ref request for port %d\n", __func__, nb);
 	return bind[nb].act_reference;
 }
 
@@ -75,6 +76,7 @@ void * ns_get_identifier(int nb) {
 		return NULL;
 	}
 	/* If service not in use, will already return NULL */
+	printf("%s: id request for port %d\n", __func__, nb);
 	return bind[nb].act_default_id;
 }
 
@@ -88,7 +90,7 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id)
 
 	bind[nb].act_reference  = act_reference;
 	bind[nb].act_default_id = act_default_id;
-
+	printf("%s: registered at port %d\n", __func__, nb);
 	return 0;
 }
 

@@ -29,10 +29,9 @@
 # SUCH DAMAGE.
 #
 
-#Fixme: clean-up code && comment
-
-.set MIPS_SZCAP, _MIPS_SZCAP
-.include "asm.S"
+.set noreorder
+.set nobopt
+.set noat
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
@@ -40,48 +39,58 @@
 # cherios_main().
 
 	.text
-	.section .init
 	.global start
 	.ent start
 start:
-	#Add 4 to EPCC
-	dmfc0	$k1, $14
-	addi	$k1, $k1, 4
-	dmtc0	$k1, $14
+	# Enable capability coprocessor.
+	mfc0		$t0, $12
+#ifdef HARD_FLOAT
+	li		$t1, 0x64000000
+#else
+	li		$t1, 0x40000000
+#endif
+	or		$t0, $t0, $t1
+	# Clear ERL
+	li		$t1, 0x4
+	nor		$t1, $t1, $t1
+	and		$t0, $t0, $t1
+	mtc0		$t0, $12
 
-	#Save register frame
-	dla	$k0, kernel_init_save_frame
-	dla	$k1, kernel_init_save_frame_end
-	cgetdefault $kr1c
-	csetoffset $kr1c, $kr1c, $k0
-	sub	$k0, $k1, $k0
-	csetbounds $kr1c, $kr1c, $k0
+	# Wait for capability coprocessor to be enabled for real
+	nop; nop; nop; nop; nop; nop; nop; nop;
 
-	cgetdefault	$kr2c
-	# Expands to a list of the form
-	# csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-	foreachi csave, 0, $kr1c,					\
-		$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-		$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-		$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
-	# Expands to a list of the form
-	# csd	$greg, $0, offset*REG_SIZE($kr1c)
-	foreachi gsave, 0, $kr1c,					\
-		$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
-		$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
-		$s7, $t8, $t9, $gp, $sp, $fp, $ra
-	mfhi	$k1
-	csd	$k1, $0, 29*REG_SIZE($kr1c)
-	mflo	$k1
-	csd	$k1, $0, 30*REG_SIZE($kr1c)
-	dmfc0	$k1, $14		# EPC
-	csd	$k1, $0, 31*REG_SIZE($kr1c)
+	# Clear other capability registers to ensure we don't retain any
+	# executable capabilities: everything but $pcc and $c0.
+	CClearLo	0xfffe
+	CClearHi	0xffff
 
+	# W^X for pointers: ensure $c0 is never executable.
+	cgetdefault	$c3
+	dli		$t0, ~(1<<1)
+	candperm	$c3, $c3, $t0
+	csetdefault	$c3
 
-	# Set up a boot-time stack using memory allocated by the linker;
+	# Implement W^X for pointers: trim store permissions from $pcc to
+	# prevent it from becoming writable in the future.
+	cgetpcc		$c12
+	dli		$t0, ~((1<<3) | (1<<5))
+	candperm	$c12, $c12, $t0
+
+	# Jump to write-free $pcc.
+	dla		$t0, cherios_init_jump_target
+	csetoffset	$c12, $c12, $t0
+	cjr		$c12
+	nop
+cherios_init_jump_target:
+
+	# Populate exception registers: $kdc and $kcc
+	cgetpcc		$c29
+	cgetdefault	$c30
+
+	# Set up a stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
-	dla		$t0, __start_exception_stack
-	dla		$t1, __size_exception_stack
+	dla		$t0, __start_init_stack
+	dla		$t1, __size_init_stack
 	cgetdefault	$c11
 	csetoffset	$c11, $c11, $t0
 	csetbounds	$c11, $c11, $t1
@@ -115,46 +124,14 @@ start:
 	# On the off chance that cherios_main() has been defined as having
 	# arguments, set the first argument (argc) to 0.
 	dli		$a0, 0
-	clc		$c3, $0, 3*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
 
-	# Call cherios_main().
+	# Call init_main().
 	cgetpcc		$c12
-	dla		$t0, cherios_main
+	dla		$t0, init_main
 	csetoffset	$c12, $c12, $t0
 	cjalr		$c12, $c17
 	nop
 
-	#Restore register frame
-	# Expands to a list of the form
-	# cld	$greg, $0, offset*REG_SIZE($kr1c)
-	foreachi grestore, 0, $kr1c,					\
-		$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
-		$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
-		$s7, $t8, $t9, $gp, $sp, $fp, $ra
-	cld	$k1, $0, 29*REG_SIZE($kr1c)
-	mthi	$k1
-	cld	$k1, $0, 30*REG_SIZE($kr1c)
-	mtlo	$k1
-	cld	$k1, $0, 31*REG_SIZE($kr1c)
-	dmtc0	$k1, $14		# EPC
-	# Expands to a list of the form
-	# clc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-	foreachi crestore, 0, $kr1c,					\
-		$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-		$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-		$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
-	csetdefault	$kr2c
-
-	# Kernel init done
-	move	$k0, $zero
-	move	$k1, $zero
-	eret
-start_end:
-	.size start, start_end - start
-	.end start
-
-	.align 5
-kernel_init_save_frame:
-	.skip 32*CAP_SIZE + 32*REG_SIZE, 0 #Should be enough
-kernel_init_save_frame_end:
-	.size kernel_init_save_frame, kernel_init_save_frame_end - kernel_init_save_frame
+	# Bootloader done. Go in waiting state. #fixme: revoke object
+	cfromptr $c1, $c1, $0
+	creturn

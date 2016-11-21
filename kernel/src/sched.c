@@ -63,12 +63,12 @@ static u32   squeue_a_end = 0;
 	aqueue[replacement] = aqueue[act];
 
 void sched_create(aid_t act) {
-	KERNEL_TRACE("sched", "create %ld", act);
+	KERNEL_TRACE("sched", "create %s-%ld", kernel_acts[act].name, act);
 	kernel_acts[act].sched_status = sched_waiting;
 }
 
 void sched_delete(aid_t act) {
-	KERNEL_TRACE("sched", "delete %ld", act);
+	KERNEL_TRACE("sched", "delete %s-%ld", kernel_acts[act].name, act);
 	if(squeue_a[aqueue[act]] == act) {
 		QDEL(act, squeue_a, aqueue);
 	}
@@ -76,14 +76,14 @@ void sched_delete(aid_t act) {
 }
 
 void sched_d2a(aid_t act, sched_status_e status) {
-	KERNEL_TRACE("sched", "add %ld", act);
+	KERNEL_TRACE("sched", "add %s-%ld", kernel_acts[act].name, act);
 	QADD(act, squeue_a, aqueue);
 	kernel_assert((status == sched_runnable) || (status == sched_schedulable));
 	kernel_acts[act].sched_status = status;
 }
 
 void sched_a2d(aid_t act, sched_status_e status) {
-	KERNEL_TRACE("sched", "rem %ld", act);
+	KERNEL_TRACE("sched", "rem %s-%ld", kernel_acts[act].name, act);
 	QDEL(act, squeue_a, aqueue);
 	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
 	kernel_acts[act].sched_status = status;

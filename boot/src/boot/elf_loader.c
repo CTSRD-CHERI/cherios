@@ -126,24 +126,31 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 
 /* not secure */
 
-void * elf_loader_mem(void * p, void *(*alloc)(size_t size), void (*free)(void *addr), size_t * maxaddr) {
-	char *addr = (char *) p;
+void *elf_loader_mem(void *p, void *(*alloc)(size_t size), void (*free)(void *addr),
+		     size_t *minaddr, size_t *maxaddr, size_t *entry) {
+	char *addr = (char *)p;
+	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(hdr)) {
 		ERROR("ELF File cannot be loaded");
 		free(addr);
 		return NULL;
 	}
+
 	Elf64_Addr e_entry = hdr->e_entry;
 	TRACE("e_entry:%lX e_phnum:%d e_shnum:%d", hdr->e_entry, hdr->e_phnum, hdr->e_shnum);
+
 	size_t allocsize = 0;
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
 		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX filesz:%lX memsz:%lX align:%lX",
-			seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr,
-			seg->p_filesz, seg->p_memsz, seg->p_align);
+		      seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr,
+		      seg->p_filesz, seg->p_memsz, seg->p_align);
 		if(seg->p_type == 1) {
-			allocsize = umax(allocsize, seg->p_vaddr + seg->p_memsz);
+			size_t bound = seg->p_vaddr + seg->p_memsz;
+			allocsize = umax(allocsize, bound);
+			lowaddr = umin(lowaddr, seg->p_vaddr);
+			TRACE("lowaddr:%lx allocsize:%lx bound:%lx", lowaddr, allocsize, bound);
 		} else if(seg->p_type == 0x6474E551) {
 			/* GNU Stack */
 		} else {
@@ -151,22 +158,32 @@ void * elf_loader_mem(void * p, void *(*alloc)(size_t size), void (*free)(void *
 			return NULL;
 		}
 	}
+
 	char *prgmp = alloc(allocsize);
+
 	if(!prgmp) {
 		ERROR("malloc failed");
 		return NULL;
 	}
+
+	TRACE("Allocated %lx bytes of target memory", allocsize);
+	CHERI_PRINT_CAP(prgmp);
+
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
 		if(seg->p_type == 1) {
 			memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
+			TRACE("memcpy: [%lx %lx] <-- [%lx %lx] (%lx bytes)",
+			      seg->p_vaddr, seg->p_vaddr + seg->p_filesz,
+			      seg->p_offset, seg->p_offset + seg->p_filesz,
+			      seg->p_filesz);
 		}
 	}
 	free(addr);
 
-	if(maxaddr) {
-		*maxaddr = allocsize;
-	}
+	if(minaddr)	*minaddr = lowaddr;
+	if(maxaddr)	*maxaddr = allocsize;
+	if(entry)	*entry   = e_entry;
 
-	return prgmp + e_entry;
+	return prgmp;
 }

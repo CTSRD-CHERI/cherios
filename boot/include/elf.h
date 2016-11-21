@@ -100,4 +100,5 @@ typedef  struct
 	Elf64_Xword	p_align;	/*  Alignment  of  segment  */
 }  Elf64_Phdr;
 
-void * elf_loader_mem(void * p, void *(*alloc)(size_t size), void (*free)(void *addr), size_t * maxaddr);
+void *elf_loader_mem(void *p, void *(*alloc)(size_t size), void (*free)(void *addr),
+		     size_t *minaddr, size_t *maxaddr, size_t *entry);

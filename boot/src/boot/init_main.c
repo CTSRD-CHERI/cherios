@@ -1,10 +1,11 @@
 /*-
+ * Copyright (c) 2016 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2016 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,34 +30,9 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _MATH_H_
-#define _MATH_H_
+#include "init.h"
 
-#include "mips.h"
-
-static inline int imax(int a, int b) {
-	return (a>b ? a : b);
+int main_init(void) {
+	init_main();
+	return 0;
 }
-
-static inline int imin(int a, int b) {
-	return (a<b ? a : b);
-}
-
-static inline size_t umax(size_t a, size_t b) {
-	return (a>b ? a : b);
-}
-
-static inline size_t umin(size_t a, size_t b) {
-	return (a<b ? a : b);
-}
-
-static inline int slog2(size_t s) {
-	int i=0;
-	while(s) {
-		i++;
-		s >>= 1;
-	}
-	return i;
-}
-
-#endif

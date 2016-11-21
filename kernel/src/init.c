@@ -29,11 +29,40 @@
  */
 
 #include "klib.h"
+#include "boot_info.h"
+
+#define KERN_PRINT_PTR(ptr)						\
+	kernel_printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n",		\
+		      __func__,						\
+		      cheri_getbase((const __capability void *)(ptr)),	\
+		      cheri_getlen((const __capability void *)(ptr)),	\
+		      cheri_getoffset((const __capability void *)(ptr)))
+
+#define KERN_PRINT_CAP(cap)						\
+	kernel_printf("%-20s: %-16s t:%lx s:%lx p:%08jx "		\
+		      "b:%016jx l:%016zx o:%jx\n",			\
+		      __func__,						\
+		      #cap,						\
+		      cheri_gettag(cap),				\
+		      cheri_getsealed(cap),				\
+		      cheri_getperm(cap),				\
+		      cheri_getbase(cap),				\
+		      cheri_getlen(cap),				\
+		      cheri_getoffset(cap))
 
 static void cache_inv_low(int op, size_t line) {
-	__asm volatile(
+	__asm__ __volatile__ (
 		"cache %[op], 0(%[line]) \n"
 		:: [op]"i" (op), [line]"r" (line));
+}
+
+static boot_info_t *get_bootinfo() {
+	boot_info_t *bi;
+	__asm__ __volatile__ (
+		"cmove	$c3, %[bi] \n"
+		: [bi]"=C" (bi)
+		);
+	return bi;
 }
 
 static void install_exception_vectors(void) {
@@ -56,7 +85,10 @@ static void install_exception_vectors(void) {
 }
 
 int cherios_main(void) {
+	boot_info_t *bi = get_bootinfo();
 	kernel_puts("Kernel Hello world\n");
+	KERN_PRINT_CAP(bi);
+
 	install_exception_vectors();
 	act_init();
 	kernel_interrupts_init(1);

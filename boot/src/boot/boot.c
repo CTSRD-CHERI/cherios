@@ -30,35 +30,32 @@
  */
 
 #include "boot/boot.h"
-#include "init.h"
 
 static void bootloader_main() {
-	extern u8 __kernel_elf_start, __kernel_elf_end;
 	/* Init hardware */
 	hw_init();
 
 	boot_printf("Boot Hello world\n");
-	boot_printf("Kernel elf:  %p - %p (%d bytes)\n",
-		    &__kernel_elf_start, &__kernel_elf_end,
-		    &__kernel_elf_end - &__kernel_elf_start);
 
-	/* Init bootloader */
-	boot_printf("Boot:B\n");
-
-	/* Load and init kernel */
-	boot_printf("Boot:D\n");
 	load_kernel();
+	boot_info_t *bi = load_init();
+
+	boot_printf("Will set $c3 to \n");
+	BOOT_PRINT_CAP(bi);
+
+	/* Set up exception handler to point to kernel entry-point. */
 	install_exception_vector();
-	boot_printf("Boot:E0\n");
 
 	__asm__ __volatile__ (
-		"li    $v0, 0        \n"
-		"syscall             \n"
-		::: "v0");
+		"cmove	$c3, %[bi] \n"
+		"li	$v0, 0	   \n"
+		"syscall           \n"
+		:
+		: [bi]"C" (bi)
+		: "v0", "$c3");
 }
 
 int cherios_main(void) {
 	bootloader_main();
-	init_main();
 	return 0;
 }

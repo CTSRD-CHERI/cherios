@@ -132,7 +132,7 @@ static void kernel_exception_unknown(register_t excode) {
 void kernel_exception(void) {
 	static int entered = 0;
 	entered++;
-	KERNEL_TRACE("exception", "enters %d", entered);
+	KERNEL_TRACE("exception", "%s enters %d", kernel_acts[kernel_curr_act].name, entered);
 	if(entered > 1) {
 		KERNEL_ERROR("interrupt in interrupt");
 	}
@@ -171,7 +171,7 @@ void kernel_exception(void) {
 		break;
 	}
 
-	KERNEL_TRACE("exception", "returns %d", entered);
+	KERNEL_TRACE("exception", "%s returns %d", kernel_acts[kernel_curr_act].name, entered);
 	entered--;
 	if(entered) {
 		KERNEL_ERROR("interrupt in interrupt");

@@ -85,16 +85,28 @@ static void kernel_ccall_core(int cflags) {
 	}
 
 	if(cflags & 2) {
+		KERNEL_TRACE(__func__, "%s : sync-call %s",
+			     kernel_acts[kernel_curr_act].name,
+			     kernel_acts[cb->aid].name);
 		sched_a2d(kernel_curr_act, sched_sync_block);
 		sched_reschedule(cb->aid);
 	}
-	if(cflags & 1) {
+	else if(cflags & 1) {
+		KERNEL_TRACE(__func__, "%s : send-switch %s",
+			     kernel_acts[kernel_curr_act].name,
+			     kernel_acts[cb->aid].name);
+
 		act_wait(kernel_curr_act, cb->aid);
+	}
+	else {
+		KERNEL_TRACE(__func__, "%s : send %s",
+			     kernel_acts[kernel_curr_act].name,
+			     kernel_acts[cb->aid].name);
 	}
 }
 
 void kernel_ccall(void) {
-	KERNEL_TRACE(__func__, "in");
+	KERNEL_TRACE(__func__, "in %s", kernel_acts[kernel_curr_act].name);
 
 	register_t ccall_selector =
 	#ifdef HARDWARE_fpga
@@ -127,7 +139,7 @@ void kernel_ccall(void) {
 }
 
 void kernel_creturn(void) {
-	KERNEL_TRACE(__func__, "in");
+  	KERNEL_TRACE(__func__, "in %s", kernel_acts[kernel_curr_act].name);
 
 	/* Ack creturn instruction */
 	kernel_skip_instr(kernel_curr_act);

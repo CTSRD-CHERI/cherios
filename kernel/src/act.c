@@ -126,7 +126,7 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 	/* set scheduling status */
 	sched_create(aid);
 
-	KERNEL_TRACE("act", "%s OK! ", __func__);
+	KERNEL_TRACE("act", "%s added %s OK! ", __func__, kernel_acts[aid].name);
 	/* done, update next_act */
 	kernel_next_act++;
 	return act_create_ctrl_ref(aid);

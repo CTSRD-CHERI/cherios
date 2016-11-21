@@ -36,6 +36,13 @@
 
 /* Converts RW pointer to RX pointer */
 static inline void * kernel_cap_to_exec(const void * p) {
+	/* XXXPM: won't this break if PCC has non-zero base?  Since
+	   then, the setbounds will add base(PCC) to base(p) to get
+	   the final base.
+
+	   Also, what if p is derived from a default data cap,
+	   resulting in no overlap of p with PCC?
+	*/
 	void * c = cheri_getpcc();
 	c = cheri_setoffset(c, cheri_getbase(p));
 	c = cheri_setbounds(c, cheri_getlen(p));

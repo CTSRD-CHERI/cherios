@@ -37,13 +37,17 @@
  * Information populated by boot-loader, and given to the kernel via a
  * pointer in $c3.
  */
-struct boot_info {
+typedef struct boot_info {
+	/* FIXME: contiguous memory ranges should be passed as caps. */
+
 	void		*kernel_start_addr;	/* Lowest kernel memory address */
 	uint64_t	kernel_mem_size;	/* Size of contiguous memory for loaded kernel */
 
 	void		*init_start_addr;	/* Lowest init memory address */
 	uint64_t	init_mem_size;		/* Size of contiguous memory for loaded init */
 	reg_frame_t	init_frame;		/* Initial frame for initial activation */
-};
+
+	void		*start_free_mem;	/* Start of free memory (which will include the bootloader) */
+} boot_info_t;
 
 #endif /* _BOOT_INFO_H_ */

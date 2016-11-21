@@ -157,5 +157,4 @@ int init_main() {
 	boot_printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
 	stats_display();
 	hw_reboot();
-
 }

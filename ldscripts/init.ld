@@ -31,7 +31,7 @@
 INCLUDE "common.ld"
 
 __size_memory		= 0x1000000;	/* Start simple: 16M above load address */
-__size_boot_stack	= 0x10000;	/* Start simple: 64K */
+__size_init_stack	= 0x10000;	/* Start simple: 64K */
 
 CAP_ALIGN = 0x20;
 PAGE_ALIGN = 0x1000;
@@ -41,7 +41,7 @@ OUTPUT_ARCH(mips)
 ENTRY(start)
 SECTIONS
 {
-	. += __boot_load_virtaddr;
+	. += __init_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
 	.init : {
@@ -111,10 +111,10 @@ SECTIONS
 	 * we just define symbols, and don't move '.'.
 	 */
 	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_heap = ALIGN((__boot_load_virtaddr + __size_memory) - __size_boot_stack, PAGE_ALIGN);
+	__stop_heap = ALIGN((__init_load_virtaddr + __size_memory) - __size_init_stack, PAGE_ALIGN);
 	__size_heap = __stop_heap - __start_heap;
 
-	__start_boot_stack	= __stop_heap;
-	__stop_boot_stack	= __start_boot_stack + __size_boot_stack;
-	__rest_of_memory	= __stop_boot_stack;
+	__start_init_stack	= __stop_heap;
+	__stop_init_stack	= __start_init_stack + __size_init_stack;
+	__rest_of_memory	= __stop_init_stack;
 }

@@ -32,11 +32,10 @@
 #include "cheric.h"
 #include "cp0.h"
 #include "boot/boot.h"
+#include "boot/boot_info.h"
 #include "object.h"
 #include "string.h"
 #include "uart.h"
-#include "assert.h"
-#include "stdio.h"
 #include "elf.h"
 
 static void *kernel_alloc_mem(size_t _size) {
@@ -50,12 +49,17 @@ static void kernel_free_mem(void *addr) {
 	(void)addr;
 }
 
+static boot_info_t bi;
+
 void load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
-	size_t maxaddr;
+	size_t minaddr, maxaddr, entry;
 	char *prgmp = elf_loader_mem(&__kernel_elf_start,
 				     &kernel_alloc_mem, &kernel_free_mem,
-				     &maxaddr);
+				     &minaddr, &maxaddr, &entry);
+
+	boot_printf("Elf-loaded kernel to [%lx-%lx] with entry at %lx\n",
+		    minaddr, maxaddr, entry);
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
@@ -64,20 +68,125 @@ void load_kernel() {
 
 	if(maxaddr > (size_t)(&__boot_load_virtaddr)) {
 		boot_printf(KRED"Kernel too large: %lx > %lx"KRST"\n",
-		    maxaddr, (size_t)(&__boot_load_virtaddr));
+			    maxaddr, (size_t)(&__boot_load_virtaddr));
 		goto err;
 	}
 
-	if(&__kernel_entry_point != prgmp) {
-		boot_printf(KRED"Bad kernel entry point: %lx"KRST"\n", prgmp);
+	if(&__kernel_entry_point != prgmp + entry) {
+		boot_printf(KRED"Bad kernel entry point:"KRST"\n");
+		BOOT_PRINT_CAP(prgmp);
+		boot_printf("Expected kernel entry point:\n");
+		BOOT_PRINT_CAP(&__kernel_entry_point);
 		goto err;
 	}
 
 	caches_invalidate(&__kernel_load_virtaddr,
 	                  maxaddr - (size_t)(&__kernel_load_virtaddr));
 
+	bzero(&bi, sizeof(bi));
+	bi.kernel_start_addr = &__kernel_load_virtaddr;
+	bi.kernel_mem_size = maxaddr - (size_t)(&__kernel_load_virtaddr);
+
 	return;
-	err:
+err:
+	hw_reboot();
+}
+
+#define	INIT_STACK_SIZE	0x10000
+#define	PAGE_ALIGN	0x1000
+
+static void *make_aligned_data_cap(const char *start, size_t len) {
+	size_t desired_ofs = (cheri_getbase(start) + cheri_getoffset(start) + PAGE_ALIGN);
+	desired_ofs &= ~ PAGE_ALIGN;
+
+	char *cap = (char *)cheri_getdefault();
+	cap += desired_ofs - cheri_getbase(cap);
+
+	cap = cheri_setbounds(cap, len);
+	cap = cheri_andperm(cap, ~ CHERI_PERM_EXECUTE);
+	return cap;
+}
+
+static void *make_free_mem_cap(const char *start) {
+	char *cap  = (char *)cheri_getdefault();
+	size_t len = cheri_getlen(cap);
+	size_t ofs = cheri_getbase(start) - cheri_getbase(cap);
+
+	cap += ofs;
+	len -= ofs;
+
+	cap = cheri_setbounds(cap, len);
+	cap = cheri_andperm(cap, ~ CHERI_PERM_EXECUTE);
+	return cap;
+}
+
+boot_info_t *load_init() {
+	extern u8 __init_elf_start, __init_elf_end;
+	size_t minaddr, maxaddr, entry;
+	// FIXME: init is direct mapped for now
+	char *prgmp = elf_loader_mem(&__init_elf_start,
+				     &kernel_alloc_mem, &kernel_free_mem,
+				     &minaddr, &maxaddr, &entry);
+
+	if(!prgmp) {
+		boot_printf(KRED"Could not load init file"KRST"\n");
+		goto err;
+	}
+
+	if(maxaddr > (size_t)(&__boot_load_virtaddr)) {
+		boot_printf(KRED"Init too large: %lx > %lx"KRST"\n",
+			    maxaddr, (size_t)(&__boot_load_virtaddr));
+		goto err;
+	}
+
+	BOOT_PRINT_CAP(prgmp);
+	boot_printf("Expected init_load_virtaddr:\n");
+	BOOT_PRINT_CAP(&__init_load_virtaddr);
+
+	caches_invalidate(&__init_load_virtaddr,
+	                  maxaddr - (size_t)(&__init_load_virtaddr));
+
+	/* set up a stack region just after the loaded executable */
+	void * stack = make_aligned_data_cap(prgmp + maxaddr, INIT_STACK_SIZE);
+
+	/* free memory starts beyond this stack */
+	bi.start_free_mem = make_free_mem_cap((char *)stack + INIT_STACK_SIZE);
+
+	/* set up pcc */
+	void *pcc = cheri_getpcc();
+	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)),
+			      cheri_getlen(prgmp));
+	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
+				  | CHERI_PERM_LOAD_CAP));
+
+	/* populate frame */
+	bzero(&bi.init_frame, sizeof(bi.init_frame));
+	bi.init_frame.cf_pcc = pcc;
+	bi.init_frame.mf_pc  = cheri_getoffset(pcc);
+	bi.init_frame.cf_c11 = stack;
+	bi.init_frame.mf_sp  = cheri_getlen(stack);
+	bi.init_frame.cf_c12 = pcc;
+	bi.init_frame.cf_c0  = cheri_setoffset(prgmp, 0);
+
+	/* copy boot-info to target location; keep this just before
+	   the loaded init.elf.  TODO: ensure that this is beyond the
+	   kernel exception stack.
+	*/
+	char *bi_start_addr = (char *)bi.kernel_start_addr - sizeof(bi);
+	boot_info_t *boot_info = make_aligned_data_cap(bi_start_addr, sizeof(boot_info));
+
+	boot_printf("Preparing to copy %lx bytes of boot_info to \n", sizeof(boot_info));
+	BOOT_PRINT_CAP(boot_info);
+	boot_printf(" from\n");
+	BOOT_PRINT_CAP(&bi);
+	if (cheri_getbase(boot_info) + cheri_getlen(boot_info) > (size_t)&__init_load_virtaddr) {
+		boot_printf("Not enough space for boot_info!\n");
+		goto err;
+	}
+	//memcpy(boot_info, &bi, sizeof(bi));
+
+	return &bi;
+err:
 	hw_reboot();
 }
 
@@ -86,8 +195,10 @@ void install_exception_vector(void) {
 	char * all_mem = cheri_getdefault() ;
 	void *mips_bev0_exception_vector_ptr =
 	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
-	memcpy(mips_bev0_exception_vector_ptr, &kernel_trampoline,
-	    (char *)&kernel_trampoline_end - (char *)&kernel_trampoline);
+	size_t nbytes = (char *)&kernel_trampoline_end - (char *)&kernel_trampoline;
+	boot_printf("Copying %lx bytes of exception trampoline (pointing to kernel entry-point) to %lx\n",
+		    nbytes, mips_bev0_exception_vector_ptr);
+	memcpy(mips_bev0_exception_vector_ptr, &kernel_trampoline, nbytes);
 	cp0_status_bev_set(0);
 }
 

@@ -35,6 +35,7 @@
 #include "mips.h"
 #include "cdefs.h"
 #include "stdio.h"
+#include "boot_info.h"
 
 extern void	kernel_trampoline;
 extern void	kernel_trampoline_end;
@@ -42,6 +43,27 @@ extern void	kernel_trampoline_end;
 extern void	__boot_load_virtaddr;
 extern void	__kernel_load_virtaddr;
 extern void	__kernel_entry_point;
+extern void	__init_load_virtaddr;
+extern void	__init_entry_point;
+
+#define BOOT_PRINT_PTR(ptr)						\
+	boot_printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n",		\
+		    __func__,						\
+		    cheri_getbase((const __capability void *)(ptr)),	\
+		    cheri_getlen((const __capability void *)(ptr)),	\
+		    cheri_getoffset((const __capability void *)(ptr)))
+
+#define BOOT_PRINT_CAP(cap)						\
+	boot_printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
+		    "b:%016jx l:%016zx o:%jx\n",			\
+		    __func__,						\
+		    #cap,						\
+		    cheri_gettag(cap),					\
+		    cheri_getsealed(cap),				\
+		    cheri_getperm(cap),					\
+		    cheri_getbase(cap),					\
+		    cheri_getlen(cap),					\
+		    cheri_getoffset(cap))
 
 //fixme
 #define	kernel_assert(e)	((e) ? (void)0 : __kernel_assert(__func__, \
@@ -57,7 +79,8 @@ int	boot_printf(const char *fmt, ...);
 int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 
-void	load_kernel();
+void		load_kernel();
+boot_info_t*	load_init();
 
 void	hw_init(void);
 void	install_exception_vector(void);

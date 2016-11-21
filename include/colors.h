@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#define NO_COLORS
 #ifndef NO_COLORS
 	#define COLORS
 #endif
@@ -56,7 +57,7 @@
 	#define KBLK ""
 	#define KREG ""
 	#define KRED ""
-	#define KGRN ""
+	#define KGRN "" "\x1B[32m"
 	#define KYLW ""
 	#define KBLU ""
 	#define KMAJ ""
