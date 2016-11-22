@@ -124,7 +124,11 @@ start:
 	cjalr		$c12, $c17
 	nop
 
-	#Restore register frame
+	# Restore context from the register frame set by the scheduler,
+	# typically pointing to an init activation.
+	dla	$k0, kernel_exception_framep_ptr
+	clc	$kr1c, $k0, 0($kdc)
+
 	# Expands to a list of the form
 	# cld	$greg, $0, offset*REG_SIZE($kr1c)
 	foreachi grestore, 0, $kr1c,					\

@@ -33,6 +33,7 @@
 #define	_CHERIOS_KLIB_H_
 
 #include "kernel.h"
+#include "boot_info.h"
 #include "mips.h"
 #include "activations.h"
 #include "cdefs.h"
@@ -99,7 +100,7 @@ void	msg_pop(aid_t act);
 void	msg_queue_init(aid_t act);
 int	msg_queue_empty(aid_t act);
 
-void	act_init(void);
+void	act_init(boot_info_t *bi);
 void	act_wait(int act, aid_t next_hint);
 void *	act_register(const reg_frame_t * frame, const char * name);
 void *	act_get_ref(act_t * ctrl);

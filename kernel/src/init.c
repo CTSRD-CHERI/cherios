@@ -29,7 +29,6 @@
  */
 
 #include "klib.h"
-#include "boot_info.h"
 
 #define KERN_PRINT_PTR(ptr)						\
 	kernel_printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n",		\
@@ -56,17 +55,27 @@ static void cache_inv_low(int op, size_t line) {
 		:: [op]"i" (op), [line]"r" (line));
 }
 
+static boot_info_t boot_info;
+
 static boot_info_t *get_bootinfo() {
 	boot_info_t *bi;
 	__asm__ __volatile__ (
 		"cmove	$c3, %[bi] \n"
 		: [bi]"=C" (bi)
 		);
-	return bi;
+	/*
+	 * Copy boot_info from boot-loader memory to our own before
+	 * processing it.
+	 *
+	 * TODO: check that the expected size matches.
+	 */
+	memcpy(&boot_info, bi, sizeof(boot_info));
+
+	return &boot_info;
 }
 
 static void install_exception_vectors(void) {
-	/* Copy exception trampoline to exception vector */
+	/* Copy exception trampoline to exception vector. */
 	char * all_mem = cheri_getdefault() ;
 	void *mips_bev0_exception_vector_ptr =
 	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
@@ -85,13 +94,18 @@ static void install_exception_vectors(void) {
 }
 
 int cherios_main(void) {
+	/* Copy the boot_info from $c3 before it gets clobbered. */
 	boot_info_t *bi = get_bootinfo();
+
 	kernel_puts("Kernel Hello world\n");
-	KERN_PRINT_CAP(bi);
 
 	install_exception_vectors();
-	act_init();
+	act_init(bi);
 	kernel_interrupts_init(1);
+
 	KERNEL_TRACE("init", "init done");
+
+	sched_reschedule(1);
+
 	return 0;
 }

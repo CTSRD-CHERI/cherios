@@ -43,7 +43,7 @@ aid_t				kernel_next_act;
 
 static const void *            act_default_id = NULL;
 
-void act_init(void) {
+void act_init(boot_info_t *bi) {
 	KERNEL_TRACE("init", "activation init");
 
 	/* initialize the default identifier to a known value */
@@ -52,7 +52,7 @@ void act_init(void) {
 	/*
 	 * create kernel activation
 	 * used to have a 'free' reg frame.
-	 * canot be scheduled: aid 0 is invalid
+	 * cannot be scheduled: aid 0 is invalid
 	 */
 	kernel_next_act = 0;
 	struct reg_frame dummy_frame;
@@ -61,10 +61,10 @@ void act_init(void) {
 	kernel_acts[0].status = status_terminated;
 	kernel_acts[0].sched_status = sched_terminated;
 
-	/* create the boot activation (activation that called us) */
-	kernel_curr_act = 1;
+	/* create the activation for init, passed in the boot_info */
+	kernel_curr_act = kernel_next_act = 1;
+	act_register(&bi->init_frame, "init");
 	kernel_exception_framep_ptr = &kernel_exception_framep[kernel_curr_act];
-	act_register(kernel_exception_framep, "boot");
 	sched_d2a(kernel_curr_act, sched_runnable);
 }
 
@@ -93,7 +93,7 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 	/* set aid */
 	kernel_acts[aid].aid = aid;
 
-	#ifndef __LITE__
+#ifndef __LITE__
 	/* set name */
 	kernel_assert(ACT_NAME_MAX_LEN > 0);
 	int name_len = 0;
@@ -105,7 +105,7 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 		kernel_acts[aid].name[i] = c; /* todo: sanitize the name if we do not trust it */
 	}
 	kernel_acts[aid].name[name_len] = '\0';
-	#endif
+#endif
 
 	/* set status */
 	kernel_acts[aid].status = status_alive;
