@@ -112,9 +112,8 @@ start:
 	cjalr		$c12, $c17
 	nop
 
-	# On the off chance that cherios_main() has been defined as having
-	# arguments, set the first argument (argc) to 0.
-	dli		$a0, 0
+	# Pass arguments to cherios_main(int, void*) in a0 and c3.
+	dli		$a0, 1
 	clc		$c3, $0, 3*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
 
 	# Call cherios_main().

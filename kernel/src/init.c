@@ -55,25 +55,6 @@ static void cache_inv_low(int op, size_t line) {
 		:: [op]"i" (op), [line]"r" (line));
 }
 
-static boot_info_t boot_info;
-
-static boot_info_t *get_bootinfo() {
-	boot_info_t *bi;
-	__asm__ __volatile__ (
-		"cmove	$c3, %[bi] \n"
-		: [bi]"=C" (bi)
-		);
-	/*
-	 * Copy boot_info from boot-loader memory to our own before
-	 * processing it.
-	 *
-	 * TODO: check that the expected size matches.
-	 */
-	memcpy(&boot_info, bi, sizeof(boot_info));
-
-	return &boot_info;
-}
-
 static void install_exception_vectors(void) {
 	/* Copy exception trampoline to exception vector. */
 	char * all_mem = cheri_getdefault() ;
@@ -93,14 +74,24 @@ static void install_exception_vectors(void) {
 	__asm volatile("sync");
 }
 
-int cherios_main(void) {
-	/* Copy the boot_info from $c3 before it gets clobbered. */
-	boot_info_t *bi = get_bootinfo();
+/* Use linker allocated memory to store boot-info. */
+static boot_info_t boot_info;
 
-	kernel_puts("Kernel Hello world\n");
+int cherios_main(int argc, void *p) {
+	kernel_printf("Kernel Hello world: %d\n", argc);
+	KERN_PRINT_CAP(p);
+
+	/*
+	 * Copy boot_info from boot-loader memory to our own before
+	 * processing it.
+	 *
+	 * TODO: check that the expected size matches.
+	 */
+	memcpy(&boot_info, p, sizeof(boot_info));
+	framedump(&boot_info.init_frame);
 
 	install_exception_vectors();
-	act_init(bi);
+	act_init(&boot_info);
 	kernel_interrupts_init(1);
 
 	KERNEL_TRACE("init", "init done");
