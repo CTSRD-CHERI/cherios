@@ -85,7 +85,6 @@ static inline const char * getcapcause(int cause) {
 }
 
 static void kernel_exception_capability(void) {
-	KERNEL_TRACE("exception", "kernel_capability");
 	register_t capcause = cheri_getcause();
 	int cause = (capcause >> 8) & 0x1F;
 
@@ -99,7 +98,7 @@ static void kernel_exception_capability(void) {
 	}
 
 	int reg_num = capcause & 0xFF;
-	exception_printf(KRED "Capability exception catched for activation! %s-%d"
+	exception_printf(KRED "Capability exception caught for activation! %s-%d"
 	             " (0x%X: %s) [Reg C%d]" KRST"\n",
 	        kernel_acts[kernel_curr_act].name, kernel_curr_act,
 		cause, getcapcause(cause), reg_num);
