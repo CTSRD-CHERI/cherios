@@ -110,5 +110,6 @@ int	act_terminate(act_t * ctrl);
 void *	act_seal_identifier(void * identifier);
 
 void	regdump(int reg_num);
+void	framedump(const struct reg_frame *frame);
 
 #endif /* _CHERIOS_KLIB_H_ */

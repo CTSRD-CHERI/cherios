@@ -92,9 +92,7 @@ void regdump(int reg_num) {
 
 	REG_DUMP_M(hi); REG_DUMP_M(lo); printf("\n");
 
-	#if 0
 	REG_DUMP_M(pc); printf("\n"); /* does not seem in sync with pcc */
-	#endif
 
 	printf("\n");
 
@@ -124,3 +122,9 @@ void regdump(int reg_num __unused) {
 
 #endif
 
+void framedump(const struct reg_frame *frame) {
+	struct reg_frame *tmp = kernel_exception_framep_ptr;
+	kernel_exception_framep_ptr = (struct reg_frame *)frame;
+	regdump(-1);
+	kernel_exception_framep_ptr = tmp;
+}
