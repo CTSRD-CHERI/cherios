@@ -162,28 +162,11 @@ boot_info_t *load_init() {
 	/* populate frame */
 	bzero(&bi.init_frame, sizeof(bi.init_frame));
 	bi.init_frame.cf_pcc = pcc;
-	bi.init_frame.mf_pc  = cheri_getoffset(pcc);
+	bi.init_frame.mf_pc  = cheri_getoffset(pcc) + entry;
 	bi.init_frame.cf_c11 = stack;
 	bi.init_frame.mf_sp  = cheri_getlen(stack);
 	bi.init_frame.cf_c12 = pcc;
 	bi.init_frame.cf_c0  = cheri_setoffset(prgmp, 0);
-
-	/* copy boot-info to target location; keep this just before
-	   the loaded init.elf.  TODO: ensure that this is beyond the
-	   kernel exception stack.
-	*/
-	char *bi_start_addr = (char *)bi.kernel_start_addr - sizeof(bi);
-	boot_info_t *boot_info = make_aligned_data_cap(bi_start_addr, sizeof(boot_info));
-
-	boot_printf("Preparing to copy %lx bytes of boot_info to \n", sizeof(boot_info));
-	BOOT_PRINT_CAP(boot_info);
-	boot_printf(" from\n");
-	BOOT_PRINT_CAP(&bi);
-	if (cheri_getbase(boot_info) + cheri_getlen(boot_info) > (size_t)&__init_load_virtaddr) {
-		boot_printf("Not enough space for boot_info!\n");
-		goto err;
-	}
-	//memcpy(boot_info, &bi, sizeof(bi));
 
 	return &bi;
 err:
