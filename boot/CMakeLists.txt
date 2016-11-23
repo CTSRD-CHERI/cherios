@@ -26,19 +26,19 @@ set(INIT_SRCS
     src/boot/boot_printf.c
     src/boot/caches.c
     src/boot/elf_loader.c
-    src/boot/init.c
-    src/boot/init_utils.c
-    src/boot/init_main.c
-    src/boot/alloc.c
-    src/boot/stats.c
-    src/boot/ufs_module.c
-    src/boot/ufs_read.c
-    src/boot/glue.c
+    src/init/init.c
+    src/init/init_utils.c
+    src/init/init_main.c
+    src/init/alloc.c
+    src/init/stats.c
+    src/init/ufs_module.c
+    src/init/ufs_read.c
+    src/init/glue.c
 )
 
 set(INIT_ASM_SRCS
-    src/boot/fs.S
-    src/boot/init_init.S
+    src/init/fs.S
+    src/init/init_init.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")
@@ -54,7 +54,7 @@ endif()
 include_directories(${CMAKE_CURRENT_BINARY_DIR}) # to find fs.img
 
 # fs.S depends on the fs.img file, kernel_elf.S on kernel.elf, init_elf.S on init.elf
-set_source_files_properties(src/boot/fs.S PROPERTIES
+set_source_files_properties(src/init/fs.S PROPERTIES
   OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
 )
 set_source_files_properties(src/boot/kernel_elf.S PROPERTIES
