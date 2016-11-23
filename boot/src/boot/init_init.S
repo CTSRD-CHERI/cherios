@@ -42,28 +42,6 @@
 	.global start
 	.ent start
 start:
-	# Enable capability coprocessor.
-	mfc0		$t0, $12
-#ifdef HARD_FLOAT
-	li		$t1, 0x64000000
-#else
-	li		$t1, 0x40000000
-#endif
-	or		$t0, $t0, $t1
-	# Clear ERL
-	li		$t1, 0x4
-	nor		$t1, $t1, $t1
-	and		$t0, $t0, $t1
-	mtc0		$t0, $12
-
-	# Wait for capability coprocessor to be enabled for real
-	nop; nop; nop; nop; nop; nop; nop; nop;
-
-	# Clear other capability registers to ensure we don't retain any
-	# executable capabilities: everything but $pcc and $c0.
-	CClearLo	0xfffe
-	CClearHi	0xffff
-
 	# W^X for pointers: ensure $c0 is never executable.
 	cgetdefault	$c3
 	dli		$t0, ~(1<<1)
