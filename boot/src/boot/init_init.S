@@ -60,11 +60,6 @@ start:
 	cjr		$c12
 	nop
 cherios_init_jump_target:
-
-	# Populate exception registers: $kdc and $kcc
-	cgetpcc		$c29
-	cgetdefault	$c30
-
 	# Set up a stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
 	dla		$t0, __start_init_stack
