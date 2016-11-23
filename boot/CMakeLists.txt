@@ -1,13 +1,13 @@
 include_directories(include)
 
 set(LIBKERNEL_SRCS
-    src/cp0.c
     src/kernel_printf.c
     src/kernel_utils.c
     src/uart.c
 )
 
 set(BOOT_SRCS
+    src/cp0.c
     src/boot/boot.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
