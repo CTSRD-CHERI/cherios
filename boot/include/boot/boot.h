@@ -72,7 +72,6 @@ void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
 void	kernel_panic(const char *fmt, ...) __dead2;
 #define printf kernel_printf
 int	kernel_printf(const char *fmt, ...);
-void	hw_reboot(void) __dead2;
 int	kernel_vprintf(const char *fmt, va_list ap);
 
 int	boot_printf(const char *fmt, ...);
@@ -82,7 +81,6 @@ void	boot_printf_syscall_enable(void);
 void		load_kernel();
 boot_info_t*	load_init();
 
-void	hw_init(void);
 void	install_exception_vector(void);
 void	caches_invalidate(void * addr, size_t size);
 

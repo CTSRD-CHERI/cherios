@@ -31,7 +31,6 @@
 #include "mips.h"
 #include "cheric.h"
 #include "cp0.h"
-#include "boot/boot.h"
 #include "init.h"
 #include "object.h"
 #include "string.h"
@@ -134,7 +133,7 @@ static void * elf_loader(const char * file, void *(*alloc)(size_t size), void (*
 	int filelen=0;
 	char * addr = load(file, &filelen);
 	if(!addr) {
-		boot_printf("Could not read file %s", file);
+		printf("Could not read file %s", file);
 		return NULL;
 	}
 	return elf_loader_mem(addr, alloc, free, NULL, NULL, entry);
@@ -206,6 +205,6 @@ int acts_alive(init_elem_t * init_list, size_t  init_list_len) {
 			break;
 		}
 	}
-	//boot_printf(KRED"%d still alive\n", nb);
+	//printf(KRED"%d still alive\n", nb);
 	return nb;
 }

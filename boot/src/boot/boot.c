@@ -30,6 +30,7 @@
  */
 
 #include "boot/boot.h"
+#include "plat.h"
 
 static void bootloader_main() {
 	/* Init hardware */

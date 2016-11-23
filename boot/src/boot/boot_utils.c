@@ -31,6 +31,7 @@
 #include "mips.h"
 #include "cheric.h"
 #include "cp0.h"
+#include "plat.h"
 #include "boot/boot.h"
 #include "boot/boot_info.h"
 #include "object.h"

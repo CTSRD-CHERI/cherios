@@ -29,7 +29,7 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
+#include "mips.h"
 #include "statcounters.h"
 
 #ifdef HARDWARE_fpga

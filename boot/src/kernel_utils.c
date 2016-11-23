@@ -29,6 +29,7 @@
  */
 
 #include "boot/boot.h"
+#include "plat.h"
 
 /*
  * Various util functions

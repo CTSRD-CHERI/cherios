@@ -28,7 +28,6 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
 #include "object.h"
 
 void glue_memmgt(void * memmgt_ctrl, void* ns_ctrl) {

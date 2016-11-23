@@ -30,10 +30,11 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
+#include "plat.h"
 #include "misc.h"
 #include "init.h"
 #include "object.h"
+#include "stdio.h"
 
 #define B_FS 1
 #define B_SO 1
@@ -92,11 +93,11 @@ void print_build_date(void) {
 	int filelen=0;
 	char * date = load("t1", &filelen);
 	if(date == NULL) {
-		boot_printf("%s failed\n", __func__);
+		printf("%s failed\n", __func__);
 		return;
 	}
 	date[filelen-1] = '\0';
-	boot_printf("%s\n", date);
+	printf("%s\n", date);
 }
 
 static void load_modules(void) {
@@ -112,19 +113,19 @@ static void load_modules(void) {
 			continue;
 		}
 		be->ctrl = load_module(be->type, be->name, be->arg, NULL);
-		boot_printf("Loaded module %s\n", be->name);
+		printf("Loaded module %s\n", be->name);
 		switch(init_list[i].type) {
-			case m_memmgt:
-				nssleep(3);
-				c_memmgt = be->ctrl;
-				init_alloc_enable_system(be->ctrl);
-				break;
-			case m_namespace:
-				nssleep(3);
-				/* glue memmgt to namespace */
-				glue_memmgt(c_memmgt, be->ctrl);
-				break;
-			default:{}
+		case m_memmgt:
+			nssleep(3);
+			c_memmgt = be->ctrl;
+			init_alloc_enable_system(be->ctrl);
+			break;
+		case m_namespace:
+			nssleep(3);
+			/* glue memmgt to namespace */
+			glue_memmgt(c_memmgt, be->ctrl);
+			break;
+		default:{}
 		}
 	}
 }
@@ -132,29 +133,26 @@ static void load_modules(void) {
 int init_main() {
   	stats_init();
 
-	/* Interrupts are ON from here */
-	boot_printf("Init:E\n");
-	/* Switch to syscall print */
-	boot_printf_syscall_enable();
+	printf("Init loaded\n");
 
 	/* Initialize the memory pool. */
 	init_alloc_init();
 
 	/* Print fs build date */
-	boot_printf("Init:C\n");
+	printf("Init:C\n");
 	print_build_date();
 
 	/* Load modules */
-	boot_printf("Init:F\n");
+	printf("Init:F\n");
 	load_modules();
 
-	boot_printf("Init:Z\n");
+	printf("Init:Z\n");
 
 	while(acts_alive(init_list, init_list_len)) {
 		ssleep(0);
 	}
 
-	boot_printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
+	printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
 	stats_display();
 	hw_reboot();
 }
