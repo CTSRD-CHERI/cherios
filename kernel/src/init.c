@@ -79,8 +79,6 @@ static boot_info_t boot_info;
 
 int cherios_main(int argc, void *p) {
 	kernel_printf("Kernel Hello world: %d\n", argc);
-	KERN_PRINT_CAP(p);
-
 	/*
 	 * Copy boot_info from boot-loader memory to our own before
 	 * processing it.
@@ -88,7 +86,6 @@ int cherios_main(int argc, void *p) {
 	 * TODO: check that the expected size matches.
 	 */
 	memcpy(&boot_info, p, sizeof(boot_info));
-	framedump(&boot_info.init_frame);
 
 	install_exception_vectors();
 	act_init(&boot_info);

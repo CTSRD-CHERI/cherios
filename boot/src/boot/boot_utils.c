@@ -58,9 +58,6 @@ void load_kernel() {
 				     &kernel_alloc_mem, &kernel_free_mem,
 				     &minaddr, &maxaddr, &entry);
 
-	boot_printf("Elf-loaded kernel to [%lx-%lx] with entry at %lx\n",
-		    minaddr, maxaddr, entry);
-
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
 		goto err;
@@ -139,10 +136,6 @@ boot_info_t *load_init() {
 		goto err;
 	}
 
-	BOOT_PRINT_CAP(prgmp);
-	boot_printf("Expected init_load_virtaddr:\n");
-	BOOT_PRINT_CAP(&__init_load_virtaddr);
-
 	caches_invalidate(&__init_load_virtaddr,
 	                  maxaddr - (size_t)(&__init_load_virtaddr));
 
@@ -179,8 +172,6 @@ void install_exception_vector(void) {
 	void *mips_bev0_exception_vector_ptr =
 	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
 	size_t nbytes = (char *)&kernel_trampoline_end - (char *)&kernel_trampoline;
-	boot_printf("Copying %lx bytes of exception trampoline (pointing to kernel entry-point) to %lx\n",
-		    nbytes, mips_bev0_exception_vector_ptr);
 	memcpy(mips_bev0_exception_vector_ptr, &kernel_trampoline, nbytes);
 	cp0_status_bev_set(0);
 }

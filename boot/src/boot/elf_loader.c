@@ -35,7 +35,7 @@
 #include "string.h"
 #include "elf.h"
 
-#if 1
+#if 0
 #define TRACE(s, ...) trace_elf_loader(KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
 static void trace_elf_loader(const char *fmt, ...) {
 	va_list ap;
@@ -167,7 +167,6 @@ void *elf_loader_mem(void *p, void *(*alloc)(size_t size), void (*free)(void *ad
 	}
 
 	TRACE("Allocated %lx bytes of target memory", allocsize);
-	CHERI_PRINT_CAP(prgmp);
 
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);

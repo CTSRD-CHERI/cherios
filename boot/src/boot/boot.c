@@ -40,9 +40,6 @@ static void bootloader_main() {
 	load_kernel();
 	boot_info_t *bi = load_init();
 
-	boot_printf("Will set $c3 to \n");
-	BOOT_PRINT_CAP(bi);
-
 	/* Set up exception handler to point to kernel entry-point. */
 	install_exception_vector();
 

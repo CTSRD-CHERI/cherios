@@ -99,9 +99,9 @@ static void kernel_exception_capability(void) {
 
 	int reg_num = capcause & 0xFF;
 	exception_printf(KRED "Capability exception caught for activation! %s-%d"
-	             " (0x%X: %s) [Reg C%d]" KRST"\n",
-	        kernel_acts[kernel_curr_act].name, kernel_curr_act,
-		cause, getcapcause(cause), reg_num);
+			 " (0x%X: %s) [Reg C%d]" KRST"\n",
+			 kernel_acts[kernel_curr_act].name, kernel_curr_act,
+			 cause, getcapcause(cause), reg_num);
 
 	regdump(reg_num);
 	kernel_freeze();
@@ -109,8 +109,8 @@ static void kernel_exception_capability(void) {
 
 static void kernel_exception_data(register_t excode) {
 	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s-%d\n",
-	       excode, cp0_badvaddr_get(),
-	       kernel_acts[kernel_curr_act].name, kernel_curr_act);
+			 excode, cp0_badvaddr_get(),
+			 kernel_acts[kernel_curr_act].name, kernel_curr_act);
 	regdump(-1);
 	kernel_freeze();
 }
@@ -118,7 +118,7 @@ static void kernel_exception_data(register_t excode) {
 
 static void kernel_exception_unknown(register_t excode) {
 	exception_printf(KRED"Unknown exception type '%d' in  %s-%d"KRST"\n",
-	       excode, kernel_acts[kernel_curr_act].name, kernel_curr_act);
+			 excode, kernel_acts[kernel_curr_act].name, kernel_curr_act);
 	regdump(-1);
 	kernel_freeze();
 }
@@ -131,9 +131,9 @@ static void kernel_exception_unknown(register_t excode) {
 void kernel_exception(void) {
 	static int entered = 0;
 	entered++;
-	KERNEL_TRACE("exception", "%s enters %d", kernel_acts[kernel_curr_act].name, entered);
 	if(entered > 1) {
-		KERNEL_ERROR("interrupt in interrupt");
+		KERNEL_ERROR("interrupt in interrupt: level %d in %s",
+			     entered, kernel_acts[kernel_curr_act].name);
 	}
 
 	/*
@@ -170,10 +170,10 @@ void kernel_exception(void) {
 		break;
 	}
 
-	KERNEL_TRACE("exception", "%s returns %d", kernel_acts[kernel_curr_act].name, entered);
 	entered--;
 	if(entered) {
-		KERNEL_ERROR("interrupt in interrupt");
+		KERNEL_ERROR("interrupt in interrupt: level %d in %s",
+			     entered, kernel_acts[kernel_curr_act].name);
 		kernel_freeze();
 	}
 }
