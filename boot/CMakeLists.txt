@@ -8,10 +8,10 @@ set(LIBKERNEL_SRCS
 
 set(BOOT_SRCS
     src/cp0.c
+    src/caches.c
     src/boot/boot.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
-    src/boot/caches.c
     src/boot/elf_loader.c
 )
 
@@ -24,8 +24,8 @@ set(BOOT_ASM_SRCS
 
 set(INIT_SRCS
     src/boot/boot_printf.c
-    src/boot/caches.c
     src/boot/elf_loader.c
+    src/caches.c
     src/init/init.c
     src/init/init_utils.c
     src/init/init_main.c

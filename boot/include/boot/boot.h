@@ -82,6 +82,5 @@ void		load_kernel();
 boot_info_t*	load_init();
 
 void	install_exception_vector(void);
-void	caches_invalidate(void * addr, size_t size);
 
 #endif

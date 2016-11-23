@@ -31,6 +31,7 @@
 #include "mips.h"
 #include "cheric.h"
 #include "cp0.h"
+#include "plat.h"
 #include "init.h"
 #include "object.h"
 #include "string.h"
