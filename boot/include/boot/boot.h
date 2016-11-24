@@ -65,7 +65,7 @@ extern void	__init_entry_point;
 		    cheri_getlen(cap),					\
 		    cheri_getoffset(cap))
 
-//fixme
+
 #define	boot_assert(e)	((e) ? (void)0 : __boot_assert(__func__, 	\
 						       __FILE__, __LINE__, #e))
 void	__boot_assert(const char *, const char *, int, const char *) __dead2;

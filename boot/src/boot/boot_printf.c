@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,6 +32,7 @@
 #include "boot/boot.h"
 #include "stdio.h"
 #include "uart.h"
+#include "plat.h"
 
 /*
  * Provide a kernel-compatible version of printf, which invokes the UART
@@ -72,4 +74,48 @@ int boot_printf(const char *fmt, ...) {
 	boot_printf2(KRST);
 
 	return (retval);
+}
+
+/*
+ * Various util functions
+ */
+
+void __boot_assert(const char *assert_function, const char *assert_file,
+		   int assert_lineno, const char *assert_message) {
+	boot_panic("assertion failure in %s at %s:%d: %s", assert_function,
+		   assert_file, assert_lineno, assert_message);
+}
+
+void boot_vtrace(const char *context, const char *fmt, va_list ap) {
+	boot_printf(KYLW KBLD"%s" KRST KYLW" - ", context);
+	boot_vprintf(fmt, ap);
+	boot_printf(KRST"\n");
+}
+
+void boot_trace(const char *context, const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	boot_vtrace(context, fmt, ap);
+	va_end(ap);
+}
+
+void boot_error(const char *file, const char *func, int line, const char *fmt, ...) {
+	boot_printf(KRED "Kernel error: '");
+	va_list ap;
+	va_start(ap, fmt);
+	boot_vprintf(fmt, ap);
+	va_end(ap);
+	boot_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
+}
+
+void boot_panic(const char *fmt, ...) {
+	va_list ap;
+
+	boot_printf(KMAJ"panic: ");
+	va_start(ap, fmt);
+	boot_vprintf(fmt, ap);
+	va_end(ap);
+	boot_printf(KRST"\n");
+
+	hw_reboot();
 }
