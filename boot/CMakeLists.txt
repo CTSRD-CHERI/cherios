@@ -75,6 +75,7 @@ add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
     ${BOOT_SRCS}
     ${BOOT_ASM_SRCS}
 )
+set_target_properties(cherios PROPERTIES COMPILE_FLAGS -DCHERIOS_BOOT)
 
 # Create the file system
 # HACK to make sure that file system is rebuilt after one of the targets changes

@@ -28,7 +28,19 @@
  * SUCH DAMAGE.
  */
 
+#ifdef CHERIOS_BOOT
+
 #include "boot/boot.h"
+#define printf kernel_printf
+#define assert(e) kernel_assert(e)
+
+#else  /* CHERIOS_BOOT */
+
+#include "stdio.h"
+#include "assert.h"
+
+#endif /* CHERIOS_BOOT */
+
 #include "init.h"
 #include "cheric.h"
 #include "math.h"
@@ -40,7 +52,7 @@
 static void trace_elf_loader(const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
-	boot_vprintf(fmt, ap);
+	vprintf(fmt, ap);
 	va_end(ap);
 }
 #else
@@ -52,9 +64,9 @@ static void trace_elf_loader(const char *fmt, ...) {
 static void error_elf_loader(const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
-	boot_printf(KRED"elf_loader: ");
-	boot_vprintf(fmt, ap);
-	boot_printf(KRST"\n");
+	printf("%s", KRED"elf_loader: ");
+	vprintf(fmt, ap);
+	printf("%s", KRST"\n");
 	va_end(ap);
 }
 
@@ -114,13 +126,13 @@ static inline Elf64_Phdr *elf_pheader(Elf64_Ehdr *hdr) {
 
 #if 0
 static inline Elf64_Shdr *elf_section(Elf64_Ehdr *hdr, int idx) {
-	kernel_assert(idx < hdr->e_shnum);
+	assert(idx < hdr->e_shnum);
 	return &elf_sheader(hdr)[idx];
 }
 #endif
 
 static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
-	kernel_assert(idx < hdr->e_phnum);
+	assert(idx < hdr->e_phnum);
 	return &elf_pheader(hdr)[idx];
 }
 
