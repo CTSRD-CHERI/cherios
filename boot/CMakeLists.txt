@@ -11,7 +11,7 @@ set(BOOT_SRCS
     src/boot/boot.c
     src/boot/kernel_printf.c
     src/boot/kernel_utils.c
-    src/uart.c
+    src/boot/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
     src/boot/elf_loader.c
@@ -41,9 +41,9 @@ set(INIT_ASM_SRCS
 )
 
 if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND BOOT_SRCS src/uart_malta.c)
+    list(APPEND BOOT_SRCS src/boot/uart_malta.c)
 elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND BOOT_SRCS src/uart_altera.c)
+    list(APPEND BOOT_SRCS src/boot/uart_altera.c)
 else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
