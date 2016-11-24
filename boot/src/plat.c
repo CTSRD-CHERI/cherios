@@ -28,57 +28,15 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
+#include "mips.h"
 #include "plat.h"
 
-/*
- * Various util functions
- */
-
-void __kernel_assert(const char *assert_function, const char *assert_file,
-			int assert_lineno, const char *assert_message) {
-	kernel_panic("assertion failure in %s at %s:%d: %s", assert_function,
-			assert_file, assert_lineno, assert_message);
-}
-
-void kernel_vtrace(const char *context, const char *fmt, va_list ap) {
-	kernel_printf(KYLW KBLD"%s" KRST KYLW" - ", context);
-	kernel_vprintf(fmt, ap);
-	kernel_printf(KRST"\n");
-}
-
-void kernel_trace(const char *context, const char *fmt, ...) {
-	va_list ap;
-	va_start(ap, fmt);
-	kernel_vtrace(context, fmt, ap);
-	va_end(ap);
-}
-
-void kernel_error(const char *file, const char *func, int line, const char *fmt, ...) {
-	kernel_printf(KRED "Kernel error: '");
-	va_list ap;
-	va_start(ap, fmt);
-	kernel_vprintf(fmt, ap);
-	va_end(ap);
-	kernel_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
-}
-
-void kernel_panic(const char *fmt, ...) {
-	va_list ap;
-
-	kernel_printf(KMAJ"panic: ");
-	va_start(ap, fmt);
-	kernel_vprintf(fmt, ap);
-	va_end(ap);
-	kernel_printf(KRST"\n");
-
-	hw_reboot();
-}
-
 void hw_reboot(void) {
-	#ifdef HARDWARE_qemu
-		/* Used to quit Qemu */
-		mips_iowrite_uint8(mips_phys_to_uncached(0x1f000000 + 0x00500), 0x42);
-	#endif
+
+#ifdef HARDWARE_qemu
+	/* Used to quit Qemu */
+	mips_iowrite_uint8(mips_phys_to_uncached(0x1f000000 + 0x00500), 0x42);
+#endif
+
 	for(;;);
 }

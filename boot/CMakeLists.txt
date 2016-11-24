@@ -1,15 +1,17 @@
 include_directories(include)
 
-set(LIBKERNEL_SRCS
-    src/kernel_printf.c
-    src/kernel_utils.c
-    src/uart.c
+set(COMMON_SRCS
+    src/boot/elf_loader.c
+    src/plat.c
+    src/caches.c
 )
 
 set(BOOT_SRCS
     src/cp0.c
-    src/caches.c
     src/boot/boot.c
+    src/boot/kernel_printf.c
+    src/boot/kernel_utils.c
+    src/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
     src/boot/elf_loader.c
@@ -23,9 +25,6 @@ set(BOOT_ASM_SRCS
 )
 
 set(INIT_SRCS
-    src/boot/boot_printf.c
-    src/boot/elf_loader.c
-    src/caches.c
     src/init/init.c
     src/init/init_utils.c
     src/init/init_main.c
@@ -42,9 +41,9 @@ set(INIT_ASM_SRCS
 )
 
 if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND LIBKERNEL_SRCS src/uart_malta.c)
+    list(APPEND BOOT_SRCS src/uart_malta.c)
 elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND LIBKERNEL_SRCS src/uart_altera.c)
+    list(APPEND BOOT_SRCS src/uart_altera.c)
 else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
@@ -65,13 +64,13 @@ set_source_files_properties(src/boot/init_elf.S PROPERTIES
 )
 
 add_cherios_init(init LINKER_SCRIPT init.ld SOURCES
-    ${LIBKERNEL_SRCS}
+    ${COMMON_SRCS}
     ${INIT_SRCS}
     ${INIT_ASM_SRCS}
 )
 
 add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
-    ${LIBKERNEL_SRCS}
+    ${COMMON_SRCS}
     ${BOOT_SRCS}
     ${BOOT_ASM_SRCS}
 )
