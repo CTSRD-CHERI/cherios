@@ -81,6 +81,7 @@ void	boot_printf_syscall_enable(void);
 void		load_kernel();
 boot_info_t*	load_init();
 
+void	hw_init();
 void	install_exception_vector(void);
 
 #endif
