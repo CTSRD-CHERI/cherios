@@ -31,8 +31,8 @@
 #ifdef CHERIOS_BOOT
 
 #include "boot/boot.h"
-#define printf boot_printf
-#define assert(e) kernel_assert(e)
+#define printf    boot_printf
+#define assert(e) boot_assert(e)
 
 #else  /* CHERIOS_BOOT */
 

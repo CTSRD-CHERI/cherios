@@ -66,10 +66,10 @@ extern void	__init_entry_point;
 		    cheri_getoffset(cap))
 
 //fixme
-#define	kernel_assert(e)	((e) ? (void)0 : __kernel_assert(__func__, \
-				__FILE__, __LINE__, #e))
-void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
-void	kernel_panic(const char *fmt, ...) __dead2;
+#define	boot_assert(e)	((e) ? (void)0 : __boot_assert(__func__, 	\
+						       __FILE__, __LINE__, #e))
+void	__boot_assert(const char *, const char *, int, const char *) __dead2;
+void	boot_panic(const char *fmt, ...) __dead2;
 
 int	boot_printf(const char *fmt, ...);
 int	boot_vprintf(const char *fmt, va_list ap);

@@ -35,26 +35,26 @@
  * Various util functions
  */
 
-void __kernel_assert(const char *assert_function, const char *assert_file,
+void __boot_assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
-	kernel_panic("assertion failure in %s at %s:%d: %s", assert_function,
+	boot_panic("assertion failure in %s at %s:%d: %s", assert_function,
 			assert_file, assert_lineno, assert_message);
 }
 
-void kernel_vtrace(const char *context, const char *fmt, va_list ap) {
+void boot_vtrace(const char *context, const char *fmt, va_list ap) {
 	boot_printf(KYLW KBLD"%s" KRST KYLW" - ", context);
 	boot_vprintf(fmt, ap);
 	boot_printf(KRST"\n");
 }
 
-void kernel_trace(const char *context, const char *fmt, ...) {
+void boot_trace(const char *context, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
-	kernel_vtrace(context, fmt, ap);
+	boot_vtrace(context, fmt, ap);
 	va_end(ap);
 }
 
-void kernel_error(const char *file, const char *func, int line, const char *fmt, ...) {
+void boot_error(const char *file, const char *func, int line, const char *fmt, ...) {
 	boot_printf(KRED "Kernel error: '");
 	va_list ap;
 	va_start(ap, fmt);
@@ -63,7 +63,7 @@ void kernel_error(const char *file, const char *func, int line, const char *fmt,
 	boot_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
 }
 
-void kernel_panic(const char *fmt, ...) {
+void boot_panic(const char *fmt, ...) {
 	va_list ap;
 
 	boot_printf(KMAJ"panic: ");
