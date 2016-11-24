@@ -42,9 +42,9 @@ void __kernel_assert(const char *assert_function, const char *assert_file,
 }
 
 void kernel_vtrace(const char *context, const char *fmt, va_list ap) {
-	kernel_printf(KYLW KBLD"%s" KRST KYLW" - ", context);
-	kernel_vprintf(fmt, ap);
-	kernel_printf(KRST"\n");
+	boot_printf(KYLW KBLD"%s" KRST KYLW" - ", context);
+	boot_vprintf(fmt, ap);
+	boot_printf(KRST"\n");
 }
 
 void kernel_trace(const char *context, const char *fmt, ...) {
@@ -55,22 +55,22 @@ void kernel_trace(const char *context, const char *fmt, ...) {
 }
 
 void kernel_error(const char *file, const char *func, int line, const char *fmt, ...) {
-	kernel_printf(KRED "Kernel error: '");
+	boot_printf(KRED "Kernel error: '");
 	va_list ap;
 	va_start(ap, fmt);
-	kernel_vprintf(fmt, ap);
+	boot_vprintf(fmt, ap);
 	va_end(ap);
-	kernel_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
+	boot_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
 }
 
 void kernel_panic(const char *fmt, ...) {
 	va_list ap;
 
-	kernel_printf(KMAJ"panic: ");
+	boot_printf(KMAJ"panic: ");
 	va_start(ap, fmt);
-	kernel_vprintf(fmt, ap);
+	boot_vprintf(fmt, ap);
 	va_end(ap);
-	kernel_printf(KRST"\n");
+	boot_printf(KRST"\n");
 
 	hw_reboot();
 }

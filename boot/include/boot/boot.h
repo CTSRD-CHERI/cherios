@@ -70,9 +70,6 @@ extern void	__init_entry_point;
 				__FILE__, __LINE__, #e))
 void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
 void	kernel_panic(const char *fmt, ...) __dead2;
-#define printf kernel_printf
-int	kernel_printf(const char *fmt, ...);
-int	kernel_vprintf(const char *fmt, va_list ap);
 
 int	boot_printf(const char *fmt, ...);
 int	boot_vprintf(const char *fmt, va_list ap);

@@ -32,40 +32,22 @@
 #include "stdio.h"
 #include "uart.h"
 
-static int syscall_print = 0;
+/*
+ * Provide a kernel-compatible version of printf, which invokes the UART
+ * driver.
+ */
+void
+uart_putchar(int c, __attribute__((unused)) void *arg)
+{
 
-void boot_printf_syscall_enable(void) {
-	syscall_print = 1;
+	uart_putc(c);
 }
 
-static void buf_puts(const char * str) {
-	if(syscall_print == 0) {
-		kernel_printf("%s", str);
-	} else {
-		__asm__ __volatile__ (
-		"li   $v0, 34 \n"
-		"cmove $c3, %[str] \n"
-		"syscall      \n"
-		:: [str]"C" (str): "v0", "$c3");
-	}
-}
+int
+boot_vprintf(const char *fmt, va_list ap)
+{
 
-static void buf_putc(int c, __attribute__((unused)) void *arg) {
-	char chr = (char)c;
-	static size_t offset;
-	const size_t buf_size = 0x100;
-	static char buf[buf_size+1];
-	buf[offset++] = chr;
-	if((chr == '\n') || (offset == buf_size)) {
-		buf[offset] = '\0';
-		buf_puts(buf);
-		offset = 0;
-	}
-}
-
-int boot_vprintf(const char *fmt, va_list ap) {
-
-	return (kvprintf(fmt, buf_putc, NULL, 10, ap));
+	return (kvprintf(fmt, uart_putchar, NULL, 10, ap));
 }
 
 static int boot_printf2(const char *fmt, ...) {
