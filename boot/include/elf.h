@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
+#include "mips.h"
 #include "init.h"
 #include "cheric.h"
 #include "math.h"
