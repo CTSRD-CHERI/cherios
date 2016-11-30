@@ -96,7 +96,4 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.elf DEPENDS kernel 
 )
 add_custom_target(kernel_elf DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.elf)
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/init.elf DEPENDS init VERBATIM
-  COMMAND cp "$<TARGET_FILE:init>" "${CMAKE_CURRENT_BINARY_DIR}/init.elf"
-)
 add_custom_target(init_elf DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/init.elf)
