@@ -131,19 +131,24 @@ static void * get_act_cap(module_t type) {
 static void * ns_ref = NULL;
 static void * ns_id  = NULL;
 
-static void * elf_loader(const char * file, void *(*alloc)(size_t size), void (*free)(void *addr), size_t * entry) {
+static void * elf_loader(Elf_Env *env, const char * file, size_t * entry) {
 	int filelen=0;
 	char * addr = load(file, &filelen);
 	if(!addr) {
 		printf("Could not read file %s", file);
 		return NULL;
 	}
-	return elf_loader_mem(addr, alloc, free, NULL, NULL, entry);
+	return elf_loader_mem(env, addr, NULL, NULL, entry);
 }
 
 void * load_module(module_t type, const char * file, int arg, const void *carg) {
 	size_t entry;
-	char *prgmp = elf_loader(file, &init_alloc, &init_free, &entry);
+	Elf_Env env = {
+	  .alloc = init_alloc,
+	  .free  = init_free,
+	};
+
+	char *prgmp = elf_loader(&env, file, &entry);
 	if(!prgmp) {
 		assert(0);
 		return NULL;

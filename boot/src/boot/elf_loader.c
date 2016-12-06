@@ -138,14 +138,12 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 
 /* not secure */
 
-void *elf_loader_mem(void *p, void *(*alloc)(size_t size), void (*free)(void *addr),
-		     size_t *minaddr, size_t *maxaddr, size_t *entry) {
+void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry) {
 	char *addr = (char *)p;
 	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(hdr)) {
 		ERROR("ELF File cannot be loaded");
-		free(addr);
 		return NULL;
 	}
 
@@ -171,10 +169,9 @@ void *elf_loader_mem(void *p, void *(*alloc)(size_t size), void (*free)(void *ad
 		}
 	}
 
-	char *prgmp = alloc(allocsize);
-
+	char *prgmp = env->alloc(allocsize);
 	if(!prgmp) {
-		ERROR("malloc failed");
+		ERROR("alloc failed");
 		return NULL;
 	}
 
@@ -190,7 +187,7 @@ void *elf_loader_mem(void *p, void *(*alloc)(size_t size), void (*free)(void *ad
 			      seg->p_filesz);
 		}
 	}
-	free(addr);
+	env->free(addr);
 
 	if(minaddr)	*minaddr = lowaddr;
 	if(maxaddr)	*maxaddr = allocsize;

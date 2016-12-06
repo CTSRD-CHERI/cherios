@@ -93,5 +93,14 @@ typedef struct {
 	Elf64_Xword	p_align;	/*  Alignment  of  segment  */
 }  Elf64_Phdr;
 
-void *elf_loader_mem(void *p, void *(*alloc)(size_t size), void (*free)(void *addr),
-		     size_t *minaddr, size_t *maxaddr, size_t *entry);
+/* Calling environment for loader */
+typedef struct {
+	void *(*alloc)(size_t size);
+	void (*free)(void *addr);
+} Elf_Env;
+
+/* given pointer p to ELF image, returns a pointer to the loaded
+   image.  if provided, it also sets the min and max addresses touched
+   by the loader, and the entry point.
+ */
+void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry);
