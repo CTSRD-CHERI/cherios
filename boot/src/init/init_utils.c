@@ -91,38 +91,39 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 static void * get_act_cap(module_t type) {
 	void * cap = NULL;
 	switch(type) {
-		case m_uart:{}
-			#ifdef CONSOLE_malta
-				#define	UART_BASE	0x180003f8
-				#define	UART_SIZE	0x40
-			#elif defined(CONSOLE_altera)
-				#define	UART_BASE	0x7f000000
-				#define	UART_SIZE	0x08
-			#else
-			#error UART type not found
-			#endif
-			cap = cheri_getdefault();
-			cap = cheri_setoffset(cap,
-			    mips_phys_to_uncached(UART_BASE));
-			cap = cheri_setbounds(cap, UART_SIZE);
-			break;
-		case m_memmgt:{}
-			size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
-			void * heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
-			heap = cheri_setbounds(heap, heaplen);
-			cap = cheri_andperm(heap, (CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_STORE
-						   | CHERI_PERM_LOAD_CAP | CHERI_PERM_STORE_CAP
-						   | CHERI_PERM_STORE_LOCAL_CAP | CHERI_PERM_SOFT_1));
-			break;
-		case m_fs:{}
-			void * mmio_cap = cheri_setoffset(cheri_getdefault(), mips_phys_to_uncached(0x1e400000));
-			cap = cheri_setbounds(mmio_cap, 0x200);
-			break;
-		case m_namespace:
-		case m_core:
-		case m_user:
-		case m_fence:
-		default:{}
+	case m_uart:{}
+
+#ifdef CONSOLE_malta
+#define	UART_BASE	0x180003f8
+#define	UART_SIZE	0x40
+#elif defined(CONSOLE_altera)
+#define	UART_BASE	0x7f000000
+#define	UART_SIZE	0x08
+#else
+#error UART type not found
+#endif
+
+		cap = cheri_getdefault();
+		cap = cheri_setoffset(cap, mips_phys_to_uncached(UART_BASE));
+		cap = cheri_setbounds(cap, UART_SIZE);
+		break;
+	case m_memmgt:{}
+		size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
+		void * heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
+		heap = cheri_setbounds(heap, heaplen);
+		cap = cheri_andperm(heap, (CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_STORE
+					   | CHERI_PERM_LOAD_CAP | CHERI_PERM_STORE_CAP
+					   | CHERI_PERM_STORE_LOCAL_CAP | CHERI_PERM_SOFT_1));
+		break;
+	case m_fs:{}
+		void * mmio_cap = cheri_setoffset(cheri_getdefault(), mips_phys_to_uncached(0x1e400000));
+		cap = cheri_setbounds(mmio_cap, 0x200);
+		break;
+	case m_namespace:
+	case m_core:
+	case m_user:
+	case m_fence:
+	default:{}
 	}
 	return cap;
 }

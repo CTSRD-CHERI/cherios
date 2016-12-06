@@ -122,18 +122,18 @@ void kernel_ccall(void) {
 	int cflags;
 
 	switch(ccall_selector) {
-		case 1: /* send */
-			cflags = 0;
-			break;
-		case 2: /* send & switch */
-			cflags = 1;
-			break;
-		case 4: /* sync call */
-			cflags = 2;
-			break;
-		default:
-			KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
-			return;
+	case 1: /* send */
+		cflags = 0;
+		break;
+	case 2: /* send & switch */
+		cflags = 1;
+		break;
+	case 4: /* sync call */
+		cflags = 2;
+		break;
+	default:
+		KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
+		return;
 	}
 	kernel_ccall_core(cflags);
 }

@@ -115,61 +115,61 @@ void kernel_exception_syscall(void)
 	//KERNEL_TRACE("exception", "Syscall number %ld", sysn);
 	aid_t kca = kernel_curr_act;
 	switch(sysn) {
-		case 13:
-			KERNEL_TRACE("exception", "Syscall %ld (sleep)", sysn);
-			syscall_sleep();
-			break;
-		case 20:
-			KERNEL_TRACE("exception", "Syscall %ld (act_register)", sysn);
-			syscall_act_register();
-			break;
-		case 21:
-			KERNEL_TRACE("exception", "Syscall %ld (act_ctrl_get_ref)", sysn);
-			syscall_act_ctrl_get_ref();
-			break;
-		case 22:
-			KERNEL_TRACE("exception", "Syscall %ld (act_ctrl_get_id)", sysn);
-			syscall_act_ctrl_get_id();
-			break;
-		case 23:
-			KERNEL_TRACE("exception", "Syscall %ld (act_ctrl_get_status)", sysn);
-			syscall_act_ctrl_get_status();
-			break;
-		case 25:
-			KERNEL_TRACE("exception", "Syscall %ld (act_revoke)", sysn);
-			syscall_act_revoke();
-			break;
-		case 26:
-			KERNEL_TRACE("exception", "Syscall %ld (act_terminate)", sysn);
-			syscall_act_terminate();
-			break;
-		case 29:
-			KERNEL_TRACE("exception", "Syscall %ld (act_seal_identifier)", sysn);
-			syscall_act_seal_identifier();
-			break;
-		case 34:
-			KERNEL_TRACE("exception", "Syscall %ld (puts)", sysn);
-			syscall_puts();
-			break;
-		case 42:
-			KERNEL_TRACE("exception", "Syscall %ld (panic)", sysn);
-			syscall_panic();
-			break;
-		case 50:
-			KERNEL_TRACE("exception", "Syscall %ld (interrupt_register)", sysn);
-			syscall_interrupt_register();
-			break;
-		case 51:
-			KERNEL_TRACE("exception", "Syscall %ld (interrupt_enable)", sysn);
-			syscall_interrupt_enable();
-			break;
-		case 66:
-			KERNEL_TRACE("exception", "Syscall %ld (gc)", sysn);
-			syscall_gc();
-			break;
-		default:
-			KERNEL_ERROR("unknown syscall '%d'", sysn);
-			kernel_freeze();
+	case 13:
+		KERNEL_TRACE("exception", "Syscall %ld (sleep)", sysn);
+		syscall_sleep();
+		break;
+	case 20:
+		KERNEL_TRACE("exception", "Syscall %ld (act_register)", sysn);
+		syscall_act_register();
+		break;
+	case 21:
+		KERNEL_TRACE("exception", "Syscall %ld (act_ctrl_get_ref)", sysn);
+		syscall_act_ctrl_get_ref();
+		break;
+	case 22:
+		KERNEL_TRACE("exception", "Syscall %ld (act_ctrl_get_id)", sysn);
+		syscall_act_ctrl_get_id();
+		break;
+	case 23:
+		KERNEL_TRACE("exception", "Syscall %ld (act_ctrl_get_status)", sysn);
+		syscall_act_ctrl_get_status();
+		break;
+	case 25:
+		KERNEL_TRACE("exception", "Syscall %ld (act_revoke)", sysn);
+		syscall_act_revoke();
+		break;
+	case 26:
+		KERNEL_TRACE("exception", "Syscall %ld (act_terminate)", sysn);
+		syscall_act_terminate();
+		break;
+	case 29:
+		KERNEL_TRACE("exception", "Syscall %ld (act_seal_identifier)", sysn);
+		syscall_act_seal_identifier();
+		break;
+	case 34:
+		KERNEL_TRACE("exception", "Syscall %ld (puts)", sysn);
+		syscall_puts();
+		break;
+	case 42:
+		KERNEL_TRACE("exception", "Syscall %ld (panic)", sysn);
+		syscall_panic();
+		break;
+	case 50:
+		KERNEL_TRACE("exception", "Syscall %ld (interrupt_register)", sysn);
+		syscall_interrupt_register();
+		break;
+	case 51:
+		KERNEL_TRACE("exception", "Syscall %ld (interrupt_enable)", sysn);
+		syscall_interrupt_enable();
+		break;
+	case 66:
+		KERNEL_TRACE("exception", "Syscall %ld (gc)", sysn);
+		syscall_gc();
+		break;
+	default:
+		KERNEL_ERROR("unknown syscall '%d'", sysn);
+		kernel_freeze();
 	}
 
 	kernel_skip_instr(kca);
