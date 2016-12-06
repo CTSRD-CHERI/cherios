@@ -29,10 +29,6 @@
  */
 
 #include "mips.h"
-#include "init.h"
-#include "cheric.h"
-#include "math.h"
-#include "string.h"
 
 typedef uint16_t Elf64_Half;	// Unsigned half int
 typedef uint64_t Elf64_Off;	// Unsigned offset
@@ -42,8 +38,7 @@ typedef int32_t  Elf64_Sword;	// Signed int
 typedef uint64_t Elf64_Xword;	// Unsigned int
 typedef int64_t  Elf64_Sxword;	// Signed int
 
-typedef  struct
-{
+typedef struct {
 	unsigned char	e_ident[16];	/*  ELF  identification  */
 	Elf64_Half	e_type;		/*  Object  file  type  */
 	Elf64_Half	e_machine;	/*  Machine  type  */
@@ -74,8 +69,7 @@ enum Elf_Ident {
 	EI_NIDENT	= 16 /* Size of e_ident[] */
 };
 
-typedef  struct
-{
+typedef struct {
 	Elf64_Word	sh_name;	/*  Section  name  */
 	Elf64_Word	sh_type;	/*  Section  type  */
 	Elf64_Xword	sh_flags;	/*  Section  attributes  */
@@ -88,8 +82,7 @@ typedef  struct
 	Elf64_Xword	sh_entsize;	/*  Size  of  entries,  if  section  has  table  */
 }  Elf64_Shdr;
 
-typedef  struct
-{
+typedef struct {
 	Elf64_Word	p_type;		/*  Type  of  segment  */
 	Elf64_Word	p_flags;	/*  Segment  attributes  */
 	Elf64_Off	p_offset;	/*  Offset  in  file  */
