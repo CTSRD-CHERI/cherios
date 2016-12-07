@@ -59,7 +59,6 @@ char	*pool;
 int
 __morepages(int n __unused)
 {
-
 	panic(__func__);
 }
 

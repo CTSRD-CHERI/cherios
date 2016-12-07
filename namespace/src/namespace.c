@@ -30,8 +30,7 @@
 
 #include "lib.h"
 
-typedef  struct
-{
+typedef struct {
 	void * act_reference;
 	void * act_default_id;
 } bind_t;
@@ -62,9 +61,9 @@ static int validate_act_caps(void * act_reference, void * act_default_id) {
 
 /* Get reference for service 'n' */
 void * ns_get_reference(int nb) {
-	if(!validate_idx(nb)) {
+	if(!validate_idx(nb))
 		return NULL;
-	}
+
 	/* If service not in use, will already return NULL */
 	printf("%s: ref request for port %d\n", __func__, nb);
 	return bind[nb].act_reference;
@@ -72,9 +71,9 @@ void * ns_get_reference(int nb) {
 
 /* Get default identifier for service 'n' */
 void * ns_get_identifier(int nb) {
-	if(!validate_idx(nb)) {
+	if(!validate_idx(nb))
 		return NULL;
-	}
+
 	/* If service not in use, will already return NULL */
 	printf("%s: id request for port %d\n", __func__, nb);
 	return bind[nb].act_default_id;
@@ -95,9 +94,8 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id)
 }
 
 int ns_register(int nb, void * act_reference, void * act_default_id) {
-	if(!validate_idx(nb) || !validate_act_caps(act_reference, act_default_id)) {
+	if(!validate_idx(nb) || !validate_act_caps(act_reference, act_default_id))
 		return -1;
-	}
 
 	return ns_register_core(nb, act_reference, act_default_id);
 }
