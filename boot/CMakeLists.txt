@@ -5,6 +5,8 @@ set(LIB_SRCS
     ${CMAKE_SOURCE_DIR}/lib/strlen.c
     ${CMAKE_SOURCE_DIR}/lib/memset.c
     ${CMAKE_SOURCE_DIR}/lib/memcpy_c.S
+    ${CMAKE_SOURCE_DIR}/lib/crtbeginC.c
+    ${CMAKE_SOURCE_DIR}/lib/crtendC.c
 )
 
 set(COMMON_SRCS

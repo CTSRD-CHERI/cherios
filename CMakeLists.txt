@@ -210,7 +210,6 @@ endfunction()
 function(add_cherios_boot _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
 endfunction()
 
 function(add_cherios_init _target)
