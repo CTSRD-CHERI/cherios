@@ -50,15 +50,24 @@ static void kernel_free_mem(void *addr) {
 	(void)addr;
 }
 
+static void *boot_memcpy(void *dest, const void *src, size_t n) {
+	return memcpy(dest, src, n);
+}
+
 static boot_info_t bi;
+static Elf_Env env;
+
+void init_elf_loader() {
+  env.alloc   = kernel_alloc_mem;
+  env.free    = kernel_free_mem;
+  env.printf  = boot_printf;
+  env.vprintf = boot_vprintf;
+  env.memcpy  = boot_memcpy;
+}
 
 void load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	size_t minaddr, maxaddr, entry;
-	Elf_Env env = {
-	  .alloc = kernel_alloc_mem,
-	  .free  = kernel_free_mem,
-	};
 	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
 				     &minaddr, &maxaddr, &entry);
 
@@ -124,10 +133,6 @@ static void *make_free_mem_cap(const char *start) {
 boot_info_t *load_init() {
 	extern u8 __init_elf_start, __init_elf_end;
 	size_t minaddr, maxaddr, entry;
-	Elf_Env env = {
-	  .alloc = kernel_alloc_mem,
-	  .free  = kernel_free_mem,
-	};
 
 	// FIXME: init is direct mapped for now
 	char *prgmp = elf_loader_mem(&env, &__init_elf_start,

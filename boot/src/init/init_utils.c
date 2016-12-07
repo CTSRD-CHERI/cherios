@@ -141,11 +141,18 @@ static void * elf_loader(Elf_Env *env, const char * file, size_t * entry) {
 	return elf_loader_mem(env, addr, NULL, NULL, entry);
 }
 
+static void *init_memcpy(void *dest, const void *src, size_t n) {
+	return memcpy(dest, src, n);
+}
+
 void * load_module(module_t type, const char * file, int arg, const void *carg) {
 	size_t entry;
 	Elf_Env env = {
-	  .alloc = init_alloc,
-	  .free  = init_free,
+	  .alloc   = init_alloc,
+	  .free    = init_free,
+	  .printf  = printf,
+	  .vprintf = vprintf,
+	  .memcpy  = init_memcpy,
 	};
 
 	char *prgmp = elf_loader(&env, file, &entry);

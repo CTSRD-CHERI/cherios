@@ -36,14 +36,20 @@ static void bootloader_main() {
 	/* Init hardware */
 	hw_init();
 
-	boot_printf("Boot Hello world\n");
+	/* Initialize elf-loader environment */
+	init_elf_loader();
 
+	boot_printf("Boot: loading kernel ...\n");
 	load_kernel();
+
+	boot_printf("Boot: loading init ...\n");
 	boot_info_t *bi = load_init();
 
 	/* Set up exception handler to point to kernel entry-point. */
+	boot_printf("Boot: installing exception vector ...\n");
 	install_exception_vector();
 
+	boot_printf("Boot: entering kernel ...\n");
 	__asm__ __volatile__ (
 		"cmove	$c3, %[bi] \n"
 		"li	$v0, 0	   \n"

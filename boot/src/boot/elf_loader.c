@@ -31,46 +31,45 @@
 #ifdef CHERIOS_BOOT
 
 #include "boot/boot.h"
-#define printf    boot_printf
+
 #define assert(e) boot_assert(e)
 
 #else  /* CHERIOS_BOOT */
 
-#include "stdio.h"
 #include "assert.h"
 
 #endif /* CHERIOS_BOOT */
 
-#include "init.h"
+#include "colors.h"
 #include "cheric.h"
 #include "math.h"
 #include "string.h"
 #include "elf.h"
 
 #if 0
-#define TRACE(s, ...) trace_elf_loader(KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
-static void trace_elf_loader(const char *fmt, ...) {
+#define TRACE(s, ...) trace_elf_loader(env, KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
+static void trace_elf_loader(Elf_Env *env, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
-	vprintf(fmt, ap);
+	env->vprintf(fmt, ap);
 	va_end(ap);
 }
 #else
 #define TRACE(...)
 #endif
 
-#define ERROR(s) error_elf_loader(KRED"elf_loader: " s KRST"\n")
-#define ERRORM(s, ...) error_elf_loader(KRED"elf_loader: " s KRST"\n", __VA_ARGS__)
-static void error_elf_loader(const char *fmt, ...) {
+#define ERROR(s) error_elf_loader(env, KRED"elf_loader: " s KRST"\n")
+#define ERRORM(s, ...) error_elf_loader(env, KRED"elf_loader: " s KRST"\n", __VA_ARGS__)
+static void error_elf_loader(Elf_Env *env, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
-	printf("%s", KRED"elf_loader: ");
-	vprintf(fmt, ap);
-	printf("%s", KRST"\n");
+	env->printf("%s", KRED"elf_loader: ");
+	env->vprintf(fmt, ap);
+	env->printf("%s", KRST"\n");
 	va_end(ap);
 }
 
-int elf_check_supported(Elf64_Ehdr *hdr) {
+int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
 	if(memcmp(hdr->e_ident, "\x7F""ELF", 4)) {
 		ERROR("Bad magic number");
 		return 0;
@@ -118,18 +117,16 @@ int elf_check_supported(Elf64_Ehdr *hdr) {
 static inline Elf64_Shdr *elf_sheader(Elf64_Ehdr *hdr) {
 	return (Elf64_Shdr *)((char *)hdr + hdr->e_shoff);
 }
-#endif
 
-static inline Elf64_Phdr *elf_pheader(Elf64_Ehdr *hdr) {
-	return (Elf64_Phdr *)((char *)hdr + hdr->e_phoff);
-}
-
-#if 0
 static inline Elf64_Shdr *elf_section(Elf64_Ehdr *hdr, int idx) {
 	assert(idx < hdr->e_shnum);
 	return &elf_sheader(hdr)[idx];
 }
 #endif
+
+static inline Elf64_Phdr *elf_pheader(Elf64_Ehdr *hdr) {
+	return (Elf64_Phdr *)((char *)hdr + hdr->e_phoff);
+}
 
 static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 	assert(idx < hdr->e_phnum);
@@ -142,7 +139,7 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 	char *addr = (char *)p;
 	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
-	if(!elf_check_supported(hdr)) {
+	if(!elf_check_supported(env, hdr)) {
 		ERROR("ELF File cannot be loaded");
 		return NULL;
 	}
@@ -180,7 +177,7 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
 		if(seg->p_type == 1) {
-			memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
+			env->memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
 			TRACE("memcpy: [%lx %lx] <-- [%lx %lx] (%lx bytes)",
 			      seg->p_vaddr, seg->p_vaddr + seg->p_filesz,
 			      seg->p_offset, seg->p_offset + seg->p_filesz,
