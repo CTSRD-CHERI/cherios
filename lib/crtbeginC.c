@@ -44,7 +44,7 @@ void	crt_call_constructors(void);
  * that contain function pointers so (until we have proper linker support) we
  * are still generating them as a sequence of PCC-relative integers.
  */
-typedef unsigned long long mips_function_ptr;
+typedef void (*mips_function_ptr)(void);
 typedef void (*cheri_function_ptr)(void);
 
 struct capreloc
@@ -100,10 +100,13 @@ crt_call_constructors(void)
 	    func != &__CTOR_END__;
 	    func++) {
 		if (*func != (mips_function_ptr)-1) {
+            /*
 			cheri_function_ptr cheri_func =
 				(cheri_function_ptr)__builtin_memcap_offset_set(
 						__builtin_memcap_program_counter_get(), *func);
 			cheri_func();
+             */
+            (*func)();
 		}
 	}
 }
@@ -127,8 +130,8 @@ crt_init_bss(void)
 void
 crt_init_globals()
 {
-	void *gdc = __builtin_memcap_global_data_get();
-	void *pcc = __builtin_memcap_program_counter_get();
+	__capability void *gdc = __builtin_memcap_global_data_get();
+	__capability void *pcc = __builtin_memcap_program_counter_get();
 
 	gdc = __builtin_memcap_perms_and(gdc, global_pointer_permissions);
 	pcc = __builtin_memcap_perms_and(pcc, function_pointer_permissions);
@@ -138,9 +141,9 @@ crt_init_globals()
 	{
 		_Bool isFunction = (reloc->permissions & function_reloc_flag) ==
 			function_reloc_flag;
-		void **dest = __builtin_memcap_offset_set(gdc, reloc->capability_location);
-		void *base = isFunction ? pcc : gdc;
-		void *src = __builtin_memcap_offset_set(base, reloc->object);
+		__capability void *dest = __builtin_memcap_offset_set(gdc, reloc->capability_location);
+		__capability void *base = isFunction ? pcc : gdc;
+		__capability void *src = __builtin_memcap_offset_set(base, reloc->object);
 
 		if (reloc->object == 0x4cd70) {
 			base = __builtin_memcap_offset_set(base, reloc->permissions);
@@ -151,6 +154,6 @@ crt_init_globals()
 			src = __builtin_memcap_bounds_set(src, reloc->size);
 		}
 		src = __builtin_memcap_offset_increment(src, reloc->offset);
-		*dest = src;
+		dest = src;
 	}
 }

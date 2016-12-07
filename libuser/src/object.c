@@ -56,12 +56,12 @@ void * act_ctrl_get_ref(void * ctrl) {
 	void * ref;
 	__asm__ (
 		"li    $v0, 21      \n"
-		"cmove $c3, %[ctrl] \n"
+		"move $a0, %[ctrl] \n"
 		"syscall            \n"
-		"cmove %[ref], $c3  \n"
-		: [ref]"=C" (ref)
-		: [ctrl]"C" (ctrl)
-		: "v0", "$c3");
+		"move %[ref], $a0  \n"
+		: [ref]"=r" (ref)
+		: [ctrl]"r" (ctrl)
+		: "v0", "a0");
 	return ref;
 }
 
@@ -69,12 +69,12 @@ void * act_ctrl_get_id(void * ctrl) {
 	void * ref;
 	__asm__ (
 		"li    $v0, 22      \n"
-		"cmove $c3, %[ctrl] \n"
+		"move $a0, %[ctrl] \n"
 		"syscall            \n"
-		"cmove %[ref], $c3  \n"
-		: [ref]"=C" (ref)
-		: [ctrl]"C" (ctrl)
-		: "v0", "$c3");
+		"move %[ref], $a0  \n"
+		: [ref]"=r" (ref)
+		: [ctrl]"r" (ctrl)
+		: "v0", "a0");
 	return ref;
 }
 
@@ -82,12 +82,12 @@ int act_ctrl_revoke(void * ctrl) {
 	int ret;
 	__asm__ (
 		"li    $v0, 25      \n"
-		"cmove $c3, %[ctrl] \n"
+		"move $a0, %[ctrl] \n"
 		"syscall            \n"
 		"move %[ret], $v0   \n"
 		: [ret]"=r" (ret)
-		: [ctrl]"C" (ctrl)
-		: "v0", "$c3");
+		: [ctrl]"r" (ctrl)
+		: "v0", "a0");
 	return ret;
 }
 
@@ -95,12 +95,12 @@ int act_ctrl_terminate(void * ctrl) {
 	int ret;
 	__asm__ (
 		"li    $v0, 26      \n"
-		"cmove $c3, %[ctrl] \n"
+		"move $a0, %[ctrl] \n"
 		"syscall            \n"
 		"move %[ret], $v0   \n"
 		: [ret]"=r" (ret)
-		: [ctrl]"C" (ctrl)
-		: "v0", "$c3");
+		: [ctrl]"r" (ctrl)
+		: "v0", "a0");
 	return ret;
 }
 
@@ -108,12 +108,12 @@ void * act_seal_id(void * id) {
 	void * sid;
 	__asm__ (
 		"li    $v0, 29      \n"
-		"cmove $c3, %[id]   \n"
+		"move $a0, %[id]   \n"
 		"syscall            \n"
-		"cmove %[sid], $c3  \n"
-		: [sid]"=C" (sid)
-		: [id]"C" (id)
-		: "v0", "$c3");
+		"move %[sid], $a0  \n"
+		: [sid]"=r" (sid)
+		: [id]"r" (id)
+		: "v0", "a0");
 	return sid;
 }
 
@@ -125,6 +125,7 @@ void dtor_null(void) {
 	return;
 }
 
+/*
 void * get_curr_cookie(void) {
 	void * object;
 	__asm__ (
@@ -142,6 +143,7 @@ void set_curr_cookie(void * cookie) {
 void * get_cookie(void * cb, void * cs) {
 	return ccall_n_c(cb, cs, -1);
 }
+ */
 
 /*
  * CCall helpers
@@ -152,8 +154,6 @@ void * get_cookie(void * cb, void * cs) {
 #define CCALL_INOPS [cb]"C" (cb), [cs]"C" (cs), [method_nb]"r" (method_nb)
 #define CCALL_CLOBS "$c1","$c2","$c3","$c4","$c5","v0","v1","a0","a1","a2"
 #define CCALL_TOP \
-	assert(VCAPS(cb, 0, VCAP_X)); \
-	assert(VCAPS(cs, 0, VCAP_W)); \
 	ret_t ret; \
 	__asm__ __volatile__ ( \
 		CCALL_ASM_CSCB \
@@ -265,6 +265,7 @@ register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg, voi
 	return ret.rret;
 }
 
+/*
 void * ccall_rrrc_c(void * cb, void * cs, int method_nb,
                     register_t rarg1, register_t rarg2, register_t rarg3, void * carg) {
 	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, carg, NULL, NULL);
@@ -276,3 +277,4 @@ register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
 	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, carg1, carg2, NULL);
 	return ret.rret;
 }
+ */

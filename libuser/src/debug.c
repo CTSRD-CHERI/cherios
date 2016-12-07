@@ -31,7 +31,7 @@
 void syscall_puts(const char * str) {
 	__asm__ __volatile__ (
 		"li   $v0, 34 \n"
-		"cmove $c3, %[str] \n"
+		"move $a0, %[str] \n"
 		"syscall      \n"
-		:: [str]"C" (str): "v0", "$c3");
+		:: [str]"r" (str): "v0", "a0");
 }

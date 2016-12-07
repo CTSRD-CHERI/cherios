@@ -43,29 +43,29 @@ static void syscall_sleep(void) {
 }
 
 static void syscall_act_register(void) {
-	reg_frame_t * frame = kernel_exception_framep_ptr->cf_c3;
-	char * name = kernel_exception_framep_ptr->cf_c4;
-	kernel_exception_framep_ptr->cf_c3 = act_register(frame, name);
+	reg_frame_t * frame = kernel_exception_framep_ptr->cf_a0;
+	char * name = kernel_exception_framep_ptr->cf_a1;
+	kernel_exception_framep_ptr->cf_a0 = act_register(frame, name);
 }
 
 static void syscall_act_ctrl_get_ref(void) {
-	kernel_exception_framep_ptr->cf_c3 = act_get_ref(kernel_exception_framep_ptr->cf_c3);
+	kernel_exception_framep_ptr->cf_a0 = act_get_ref(kernel_exception_framep_ptr->cf_a0);
 }
 
 static void syscall_act_ctrl_get_id(void) {
-	kernel_exception_framep_ptr->cf_c3 = act_get_id(kernel_exception_framep_ptr->cf_c3);
+	kernel_exception_framep_ptr->cf_a0 = act_get_id(kernel_exception_framep_ptr->cf_a0);
 }
 
 static void syscall_act_ctrl_get_status(void) {
-	kernel_exception_framep_ptr->mf_v0 = act_get_status(kernel_exception_framep_ptr->cf_c3);
+	kernel_exception_framep_ptr->mf_v0 = act_get_status(kernel_exception_framep_ptr->cf_a0);
 }
 
 static void syscall_act_revoke(void) {
-	kernel_exception_framep_ptr->mf_v0 = act_revoke(kernel_exception_framep_ptr->cf_c3);
+	kernel_exception_framep_ptr->mf_v0 = act_revoke(kernel_exception_framep_ptr->cf_a0);
 }
 
 static void syscall_act_terminate(void) {
-	int ret = act_terminate(kernel_exception_framep_ptr->cf_c3);
+	int ret = act_terminate(kernel_exception_framep_ptr->cf_a0);
 	if(ret == 1) {
 		sched_reschedule(0);
 	} else {
@@ -74,11 +74,11 @@ static void syscall_act_terminate(void) {
 }
 
 static void syscall_act_seal_identifier(void) {
-	kernel_exception_framep_ptr->cf_c3 = act_seal_identifier(kernel_exception_framep_ptr->cf_c3);
+	kernel_exception_framep_ptr->cf_a0 = act_seal_identifier(kernel_exception_framep_ptr->cf_a0);
 }
 
 static void syscall_puts() {
-	void * msg = kernel_exception_framep_ptr->cf_c3;
+	void * msg = kernel_exception_framep_ptr->cf_a0;
 	#ifndef __LITE__
 	printf(KGRN"%s" KREG KRST, msg);
 	#else
@@ -102,8 +102,8 @@ static void syscall_interrupt_enable(void) {
 
 static void syscall_gc(void) {
 	kernel_exception_framep_ptr->mf_v0 =
-	  try_gc(kernel_exception_framep_ptr->cf_c3,
-	         kernel_exception_framep_ptr->cf_c4);
+	  try_gc(kernel_exception_framep_ptr->cf_a0,
+	         kernel_exception_framep_ptr->cf_a1);
 }
 
 /*

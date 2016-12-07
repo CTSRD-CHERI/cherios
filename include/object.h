@@ -83,9 +83,10 @@ register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, const void 
 void	ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2);
 void	ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg);
 register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg1, void * carg1, void * carg2);
+/*
 void *	ccall_rrrc_c(void * cb, void * cs, int method_nb,
                     register_t, register_t, register_t, void * carg);
 register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
                     register_t rarg1, register_t rarg2, void * carg1, void * carg2);
-
+ */
 #endif
