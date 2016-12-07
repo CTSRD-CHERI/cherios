@@ -1,6 +1,6 @@
 set(LIBUSER_ASM_SRCS
     src/init.S
-    src/memcpy_c.S
+    ${CMAKE_SOURCE_DIR}/lib/memcpy_c.S
     src/msg.S
 )
 
@@ -15,7 +15,7 @@ set(LIBUSER_SRCS
     src/interrupt.c
     src/libuser.c
     src/malloc.c
-    src/memset.c
+    ${CMAKE_SOURCE_DIR}/lib/memset.c
     src/mmap.c
     src/msg.c
     src/msg_default.c
@@ -28,8 +28,8 @@ set(LIBUSER_SRCS
     src/stdio.c
     src/stdlib.c
     src/strcmp.c
-    src/strlen.c
-    src/subr_prf.c
+    ${CMAKE_SOURCE_DIR}/lib/strlen.c
+    ${CMAKE_SOURCE_DIR}/lib/subr_prf.c
     src/virtioblk.c
 )
 

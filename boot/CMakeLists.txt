@@ -1,5 +1,12 @@
 include_directories(include)
 
+set(LIB_SRCS
+    ${CMAKE_SOURCE_DIR}/lib/subr_prf.c
+    ${CMAKE_SOURCE_DIR}/lib/strlen.c
+    ${CMAKE_SOURCE_DIR}/lib/memset.c
+    ${CMAKE_SOURCE_DIR}/lib/memcpy_c.S
+)
+
 set(COMMON_SRCS
     src/elf_loader.c
     src/plat.c
@@ -61,12 +68,14 @@ set_source_files_properties(src/boot/init_elf.S PROPERTIES
 )
 
 add_cherios_init(init LINKER_SCRIPT init.ld SOURCES
+    ${LIB_SRCS}
     ${COMMON_SRCS}
     ${INIT_SRCS}
     ${INIT_ASM_SRCS}
 )
 
 add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
+    ${LIB_SRCS}
     ${COMMON_SRCS}
     ${BOOT_SRCS}
     ${BOOT_ASM_SRCS}
