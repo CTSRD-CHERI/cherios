@@ -1,10 +1,10 @@
-set(LIB_SRCS
-    ${CMAKE_SOURCE_DIR}/lib/memcpy_c.S
-    ${CMAKE_SOURCE_DIR}/lib/memset.c
-    ${CMAKE_SOURCE_DIR}/lib/strlen.c
-    ${CMAKE_SOURCE_DIR}/lib/subr_prf.c
-    ${CMAKE_SOURCE_DIR}/lib/crtbeginC.c
-    ${CMAKE_SOURCE_DIR}/lib/crtendC.c
+set(LIBCRT_SRCS
+    ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
+    ${CMAKE_SOURCE_DIR}/libcrt/memset.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strlen.c
+    ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
+    ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
+    ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
 )
 
 set(LIBUSER_ASM_SRCS
@@ -36,6 +36,6 @@ set(LIBUSER_SRCS
     src/virtioblk.c
 )
 
-add_library(user STATIC ${LIB_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
+add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
 set_target_properties(user PROPERTIES COMPILE_FLAGS -mxgot)
 add_library(CheriOS::LibUser ALIAS user)
