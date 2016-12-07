@@ -1,7 +1,7 @@
 include_directories(include)
 
 set(COMMON_SRCS
-    src/boot/elf_loader.c
+    src/elf_loader.c
     src/plat.c
     src/caches.c
 )
@@ -12,7 +12,6 @@ set(BOOT_SRCS
     src/boot/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
-    src/boot/elf_loader.c
 )
 
 set(BOOT_ASM_SRCS
