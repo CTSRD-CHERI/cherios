@@ -28,8 +28,17 @@
  * SUCH DAMAGE.
  */
 
+#include "mips.h"
+#ifdef CHERIOS_BOOT
+
 #include "boot/boot.h"
+#define assert(e) boot_assert(e)
+
+#else  /* CHERIOS_BOOT */
+
 #include "assert.h"
+
+#endif /* CHERIOS_BOOT */
 
 static int line_size = 0;
 
