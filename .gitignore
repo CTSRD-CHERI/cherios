@@ -33,3 +33,6 @@
 
 # Debug files
 *.dSYM/
+
+# Vim swap files
+*.swp
