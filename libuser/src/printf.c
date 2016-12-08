@@ -40,10 +40,10 @@ static void buf_puts(char * str) {
 	#if 1
 	/* Syscall version */
 	__asm__ __volatile__ (
-		"li   $v0, 34 \n"
+		"li   $v1, 34 \n"
 		"move $a0, %[str] \n"
 		"syscall      \n"
-		:: [str]"r" (str): "v0", "a0");
+		:: [str]"r" (str): "v1", "a0");
 	#else
 	/* CCall version */
 	static void * uart_ref = NULL;

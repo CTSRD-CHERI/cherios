@@ -39,6 +39,7 @@
 static uint64_t get_sync_token(aid_t ccaller) {
 	static uint32_t unique = 0;
 	unique++;
+    if(unique == 0) unique++;
 	kernel_acts[ccaller].sync_token.expected_reply  = unique;
 
 	uint64_t token_offset = (((u64)ccaller) << 32) + unique;
@@ -48,8 +49,8 @@ static uint64_t get_sync_token(aid_t ccaller) {
 static void kernel_ccall_core(int cflags) {
 	/* Unseal CCall cs and cb */
 	/* cb is the activation and cs the identifier */
-	void * cs = kernel_exception_framep_ptr->cf_t1;
-	act_t * cb = kernel_exception_framep_ptr->cf_t0;
+	void * cs = (void *)kernel_exception_framep_ptr->mf_t1;
+	act_t * cb = (void *)kernel_exception_framep_ptr->mf_t0;
 
 	if(cb->status != status_alive) {
 		KERNEL_ERROR("Trying to CCall revoked activation %s-%d",
@@ -57,7 +58,7 @@ static void kernel_ccall_core(int cflags) {
 		return;
 	}
 
-	void * sync_token = NULL;
+	uint64_t sync_token = 0;
 	if(cflags & 2) {
 		sync_token = get_sync_token(kernel_curr_act);
 	}
@@ -123,8 +124,8 @@ void kernel_creturn(void) {
 	/* Ack creturn instruction */
 	kernel_skip_instr(kernel_curr_act);
 
-	sync_t * sync_token = kernel_exception_framep_ptr->cf_v1;
-	if(sync_token == NULL) {
+	uint64_t sync_token = kernel_exception_framep_ptr->mf_t2;
+	if(sync_token == 0) {
 		/* Used by asynchronous primitives */
 		//act_wait(kernel_curr_act, 0);
 		act_wait(kernel_curr_act, kernel_curr_act);

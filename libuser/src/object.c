@@ -55,65 +55,65 @@ void * act_get_cap(void) {
 void * act_ctrl_get_ref(void * ctrl) {
 	void * ref;
 	__asm__ (
-		"li    $v0, 21      \n"
+		"li    $v1, 21      \n"
 		"move $a0, %[ctrl] \n"
 		"syscall            \n"
 		"move %[ref], $a0  \n"
 		: [ref]"=r" (ref)
 		: [ctrl]"r" (ctrl)
-		: "v0", "a0");
+		: "v0", "v1", "a0");
 	return ref;
 }
 
 void * act_ctrl_get_id(void * ctrl) {
 	void * ref;
 	__asm__ (
-		"li    $v0, 22      \n"
+		"li    $v1, 22      \n"
 		"move $a0, %[ctrl] \n"
 		"syscall            \n"
 		"move %[ref], $a0  \n"
 		: [ref]"=r" (ref)
 		: [ctrl]"r" (ctrl)
-		: "v0", "a0");
+		: "v0", "v1", "a0");
 	return ref;
 }
 
 int act_ctrl_revoke(void * ctrl) {
 	int ret;
 	__asm__ (
-		"li    $v0, 25      \n"
+		"li    $v1, 25      \n"
 		"move $a0, %[ctrl] \n"
 		"syscall            \n"
 		"move %[ret], $v0   \n"
 		: [ret]"=r" (ret)
 		: [ctrl]"r" (ctrl)
-		: "v0", "a0");
+		: "v0", "v1", "a0");
 	return ret;
 }
 
 int act_ctrl_terminate(void * ctrl) {
 	int ret;
 	__asm__ (
-		"li    $v0, 26      \n"
+		"li    $v1, 26      \n"
 		"move $a0, %[ctrl] \n"
 		"syscall            \n"
 		"move %[ret], $v0   \n"
 		: [ret]"=r" (ret)
 		: [ctrl]"r" (ctrl)
-		: "v0", "a0");
+		: "v0", "v1", "a0");
 	return ret;
 }
 
 void * act_seal_id(void * id) {
 	void * sid;
 	__asm__ (
-		"li    $v0, 29      \n"
+		"li    $v1, 29      \n"
 		"move $a0, %[id]   \n"
 		"syscall            \n"
 		"move %[sid], $a0  \n"
 		: [sid]"=r" (sid)
 		: [id]"r" (id)
-		: "v0", "a0");
+		: "v0", "v1", "a0");
 	return sid;
 }
 
@@ -149,10 +149,10 @@ void * get_cookie(void * cb, void * cs) {
  * CCall helpers
  */
 
-#define CCALL_ASM_CSCB "move $t0, %[cb] \n" "move $t1, %[cs] \n" "move $v1, %[method_nb] \n"
+#define CCALL_ASM_CSCB "move $t0, %[cb] \n" "move $t1, %[cs] \n" "move $v0, %[method_nb] \n"
 //#define CCALL_INSTR(n) "ccall $c1, $c2, " #n "\n"
 #define CCALL_INSTR(n) \
-        "li $v0, " #n "\n" \
+        "li $v1, " #n "\n" \
         "syscall \n" \
 
 #define CCALL_INOPS [cb]"r" (cb), [cs]"r" (cs), [method_nb]"r" (method_nb)

@@ -43,14 +43,14 @@
 static void * init_act_register(reg_frame_t * frame, const char * name) {
 	void * ret;
 	__asm__ __volatile__ (
-		"li    $v0, 20       \n"
-		"cmove $c3, %[frame] \n"
-		"cmove $c4, %[name]  \n"
+		"li    $v1, 20       \n"
+		"move $a0, %[frame] \n"
+		"move $a1, %[name]  \n"
 		"syscall             \n"
-		"cmove %[ret], $c3   \n"
-		: [ret] "=C" (ret)
-		: [frame] "C" (frame), [name] "C" (name)
-		: "v0", "$c3", "$c4");
+		"move %[ret], $a0   \n"
+		: [ret] "=r" (ret)
+		: [frame] "r" (frame), [name] "r" (name)
+		: "v0", "v1", "a0", "a1");
 	return ret;
 }
 
@@ -62,11 +62,11 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 
 	/* set pc */
 	frame.cf_pcc	= pcc;
-	frame.mf_pc	= cheri_getoffset(pcc);
+	frame.mf_pc	= (register_t)pcc;
 
 	/* set stack */
 	frame.cf_c11	= stack;
-	frame.mf_sp	= cheri_getlen(stack);
+	frame.mf_sp	= (register_t)stack;
 
 	/* set c12 */
 	frame.cf_c12	= frame.cf_pcc;
@@ -83,7 +83,7 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 
 	void * ctrl = init_act_register(&frame, name);
 	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
-	      rarg, 0, 0, carg, NULL, ctrl);
+	      rarg, (register_t)carg, 0, (register_t)ctrl);
 	return ctrl;
 }
 
@@ -103,21 +103,26 @@ static void * get_act_cap(module_t type) {
 #error UART type not found
 #endif
 
+        /*
 		cap = cheri_getdefault();
 		cap = cheri_setoffset(cap, mips_phys_to_uncached(UART_BASE));
 		cap = cheri_setbounds(cap, UART_SIZE);
+         */
 		break;
 	case m_memmgt:{}
-		size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
-		void * heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
+		//size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
+		void * heap = &__start_heap;
+        cap = heap;
+        /*
 		heap = cheri_setbounds(heap, heaplen);
 		cap = cheri_andperm(heap, (CHERI_PERM_GLOBAL | CHERI_PERM_LOAD | CHERI_PERM_STORE
 					   | CHERI_PERM_LOAD_CAP | CHERI_PERM_STORE_CAP
 					   | CHERI_PERM_STORE_LOCAL_CAP | CHERI_PERM_SOFT_1));
+         */
 		break;
 	case m_fs:{}
-		void * mmio_cap = cheri_setoffset(cheri_getdefault(), mips_phys_to_uncached(0x1e400000));
-		cap = cheri_setbounds(mmio_cap, 0x200);
+		void * mmio_cap = (void *)mips_phys_to_uncached(0x1e400000);
+        cap = mmio_cap;
 		break;
 	case m_namespace:
 	case m_core:
@@ -131,14 +136,14 @@ static void * get_act_cap(module_t type) {
 static void * ns_ref = NULL;
 static void * ns_id  = NULL;
 
-static void * elf_loader(Elf_Env *env, const char * file, size_t * entry) {
+static void * elf_loader(Elf_Env *env, const char * file, size_t *maxaddr, size_t * entry) {
 	int filelen=0;
 	char * addr = load(file, &filelen);
 	if(!addr) {
 		printf("Could not read file %s", file);
 		return NULL;
 	}
-	return elf_loader_mem(env, addr, NULL, NULL, entry);
+	return elf_loader_mem(env, addr, NULL, maxaddr, entry);
 }
 
 static void *init_memcpy(void *dest, const void *src, size_t n) {
@@ -147,6 +152,7 @@ static void *init_memcpy(void *dest, const void *src, size_t n) {
 
 void * load_module(module_t type, const char * file, int arg, const void *carg) {
 	size_t entry;
+    size_t allocsize;
 	Elf_Env env = {
 	  .alloc   = init_alloc,
 	  .free    = init_free,
@@ -155,7 +161,7 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 	  .memcpy  = init_memcpy,
 	};
 
-	char *prgmp = elf_loader(&env, file, &entry);
+	char *prgmp = elf_loader(&env, file, &allocsize, &entry);
 	if(!prgmp) {
 		assert(0);
 		return NULL;
@@ -164,8 +170,7 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 
 	/* Invalidate the whole range; elf_loader only returns a
 	   pointer to the entry point. */
-	size_t allocsize = cheri_getlen(prgmp);
-	caches_invalidate(cheri_setoffset(prgmp, 0), allocsize);
+	caches_invalidate(prgmp - entry, allocsize);
 
 	size_t stack_size = 0x10000;
 	void * stack = init_alloc(stack_size);
@@ -173,12 +178,8 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 		assert(0);
 		return NULL;
 	}
-	void * pcc = cheri_getpcc();
-	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)), allocsize);
-	pcc = cheri_setoffset(pcc, cheri_getoffset(prgmp));
-	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-				  | CHERI_PERM_LOAD_CAP));
-	void * ctrl = init_act_create(file, cheri_setoffset(prgmp, 0),
+	void * pcc = prgmp;
+	void * ctrl = init_act_create(file, 0,
 				      pcc, stack, get_act_cap(type),
 				      ns_ref, ns_id, arg, carg);
 	if(ctrl == NULL) {
@@ -197,13 +198,13 @@ static int act_alive(void * ctrl) {
 	}
 	int ret;
 	__asm__ __volatile__ (
-		"li    $v0, 23      \n"
-		"cmove $c3, %[ctrl] \n"
+		"li    $v1, 23      \n"
+		"move $a0, %[ctrl] \n"
 		"syscall            \n"
 		"move %[ret], $v0   \n"
 		: [ret] "=r" (ret)
-		: [ctrl] "C" (ctrl)
-		: "v0", "$c3");
+		: [ctrl] "r" (ctrl)
+		: "v0", "v1", "a0");
 	if(ret == 2) {
 		return 0;
 	}

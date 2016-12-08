@@ -33,9 +33,9 @@
 
 static void syscall_panic(void) {
 	__asm__ __volatile__ (
-		"li    $v0, 42 \n"
+		"li    $v1, 42 \n"
 		"syscall       \n"
-		:::"v0");
+		:::"v1");
 }
 
 __attribute__((noreturn))

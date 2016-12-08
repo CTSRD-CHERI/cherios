@@ -42,7 +42,7 @@
 static void *kernel_alloc_mem(size_t _size) {
 	/* The kernel is direct-mapped. */
 	(void) _size;
-	return cheri_getdefault();
+	return NULL;
 }
 
 static void kernel_free_mem(void *addr) {
@@ -106,27 +106,16 @@ err:
 #define	PAGE_ALIGN	0x1000
 
 static void *make_aligned_data_cap(const char *start, size_t len) {
-	size_t desired_ofs = (cheri_getbase(start) + cheri_getoffset(start) + PAGE_ALIGN);
+	size_t desired_ofs = ((size_t)start + PAGE_ALIGN);
 	desired_ofs &= ~ PAGE_ALIGN;
 
-	char *cap = (char *)cheri_getdefault();
-	cap += desired_ofs - cheri_getbase(cap);
-
-	cap = cheri_setbounds(cap, len);
-	cap = cheri_andperm(cap, ~ CHERI_PERM_EXECUTE);
+	char *cap = (char *)desired_ofs;
 	return cap;
 }
 
 static void *make_free_mem_cap(const char *start) {
-	char *cap  = (char *)cheri_getdefault();
-	size_t len = cheri_getlen(cap);
-	size_t ofs = cheri_getbase(start) - cheri_getbase(cap);
+	char *cap  = (char *)(size_t)start;
 
-	cap += ofs;
-	len -= ofs;
-
-	cap = cheri_setbounds(cap, len);
-	cap = cheri_andperm(cap, ~ CHERI_PERM_EXECUTE);
 	return cap;
 }
 
@@ -159,20 +148,16 @@ boot_info_t *load_init() {
 	bi.start_free_mem = make_free_mem_cap((char *)stack + INIT_STACK_SIZE);
 
 	/* set up pcc */
-	void *pcc = cheri_getpcc();
-	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)),
-			      cheri_getlen(prgmp));
-	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-				  | CHERI_PERM_LOAD_CAP));
+	void *pcc = prgmp;
 
 	/* populate frame */
 	bzero(&bi.init_frame, sizeof(bi.init_frame));
 	bi.init_frame.cf_pcc = pcc;
-	bi.init_frame.mf_pc  = cheri_getoffset(pcc) + entry;
+	bi.init_frame.mf_pc  = (size_t)pcc + entry;
 	bi.init_frame.cf_c11 = stack;
-	bi.init_frame.mf_sp  = cheri_getlen(stack);
+	bi.init_frame.mf_sp  = (size_t)stack;
 	bi.init_frame.cf_c12 = pcc;
-	bi.init_frame.cf_c0  = cheri_setoffset(prgmp, 0);
+	bi.init_frame.cf_c0  = 0;
 
 	return &bi;
 err:
@@ -181,7 +166,7 @@ err:
 
 void install_exception_vector(void) {
 	/* Copy exception trampoline to exception vector */
-	char * all_mem = cheri_getdefault() ;
+	char * all_mem = NULL;
 	void *mips_bev0_exception_vector_ptr =
 	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
 	size_t nbytes = (char *)&kernel_trampoline_end - (char *)&kernel_trampoline;

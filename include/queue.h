@@ -7,14 +7,12 @@ typedef struct
 	register_t a0; /* GP arguments */
 	register_t a1;
 	register_t a2;
-
-	void * c3; /* cap arguments */
-	void * c4;
-	void * c5;
+	register_t a3;
 
 	register_t v0;  /* method nb */
+	register_t v1;  /* syscall nb */
+	register_t t2;  /* token nb */
 	void *     idc; /* identifier */
-	void *     c1;  /* sync token */
 }  msg_t;
 
 typedef struct

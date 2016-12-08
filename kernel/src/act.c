@@ -41,13 +41,13 @@ act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
 aid_t 				kernel_curr_act;
 aid_t				kernel_next_act;
 
-static const void *            act_default_id = NULL;
+static uint64_t            act_default_id = 0;
 
 void act_init(boot_info_t *bi) {
 	KERNEL_TRACE("init", "activation init");
 
 	/* initialize the default identifier to a known value */
-	act_default_id = cheri_setbounds(cheri_getdefault(), 0);
+	act_default_id = 0;
 
 	/*
 	 * create kernel activation
@@ -71,16 +71,16 @@ void act_init(boot_info_t *bi) {
 void kernel_skip_instr(aid_t act) {
 	kernel_exception_framep[act].mf_pc += 4; /* assumes no branch delay slot */
 	void * pcc = (void *) kernel_exception_framep[act].cf_pcc;
-	pcc = __builtin_memcap_offset_increment(pcc, 4);
+	pcc = (char *)pcc + 4;
 	kernel_exception_framep[act].cf_pcc = pcc;
 }
 
 static void * act_create_ref(aid_t aid) {
-	return kernel_seal(kernel_cap_to_exec(kernel_acts + aid), aid);
+	return kernel_acts + aid;
 }
 
 static void * act_create_ctrl_ref(aid_t aid) {
-	return kernel_seal(kernel_acts + aid, 42001);
+	return kernel_acts + aid;
 }
 
 void * act_register(const reg_frame_t * frame, const char * name) {
@@ -121,7 +121,7 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 	kernel_acts[aid].act_reference = act_create_ref(aid);
 
 	/* set default identifier */
-	kernel_acts[aid].act_default_id = kernel_seal(act_default_id, aid);
+	kernel_acts[aid].act_default_id = act_default_id;
 
 	/* set scheduling status */
 	sched_create(aid);
@@ -133,7 +133,6 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 }
 
 int act_revoke(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
 	aid_t aid = ctrl->aid;
 	if(kernel_acts[aid].status == status_terminated) {
 		return -1;
@@ -143,7 +142,6 @@ int act_revoke(act_t * ctrl) {
 }
 
 int act_terminate(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
 	aid_t act = ctrl->aid;
 	kernel_acts[act].status = status_terminated;
 	sched_delete(act);
@@ -156,19 +154,16 @@ int act_terminate(act_t * ctrl) {
 }
 
 void * act_get_ref(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
 	aid_t aid = ctrl->aid;
 	return kernel_acts[aid].act_reference;
 }
 
-void * act_get_id(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
+uint64_t act_get_id(act_t * ctrl) {
 	aid_t aid = ctrl->aid;
 	return kernel_acts[aid].act_default_id;
 }
 
 int act_get_status(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
 	aid_t aid = ctrl->aid;
 	return kernel_acts[aid].status;
 }
@@ -183,6 +178,8 @@ void act_wait(int act, aid_t next_hint) {
 	sched_reschedule(next_hint);
 }
 
+/*
 void * act_seal_identifier(void * identifier) {
 	return kernel_seal(cheri_andperm(identifier, 0b111100011111101), kernel_curr_act);
 }
+ */

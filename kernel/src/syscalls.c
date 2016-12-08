@@ -43,29 +43,29 @@ static void syscall_sleep(void) {
 }
 
 static void syscall_act_register(void) {
-	reg_frame_t * frame = kernel_exception_framep_ptr->cf_a0;
-	char * name = kernel_exception_framep_ptr->cf_a1;
-	kernel_exception_framep_ptr->cf_a0 = act_register(frame, name);
+	reg_frame_t * frame = (void *)kernel_exception_framep_ptr->mf_a0;
+	char * name = (void *)kernel_exception_framep_ptr->mf_a1;
+	kernel_exception_framep_ptr->mf_a0 = (register_t)act_register(frame, name);
 }
 
 static void syscall_act_ctrl_get_ref(void) {
-	kernel_exception_framep_ptr->cf_a0 = act_get_ref(kernel_exception_framep_ptr->cf_a0);
+	kernel_exception_framep_ptr->mf_a0 = (register_t)act_get_ref((void *)kernel_exception_framep_ptr->mf_a0);
 }
 
 static void syscall_act_ctrl_get_id(void) {
-	kernel_exception_framep_ptr->cf_a0 = act_get_id(kernel_exception_framep_ptr->cf_a0);
+	kernel_exception_framep_ptr->mf_a0 = (register_t)act_get_id((void *)kernel_exception_framep_ptr->mf_a0);
 }
 
 static void syscall_act_ctrl_get_status(void) {
-	kernel_exception_framep_ptr->mf_v0 = act_get_status(kernel_exception_framep_ptr->cf_a0);
+	kernel_exception_framep_ptr->mf_v0 = (register_t)act_get_status((void *)kernel_exception_framep_ptr->mf_a0);
 }
 
 static void syscall_act_revoke(void) {
-	kernel_exception_framep_ptr->mf_v0 = act_revoke(kernel_exception_framep_ptr->cf_a0);
+	kernel_exception_framep_ptr->mf_v0 = act_revoke((void *)kernel_exception_framep_ptr->mf_a0);
 }
 
 static void syscall_act_terminate(void) {
-	int ret = act_terminate(kernel_exception_framep_ptr->cf_a0);
+	int ret = act_terminate((void *)kernel_exception_framep_ptr->mf_a0);
 	if(ret == 1) {
 		sched_reschedule(0);
 	} else {
@@ -74,11 +74,11 @@ static void syscall_act_terminate(void) {
 }
 
 static void syscall_act_seal_identifier(void) {
-	kernel_exception_framep_ptr->cf_a0 = act_seal_identifier(kernel_exception_framep_ptr->cf_a0);
+	//kernel_exception_framep_ptr->mf_a0 = (register_t)act_seal_identifier((void *)kernel_exception_framep_ptr->mf_a0);
 }
 
 static void syscall_puts() {
-	void * msg = kernel_exception_framep_ptr->cf_a0;
+	void * msg = (void *)kernel_exception_framep_ptr->mf_a0;
 	#ifndef __LITE__
 	printf(KGRN"%s" KREG KRST, msg);
 	#else
@@ -100,18 +100,20 @@ static void syscall_interrupt_enable(void) {
 		kernel_interrupt_enable(kernel_exception_framep_ptr->mf_a0);
 }
 
+/*
 static void syscall_gc(void) {
 	kernel_exception_framep_ptr->mf_v0 =
 	  try_gc(kernel_exception_framep_ptr->cf_a0,
 	         kernel_exception_framep_ptr->cf_a1);
 }
+ */
 
 /*
  * Syscall demux
  */
 void kernel_exception_syscall(void)
 {
-	long sysn = kernel_exception_framep_ptr->mf_v0;
+	long sysn = kernel_exception_framep_ptr->mf_v1;
 	//KERNEL_TRACE("exception", "Syscall number %ld", sysn);
 	aid_t kca = kernel_curr_act;
 	switch(sysn) {
@@ -165,18 +167,18 @@ void kernel_exception_syscall(void)
 		break;
 	case 66:
 		KERNEL_TRACE("exception", "Syscall %ld (gc)", sysn);
-		syscall_gc();
+		//syscall_gc();
 		break;
-	case 101:
-		KERNEL_TRACE("exception", "(CCall1)Syscall %ld (gc)", sysn);
+	case 1001:
+		KERNEL_TRACE("exception", "(CCall1)Syscall %ld", sysn);
         kernel_ccall(1);
 		break;
-	case 102:
-		KERNEL_TRACE("exception", "(CCall2)Syscall %ld (gc)", sysn);
+	case 1002:
+		KERNEL_TRACE("exception", "(CCall2)Syscall %ld", sysn);
         kernel_ccall(2);
 		break;
-	case 104:
-		KERNEL_TRACE("exception", "(CCall4)Syscall %ld (gc)", sysn);
+	case 1004:
+		KERNEL_TRACE("exception", "(CCall4)Syscall %ld", sysn);
         kernel_ccall(4);
 		break;
 	default:

@@ -30,6 +30,7 @@
 
 #include "klib.h"
 #include "cp0.h"
+#include"stdio.h"
 
 /*
  * Exception demux
@@ -89,11 +90,13 @@ static void kernel_exception_capability(void) {
 	int cause = (capcause >> 8) & 0x1F;
 
 	if(cause == 5) { /* todo: give them their own handler */
-		kernel_ccall();
+        panic("CCall should not happen");
+		//kernel_ccall();
 		return;
 	}
 	if(cause == 6) {
-		kernel_creturn();
+        panic("CReturn should not happen");
+		//kernel_creturn();
 		return;
 	}
 

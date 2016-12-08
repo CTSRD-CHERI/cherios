@@ -53,6 +53,8 @@ static char *rcsid = "$FreeBSD$";
 
 #pragma clang diagnostic ignored "-Wsign-compare"
 
+extern uint64_t __size_heap;
+
 caddr_t	pagepool_start, pagepool_end;
 char	*pool;
 
@@ -70,8 +72,8 @@ __init_heap(void * heap)
 	 */
 	assert((size_t)heap == roundup2((size_t)heap, pagesz));
 
-	assert(cheri_getoffset(heap) == 0);
-	size_t heaplen = cheri_getlen(heap);
+	//assert(cheri_getoffset(heap) == 0);
+	size_t heaplen = 0x400000;
 	pagepool_start = (size_t)0;
 	pagepool_end = pagepool_start + heaplen;
 	pool = heap;
@@ -80,13 +82,8 @@ __init_heap(void * heap)
 void *
 __rederive_pointer(void *ptr)
 {
-	caddr_t addr, base;
-
-	addr = cheri_getbase(ptr) + cheri_getoffset(ptr);
-	base = cheri_getbase(pool);
-
-	if (addr >= base && addr < base + cheri_getlen(pool))
-		return(cheri_setoffset(pool, addr - base));
+	if ((char *)ptr > pool)
+		return (void *)((char *)ptr - (char *)pool);
 
 	return (NULL);
 }

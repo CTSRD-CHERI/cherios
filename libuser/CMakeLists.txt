@@ -21,6 +21,7 @@ set(LIBUSER_SRCS
     src/interrupt.c
     src/libuser.c
     src/malloc.c
+    src/memcpy.c
     src/mmap.c
     src/msg.c
     src/msg_default.c

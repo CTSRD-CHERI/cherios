@@ -191,14 +191,14 @@ morecore(int bucket)
 		if (__morepages(amt/pagesz) == 0)
 			return;
 
-	buf = pagepool_start;
+	buf = (char *)pagepool_start;
 	pagepool_start += amt;
 
 	/*
 	 * Add new memory allocated to that on
 	 * free list for this hash bucket.
 	 */
-	nextf[bucket] = op = buf;
+	nextf[bucket] = op = (union overhead *)buf;
 	while (--nblks > 0) {
 		op->ov_next = (union overhead *)((char *)op + sz);
 		op = op->ov_next;
@@ -284,8 +284,7 @@ realloc(void *cp, size_t nbytes)
 	 */
 	smaller_space = (1 << (op->ov_index + 2)) - sizeof(*op);
 	if (nbytes <= cur_space && nbytes > smaller_space)
-		return (cheri_andperm(cheri_setbounds(op + 1, nbytes),
-		    cheri_getperm(cp)));
+		return (op+1);
 
 	if ((res = malloc(nbytes)) == NULL)
 		return (NULL);
@@ -295,7 +294,7 @@ realloc(void *cp, size_t nbytes)
 	 * for some programmers, but to do otherwise risks information leaks.
 	 */
 	memcpy(res, cp, (nbytes <= cheri_getlen(cp)) ? nbytes : cheri_getlen(cp));
-	res = cheri_andperm(res, cheri_getperm(cp));
+	//res = cheri_andperm(res, cheri_getperm(cp));
 	free(cp);
 	return (res);
 }

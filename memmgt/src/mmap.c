@@ -122,11 +122,11 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 		book[page+pages_wanted].status = page_unused;
 		book[page+pages_wanted].len = curr_len-pages_wanted;
 	}
-	p = cheri_setbounds(pool+page*pagesz, length);
+	p = pool+page*pagesz;
 	goto ok;
 
  ok:
-	p = cheri_andperm(p, perms);
+	//p = cheri_andperm(p, perms);
 	//CHERI_PRINT_CAP(p);
 	return p;
 
@@ -184,12 +184,13 @@ void minit(char *heap) {
 	pages_nb = length / (pagesz + sizeof(page_t));
 	assert(pages_nb > 0);
 	size_t pool_len = pages_nb*pagesz;
-	pool = cheri_setbounds(heap, pool_len);
+	pool = heap;
 
 	size_t book_len = pages_nb*sizeof(page_t);
 	//printf("Heaplen:%jx Poollen: %jx, Booklen: %jx\n", length, pool_len, book_len);
 	assert(book_len + pool_len <= length);
-	book = cheri_setbounds(heap + pool_len, book_len);
+	//book = cheri_setbounds(heap + pool_len, book_len);
+	book = (page_t *)(heap + pool_len);
 
 	book[0].status = page_unused;
 	book[0].len = pages_nb;

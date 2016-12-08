@@ -64,14 +64,14 @@ static void rel_push(void * p) {
 static int try_gc(void * p) {
 	register_t ret;
 	__asm__ __volatile__ (
-		"li    $v0, 66       \n"
-		"cmove $c3, %[p]     \n"
-		"cmove $c4, %[pool]  \n"
+		"li    $v1, 66       \n"
+		"move $a0, %[p]     \n"
+		"move $a1, %[pool]  \n"
 		"syscall             \n"
 		"move %[ret], $v0    \n"
 		: [ret] "=r" (ret)
-		: [p] "C" (p), [pool] "C" (pool)
-		: "v0", "$c3", "$c4");
+		: [p] "r" (p), [pool] "r" (pool)
+		: "v0", "v1", "a0", "a1");
 	return ret;
 }
 

@@ -51,12 +51,12 @@ static void bootloader_main() {
 
 	boot_printf("Boot: entering kernel ...\n");
 	__asm__ __volatile__ (
-		"cmove	$c3, %[bi] \n"
-		"li	$v0, 0	   \n"
+		"move	$a0, %[bi] \n"
+		"li	$v1, 0	   \n"
 		"syscall           \n"
 		:
-		: [bi]"C" (bi)
-		: "v0", "$c3");
+		: [bi]"r" (bi)
+		: "v1", "a0");
 }
 
 int cherios_main(void) {

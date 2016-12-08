@@ -94,38 +94,49 @@ extern void * uart_cap;
 static inline char
 uart_data_receive(void)
 {
-	return (mips_cap_ioread_uint8(uart_cap, MALTA_UART_RXTX_OFF));
+
+	return (mips_ioread_uint8(mips_phys_to_uncached(MALTA_UART_BASE +
+	    MALTA_UART_RXTX_OFF)));
 }
 
 static inline void
 uart_data_transmit(char ch)
 {
-	mips_cap_iowrite_uint8(uart_cap, MALTA_UART_RXTX_OFF, ch);
+
+	mips_iowrite_uint8(mips_phys_to_uncached(MALTA_UART_BASE +
+	    MALTA_UART_RXTX_OFF), ch);
 }
 
 static inline uint8_t
 uart_lsr_read(void)
 {
-	return (mips_cap_ioread_uint8(uart_cap, MALTA_UART_LSR_OFF));
+
+	return (mips_ioread_uint8(mips_phys_to_uncached(MALTA_UART_BASE +
+	    MALTA_UART_LSR_OFF)));
 }
 
 static inline void
 uart_lcr_set(uint8_t v)
 {
-	mips_cap_iowrite_uint8(uart_cap, MALTA_UART_LCR_OFF, v);
+
+	mips_iowrite_uint8(mips_phys_to_uncached(MALTA_UART_BASE +
+	    MALTA_UART_LCR_OFF), v);
 }
 
 static inline void
 uart_ier_set(uint8_t v)
 {
-	mips_cap_iowrite_uint8(uart_cap, MALTA_UART_IER_OFF, v);
+
+	mips_iowrite_uint8(mips_phys_to_uncached(MALTA_UART_BASE +
+	    MALTA_UART_IER_OFF), v);
 }
 
 static inline void
 uart_mcr_set(uint8_t v)
 {
 
-	mips_cap_iowrite_uint8(uart_cap, MALTA_UART_MCR_OFF, v);
+	mips_iowrite_uint8(mips_phys_to_uncached(MALTA_UART_BASE +
+	    MALTA_UART_MCR_OFF), v);
 }
 
 int

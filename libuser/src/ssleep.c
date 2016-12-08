@@ -31,11 +31,11 @@
 #include "all.h"
 void ssleep(int n) {
 	__asm__ __volatile__ (
-		"li   $v0, 13 \n"
+		"li   $v1, 13 \n"
 		"move $a0, %[n] \n"
 		"syscall      \n"
 		:: [n]"r" (n)
-		: "v0", "a0");
+		: "v1", "a0");
 }
 
 void nssleep(int n) {

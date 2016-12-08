@@ -57,7 +57,7 @@ static void cache_inv_low(int op, size_t line) {
 
 static void install_exception_vectors(void) {
 	/* Copy exception trampoline to exception vector. */
-	char * all_mem = cheri_getdefault() ;
+	char * all_mem = 0;
 	void *mips_bev0_exception_vector_ptr =
 	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
 	memcpy(mips_bev0_exception_vector_ptr, &kernel_exception_trampoline,
