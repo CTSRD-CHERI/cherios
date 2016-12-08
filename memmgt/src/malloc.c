@@ -138,7 +138,7 @@ malloc(size_t nbytes)
 	nextf[bucket] = op->ov_next;
 	op->ov_magic = MAGIC;
 	op->ov_index = bucket;
-	return (cheri_setbounds(op + 1, nbytes));
+	return op + 1;
 }
 
 void *
@@ -191,18 +191,16 @@ morecore(int bucket)
 		if (__morepages(amt/pagesz) == 0)
 			return;
 
-	buf = cheri_setoffset(pool, pagepool_start);
-	buf = cheri_setbounds(buf, amt);
+	buf = pagepool_start;
 	pagepool_start += amt;
 
 	/*
 	 * Add new memory allocated to that on
 	 * free list for this hash bucket.
 	 */
-	nextf[bucket] = op = cheri_setbounds(buf, sz);
+	nextf[bucket] = op = buf;
 	while (--nblks > 0) {
-		op->ov_next = (union overhead *)cheri_setbounds(buf + sz, sz);
-		buf += sz;
+		op->ov_next = (union overhead *)((char *)op + sz);
 		op = op->ov_next;
 	}
 	op->ov_next = NULL;

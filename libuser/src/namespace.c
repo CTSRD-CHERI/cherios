@@ -42,13 +42,13 @@ void namespace_init(void *ns_ref, void *ns_id) {
 }
 
 int namespace_register(int nb, void *ref, void *id) {
-	return ccall_rcc_r(namespace_ref, namespace_id, 0, nb, ref, id);
+	return ccall_rrr_r(namespace_ref, namespace_id, 0, nb, (register_t)ref, (register_t)id);
 }
 
 void * namespace_get_ref(int nb) {
-	return ccall_r_c(namespace_ref, namespace_id, 1, nb);
+	return (void *)ccall_r_r(namespace_ref, namespace_id, 1, nb);
 }
 
 void * namespace_get_id(int nb) {
-	return ccall_r_c(namespace_ref, namespace_id, 2, nb);
+	return (void *)ccall_r_r(namespace_ref, namespace_id, 2, nb);
 }

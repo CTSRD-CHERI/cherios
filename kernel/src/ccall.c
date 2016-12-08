@@ -36,33 +36,20 @@
  */
 
 /* Creates a token for synchronous CCalls. This ensures the answer is unique. */
-static void * get_sync_token(aid_t ccaller) {
+static uint64_t get_sync_token(aid_t ccaller) {
 	static uint32_t unique = 0;
 	unique++;
 	kernel_acts[ccaller].sync_token.expected_reply  = unique;
 
 	uint64_t token_offset = (((u64)ccaller) << 32) + unique;
-	void * sync_token = cheri_andperm(cheri_getdefault(), 0);
-	#ifdef _CHERI256_
-	sync_token = cheri_setbounds(sync_token, 0);
-	#endif
-	sync_token = cheri_setoffset(sync_token, token_offset);
-	return kernel_seal(sync_token, 42000);
+	return token_offset;
 }
 
 static void kernel_ccall_core(int cflags) {
 	/* Unseal CCall cs and cb */
 	/* cb is the activation and cs the identifier */
-	void * cs = kernel_exception_framep_ptr->cf_c2;
-	act_t * cb = kernel_exception_framep_ptr->cf_c1;
-	int otype = cheri_gettype(cb);
-	cs = kernel_unseal(cs, otype);
-	cb = kernel_unseal(cb, otype);
-
-	if(!(cheri_getperm(cs) & CHERI_PERM_STORE)) {
-		KERNEL_ERROR("Bad identifier: missing store permission");
-		return;
-	}
+	void * cs = kernel_exception_framep_ptr->cf_t1;
+	act_t * cb = kernel_exception_framep_ptr->cf_t0;
 
 	if(cb->status != status_alive) {
 		KERNEL_ERROR("Trying to CCall revoked activation %s-%d",
@@ -105,16 +92,8 @@ static void kernel_ccall_core(int cflags) {
 	}
 }
 
-void kernel_ccall(void) {
+void kernel_ccall(register_t ccall_selector) {
 	KERNEL_TRACE(__func__, "in %s", kernel_acts[kernel_curr_act].name);
-
-	register_t ccall_selector =
-	#ifdef HARDWARE_fpga
-	        cp0_badinstr_get();
-	#else
-	        *((uint32_t *)kernel_exception_framep_ptr->cf_pcc);
-	#endif
-	ccall_selector &= 0x7FF;
 
 	/* Ack ccall instruction */
 	kernel_skip_instr(kernel_curr_act);
@@ -144,7 +123,7 @@ void kernel_creturn(void) {
 	/* Ack creturn instruction */
 	kernel_skip_instr(kernel_curr_act);
 
-	sync_t * sync_token = kernel_exception_framep_ptr->cf_c1;
+	sync_t * sync_token = kernel_exception_framep_ptr->cf_v1;
 	if(sync_token == NULL) {
 		/* Used by asynchronous primitives */
 		//act_wait(kernel_curr_act, 0);
@@ -153,8 +132,7 @@ void kernel_creturn(void) {
 	}
 
 	/* Check if we expect this anwser */
-	sync_token = kernel_unseal(sync_token, 42000);
-	size_t sync_offset = cheri_getoffset(sync_token);
+	size_t sync_offset = sync_token;
 	aid_t ccaller = sync_offset >> 32;
 	uint64_t unique = sync_offset & 0xFFFFFFF;
 	if(kernel_acts[ccaller].sync_token.expected_reply != unique ) {
@@ -167,8 +145,6 @@ void kernel_creturn(void) {
 	sched_d2a(ccaller, sched_runnable);
 
 	/* Copy return values */
-	kernel_exception_framep[ccaller].cf_c3 =
-	   kernel_exception_framep_ptr->cf_c3;
 	kernel_exception_framep[ccaller].mf_v0 =
 	   kernel_exception_framep_ptr->mf_v0;
 	kernel_exception_framep[ccaller].mf_v1 =

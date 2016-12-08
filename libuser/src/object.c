@@ -149,132 +149,90 @@ void * get_cookie(void * cb, void * cs) {
  * CCall helpers
  */
 
-#define CCALL_ASM_CSCB "cmove $c1, %[cb] \n" "cmove $c2, %[cs] \n" "move $v0, %[method_nb] \n"
-#define CCALL_INSTR(n) "ccall $c1, $c2, " #n "\n"
-#define CCALL_INOPS [cb]"C" (cb), [cs]"C" (cs), [method_nb]"r" (method_nb)
-#define CCALL_CLOBS "$c1","$c2","$c3","$c4","$c5","v0","v1","a0","a1","a2"
+#define CCALL_ASM_CSCB "move $t0, %[cb] \n" "move $t1, %[cs] \n" "move $v1, %[method_nb] \n"
+//#define CCALL_INSTR(n) "ccall $c1, $c2, " #n "\n"
+#define CCALL_INSTR(n) \
+        "li $v0, " #n "\n" \
+        "syscall \n" \
+
+#define CCALL_INOPS [cb]"r" (cb), [cs]"r" (cs), [method_nb]"r" (method_nb)
+#define CCALL_CLOBS "v0","v1","a0","a1","a2","a3","t0","t1"
 #define CCALL_TOP \
-	ret_t ret; \
+	register_t ret; \
 	__asm__ __volatile__ ( \
 		CCALL_ASM_CSCB \
 		"move  $a0, %[rarg1] \n" \
 		"move  $a1, %[rarg2] \n" \
 		"move  $a2, %[rarg3] \n" \
-		"cmove $c3, %[carg1] \n" \
-		"cmove $c4, %[carg2] \n" \
-		"cmove $c5, %[carg3] \n" \
+		"move  $a3, %[rarg4] \n" \
 
 #define CCALL_BOTTOM \
-		"move  %[rret], $v0  \n" \
-		"cmove %[cret], $c3  \n" \
-		: [rret]"=r" (ret.rret), [cret]"=C" (ret.cret) \
-		: CCALL_INOPS, [rarg1]"r" (rarg1), [rarg2]"r" (rarg2), [rarg3]"r" (rarg3), \
-		               [carg1]"C" (carg1), [carg2]"C" (carg2), [carg3]"C" (carg3) \
+		"move  %[ret], $v0  \n" \
+		: [ret]"=r" (ret) \
+		: CCALL_INOPS, [rarg1]"r" (rarg1), [rarg2]"r" (rarg2), [rarg3]"r" (rarg3), [rarg4]"r" (rarg4) \
 		: CCALL_CLOBS);
 
 #define CCALLS(...) CCALL(4, __VA_ARGS__)
 
 register_t ccall_1(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3) {
+		  register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
 	CCALL_TOP
-		CCALL_INSTR(1)
+		CCALL_INSTR(1001)
 	CCALL_BOTTOM
-	return ret.rret;
+	return ret;
 }
 
 register_t ccall_2(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3) {
+		  register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
 	CCALL_TOP
-		CCALL_INSTR(2)
+		CCALL_INSTR(1002)
 	CCALL_BOTTOM
-	return ret.rret;
+	return ret;
 }
 
-inline ret_t ccall_4(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3) {
+inline register_t ccall_4(void * cb, void * cs, int method_nb,
+		  register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
 	CCALL_TOP
-		CCALL_INSTR(4)
+		CCALL_INSTR(1004)
 	CCALL_BOTTOM
 	return ret;
 }
 
 
-void ccall_c_n(void * cb, void * cs, int method_nb, const void * carg) {
-	CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
+void ccall_r_n(void * cb, void * cs, int method_nb, register_t rarg1) {
+	CCALLS(cb, cs, method_nb, rarg1, 0, 0, 0);
 }
-
-void * ccall_n_c(void * cb, void * cs, int method_nb) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, NULL, NULL, NULL);
-	return ret.cret;
+void ccall_rr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2) {
+	CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, 0);
 }
-
-void * ccall_r_c(void * cb, void * cs, int method_nb, int rarg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, NULL, NULL, NULL);
-	return ret.cret;
+void ccall_rrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3) {
+	CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, 0);
 }
-
-void * ccall_c_c(void * cb, void * cs, int method_nb, const void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
-	return ret.cret;
-}
-
-
-void * ccall_rr_c(void * cb, void * cs, int method_nb, int rarg1, int rarg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
-	return ret.cret;
+void ccall_rrrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
+	CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, rarg4);
 }
 
 register_t ccall_n_r(void * cb, void * cs, int method_nb) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, NULL, NULL, NULL);
-	return ret.rret;
+	register_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, 0);
+	return ret;
 }
 
-register_t ccall_r_r(void * cb, void * cs, int method_nb, int rarg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, NULL, NULL, NULL);
-	return ret.rret;
+register_t ccall_r_r(void * cb, void * cs, int method_nb, register_t rarg1) {
+	register_t ret = CCALLS(cb, cs, method_nb, rarg1, 0, 0, 0);
+	return ret;
 }
 
-register_t ccall_c_r(void * cb, void * cs, int method_nb, void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
-	return ret.rret;
+register_t ccall_rr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2) {
+	register_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, 0);
+	return ret;
 }
 
-register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg1, int rarg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
-	return ret.rret;
+register_t ccall_rrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3) {
+	register_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, 0);
+	return ret;
 }
 
-register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, const void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, carg, NULL, NULL);
-	return ret.rret;
+register_t ccall_rrrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
+	register_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, rarg4);
+	return ret;
 }
-
-void ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg) {
-	CCALLS(cb, cs, method_nb, rarg, 0, 0, carg, NULL, NULL);
-}
-
-void ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2) {
-	CCALLS(cb, cs, method_nb, 0, 0, 0, carg1, carg2, NULL);
-}
-
-register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg, void * carg1, void * carg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, carg1, carg2, NULL);
-	return ret.rret;
-}
-
-/*
-void * ccall_rrrc_c(void * cb, void * cs, int method_nb,
-                    register_t rarg1, register_t rarg2, register_t rarg3, void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, carg, NULL, NULL);
-	return ret.cret;
-}
-
-register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
-                    register_t rarg1, register_t rarg2, void * carg1, void * carg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, carg1, carg2, NULL);
-	return ret.rret;
-}
- */

@@ -41,7 +41,7 @@ static void *_mmap(void *addr, size_t length, int prot, int flags) {
 		memmgt_ref = namespace_get_ref(3);
 		memmgt_id  = namespace_get_id(3);
 	}
-	return ccall_rrrc_c(memmgt_ref, memmgt_id, 0, length, prot, flags, addr);
+	return (void *)ccall_rrrr_r(memmgt_ref, memmgt_id, 0,  (register_t)addr, length, prot, flags);
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
@@ -49,7 +49,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 }
 
 int munmap(void *addr, size_t length) {
-	return ccall_rc_r(memmgt_ref, memmgt_id, 1, length, addr);
+	return ccall_rr_r(memmgt_ref, memmgt_id, 1, (register_t)addr, length);
 }
 
 void mmap_set_act(void * ref, void * id) {

@@ -49,7 +49,7 @@ static inline int empty(queue_t * queue) {
 	return queue->start == queue->end;
 }
 
-int msg_push(int dest, int src, void * identifier, void * sync_token) {
+int msg_push(int dest, int src, void * identifier, uint64_t sync_token) {
 	queue_t * queue = msg_queues + dest;
 	msg_nb_t  qmask  = kernel_acts[dest].queue_mask;
 	kernel_assert(qmask > 0);
@@ -61,14 +61,11 @@ int msg_push(int dest, int src, void * identifier, void * sync_token) {
 	queue->msg[next_slot].a0  = kernel_exception_framep[src].mf_a0;
 	queue->msg[next_slot].a1  = kernel_exception_framep[src].mf_a1;
 	queue->msg[next_slot].a2  = kernel_exception_framep[src].mf_a2;
-
-	queue->msg[next_slot].c3  = kernel_exception_framep[src].cf_c3;
-	queue->msg[next_slot].c4  = kernel_exception_framep[src].cf_c4;
-	queue->msg[next_slot].c5  = kernel_exception_framep[src].cf_c5;
+	queue->msg[next_slot].a3  = kernel_exception_framep[src].mf_a3;
 
 	queue->msg[next_slot].v0  = kernel_exception_framep[src].mf_v0;
 	queue->msg[next_slot].idc = identifier;
-	queue->msg[next_slot].c1  = sync_token;
+	queue->msg[next_slot].v1  = sync_token;
 
 	queue->end = safe(queue->end+1, qmask);
 
@@ -90,14 +87,11 @@ void msg_pop(aid_t act) {
 	kernel_exception_framep[act].mf_a0  = queue->msg[start].a0;
 	kernel_exception_framep[act].mf_a1  = queue->msg[start].a1;
 	kernel_exception_framep[act].mf_a2  = queue->msg[start].a2;
-
-	kernel_exception_framep[act].cf_c3  = queue->msg[start].c3;
-	kernel_exception_framep[act].cf_c4  = queue->msg[start].c4;
-	kernel_exception_framep[act].cf_c5  = queue->msg[start].c5;
+	kernel_exception_framep[act].mf_a3  = queue->msg[start].a3;
 
 	kernel_exception_framep[act].mf_v0  = queue->msg[start].v0;
+	kernel_exception_framep[act].mf_v1  = queue->msg[start].v1;
 	kernel_exception_framep[act].cf_idc = queue->msg[start].idc;
-	kernel_exception_framep[act].cf_c1  = queue->msg[start].c1;
 
 	queue->start = safe(start+1, qmask);
 }

@@ -56,37 +56,21 @@ void * get_cookie(void * cb, void * cs);
 extern void * sync_token;
 extern long msg_enable;
 
-typedef struct
-{
-	void * cret;
-	register_t rret;
-}  ret_t;
-
 #define CCALL(selector, ...) ccall_##selector(__VA_ARGS__)
 register_t ccall_1(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3);
+		  register_t rarg1, register_t rarg2,
+		  register_t rarg3, register_t rarg4);
 register_t ccall_2(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3);
+		  register_t rarg1, register_t rarg2,
+		  register_t rarg3, register_t rarg4);
 
-void	ccall_c_n(void * cb, void * cs, int method_nb, const void * carg);
-void *	ccall_n_c(void * cb, void * cs, int method_nb);
-void *	ccall_r_c(void * cb, void * cs, int method_nb, int rarg);
-void *	ccall_c_c(void * cb, void * cs, int method_nb, const void * carg);
-void *	ccall_rr_c(void * cb, void * cs, int method_nb, int rarg, int rarg2);
+void ccall_r_n(void * cb, void * cs, int method_nb, register_t rarg1);
+void ccall_rr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2);
+void ccall_rrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3);
+void ccall_rrrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4);
 register_t ccall_n_r(void * cb, void * cs, int method_nb);
-register_t ccall_r_r(void * cb, void * cs, int method_nb, int rarg);
-register_t ccall_c_r(void * cb, void * cs, int method_nb, void * carg);
-register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg, int rarg2);
-register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, const void * carg);
-void	ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2);
-void	ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg);
-register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg1, void * carg1, void * carg2);
-/*
-void *	ccall_rrrc_c(void * cb, void * cs, int method_nb,
-                    register_t, register_t, register_t, void * carg);
-register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
-                    register_t rarg1, register_t rarg2, void * carg1, void * carg2);
- */
+register_t ccall_r_r(void * cb, void * cs, int method_nb, register_t rarg1);
+register_t ccall_rr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2);
+register_t ccall_rrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3);
+register_t ccall_rrrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4); 
 #endif
