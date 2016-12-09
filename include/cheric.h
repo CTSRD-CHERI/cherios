@@ -317,7 +317,7 @@ typedef struct reg_frame {
 	 * Capability registers.
 	 */
 	/* c0 has special properties for MIPS load/store instructions. */
-	capability	cf_c0;
+    capability	cf_c0;
 
 	/*
 	 * General purpose capability registers.
@@ -338,6 +338,6 @@ typedef struct reg_frame {
 	/* Program counter capability. */
 	capability	cf_pcc;
 
-
+    capability padding[28];
 } reg_frame_t;
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

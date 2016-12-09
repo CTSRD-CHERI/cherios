@@ -152,12 +152,12 @@ boot_info_t *load_init() {
 
 	/* populate frame */
 	bzero(&bi.init_frame, sizeof(bi.init_frame));
-	bi.init_frame.cf_pcc = pcc;
+	//bi.init_frame.cf_pcc = pcc;
 	bi.init_frame.mf_pc  = (size_t)pcc + entry;
-	bi.init_frame.cf_c11 = stack;
-	bi.init_frame.mf_sp  = (size_t)stack;
-	bi.init_frame.cf_c12 = pcc;
-	bi.init_frame.cf_c0  = 0;
+	//bi.init_frame.cf_c11 = stack;
+	bi.init_frame.mf_sp  = (size_t)stack + INIT_STACK_SIZE;
+	//bi.init_frame.cf_c12 = pcc;
+	//bi.init_frame.cf_c0  = 0;
 
 	return &bi;
 err:

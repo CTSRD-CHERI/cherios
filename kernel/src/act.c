@@ -29,6 +29,7 @@
  */
 
 #include "klib.h"
+#include"string.h"
 
 /*
  * Routines to handle activations
@@ -96,10 +97,7 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 #ifndef __LITE__
 	/* set name */
 	kernel_assert(ACT_NAME_MAX_LEN > 0);
-	int name_len = 0;
-	if(VCAP(name, 1, VCAP_R)) {
-		name_len = imin(cheri_getlen(name), ACT_NAME_MAX_LEN-1);
-	}
+    int name_len = imin(strlen(name), ACT_NAME_MAX_LEN-1);
 	for(int i = 0; i < name_len; i++) {
 		char c = name[i];
 		kernel_acts[aid].name[i] = c; /* todo: sanitize the name if we do not trust it */
