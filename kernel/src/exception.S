@@ -82,8 +82,12 @@ kernel_cp2_exception_handler:
 		# relative to KDC.  First save and clear CP2 context, then
 		# move on to general-purpose registers.
 		#
-		dla	$k0, kernel_exception_framep_ptr
-		clc	$kr1c, $k0, 0($kdc)
+        dla	$k0, kernel_exception_framep_ptr
+        ld  $k0, 0($k0)
+        cgetdefault $kr1c
+        csetoffset $kr1c, $kr1c, $k0
+        dla	$k0, 32*CAP_SIZE + 32*REG_SIZE #Should be enough
+        csetbounds $kr1c, $kr1c, $k0
 
 		# Notice correspondence to the layout of struct reg_frame.
 		# Notice also that KCC and KDC are not preserved.
@@ -91,10 +95,10 @@ kernel_cp2_exception_handler:
 		cgetdefault	$kr2c
 		# Expands to a list of the form
 		# csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-		foreachi csave, 0, $kr1c,					\
-			$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-			$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-			$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
+        #foreachi csave, 0, $kr1c,					\
+		#	$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
+		#	$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
+		#	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
 
 		#
 		# Context switch save; step all over k0 and k1 as is usual
@@ -115,10 +119,7 @@ kernel_cp2_exception_handler:
 		csd	$k1, $0, 31*REG_SIZE($kr1c)
 
 		# Set up exception stack
-		dla		$t0, __start_exception_stack
-		dla		$t1, __size_exception_stack
-		csetoffset	$c11, $kdc, $t0
-		csetbounds	$c11, $c11, $t1
+		dla		$t1, __stop_exception_stack
 		move		$sp, $t1
 
 		#
@@ -133,10 +134,9 @@ kernel_cp2_exception_handler:
 		#
 		# Normal function invocation of kernel_exception().
 		#
-		cgetpcc		$c12
 		dla		$t0, kernel_exception
-		csetoffset	$c12, $c12, $t0
-		cjalr		$c12, $c17
+		dla		$t9, kernel_exception
+		jalr		$t0
 		nop
 
 		#
@@ -144,8 +144,12 @@ kernel_cp2_exception_handler:
 		# its contents replaced by the kernel.  Notice correspondence
 		# to the layout of struct reg_frame.
 		#
-		dla	$k0, kernel_exception_framep_ptr
-		clc	$kr1c, $k0, 0($kdc)
+        dla	$k0, kernel_exception_framep_ptr
+        ld  $k0, 0($k0)
+        cgetdefault $kr1c
+        csetoffset $kr1c, $kr1c, $k0
+        dla	$k0, 32*CAP_SIZE + 32*REG_SIZE #Should be enough
+        csetbounds $kr1c, $kr1c, $k0
 
 		# Expands to a list of the form
 		# cld	$greg, $0, offset*REG_SIZE($kr1c)
@@ -170,11 +174,12 @@ kernel_cp2_exception_handler:
 		#
 		# Expands to a list of the form
 		# clc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-		foreachi crestore, 0, $kr1c,					\
-			$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-			$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-			$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
-		csetdefault	$kr2c
+        #foreachi crestore, 0, $kr1c,					\
+		#	$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
+		#	$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
+		#	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
+		#csetdefault	$kr2c
+		cgetdefault $c31
 
 		#
 		# On general principle, flush the contents of $k0 and $k1
