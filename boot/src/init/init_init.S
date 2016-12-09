@@ -42,56 +42,37 @@
 	.global start
 	.ent start
 start:
-	# W^X for pointers: ensure $c0 is never executable.
-	cgetdefault	$c3
-	dli		$t0, ~(1<<1)
-	candperm	$c3, $c3, $t0
-	csetdefault	$c3
-
-	# Implement W^X for pointers: trim store permissions from $pcc to
-	# prevent it from becoming writable in the future.
-	cgetpcc		$c12
-	dli		$t0, ~((1<<3) | (1<<5))
-	candperm	$c12, $c12, $t0
 
 	# Jump to write-free $pcc.
 	dla		$t0, cherios_init_jump_target
-	csetoffset	$c12, $c12, $t0
-	cjr		$c12
+	jr		$t0
 	nop
 cherios_init_jump_target:
 	# Set up a stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
-	dla		$t0, __start_init_stack
-	dla		$t1, __size_init_stack
-	cgetdefault	$c11
-	csetoffset	$c11, $c11, $t0
-	csetbounds	$c11, $c11, $t1
-	move		$sp, $t1
+	dla		$t0, __stop_init_stack
+	move		$sp, $t0
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
 	# Zero BSS.
-	cgetpcc		$c12
 	dla		$t0, crt_init_bss
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_init_bss
+    jalr    $t0
 	nop
 
 	# Initialise globals.
-	cgetpcc		$c12
 	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_init_globals
+    jalr    $t0
 	nop
 
 	# Call C constructors.
-	cgetpcc		$c12
 	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_call_constructors
+    jalr    $t0
 	nop
 
 	# On the off chance that cherios_main() has been defined as having
@@ -99,12 +80,11 @@ cherios_init_jump_target:
 	dli		$a0, 0
 
 	# Call init_main().
-	cgetpcc		$c12
 	dla		$t0, init_main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, init_main
+    jalr    $t0
 	nop
 
 	# Bootloader done. Go in waiting state. #fixme: revoke object
-	cfromptr $c1, $c1, $0
-	creturn
+    move    $v0, $0
+    jr  $ra

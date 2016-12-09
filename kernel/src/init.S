@@ -80,47 +80,39 @@ start:
 
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
-	dla		$t0, __start_exception_stack
-	dla		$t1, __size_exception_stack
-	cgetdefault	$c11
-	csetoffset	$c11, $c11, $t0
-	csetbounds	$c11, $c11, $t1
-	move		$sp, $t1
+	dla		$t0, __stop_exception_stack
+	move		$sp, $t0
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
 	# Zero BSS.
-	cgetpcc		$c12
 	dla		$t0, crt_init_bss
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_init_bss
+    jalr    $t0
 	nop
 
 	# Initialise globals.
-	cgetpcc		$c12
 	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_init_globals
+    jalr    $t0
 	nop
 
 	# Call C constructors.
-	cgetpcc		$c12
 	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_call_constructors
+    jalr    $t0
 	nop
 
 	# Pass arguments to cherios_main(int, void*) in a0 and c3.
 	dli		$a0, 1
-	clc		$c3, $0, 3*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
+	cld	$a1, $0, 4*REG_SIZE($kr1c)
 
 	# Call cherios_main().
-	cgetpcc		$c12
 	dla		$t0, cherios_main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, cherios_main
+	jalr		$t0
 	nop
 
 	# Restore context from the register frame set by the scheduler,

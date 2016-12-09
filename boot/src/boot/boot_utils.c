@@ -71,7 +71,7 @@ void load_kernel() {
 	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
 				     &minaddr, &maxaddr, &entry);
 
-	if(!prgmp) {
+	if((size_t)prgmp + (size_t)entry == 0) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
 		goto err;
 	}
@@ -127,7 +127,7 @@ boot_info_t *load_init() {
 	char *prgmp = elf_loader_mem(&env, &__init_elf_start,
 				     &minaddr, &maxaddr, &entry);
 
-	if(!prgmp) {
+	if((size_t)prgmp + (size_t)entry == 0) {
 		boot_printf(KRED"Could not load init file"KRST"\n");
 		goto err;
 	}

@@ -167,7 +167,7 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 	}
 
 	char *prgmp = env->alloc(allocsize);
-	if(!prgmp) {
+	if((size_t)prgmp + (size_t)e_entry == 0) {
 		ERROR("alloc failed");
 		return NULL;
 	}
