@@ -178,9 +178,9 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 		assert(0);
 		return NULL;
 	}
-	void * pcc = prgmp;
+	void * pcc = (void *)((size_t)prgmp + entry);
 	void * ctrl = init_act_create(file, 0,
-				      pcc, stack, get_act_cap(type),
+				      pcc, (void *)((size_t)stack + stack_size), get_act_cap(type),
 				      ns_ref, ns_id, arg, carg);
 	if(ctrl == NULL) {
 		return NULL;
