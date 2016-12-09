@@ -34,10 +34,10 @@
 #include "stdlib.h"
 #include "sys/mman.h"
 #include "object.h"
+#include"stdio.h"
 
 static inline void *align_upwards(void *p, uintptr_t align)
 {
-	align = 1 << align;
 	uint8_t * addr = (uint8_t *)p;
 	uintptr_t offset = (uintptr_t)addr - ((uintptr_t)addr & ~(align-1));
 	if(offset > 0) {
