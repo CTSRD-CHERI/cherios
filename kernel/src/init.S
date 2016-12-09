@@ -60,10 +60,10 @@ start:
 	cgetdefault	$kr2c
 	# Expands to a list of the form
 	# csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-    foreachi csave, 0, $kr1c,					\
-		$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-		$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-		$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
+    #foreachi csave, 0, $kr1c,					\
+	#	$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
+	#	$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
+	#	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
 	# Expands to a list of the form
 	# csd	$greg, $0, offset*REG_SIZE($kr1c)
 	foreachi gsave, 0, $kr1c,					\
@@ -118,6 +118,7 @@ start:
 	# Restore context from the register frame set by the scheduler,
 	# typically pointing to an init activation.
 	dla	$k0, kernel_exception_framep_ptr
+    ld  $k0, 0($k0)
 	cgetdefault $kr1c
 	csetoffset $kr1c, $kr1c, $k0
 	dla	$k0, kernel_init_save_frame
@@ -139,13 +140,11 @@ start:
 	dmtc0	$k1, $14		# EPC
 	# Expands to a list of the form
 	# clc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-    foreachi crestore, 0, $kr1c,					\
-		$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-		$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-		$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
-	csetdefault	$kr2c
+    #foreachi crestore, 0, $kr1c,					\
+	#	$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
+	#	$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
+	#	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
     cgetdefault $c31
-    cgetdefault $c0
 
 	# Kernel init done
 	move	$k0, $zero

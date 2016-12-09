@@ -337,7 +337,5 @@ typedef struct reg_frame {
 
 	/* Program counter capability. */
 	capability	cf_pcc;
-
-    capability padding[28];
 } reg_frame_t;
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

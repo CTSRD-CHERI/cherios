@@ -110,6 +110,9 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 
 	/* set register frame */
 	memcpy(kernel_exception_framep + aid, frame, sizeof(struct reg_frame));
+    kernel_printf("exception_framep + aid: %p\n", kernel_exception_framep+aid); //Hongyan debug
+    kernel_printf("(exception_framep + aid)->pc: %p\n", (kernel_exception_framep+aid)->mf_pc); //Hongyan debug
+    kernel_printf("(exception_framep + aid)->pcc: %p\n", (kernel_exception_framep+aid)->cf_pcc); //Hongyan debug
 
 	/* set queue */
 	msg_queue_init(aid);

@@ -117,6 +117,8 @@ void sched_reschedule(aid_t hint) {
 
 	kernel_curr_act = hint;
 	kernel_exception_framep_ptr = kernel_exception_framep + hint;
+    kernel_printf("Kernel exception framep now: %p\n", kernel_exception_framep_ptr); //Hongyan debug
+    kernel_printf("Kernel exception framep address now: %p\n", &kernel_exception_framep_ptr); //Hongyan debug
 	KERNEL_TRACE("sched", "Reschedule from task '%s-%ld' to task '%s-%ld'",
 	        kernel_acts[old_kernel_curr_act].name, old_kernel_curr_act,
 	        kernel_acts[kernel_curr_act].name, kernel_curr_act);
