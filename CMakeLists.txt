@@ -277,6 +277,8 @@ add_subdirectory(libuser)
 #
 add_subdirectory(qsort)
 add_subdirectory(spam)
+add_subdirectory(CRC32)
+#add_subdirectory(stringsearch)
 #add_subdirectory(fatfs)
 #add_subdirectory(hello)
 #add_subdirectory(memmgt)

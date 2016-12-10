@@ -1,4 +1,6 @@
-#include"lib.h"
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
 
 #define UNLIMIT
 #define MAXARRAY 2000 /* this number, if too large, will cause a seg. fault!! */
@@ -5020,7 +5022,7 @@ int compare(const void *elem1, const void *elem2)
 
 
 int
-main(int argc, char *argv[]) {
+main() {
   int i,count=0;
   
   count = MAXARRAY;

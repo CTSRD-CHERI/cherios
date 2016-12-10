@@ -31,6 +31,8 @@
 #ifndef __STDLIB_H__
 #define	__STDLIB_H__
 
+#include"mips.h"
+
 void *	malloc(size_t n);
 void *	calloc(size_t n, size_t s);
 void 	free(void * p);

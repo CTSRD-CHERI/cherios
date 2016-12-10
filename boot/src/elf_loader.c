@@ -173,7 +173,9 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 		ERROR("alloc failed");
 		return NULL;
 	}
-    /* rewrite GOT with additional offset */
+    /* rewrite .got and .data.rel.local with additional offset
+     * However, more sections might need rewriting. XXX
+     */
     for(int i=0; i<hdr->e_shnum; i++) {
         if(elf_section(hdr, i)->sh_type == 3) { // This section is a string table
             strtable = elf_section(hdr, i)->sh_offset + addr;
@@ -182,7 +184,7 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
     }
 
     for(int i=0; i<hdr->e_shnum; i++) {
-        if(strcmp(strtable + elf_section(hdr, i)->sh_name, ".got") == 0) { //Hongyan debug
+        if(strcmp(strtable + elf_section(hdr, i)->sh_name, ".got") == 0 || strcmp(strtable + elf_section(hdr, i)->sh_name, ".data.rel.local") == 0) { //Hongyan debug
             //env->printf("GOT found at %p\n", elf_section(hdr, i)->sh_offset);
             char *gotstart = (char *)((size_t)addr + elf_section(hdr, i)->sh_offset);
             size_t gotsize = elf_section(hdr, i)->sh_size;
