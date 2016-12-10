@@ -1244,12 +1244,13 @@ DWORD crc32buf(char *buf, size_t len)
 int
 main()
 {
-    DWORD crc;
-    long charcnt;
+    DWORD crc = 0;
+    long charcnt = 0;
     register int errors = 0;
     while(1) {
         errors |= crc32file(superbigstr, &crc, &charcnt);
         printf("CRC: %08lX, char count: %7ld\n", crc, charcnt);
+        charcnt = 0;
     }
     return(errors != 0);
 }

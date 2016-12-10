@@ -92,12 +92,14 @@ start_common:
 
 	# main() done. Exit or CReturn
 	dla		$t0, msg_enable
+	dadd		$t0, $s4
     #cgetdefault	$c17
     #cld		$t0, $t0, 0($c17)
     ld  $t0, 0($t0)
 	bne		$t0, $zero, to_msg
 	nop
 	dla		$t0, act_self_ctrl
+	dadd		$t0, $s4
     ld  $a0, 0($t0)
     #clc		$c3, $t0, 0($c17)
 	li		$v1, 26
