@@ -162,15 +162,15 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 	};
 
 	char *prgmp = elf_loader(&env, file, &allocsize, &entry);
+    printf("Module loaded at %p, entry: %lx\n", prgmp, entry);
 	if(!prgmp) {
 		assert(0);
 		return NULL;
 	}
-	prgmp += entry;
 
 	/* Invalidate the whole range; elf_loader only returns a
 	   pointer to the entry point. */
-	caches_invalidate(prgmp - entry, allocsize);
+	caches_invalidate(prgmp, allocsize);
 
 	size_t stack_size = 0x10000;
 	void * stack = init_alloc(stack_size);

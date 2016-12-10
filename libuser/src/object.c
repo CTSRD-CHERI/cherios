@@ -33,6 +33,7 @@
 #include "cheric.h"
 #include "assert.h"
 #include "namespace.h"
+#include"stdio.h" //Hongyan debug
 
 void * act_self_ctrl = NULL;
 void * act_self_ref  = NULL;
@@ -62,6 +63,7 @@ void * act_ctrl_get_ref(void * ctrl) {
 		: [ref]"=r" (ref)
 		: [ctrl]"r" (ctrl)
 		: "v0", "v1", "a0");
+    printf("The ref is: %p\n", ref); //Hongyan debug
 	return ref;
 }
 
@@ -75,6 +77,7 @@ void * act_ctrl_get_id(void * ctrl) {
 		: [ref]"=r" (ref)
 		: [ctrl]"r" (ctrl)
 		: "v0", "v1", "a0");
+    printf("The ctrl ID is: %p\n", ref); //Hongyan debug
 	return ref;
 }
 
