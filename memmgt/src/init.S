@@ -36,4 +36,4 @@
 	.global start
 	.ent start
 start:
-	j start_common
+    j start_common

@@ -44,74 +44,69 @@ start_common:
 	# Save arguments
 	move		$s0, $a0
 	move		$s1, $a1
-	cmove		$c18, $c3
-	cmove		$c19, $c4
-	cmove		$c20, $c5
+	move		$s2, $a2
+	move		$s3, $a3
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
 	# Zero BSS.
-	cgetpcc		$c12
 	dla		$t0, crt_init_bss
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_init_bss
+	jalr    $t0
 	nop
 
 	# Initialise globals.
-	cgetpcc		$c12
 	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_init_globals
+	jalr    $t0
 	nop
 
 	# Call C constructors.
-	cgetpcc		$c12
 	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, crt_call_constructors
+	jalr    $t0
 	nop
 
 	# Call object init.
-	cmove		$c3, $c20
-	cmove		$c4, $c22
-	cmove		$c5, $c23
-	cmove		$c6, $c24
-	cgetpcc		$c12
+	move		$a0, $s3
+	move		$a1, $s5
+	move		$a2, $s6
+	move		$a3, $s7
 	dla		$t0, libuser_init
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, libuser_init
+	jalr    $t0
 	nop
 
 	# Restore arguments
 	move		$a0, $s0
 	move		$a1, $s1
-	cmove		$c3, $c18
-	cmove		$c4, $c19
+	move		$a2, $s2
 
 	# Call main().
-	cgetpcc		$c12
 	dla		$t0, main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+	dla		$t9, main
+	jalr    $t0
 	nop
 
 	# main() done. Exit or CReturn
 	dla		$t0, msg_enable
-	cgetdefault	$c17
-	cld		$t0, $t0, 0($c17)
+    #cgetdefault	$c17
+    #cld		$t0, $t0, 0($c17)
+    ld  $t0, 0($t0)
 	bne		$t0, $zero, to_msg
 	nop
 	dla		$t0, act_self_ctrl
-	clc		$c3, $t0, 0($c17)
-	li		$v0, 26
+    ld  $a0, 0($t0)
+    #clc		$c3, $t0, 0($c17)
+	li		$v1, 26
 	syscall
 
 to_msg:
 	# CReturn to go in waiting state.
-	cfromptr	$c1, $c1, $0
-	creturn
+	move    $v0, $0
+    jr  $ra
 
 	#First 'real' message. Go to appropriate handler
 	j msg_entry

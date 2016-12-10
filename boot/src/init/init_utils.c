@@ -75,11 +75,11 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 	frame.cf_c0	= c0;
 
 	/* set cap */
-	frame.cf_c22	= act_cap;
+	frame.mf_s5	= (register_t)act_cap;
 
 	/* set namespace */
-	frame.cf_c23	= ns_ref;
-	frame.cf_c24	= ns_id;
+	frame.mf_s6	= (register_t)ns_ref;
+	frame.mf_s7	= (register_t)ns_id;
 
 	void * ctrl = init_act_register(&frame, name);
 	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
