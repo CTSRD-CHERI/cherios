@@ -114,6 +114,8 @@ int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
 }
 
 #if 0
+#endif
+
 static inline Elf64_Shdr *elf_sheader(Elf64_Ehdr *hdr) {
 	return (Elf64_Shdr *)((char *)hdr + hdr->e_shoff);
 }
@@ -122,7 +124,6 @@ static inline Elf64_Shdr *elf_section(Elf64_Ehdr *hdr, int idx) {
 	assert(idx < hdr->e_shnum);
 	return &elf_sheader(hdr)[idx];
 }
-#endif
 
 static inline Elf64_Phdr *elf_pheader(Elf64_Ehdr *hdr) {
 	return (Elf64_Phdr *)((char *)hdr + hdr->e_phoff);
@@ -137,6 +138,7 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 
 void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry) {
 	char *addr = (char *)p;
+    char *strtable;
 	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(env, hdr)) {
@@ -171,6 +173,24 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 		ERROR("alloc failed");
 		return NULL;
 	}
+    /* rewrite GOT with additional offset */
+    for(int i=0; i<hdr->e_shnum; i++) {
+        if(elf_section(hdr, i)->sh_type == 3) { // This section is a string table
+            strtable = elf_section(hdr, i)->sh_offset + addr;
+            break;
+        }
+    }
+
+    for(int i=0; i<hdr->e_shnum; i++) {
+        if(strcmp(strtable + elf_section(hdr, i)->sh_name, ".got") == 0) { //Hongyan debug
+            //env->printf("GOT found at %p\n", elf_section(hdr, i)->sh_offset);
+            char *gotstart = (char *)((size_t)addr + elf_section(hdr, i)->sh_offset);
+            size_t gotsize = elf_section(hdr, i)->sh_size;
+            for(size_t j=0; j<gotsize; j+=8) {
+                *(uint64_t *)((size_t)gotstart + j) += (uint64_t)prgmp;
+            }
+        }
+    }
 
 	TRACE("Allocated %lx bytes of target memory", allocsize);
 

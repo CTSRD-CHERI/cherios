@@ -1,8 +1,9 @@
 /*-
- * Copyright (c) 1983 Regents of the University of California.
- * Copyright (c) 2015 SRI International
- * Copyright (c) 2016 Robert N. M. Watson
- * All rights reserved.
+ * Copyright (c) 1990, 1993
+ *	The Regents of the University of California.  All rights reserved.
+ *
+ * This code is derived from software contributed to Berkeley by
+ * Chris Torek.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,61 +30,26 @@
  * SUCH DAMAGE.
  */
 
+#if 0
 #if defined(LIBC_SCCS) && !defined(lint)
-/*static char *sccsid = "from: @(#)malloc.c	5.11 (Berkeley) 2/23/91";*/
-static char *rcsid = "$FreeBSD$";
+static char sccsid[] = "@(#)strcmp.c	8.1 (Berkeley) 6/4/93";
 #endif /* LIBC_SCCS and not lint */
-
-/*
- * malloc.c (Caltech) 2/21/82
- * Chris Kingsley, kingsley@cit-20.
- *
- * This is a very fast storage allocator.  It allocates blocks of a small
- * number of different sizes, and keeps free lists of each size.  Blocks that
- * don't exactly fit are passed up to the next larger size.  In this
- * implementation, the available sizes are 2^n-4 (or 2^n-10) bytes long.
- * This is designed for use in a virtual memory environment.
- */
+#include <sys/cdefs.h>
+__FBSDID("$FreeBSD$");
+#endif
 
 #include "mips.h"
-#include "cheric.h"
-#include "lib.h"
+#include "string.h"
 
-#include "malloc_heap.h"
-
-#pragma clang diagnostic ignored "-Wsign-compare"
-
-extern uint64_t __size_heap;
-
-caddr_t	pagepool_start, pagepool_end;
-char	*pool;
-
+/*
+ * Compare strings.
+ */
 int
-__morepages(int n __unused)
+strcmp(const char *s1, const char *s2)
 {
-	panic(__func__);
+	while (*s1 == *s2++)
+		if (*s1++ == '\0')
+			return (0);
+	return (*(const unsigned char *)s1 - *(const unsigned char *)(s2 - 1));
 }
 
-void
-__init_heap(void * heap)
-{
-	/*
-	 * XXXBD: assumes DDC is page aligned.
-	 */
-	assert((size_t)heap == roundup2((size_t)heap, pagesz));
-
-	//assert(cheri_getoffset(heap) == 0);
-	size_t heaplen = 0x400000; //XXX hardcoded heap len, needs fix
-	pagepool_start = (size_t)0;
-	pagepool_end = pagepool_start + heaplen;
-	pool = heap;
-}
-
-void *
-__rederive_pointer(void *ptr)
-{
-	if ((char *)ptr > pool)
-		return (void *)((char *)ptr - (char *)pool);
-
-	return (NULL);
-}

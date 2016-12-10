@@ -52,7 +52,6 @@ static page_t * book = NULL;
 
 /* fd and offset are currently unused and discarded in userspace */
 void *__mmap(void *addr, size_t length, int prot, int flags) {
-	int perms = CHERI_PERM_SOFT_1; /* can-free perm */
 	if(addr != NULL)
 		panic("mmap: addr must be NULL");
 
@@ -66,23 +65,25 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 	}
 
 	if(flags & MAP_PRIVATE) {
-		perms |= 1 << 6;
+		//perms |= 1 << 6;
 	} else if(flags & MAP_SHARED) {
-		perms |= 1 << 0;
+		//perms |= 1 << 0;
 	} else {
 		errno = EINVAL;
 		goto fail;
 	}
 
 	if(prot & PROT_READ) {
-		perms |= 1 << 2;
-		if(!(prot & PROT_NO_READ_CAP))
-			perms |= 1 << 4;
+		//perms |= 1 << 2;
+		if(!(prot & PROT_NO_READ_CAP)) {
+			//perms |= 1 << 4;
+        }
 	}
 	if(prot & PROT_WRITE) {
-		perms |= 1 << 3;
-		if(!(prot & PROT_NO_WRITE_CAP))
-			perms |= 1 << 5;
+		//perms |= 1 << 3;
+		if(!(prot & PROT_NO_WRITE_CAP)) {
+			//perms |= 1 << 5;
+        }
 	}
 
 	void * p = NULL;
@@ -153,11 +154,6 @@ int __munmap(void *addr, size_t length) {
 	free(addr);
 	return 0;
 #endif
-	if(!(cheri_getperm(addr) & CHERI_PERM_SOFT_1)) {
-		errno = EINVAL;
-		printf(KRED"BAD MUNMAP\n");
-		return -1;
-	}
 
 	bzero(addr, length); /* clear mem */
 
@@ -177,9 +173,9 @@ void mfree(void *addr) {
 
 void minit(char *heap) {
 	assert((size_t)heap == roundup2((size_t)heap, pagesz));
-	assert(cheri_getoffset(heap) == 0);
+	//assert(cheri_getoffset(heap) == 0);
 
-	size_t length = cheri_getlen(heap);
+	size_t length = 0x400000;
 
 	pages_nb = length / (pagesz + sizeof(page_t));
 	assert(pages_nb > 0);

@@ -121,7 +121,7 @@ set(ASMC_COMPILER_FLAGS
     -mcpu=mips4
 #-mabi=sandbox
     -cheri-linker
-#-fpic
+    -fpic
     -integrated-as
     -msoft-float
     -fcolor-diagnostics
@@ -275,10 +275,12 @@ endfunction()
 
 add_subdirectory(libuser)
 #
+add_subdirectory(qsort)
+add_subdirectory(spam)
 #add_subdirectory(fatfs)
-add_subdirectory(hello)
-add_subdirectory(memmgt)
-add_subdirectory(namespace)
+#add_subdirectory(hello)
+#add_subdirectory(memmgt)
+#add_subdirectory(namespace)
 #add_subdirectory(prga)
 #add_subdirectory(sockets)
 #add_subdirectory(test1a)
@@ -286,7 +288,7 @@ add_subdirectory(namespace)
 #add_subdirectory(test2a)
 #add_subdirectory(test2b)
 #add_subdirectory(test3)
-add_subdirectory(uart)
+#add_subdirectory(uart)
 #add_subdirectory(virtio-blk)
 #add_subdirectory(zlib)
 #add_subdirectory(zlib_test)

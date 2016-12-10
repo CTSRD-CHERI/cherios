@@ -52,32 +52,32 @@ start_common:
 	# runtime) for granted.
 
 	# Zero BSS.
-	dla		$t0, crt_init_bss
-	dla		$t9, crt_init_bss
-	jalr    $t0
-	nop
+    dla     $t9, crt_init_bss
+    dadd    $t9, $s4, $t9
+    jalr    $t9
+    nop
 
 	# Initialise globals.
-	dla		$t0, crt_init_globals
-	dla		$t9, crt_init_globals
-	jalr    $t0
-	nop
+    dla     $t9, crt_init_globals
+    dadd    $t9, $s4, $t9
+    jalr    $t9
+    nop
 
 	# Call C constructors.
-	dla		$t0, crt_call_constructors
-	dla		$t9, crt_call_constructors
-	jalr    $t0
-	nop
+    dla     $t9, crt_call_constructors
+    dadd    $t9, $s4, $t9
+    jalr    $t9
+    nop
 
 	# Call object init.
 	move		$a0, $s3
 	move		$a1, $s5
 	move		$a2, $s6
-	move		$a3, $s7
-	dla		$t0, libuser_init
-	dla		$t9, libuser_init
-	jalr    $t0
-	nop
+	move		$a3, $s7 # careful, s8 is used to remember pc for PIC
+    dla     $t9, libuser_init
+    dadd    $t9, $s4, $t9
+    jalr    $t9
+    nop
 
 	# Restore arguments
 	move		$a0, $s0
@@ -85,10 +85,10 @@ start_common:
 	move		$a2, $s2
 
 	# Call main().
-	dla		$t0, main
-	dla		$t9, main
-	jalr    $t0
-	nop
+    dla     $t9, main
+    dadd    $t9, $s4, $t9
+    jalr    $t9
+    nop
 
 	# main() done. Exit or CReturn
 	dla		$t0, msg_enable
@@ -109,5 +109,9 @@ to_msg:
     jr  $ra
 
 	#First 'real' message. Go to appropriate handler
-	j msg_entry
-	nop
+#j msg_entry
+#nop
+    dla $t9, msg_entry
+    dadd $t9, $s4, $t9
+    jr  $t9
+    nop

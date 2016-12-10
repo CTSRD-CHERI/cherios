@@ -42,6 +42,7 @@
 #define B_T1 0
 #define B_T2 0
 #define B_T3 0
+#define B_MI 1
 
 #define B_ENTRY(_type, _name, _arg, _daemon, _cond) \
 	{_type,	_cond, _name, _arg, _daemon, 0, NULL},
@@ -53,9 +54,11 @@
 	{m_fence, 1, NULL, 0, 0, 0, NULL},
 
 init_elem_t init_list[] = {
-	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
-	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
-	B_DENTRY(m_uart,	"uart.elf",		0,	1)
+	B_PENTRY(m_user,	"qsort.elf",		0, 	B_MI)
+	B_PENTRY(m_user,	"spam.elf",		0, 	B_MI)
+	//B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
+	//B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
+	//B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	//B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	//B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	//B_DENTRY(m_core,	"virtio-blk.elf",	0,	B_FS)
@@ -63,7 +66,7 @@ init_elem_t init_list[] = {
 	//B_FENCE
 	//B_PENTRY(m_fs,		"fatfs.elf",		0,	B_FS)
 	//B_FENCE
-	B_PENTRY(m_user,	"hello.elf",		0,	1)
+	//B_PENTRY(m_user,	"hello.elf",		0,	1)
 	//B_FENCE
 	//B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
 	//B_PENTRY(m_user,	"prga.elf",		2,	B_SO)

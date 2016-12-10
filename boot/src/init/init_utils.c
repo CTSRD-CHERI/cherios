@@ -54,14 +54,14 @@ static void * init_act_register(reg_frame_t * frame, const char * name) {
 	return ret;
 }
 
-static void * init_act_create(const char * name, void * c0, void * pcc, void * stack,
+static void * init_act_create(const char * name, void * c0, void *pcbase, void * pcc, void * stack,
 			      void * act_cap, void * ns_ref, void * ns_id,
 			      register_t rarg, const void * carg) {
 	reg_frame_t frame;
 	memset(&frame, 0, sizeof(reg_frame_t));
 
 	/* set pc */
-	frame.cf_pcc	= pcc;
+	frame.cf_pcc	= pcbase;
 	frame.mf_pc	= (register_t)pcc;
 
 	/* set stack */
@@ -80,6 +80,9 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 	/* set namespace */
 	frame.mf_s6	= (register_t)ns_ref;
 	frame.mf_s7	= (register_t)ns_id;
+
+    /* remember pc for PIC */
+	frame.mf_s4	= (register_t)pcbase;
 
 	void * ctrl = init_act_register(&frame, name);
 	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
@@ -179,7 +182,7 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 		return NULL;
 	}
 	void * pcc = (void *)((size_t)prgmp + entry);
-	void * ctrl = init_act_create(file, 0,
+	void * ctrl = init_act_create(file, 0, prgmp,
 				      pcc, (void *)((size_t)stack + stack_size), get_act_cap(type),
 				      ns_ref, ns_id, arg, carg);
 	if(ctrl == NULL) {

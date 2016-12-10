@@ -52,6 +52,7 @@
  * CHERI-aware Clang/LLVM, and full CP2 context switching, so not yet usable
  * in the kernel.
  */
+
 #define	cheri_getlen(x)		__builtin_cheri_get_cap_length(		\
 				    __DECONST(__capability void *, (x)))
 #define	cheri_getbase(x)	__builtin_cheri_get_cap_base(		\
@@ -105,6 +106,7 @@
 
 #define	cheri_setbounds(x, y)	__builtin_memcap_bounds_set(		\
 				    __DECONST(__capability void *, (x)), (y))
+
 
 /* Names for permission bits */
 #define CHERI_PERM_GLOBAL		(1 <<  0)

@@ -211,8 +211,6 @@ find_overhead(void * cp)
 {
 	union overhead *op;
 
-	if (!cheri_gettag(cp))
-		return (NULL);
 	op = __rederive_pointer(cp);
 	if (op == NULL) {
 		printf("%s: no region found for %#p\n", __func__, cp);
@@ -293,7 +291,7 @@ realloc(void *cp, size_t nbytes)
 	 * than the size of the original allocation.  This risks surprise
 	 * for some programmers, but to do otherwise risks information leaks.
 	 */
-	memcpy(res, cp, (nbytes <= cheri_getlen(cp)) ? nbytes : cheri_getlen(cp));
+	memcpy(res, cp, nbytes);
 	//res = cheri_andperm(res, cheri_getperm(cp));
 	free(cp);
 	return (res);

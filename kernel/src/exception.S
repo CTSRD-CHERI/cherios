@@ -134,9 +134,8 @@ kernel_cp2_exception_handler:
 		#
 		# Normal function invocation of kernel_exception().
 		#
-		dla		$t0, kernel_exception
 		dla		$t9, kernel_exception
-		jalr		$t0
+		jalr		$t9
 		nop
 
 		#

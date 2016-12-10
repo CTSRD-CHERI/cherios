@@ -58,21 +58,18 @@ cherios_init_jump_target:
 	# runtime) for granted.
 
 	# Zero BSS.
-	dla		$t0, crt_init_bss
 	dla		$t9, crt_init_bss
-    jalr    $t0
+    jalr    $t9
 	nop
 
 	# Initialise globals.
-	dla		$t0, crt_init_globals
 	dla		$t9, crt_init_globals
-    jalr    $t0
+    jalr    $t9
 	nop
 
 	# Call C constructors.
-	dla		$t0, crt_call_constructors
 	dla		$t9, crt_call_constructors
-    jalr    $t0
+    jalr    $t9
 	nop
 
 	# On the off chance that cherios_main() has been defined as having
@@ -80,9 +77,8 @@ cherios_init_jump_target:
 	dli		$a0, 0
 
 	# Call init_main().
-	dla		$t0, init_main
 	dla		$t9, init_main
-    jalr    $t0
+    jalr    $t9
 	nop
 
 	# Bootloader done. Go in waiting state. #fixme: revoke object

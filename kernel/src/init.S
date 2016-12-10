@@ -88,21 +88,18 @@ start:
 	# runtime) for granted.
 
 	# Zero BSS.
-	dla		$t0, crt_init_bss
 	dla		$t9, crt_init_bss
-    jalr    $t0
+    jalr    $t9
 	nop
 
 	# Initialise globals.
-	dla		$t0, crt_init_globals
 	dla		$t9, crt_init_globals
-    jalr    $t0
+    jalr    $t9
 	nop
 
 	# Call C constructors.
-	dla		$t0, crt_call_constructors
 	dla		$t9, crt_call_constructors
-    jalr    $t0
+    jalr    $t9
 	nop
 
 	# Pass arguments to cherios_main(int, void*) in a0 and c3.
@@ -110,9 +107,8 @@ start:
 	cld	$a1, $0, 4*REG_SIZE($kr1c)
 
 	# Call cherios_main().
-	dla		$t0, cherios_main
 	dla		$t9, cherios_main
-	jalr		$t0
+	jalr		$t9
 	nop
 
 	# Restore context from the register frame set by the scheduler,

@@ -3,7 +3,7 @@
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,15 +28,5 @@
  * SUCH DAMAGE.
  */
 
-#ifndef __STDLIB_H__
-#define	__STDLIB_H__
+#include "all.h"
 
-void *	malloc(size_t n);
-void *	calloc(size_t n, size_t s);
-void 	free(void * p);
-
-void 	abort(void);
-void	exit(int status);
-void qsort(void *a, size_t n, size_t es, int (*cmp)(const void *, const void *));
-
-#endif /* !__STDLIB_H__ */
