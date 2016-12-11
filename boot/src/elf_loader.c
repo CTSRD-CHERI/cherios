@@ -185,8 +185,7 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 
     for(int i=0; i<hdr->e_shnum; i++) {
         if(strcmp(strtable + elf_section(hdr, i)->sh_name, ".got") == 0 || 
-                strcmp(".data.rel.local", strtable + elf_section(hdr, i)->sh_name) == 0 ||
-                strcmp(".data.rel", strtable + elf_section(hdr, i)->sh_name) == 0) { //Hongyan debug
+                strncmp(".data.rel", strtable + elf_section(hdr, i)->sh_name, 9) == 0) { //Hongyan debug
             //env->printf("GOT found at %p\n", elf_section(hdr, i)->sh_offset);
             char *gotstart = (char *)((size_t)addr + elf_section(hdr, i)->sh_offset);
             size_t gotsize = elf_section(hdr, i)->sh_size;

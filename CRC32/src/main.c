@@ -19,7 +19,7 @@
 
 /* Need an unsigned type capable of holding 32 bits; */
 
-typedef DWORD UNS_32_BITS;
+typedef WORD UNS_32_BITS;
 
 /* Copyright (C) 1986 Gary S. Brown.  You may use this program, or
    code or tables extracted from it, as desired without restriction.*/
@@ -1204,14 +1204,14 @@ Hosting by jambit GmbH. \
  \
 Cover of TLPI"; 
 
-DWORD updateCRC32(unsigned char ch, DWORD crc)
+WORD updateCRC32(unsigned char ch, WORD crc)
 {
       return UPDC32(ch, crc);
 }
 
-Boolean_T crc32file(const char *name, DWORD *crc, long *charcnt)
+Boolean_T crc32file(const char *name, WORD *crc, long *charcnt)
 {
-      register DWORD oldcrc32;
+      register WORD oldcrc32;
       register int c;
       const char *ptr = name;
 
@@ -1226,9 +1226,9 @@ Boolean_T crc32file(const char *name, DWORD *crc, long *charcnt)
       return Success_;
 }
 
-DWORD crc32buf(char *buf, size_t len)
+WORD crc32buf(char *buf, size_t len)
 {
-      register DWORD oldcrc32;
+      register WORD oldcrc32;
 
       oldcrc32 = 0xFFFFFFFF;
 
@@ -1244,12 +1244,12 @@ DWORD crc32buf(char *buf, size_t len)
 int
 main()
 {
-    DWORD crc = 0;
+    WORD crc = 0;
     long charcnt = 0;
     register int errors = 0;
     while(1) {
         errors |= crc32file(superbigstr, &crc, &charcnt);
-        printf("CRC: %08lX, char count: %7ld\n", crc, charcnt);
+        printf("CRC: %08X, char count: %7ld\n", crc, charcnt);
         charcnt = 0;
     }
     return(errors != 0);
