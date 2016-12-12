@@ -113,8 +113,13 @@ static void * get_act_cap(module_t type) {
          */
 		break;
 	case m_memmgt:{}
-		//size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
+        /* heap length not passed in the MIPS case
+        if(caplen)
+            caplen = (size_t)&__stop_heap - (size_t)&__start_heap;
+         */
 		void * heap = &__start_heap;
+        *(size_t *)((size_t)heap + 0x100) = &__stop_heap - &__start_heap; // super ugly hack, put the length of the heap at heap + 0x100
+        printf("Size of the heap: 0x%lx\n", &__stop_heap - &__start_heap);
         cap = heap;
         /*
 		heap = cheri_setbounds(heap, heaplen);

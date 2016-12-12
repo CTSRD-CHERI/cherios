@@ -63,7 +63,7 @@ void	release_init(void);
 
 void *	__mmap(void *addr, size_t length, int prot, int flags);
 int	__munmap(void *addr, size_t length);
-void	minit(char *heap);
+void	minit(char *heap, size_t heaplen);
 void	mfree(void *addr);
 
 extern	size_t pagesz;

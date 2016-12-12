@@ -52,6 +52,7 @@ int main(void) {
 
 	/* Get capability to heap */
 	void * heap = act_get_cap();
+    size_t heaplen = *(size_t *)((size_t)heap + 0x100);
 	//CHERI_PRINT_CAP(heap);
 	assert(heap != NULL);
 
@@ -61,10 +62,12 @@ int main(void) {
 	 */
 	pagesz = CHERIOS_PAGESIZE;
 	#if MMAP
-	minit(heap);
+	minit(heap, heaplen);
+    printf("Initialize(minit) the heap with base: %p, length %lx.\n", heap, heaplen);
 	#else
 	init_pagebucket();
-	__init_heap(heap);
+	__init_heap(heap, heaplen);
+    printf("Initialize(__init_heap) the heap with base: %p, length %lx.\n", heap, heaplen);
 	#endif
 
 	/* init release mecanism */

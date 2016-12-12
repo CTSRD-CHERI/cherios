@@ -171,11 +171,11 @@ void mfree(void *addr) {
 	book[page].status = page_unused;
 }
 
-void minit(char *heap) {
+void minit(char *heap, size_t heaplen) {
 	assert((size_t)heap == roundup2((size_t)heap, pagesz));
 	//assert(cheri_getoffset(heap) == 0);
 
-	size_t length = 0x400000;
+	size_t length = heaplen;
 
 	pages_nb = length / (pagesz + sizeof(page_t));
 	assert(pages_nb > 0);
@@ -190,4 +190,5 @@ void minit(char *heap) {
 
 	book[0].status = page_unused;
 	book[0].len = pages_nb;
+    printf("Initialize the heap with base: %p, length %ld.\n", heap, length);
 }

@@ -53,8 +53,6 @@ static char *rcsid = "$FreeBSD$";
 
 #pragma clang diagnostic ignored "-Wsign-compare"
 
-extern uint64_t __size_heap;
-
 caddr_t	pagepool_start, pagepool_end;
 char	*pool;
 
@@ -65,7 +63,7 @@ __morepages(int n __unused)
 }
 
 void
-__init_heap(void * heap)
+__init_heap(void * heap, size_t length)
 {
 	/*
 	 * XXXBD: assumes DDC is page aligned.
@@ -73,7 +71,7 @@ __init_heap(void * heap)
 	assert((size_t)heap == roundup2((size_t)heap, pagesz));
 
 	//assert(cheri_getoffset(heap) == 0);
-	size_t heaplen = 0x400000; //XXX hardcoded heap len, needs fix
+	size_t heaplen = length;
 	pagepool_start = (size_t)0;
 	pagepool_end = pagepool_start + heaplen;
 	pool = heap;

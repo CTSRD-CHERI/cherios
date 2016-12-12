@@ -30,7 +30,10 @@
 
 INCLUDE "common.ld"
 
-__size_memory		= 0x1000000;	/* Start simple: 16M above load address */
+/* It seems when the __stop_heap reaches 0xffffffff9......., things start to
+ * go wrong, therefore this is the largest __size_memory we can get
+ */
+__size_memory		= 0xFF00000;	/* Start simple: 255M above load address */
 __size_init_stack	= 0x10000;	/* Start simple: 64K */
 
 CAP_ALIGN = 0x20;
