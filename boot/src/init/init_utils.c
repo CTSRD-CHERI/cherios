@@ -165,6 +165,7 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 	};
 
 	char *prgmp = elf_loader(&env, file, &allocsize, &entry);
+    printf("Module loaded at %p, entry: %lx\n", prgmp, entry);
 	if(!prgmp) {
 		assert(0);
 		return NULL;

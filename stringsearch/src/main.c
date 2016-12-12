@@ -1405,7 +1405,7 @@ main()
 "parts",
 "more",
 "me",
-NULL};
+"\0haha"};
       const char *search_strings[] = { "Kurt Vonneguts Commencement Address at",
 "MIT Ladies and gentlemen of",
 "the class of 97 Wear",
@@ -2741,7 +2741,7 @@ NULL};
 };
       int i;
 
-      for (i = 0; find_strings[i]; i++)
+      for (i = 0; find_strings[i][0]; i++)
       {
             init_search(find_strings[i]);
             here = strsearch(search_strings[i]);
@@ -2749,7 +2749,7 @@ NULL};
                   here ? "" : " not", search_strings[i]);
             if (here)
                   printf(" [\"%s\"]", here);
-            printf("\n");
+            putchar('\n');
       }
 
       return 0;
