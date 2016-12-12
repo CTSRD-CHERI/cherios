@@ -74,11 +74,8 @@ int msg_push(int dest, int src, void * identifier, uint64_t sync_token) {
 
 	if(kernel_acts[dest].sched_status == sched_waiting) {
 		sched_d2a(dest, sched_schedulable);
-        kernel_printf("The destination %d is sched_waiting and turned into schedulable\n", dest);
-	} else {
-        kernel_printf("The destination %d is NOT schedulable\n", dest);
-    }
-	return 0;
+	}
+    return 0;
 }
 
 void msg_pop(aid_t act) {

@@ -108,7 +108,10 @@ end:
 	dla		$t1, sync_token
 	dadd    $t1, $s4, $t1
 	cld		$t2, $t1, 0($c17)
-	jr  $ra
+#jr  $ra
+    li $v1, 1010
+    syscall
+    nop
 
 	#We are scheduled again: new message
 #b msg_entry

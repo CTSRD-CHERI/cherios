@@ -83,4 +83,7 @@ cherios_init_jump_target:
 
 	# Bootloader done. Go in waiting state. #fixme: revoke object
     move    $v0, $0
-    jr  $ra
+#jr  $ra
+    li $v1, 1010
+    syscall
+    nop

@@ -181,6 +181,10 @@ void kernel_exception_syscall(void)
 		KERNEL_TRACE("exception", "(CCall4)Syscall %ld", sysn);
         kernel_ccall(4);
 		break;
+	case 1010:
+		KERNEL_TRACE("exception", "(CCall4)Syscall %ld", sysn);
+        kernel_creturn();
+		break;
 	default:
 		KERNEL_ERROR("unknown syscall '%d'", sysn);
 		kernel_freeze();
