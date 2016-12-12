@@ -38,7 +38,6 @@ static void sched_schedule(aid_t act) {
 
 	/* Activation ready to be run */
 	kernel_acts[act].sched_status = sched_runnable;
-	kernel_printf("act %d changed to runnable\n", act);
 }
 
 /* todo: sleep cpu */

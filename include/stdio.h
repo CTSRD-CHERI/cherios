@@ -47,6 +47,7 @@ int	vprintf(const char *fmt, va_list ap);
 int	fprintf(FILE * f, const char *fmt, ...);
 int	puts(const char *s);
 int	putc(int character, FILE * stream);
+int	putchar(int character);
 int	fputc(int character, FILE * stream);
 void	panic(const char *str) __dead2;
 

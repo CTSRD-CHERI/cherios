@@ -99,6 +99,11 @@ int putc(int character, FILE *f) {
 	return fputc(character, f);
 }
 
+int putchar(int character) {
+    uart_putchar(character, NULL);
+    return 0;
+}
+
 int fputc(int character, FILE *f) {
 	if(f != NULL) {
 		panic("fprintf not implememted");

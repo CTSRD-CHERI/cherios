@@ -5027,11 +5027,11 @@ main() {
   
   count = MAXARRAY;
   printf("\nSorting %d elements.\n\n",count);
-  while(1) {
+  //while(1) {
       qsort(qstring, count, 128 * sizeof(char),compare);
       
       for(i=0;i<count;i++)
         printf("%s\n", qstring[i]);
-  }
+  //}
   return 0;
 }

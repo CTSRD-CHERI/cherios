@@ -35,6 +35,7 @@
 
 void *	malloc(size_t n);
 void *	calloc(size_t n, size_t s);
+void *	realloc(void *oldmem, size_t s);
 void 	free(void * p);
 
 void 	abort(void);

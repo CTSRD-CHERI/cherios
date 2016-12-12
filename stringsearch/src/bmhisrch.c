@@ -49,7 +49,7 @@ void bmhi_init(const char *pattern)
       pat = realloc ((void*)pat, patlen);
       if (!pat)
             exit(1);
-      else  atexit(bhmi_cleanup);
+      //else  atexit(bhmi_cleanup); XXX remember to put this back
       for (i=0; i < patlen; i++)
             pat[i] = toupper(pattern[i]);
 
@@ -60,11 +60,11 @@ void bmhi_init(const char *pattern)
       for ( i = 0; i < patlen - 1; ++i )
       {
             skip[        pat[i] ] = patlen - i - 1;
-            skip[tolower(pat[i])] = patlen - i - 1;
+            skip[(int)tolower(pat[i])] = patlen - i - 1;
       }
       lastpatchar = pat[patlen - 1];
       skip[        lastpatchar ] = LARGE;
-      skip[tolower(lastpatchar)] = LARGE;
+      skip[(int)tolower(lastpatchar)] = LARGE;
       skip2 = patlen;                     /* Horspool's fixed second shift */
       for (i = 0; i < patlen - 1; ++i)
       {

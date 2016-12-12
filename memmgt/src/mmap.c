@@ -52,7 +52,6 @@ static page_t * book = NULL;
 
 /* fd and offset are currently unused and discarded in userspace */
 void *__mmap(void *addr, size_t length, int prot, int flags) {
-    printf("mmap call received  with arguments %p    %lx    %x    %x.\n", addr, length, prot, flags); //Hongyan debug
 	if(addr != NULL)
 		panic("mmap: addr must be NULL");
 

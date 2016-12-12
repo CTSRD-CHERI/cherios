@@ -146,6 +146,7 @@ start:
 	move	$k0, $zero
 	move	$k1, $zero
 	eret
+    nop
 start_end:
 	.size start, start_end - start
 	.end start

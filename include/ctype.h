@@ -30,3 +30,5 @@
 
 char toupper(char c);
 char * strtoupper(char * s);
+char tolower(char c);
+char * strtolower(char * s);

@@ -33,7 +33,6 @@
 #include "cheric.h"
 #include "assert.h"
 #include "namespace.h"
-#include"stdio.h" //Hongyan debug
 
 void * act_self_ctrl = NULL;
 void * act_self_ref  = NULL;
@@ -63,7 +62,6 @@ void * act_ctrl_get_ref(void * ctrl) {
 		: [ref]"=r" (ref)
 		: [ctrl]"r" (ctrl)
 		: "v0", "v1", "a0");
-    printf("The ref is: %p\n", ref); //Hongyan debug
 	return ref;
 }
 
@@ -77,7 +75,6 @@ void * act_ctrl_get_id(void * ctrl) {
 		: [ref]"=r" (ref)
 		: [ctrl]"r" (ctrl)
 		: "v0", "v1", "a0");
-    printf("The ctrl ID is: %p\n", ref); //Hongyan debug
 	return ref;
 }
 
@@ -157,6 +154,7 @@ void * get_cookie(void * cb, void * cs) {
 #define CCALL_INSTR(n) \
         "li $v1, " #n "\n" \
         "syscall \n" \
+        "nop \n" \
 
 #define CCALL_INOPS [cb]"r" (cb), [cs]"r" (cs), [method_nb]"r" (method_nb)
 #define CCALL_CLOBS "v0","v1","a0","a1","a2","a3","t0","t1"

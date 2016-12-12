@@ -188,6 +188,7 @@ kernel_cp2_exception_handler:
 		move	$k1, $zero
 
 		eret
+        nop
 
 kernel_cp2_exception_handler_end:
 		.size kernel_cp2_exception_handler, kernel_cp2_exception_handler_end - kernel_cp2_exception_handler

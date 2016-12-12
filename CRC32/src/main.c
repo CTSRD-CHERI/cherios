@@ -1247,10 +1247,10 @@ main()
     WORD crc = 0;
     long charcnt = 0;
     register int errors = 0;
-    while(1) {
+    //while(1) {
         errors |= crc32file(superbigstr, &crc, &charcnt);
         printf("CRC: %08X, char count: %7ld\n", crc, charcnt);
         charcnt = 0;
-    }
+    //}
     return(errors != 0);
 }

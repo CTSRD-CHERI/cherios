@@ -34,6 +34,7 @@
 static mspace mymspace = NULL;
 #define mymalloc(bytes)  mspace_malloc(mymspace, bytes)
 #define mycalloc(elems, size)  mspace_calloc(mymspace, elems, size)
+#define myrealloc(oldmem, size)  mspace_realloc(mymspace, oldmem, size)
 #define myfree(mem)  mspace_free(mymspace, mem)
 
 static inline void alloc_init() {
@@ -50,6 +51,11 @@ void * malloc(size_t n) {
 void * calloc(size_t n, size_t s) {
 	alloc_init();
 	return mycalloc(n, s);
+}
+
+void * realloc(void *mem, size_t s) {
+	alloc_init();
+	return myrealloc(mem, s);
 }
 
 void free(void * p) {

@@ -73,7 +73,7 @@ int
 main()
 {
       char *here;
-      char *find_strings[] = { "Kur",
+      const char *find_strings[] = { "Kur",
 "gent",
 "lass",
 "suns",
@@ -1406,7 +1406,7 @@ main()
 "more",
 "me",
 NULL};
-      char *search_strings[] = { "Kurt Vonneguts Commencement Address at",
+      const char *search_strings[] = { "Kurt Vonneguts Commencement Address at",
 "MIT Ladies and gentlemen of",
 "the class of 97 Wear",
 "sunscreen If I could offer",
@@ -2749,7 +2749,7 @@ NULL};
                   here ? "" : " not", search_strings[i]);
             if (here)
                   printf(" [\"%s\"]", here);
-            putchar('\n');
+            printf("\n");
       }
 
       return 0;

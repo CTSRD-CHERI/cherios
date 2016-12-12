@@ -51,7 +51,6 @@ static void kernel_ccall_core(int cflags) {
 	/* cb is the activation and cs the identifier */
 	void * cs = (void *)kernel_exception_framep_ptr->mf_t1;
 	act_t * cb = (void *)kernel_exception_framep_ptr->mf_t0;
-    kernel_printf("Calling(%d) with method number: %d, aid: %d, with arguments %lx    %lx    %lx    %lx.\n", cflags, kernel_exception_framep_ptr->mf_v0, cb->aid, kernel_exception_framep_ptr->mf_a0, kernel_exception_framep_ptr->mf_a1, kernel_exception_framep_ptr->mf_a2, kernel_exception_framep_ptr->mf_a3); //Hongyan debug
 
 	if(cb->status != status_alive) {
 		KERNEL_ERROR("Trying to CCall revoked activation %s-%d",
