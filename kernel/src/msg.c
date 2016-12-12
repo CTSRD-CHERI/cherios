@@ -68,11 +68,16 @@ int msg_push(int dest, int src, void * identifier, uint64_t sync_token) {
 	queue->msg[next_slot].v1  = kernel_exception_framep[src].mf_v1;
 	queue->msg[next_slot].t2  = sync_token;
 
+    kernel_printf("Pushing to queue(4) with method_nb: %d, with arguments %lx    %lx    %lx    %lx.\n", queue->msg[next_slot].v0, queue->msg[next_slot].a0, queue->msg[next_slot].a1, queue->msg[next_slot].a2, queue->msg[next_slot].a3);
+
 	queue->end = safe(queue->end+1, qmask);
 
 	if(kernel_acts[dest].sched_status == sched_waiting) {
 		sched_d2a(dest, sched_schedulable);
-	}
+        kernel_printf("The destination %d is sched_waiting and turned into schedulable\n", dest);
+	} else {
+        kernel_printf("The destination %d is NOT schedulable\n", dest);
+    }
 	return 0;
 }
 
@@ -95,6 +100,7 @@ void msg_pop(aid_t act) {
 	kernel_exception_framep[act].cf_idc = queue->msg[start].idc;
 	kernel_exception_framep[act].mf_t2  = queue->msg[start].t2;
 
+    kernel_printf("Popping queue(4) with method_nb: %d, with arguments %lx    %lx    %lx    %lx.\n", kernel_exception_framep[act].mf_v0, kernel_exception_framep[act].mf_a0, kernel_exception_framep[act].mf_a1, kernel_exception_framep[act].mf_a2, kernel_exception_framep[act].mf_a3); 
 	queue->start = safe(start+1, qmask);
 }
 

@@ -42,6 +42,8 @@
 .endif
 .endif
 
+.set REG_SIZE_BITS, 3
+
 # Dispatch CCalls
 
 	.text
@@ -53,13 +55,20 @@ msg_entry:
 	nop
 
 	dla		$t0, msg_methods
+	dadd    $t0, $s4, $t0
 	dla		$t1, msg_methods_nb
-	b		call
+	dadd    $t1, $s4, $t1
+#b		call
+    dla $t9, call
+    dadd    $t9, $s4, $t9
+    jr  $t9
 	nop
 
 control:
 	dla		$t0, ctrl_methods
+	dadd    $t0, $s4, $t0
 	dla		$t1, ctrl_methods_nb
+    dadd    $t1, $s4, $t1
 	sub		$v0, $0, $v0
 call:
 	cld		$t1, $t1, 0($c17)
@@ -69,32 +78,43 @@ call:
 
 	#Save sync_token
 	dla		$t1, sync_token
-	csc		$c1, $t1, 0($c17)
+	dadd    $t1, $s4, $t1
+	csd		$t2, $t1, 0($c17)
 
-	sll		$v0, $v0, CAP_SIZE_BITS
+	sll		$v0, $v0, REG_SIZE_BITS
 	add		$t0, $t0, $v0
-	clc		$c12, $t0, 0($c17)
-	cjalr		$c12, $c17
+	cld		$t9, $t0, 0($c17)
+	jalr    $t9
 	nop
-	b		end
+#b		end
+    dla $t9, end
+    dadd    $t9, $s4, $t9
+    jr  $t9
 	nop
 
 overflow:
 	move		$v0, $0
 	move		$v1, $0
-	cfromptr	$c3, $c3, $0
-	b		end
+#	cfromptr	$c3, $c3, $0
+#b		end
+    dla $t9, end
+    dadd    $t9, $s4, $t9
+    jr  $t9
 	nop
 
 end:
 	#Restore sync_token
 	cgetdefault	$c17
 	dla		$t1, sync_token
-	clc		$c1, $t1, 0($c17)
-	creturn
+	dadd    $t1, $s4, $t1
+	cld		$t2, $t1, 0($c17)
+	jr  $ra
 
 	#We are scheduled again: new message
-	b msg_entry
+#b msg_entry
+    dla $t9, msg_entry
+    dadd    $t9, $s4, $t9
+    jr  $t9
 	nop
 msg_entry_end:
 	.end msg_entry

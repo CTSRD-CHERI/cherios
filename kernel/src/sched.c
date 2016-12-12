@@ -38,6 +38,7 @@ static void sched_schedule(aid_t act) {
 
 	/* Activation ready to be run */
 	kernel_acts[act].sched_status = sched_runnable;
+	kernel_printf("act %d changed to runnable\n", act);
 }
 
 /* todo: sleep cpu */
@@ -65,6 +66,7 @@ static u32   squeue_a_end = 0;
 void sched_create(aid_t act) {
 	KERNEL_TRACE("sched", "create %s-%ld", kernel_acts[act].name, act);
 	kernel_acts[act].sched_status = sched_waiting;
+	kernel_printf("act %d changed to waiting\n", act);
 }
 
 void sched_delete(aid_t act) {
@@ -73,6 +75,7 @@ void sched_delete(aid_t act) {
 		QDEL(act, squeue_a, aqueue);
 	}
 	kernel_acts[act].status = status_terminated;
+	kernel_printf("act %d changed to terminated\n", act);
 }
 
 void sched_d2a(aid_t act, sched_status_e status) {
@@ -80,6 +83,7 @@ void sched_d2a(aid_t act, sched_status_e status) {
 	QADD(act, squeue_a, aqueue);
 	kernel_assert((status == sched_runnable) || (status == sched_schedulable));
 	kernel_acts[act].sched_status = status;
+	kernel_printf("act %d changed to %d\n", status);
 }
 
 void sched_a2d(aid_t act, sched_status_e status) {
@@ -87,6 +91,7 @@ void sched_a2d(aid_t act, sched_status_e status) {
 	QDEL(act, squeue_a, aqueue);
 	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
 	kernel_acts[act].sched_status = status;
+	kernel_printf("act %d changed to %d\n", status);
 }
 
 static aid_t sched_picknext(void) {
@@ -110,7 +115,9 @@ void sched_reschedule(aid_t hint) {
 	}
 	if(kernel_acts[hint].sched_status == sched_schedulable) {
 		sched_schedule(hint);
-	}
+	} else {
+        kernel_printf("aid :%d is Not schedulable!\n", hint); //Hongyan debug
+    }
 	if(kernel_acts[hint].sched_status != sched_runnable) {
 		goto again;
 	}
