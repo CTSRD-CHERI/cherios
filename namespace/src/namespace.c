@@ -37,9 +37,11 @@ typedef struct {
 
 const int bind_len = 0x80;
 bind_t bind[bind_len];
+int count;
 
 void ns_init(void) {
 	bzero(bind, sizeof(bind));
+	count = 0;
 }
 
 static int validate_idx(int nb) {
@@ -89,7 +91,8 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id)
 
 	bind[nb].act_reference  = act_reference;
 	bind[nb].act_default_id = act_default_id;
-	printf("%s: registered at port %d\n", __func__, nb);
+	printf("%s: #%d registered at port %d\n", __func__, count, nb);
+	count++;
 	return 0;
 }
 
@@ -98,4 +101,8 @@ int ns_register(int nb, void * act_reference, void * act_default_id) {
 		return -1;
 
 	return ns_register_core(nb, act_reference, act_default_id);
+}
+
+int ns_get_num_services(void) {
+	return count;
 }

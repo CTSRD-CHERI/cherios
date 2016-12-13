@@ -52,3 +52,9 @@ void * namespace_get_ref(int nb) {
 void * namespace_get_id(int nb) {
 	return ccall_r_c(namespace_ref, namespace_id, 2, nb);
 }
+
+int namespace_get_num_services(void) {
+	if (namespace_ref == NULL || namespace_id == NULL)
+		return -1;
+	return ccall_n_r(namespace_ref, namespace_id, 3);
+}

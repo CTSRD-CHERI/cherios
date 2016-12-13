@@ -35,4 +35,5 @@ void	ns_init(void);
 int	ns_register(int nb, void * act_reference, void * act_default_id);
 void *	ns_get_reference(int nb);
 void *	ns_get_identifier(int nb);
+int	ns_get_num_services(void);
 
