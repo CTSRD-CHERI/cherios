@@ -74,6 +74,7 @@ void init_alloc_init(void) {
 void init_alloc_enable_system(void * c_memmgt) {
 	mmap_set_act(act_ctrl_get_ref(c_memmgt), act_ctrl_get_id(c_memmgt));
 	system_alloc = 1;
+    printf("System alloc (mmap) enabled.\n");
 }
 
 void *init_alloc(size_t s) {

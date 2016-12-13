@@ -50,7 +50,6 @@
 	.global msg_entry
 	.ent msg_entry
 msg_entry:
-	cgetdefault	$c17
 	bltz		$v0, control
 	nop
 
@@ -79,7 +78,7 @@ call:
 	#Save sync_token
 	dla		$t1, sync_token
 	dadd    $t1, $s4, $t1
-	csd		$t2, $t1, 0($c17)
+	sd		$t2, 0($t1)
 
 	sll		$v0, $v0, REG_SIZE_BITS
 	add		$t0, $t0, $v0
@@ -104,10 +103,9 @@ overflow:
 
 end:
 	#Restore sync_token
-	cgetdefault	$c17
 	dla		$t1, sync_token
 	dadd    $t1, $s4, $t1
-	cld		$t2, $t1, 0($c17)
+	ld		$t2, 0($t1)
 #jr  $ra
     li $v1, 1010
     syscall

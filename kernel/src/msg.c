@@ -64,7 +64,6 @@ int msg_push(int dest, int src, void * identifier, uint64_t sync_token) {
 	queue->msg[next_slot].a3  = kernel_exception_framep[src].mf_a3;
 
 	queue->msg[next_slot].v0  = kernel_exception_framep[src].mf_v0;
-	queue->msg[next_slot].idc = identifier;
 	queue->msg[next_slot].v1  = kernel_exception_framep[src].mf_v1;
 	queue->msg[next_slot].t2  = sync_token;
 
@@ -92,7 +91,6 @@ void msg_pop(aid_t act) {
 
 	kernel_exception_framep[act].mf_v0  = queue->msg[start].v0;
 	kernel_exception_framep[act].mf_v1  = queue->msg[start].v1;
-	kernel_exception_framep[act].cf_idc = queue->msg[start].idc;
 	kernel_exception_framep[act].mf_t2  = queue->msg[start].t2;
 
 	queue->start = safe(start+1, qmask);

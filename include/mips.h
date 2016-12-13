@@ -415,7 +415,6 @@ typedef struct reg_frame {
 
 	/* Program counter. */
 	register_t	mf_pc;
-    void *cf_idc;
 } reg_frame_t;
 #endif
 
