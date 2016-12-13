@@ -38,7 +38,7 @@
 /* We only create activations for now, no delete */
 struct reg_frame		kernel_exception_framep[MAX_ACTIVATIONS];
 struct reg_frame *		kernel_exception_framep_ptr;
-act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
+act_t				kernel_acts[MAX_ACTIVATIONS];
 aid_t 				kernel_curr_act;
 aid_t				kernel_next_act;
 
@@ -71,9 +71,6 @@ void act_init(boot_info_t *bi) {
 
 void kernel_skip_instr(aid_t act) {
 	kernel_exception_framep[act].mf_pc += 4; /* assumes no branch delay slot */
-	void * pcc = (void *) kernel_exception_framep[act].cf_pcc;
-	pcc = (char *)pcc + 4;
-	kernel_exception_framep[act].cf_pcc = pcc;
 }
 
 static void * act_create_ref(aid_t aid) {

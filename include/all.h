@@ -30,7 +30,6 @@
 
 #include "mips.h"
 #include "assert.h"
-#include "cheric.h"
 #include "colors.h"
 #include "ctype.h"
 #include "debug.h"

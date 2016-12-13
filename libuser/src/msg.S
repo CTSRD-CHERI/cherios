@@ -32,15 +32,15 @@
 .set nobopt
 .set noat
 
-.ifeq _MIPS_SZCAP-256
-.set CAP_SIZE_BITS, 5
-.else
-.ifeq _MIPS_SZCAP-128
-.set CAP_SIZE_BITS, 4
-.else
-.error "Unknown cap size"
-.endif
-.endif
+#.ifeq _MIPS_SZCAP-256
+#.set CAP_SIZE_BITS, 5
+#.else
+#.ifeq _MIPS_SZCAP-128
+#.set CAP_SIZE_BITS, 4
+#.else
+#.error "Unknown cap size"
+#.endif
+#.endif
 
 .set REG_SIZE_BITS, 3
 

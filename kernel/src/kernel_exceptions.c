@@ -85,6 +85,7 @@ static inline const char * getcapcause(int cause) {
 	#endif
 }
 
+#if 0
 static void kernel_exception_capability(void) {
 	register_t capcause = cheri_getcause();
 	int cause = (capcause >> 8) & 0x1F;
@@ -109,6 +110,7 @@ static void kernel_exception_capability(void) {
 	regdump(reg_num);
 	kernel_freeze();
 }
+#endif
 
 static void kernel_exception_data(register_t excode) {
 	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s-%d\n",
@@ -156,7 +158,7 @@ void kernel_exception(void) {
 		break;
 
 	case MIPS_CP0_EXCODE_C2E:
-		kernel_exception_capability();
+		kernel_exception_unknown(excode);
 		break;
 
 	case MIPS_CP0_EXCODE_TLBL:

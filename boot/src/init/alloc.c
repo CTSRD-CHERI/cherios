@@ -29,7 +29,6 @@
  */
 
 #include "mips.h"
-#include "cheric.h"
 #include "string.h"
 #include "stdlib.h"
 #include "sys/mman.h"

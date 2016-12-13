@@ -46,7 +46,6 @@ static char *rcsid = "$FreeBSD$";
  */
 
 #include "mips.h"
-#include "cheric.h"
 #include "lib.h"
 
 #include "malloc_heap.h"

@@ -28,7 +28,11 @@
 # SUCH DAMAGE.
 #
 
+.ifdef MIPS_SZCAP
 .set CAP_SIZE, (MIPS_SZCAP/8)
+.else
+.set CAP_SIZE, 0
+.endif
 .set REG_SIZE, (64/8)
 .set MIPS_FRAME_SIZE, (32*REG_SIZE)
 
@@ -40,24 +44,14 @@
 # A few useful macros
 #
 
-# Saves capability register 'creg' to offset 'offset' of frame 'frame'
-.macro csave creg, offset, frame
-	csc	\creg, $0, \offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame)
-.endm
-
-# Restores capability register 'creg' to offset 'offset' of frame 'frame'
-.macro crestore creg, offset, frame
-	clc	\creg, $0, \offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame)
-.endm
-
 # Saves general-purpose register 'greg' to offset 'offset' of frame 'frame'
 .macro gsave greg, offset, frame
-	csd	\greg, $0, \offset*REG_SIZE(\frame)
+	sd	\greg, (\offset*REG_SIZE)(\frame)
 .endm
 
 # Restores general-purpose register 'greg' to offset 'offset' of frame 'frame'
 .macro grestore greg, offset, frame
-	cld	\greg, $0, \offset*REG_SIZE(\frame)
+	ld	\greg, (\offset*REG_SIZE)(\frame)
 .endm
 
 # Calls 'macro elem, index, global' for each 'elem' of the input list

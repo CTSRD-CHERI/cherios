@@ -47,7 +47,6 @@ static char *rcsid = "$FreeBSD$";
 
 #include "lib.h"
 #include "mips.h"
-#include "cheric.h"
 #include "malloc_heap.h"
 
 #pragma clang diagnostic ignored "-Wsign-compare"
@@ -230,7 +229,6 @@ find_overhead(void * cp)
 	printf(
 	    "%s: Attempting to free or realloc unallocated memory\n",
 	    __func__);
-	CHERI_PRINT_PTR(cp);
 	return (NULL);
 }
 

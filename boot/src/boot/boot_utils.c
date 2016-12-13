@@ -29,7 +29,6 @@
  */
 
 #include "mips.h"
-#include "cheric.h"
 #include "cp0.h"
 #include "plat.h"
 #include "boot/boot.h"
@@ -84,9 +83,9 @@ void load_kernel() {
 
 	if(&__kernel_entry_point != prgmp + entry) {
 		boot_printf(KRED"Bad kernel entry point:"KRST"\n");
-		BOOT_PRINT_CAP(prgmp);
+		//BOOT_PRINT_CAP(prgmp);
 		boot_printf("Expected kernel entry point:\n");
-		BOOT_PRINT_CAP(&__kernel_entry_point);
+		//BOOT_PRINT_CAP(&__kernel_entry_point);
 		goto err;
 	}
 

@@ -61,8 +61,8 @@ start:
 
 	# Clear other capability registers to ensure we don't retain any
 	# executable capabilities: everything but $pcc and $c0.
-	CClearLo	0xfffe
-	CClearHi	0xffff
+#CClearLo	0xfffe
+#CClearHi	0xffff
 
 	# Jump to write-free $pcc.
 	dla		$t0, cherios_init_jump_target
@@ -71,8 +71,8 @@ start:
 cherios_init_jump_target:
 
 	# Populate exception registers: $kdc and $kcc
-	cgetpcc		$c29
-	cgetdefault	$c30
+#cgetpcc		$c29
+#cgetdefault	$c30
 
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.

@@ -31,7 +31,6 @@
 #ifndef __ACTIVATIONS_H
 #define __ACTIVATIONS_H
 
-#include "cheric.h"
 #include "queue.h"
 
 typedef u32 aid_t;

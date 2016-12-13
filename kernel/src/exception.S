@@ -84,15 +84,15 @@ kernel_cp2_exception_handler:
 		#
         dla	$k0, kernel_exception_framep_ptr
         ld  $k0, 0($k0)
-        cgetdefault $kr1c
-        csetoffset $kr1c, $kr1c, $k0
-        dla	$k0, 32*CAP_SIZE + 32*REG_SIZE #Should be enough
-        csetbounds $kr1c, $kr1c, $k0
+#cgetdefault $kr1c
+#csetoffset $kr1c, $kr1c, $k0
+#dla	$k0, 32*CAP_SIZE + 32*REG_SIZE #Should be enough
+#csetbounds $kr1c, $kr1c, $k0
 
 		# Notice correspondence to the layout of struct reg_frame.
 		# Notice also that KCC and KDC are not preserved.
 		#
-		cgetdefault	$kr2c
+#cgetdefault	$kr2c
 		# Expands to a list of the form
 		# csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
         #foreachi csave, 0, $kr1c,					\
@@ -107,16 +107,16 @@ kernel_cp2_exception_handler:
 		#
 		# Expands to a list of the form
 		# csd	$greg, $0, offset*REG_SIZE($kr1c)
-		foreachi gsave, 0, $kr1c,					\
+		foreachi gsave, 0, $k0,					\
 			$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
 			$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
 			$s7, $t8, $t9, $gp, $sp, $fp, $ra
 		mfhi	$k1
-		csd	$k1, $0, 29*REG_SIZE($kr1c)
+		sd	$k1, 29*REG_SIZE($k0)
 		mflo	$k1
-		csd	$k1, $0, 30*REG_SIZE($kr1c)
+		sd	$k1, 30*REG_SIZE($k0)
 		dmfc0	$k1, $14		# EPC
-		csd	$k1, $0, 31*REG_SIZE($kr1c)
+		sd	$k1, 31*REG_SIZE($k0)
 
 		# Set up exception stack
 		dla		$t1, __stop_exception_stack
@@ -129,7 +129,6 @@ kernel_cp2_exception_handler:
 		# once the kernel uses capabilities in more intricate ways,
 		# we'll need to restore other kernel capability context here.
 		#
-		csetdefault	$kdc
 
 		#
 		# Normal function invocation of kernel_exception().
@@ -145,22 +144,18 @@ kernel_cp2_exception_handler:
 		#
         dla	$k0, kernel_exception_framep_ptr
         ld  $k0, 0($k0)
-        cgetdefault $kr1c
-        csetoffset $kr1c, $kr1c, $k0
-        dla	$k0, 32*CAP_SIZE + 32*REG_SIZE #Should be enough
-        csetbounds $kr1c, $kr1c, $k0
 
 		# Expands to a list of the form
 		# cld	$greg, $0, offset*REG_SIZE($kr1c)
-		foreachi grestore, 0, $kr1c,					\
+		foreachi grestore, 0, $k0,					\
 			$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
 			$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
 			$s7, $t8, $t9, $gp, $sp, $fp, $ra
-		cld	$k1, $0, 29*REG_SIZE($kr1c)
+		ld	$k1, 29*REG_SIZE($k0)
 		mthi	$k1
-		cld	$k1, $0, 30*REG_SIZE($kr1c)
+		ld	$k1, 30*REG_SIZE($k0)
 		mtlo	$k1
-		cld	$k1, $0, 31*REG_SIZE($kr1c)
+		ld	$k1, 31*REG_SIZE($k0)
 		dmtc0	$k1, $14		# EPC
 
 		#
@@ -178,7 +173,6 @@ kernel_cp2_exception_handler:
 		#	$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
 		#	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
 		#csetdefault	$kr2c
-		cgetdefault $c31
 
 		#
 		# On general principle, flush the contents of $k0 and $k1

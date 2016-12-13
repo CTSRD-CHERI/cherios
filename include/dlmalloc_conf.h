@@ -1,6 +1,5 @@
 /* Config for CheriOS */
 #include "mips.h"
-#include "cheric.h"
 #include "assert.h"
 #define DEBUG 1
 #define ABORT_ON_ASSERT_FAILURE 0

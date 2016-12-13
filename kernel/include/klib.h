@@ -37,7 +37,6 @@
 #include "mips.h"
 #include "activations.h"
 #include "cdefs.h"
-#include "cheric.h"
 #include "colors.h"
 #include "math.h"
 #include "sched.h"

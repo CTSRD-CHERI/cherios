@@ -29,7 +29,6 @@
  */
 
 #include "mips.h"
-#include "cheric.h"
 #include "cp0.h"
 #include "plat.h"
 #include "init.h"
@@ -61,18 +60,14 @@ static void * init_act_create(const char * name, void * c0, void *pcbase, void *
 	memset(&frame, 0, sizeof(reg_frame_t));
 
 	/* set pc */
-	frame.cf_pcc	= pcbase;
 	frame.mf_pc	= (register_t)pcc;
 
 	/* set stack */
-	frame.cf_c11	= stack;
 	frame.mf_sp	= (register_t)stack;
 
 	/* set c12 */
-	frame.cf_c12	= frame.cf_pcc;
 
 	/* set c0 */
-	frame.cf_c0	= c0;
 
 	/* set cap */
 	frame.mf_s5	= (register_t)act_cap;

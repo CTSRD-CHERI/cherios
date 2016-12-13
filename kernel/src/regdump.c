@@ -41,9 +41,11 @@
 	__REGDUMP(reg, reg, #_reg, 64); \
 	}
 
-#define REG_DUMP_C(_reg) \
+#define REG_DUMP_C(_reg)
+/*
 	regdump_c(#_reg, creg++==reg_num, \
 		kernel_exception_framep_ptr->cf_##_reg);
+ */
 
 #define __REGDUMP(elem, cond, name, bits) { \
 	printf("%s"name":"KFNT"0x", cond?"":KFNT,elem); \
@@ -52,6 +54,7 @@
 	if(elem) { printf(KREG"%jx ", elem); } else { printf(" "KREG);} \
 	}
 
+/*
 static void regdump_c(const char * str_cap, int hl, const void * cap) {
 	printf("%s%-3s:"KREG, hl?KBLD KUND:"", str_cap);
 	int tag  = cheri_gettag(cap);
@@ -70,6 +73,7 @@ static void regdump_c(const char * str_cap, int hl, const void * cap) {
 	__REGDUMP(otype, otype||seal, "otype", 24);
 	printf(KRST"\n");
 }
+ */
 
 void regdump(int reg_num) {
 	int creg = 0;

@@ -33,7 +33,6 @@
 
 #include "mips.h"
 #include "assert.h"
-#include "cheric.h"
 #include "cdefs.h"
 #include "debug.h"
 #include "misc.h"
@@ -52,13 +51,13 @@ void register_ns(void * ns_ref, void * ns_id);
 #define calloc __calloc
 #define realloc __realloc
 
-void *	malloc(size_t nbytes) __attribute__((cheri_ccallee));
-void *	calloc(size_t num, size_t size) __attribute__((cheri_ccallee));
-void *	realloc(void *cp, size_t nbytes) __attribute__((cheri_ccallee));
+void *	malloc(size_t nbytes);
+void *	calloc(size_t num, size_t size);
+void *	realloc(void *cp, size_t nbytes);
 void	free(void *cp);
 #endif
 
-void	release(void * p) __attribute__((cheri_ccallee));
+void	release(void * p);
 void	release_init(void);
 
 void *	__mmap(void *addr, size_t length, int prot, int flags);

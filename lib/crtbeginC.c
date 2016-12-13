@@ -47,15 +47,6 @@ void	crt_call_constructors(void);
 typedef void (*mips_function_ptr)(void);
 typedef void (*cheri_function_ptr)(void);
 
-struct capreloc
-{
-	uint64_t capability_location;
-	uint64_t object;
-	uint64_t offset;
-	uint64_t size;
-	uint64_t permissions;
-};
-
 static mips_function_ptr __attribute__((used))
     __attribute__((section(".ctors")))
     __CTOR_LIST__[1] = { (mips_function_ptr)(-1) };
@@ -63,19 +54,6 @@ static mips_function_ptr __attribute__((used))
 static mips_function_ptr __attribute__((used))
     __attribute__((section(".dtors")))
     __DTOR_LIST__[1] = { (mips_function_ptr)(-1) };
-
-static const uint64_t function_reloc_flag = 1ULL<<63;
-static const uint64_t function_pointer_permissions =
-	~0 &
-	~__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ &
-	~__CHERI_CAP_PERMISSION_PERMIT_STORE__;
-static const uint64_t global_pointer_permissions =
-	~0 & ~__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__;
-
-__attribute__((weak))
-extern struct capreloc __start___cap_relocs;
-__attribute__((weak))
-extern struct capreloc __stop___cap_relocs;
 
 /*
  * Symbols provided by rtendC.c, which provide us with the tails for the
@@ -111,8 +89,6 @@ crt_call_constructors(void)
 	}
 }
 
-volatile int _int;
-
 void
 crt_init_bss(void)
 {
@@ -128,32 +104,5 @@ crt_init_bss(void)
 }
 
 void
-crt_init_globals()
-{
-	__capability void *gdc = __builtin_memcap_global_data_get();
-	__capability void *pcc = __builtin_memcap_program_counter_get();
-
-	gdc = __builtin_memcap_perms_and(gdc, global_pointer_permissions);
-	pcc = __builtin_memcap_perms_and(pcc, function_pointer_permissions);
-
-	for (struct capreloc *reloc = &__start___cap_relocs ;
-	     reloc < &__stop___cap_relocs ; reloc++)
-	{
-		_Bool isFunction = (reloc->permissions & function_reloc_flag) ==
-			function_reloc_flag;
-		__capability void *dest = __builtin_memcap_offset_set(gdc, reloc->capability_location);
-		__capability void *base = isFunction ? pcc : gdc;
-		__capability void *src = __builtin_memcap_offset_set(base, reloc->object);
-
-		if (reloc->object == 0x4cd70) {
-			base = __builtin_memcap_offset_set(base, reloc->permissions);
-			_int = *(int *)base;
-		}
-		if (!isFunction && (reloc->size != 0))
-		{
-			src = __builtin_memcap_bounds_set(src, reloc->size);
-		}
-		src = __builtin_memcap_offset_increment(src, reloc->offset);
-		dest = src;
-	}
+crt_init_globals() {
 }

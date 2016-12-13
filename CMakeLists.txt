@@ -65,9 +65,9 @@ set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this 
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # make sure we compile for cheri:
-set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_ASM_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_C_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_CXX_COMPILER_TARGET mips64-unknown-freebsd)
 # sysroot should not be needed as we are in a freestanding environment
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 
@@ -182,8 +182,8 @@ function(add_to_filesystem _target)
     # copy the binary to the fs root directory
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
     # remove some sections to save place (TODO: make this depend on the configuration)
-#COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
-#COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
     )
   # Using a CACHE INTERNAL variable ensures that changes are globally visible
   set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")

@@ -41,7 +41,7 @@
 #endif /* CHERIOS_BOOT */
 
 #include "colors.h"
-#include "cheric.h"
+#include "mips.h"
 #include "math.h"
 #include "string.h"
 #include "elf.h"

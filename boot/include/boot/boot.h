@@ -46,14 +46,17 @@ extern void	__kernel_entry_point;
 extern void	__init_load_virtaddr;
 extern void	__init_entry_point;
 
-#define BOOT_PRINT_PTR(ptr)						\
+#define BOOT_PRINT_PTR(ptr)
+/*
 	boot_printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n",		\
 		    __func__,						\
 		    cheri_getbase((const __capability void *)(ptr)),	\
 		    cheri_getlen((const __capability void *)(ptr)),	\
 		    cheri_getoffset((const __capability void *)(ptr)))
+ */
 
-#define BOOT_PRINT_CAP(cap)						\
+#define BOOT_PRINT_CAP(cap)
+/*
 	boot_printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
 		    "b:%016jx l:%016zx o:%jx\n",			\
 		    __func__,						\
@@ -64,6 +67,7 @@ extern void	__init_entry_point;
 		    cheri_getbase(cap),					\
 		    cheri_getlen(cap),					\
 		    cheri_getoffset(cap))
+ */
 
 
 #define	boot_assert(e)	((e) ? (void)0 : __boot_assert(__func__, 	\

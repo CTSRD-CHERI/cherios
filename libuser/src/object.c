@@ -30,7 +30,6 @@
 
 #include "mips.h"
 #include "object.h"
-#include "cheric.h"
 #include "assert.h"
 #include "namespace.h"
 
