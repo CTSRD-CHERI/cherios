@@ -69,8 +69,10 @@ static void kernel_ccall_core(int cflags) {
 		if(cflags & 2) {
 			kernel_panic("queue full (csync)");
 		}
+		kernel_exception_framep_ptr->mf_v0 = 1;
+	} else {
 		kernel_exception_framep_ptr->mf_v0 = 0;
-	}
+    }
 
 	if(cflags & 2) {
 		KERNEL_TRACE(__func__, "%s : sync-call %s",

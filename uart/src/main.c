@@ -53,7 +53,6 @@ int main(void)
 
 	/* Get capability to use uart */
 	uart_cap = act_get_cap();
-	assert(VCAP(uart_cap, 0, VCAP_RW));
 
 	/* Register ourself to the kernel as being the UART module */
 	int ret = namespace_register(1, act_self_ref, act_self_id);

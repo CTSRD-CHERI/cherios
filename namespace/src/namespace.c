@@ -49,13 +49,13 @@ static int validate_idx(int nb) {
 }
 
 static int validate_act_caps(void * act_reference, void * act_default_id) {
-	if(cheri_gettag(act_reference) == 0) { return 0; }
-	if(cheri_gettag(act_default_id) == 0) { return 0; }
-	if(cheri_getsealed(act_reference) == 0) { return 0; }
-	if(cheri_getsealed(act_default_id) == 0) { return 0; }
-	if(cheri_gettype(act_reference) !=
-	   cheri_gettype(act_default_id)) { return 0; }
-	/* todo: check otype range and permissions */
+	//if(cheri_gettag(act_reference) == 0) { return 0; }
+	//if(cheri_gettag(act_default_id) == 0) { return 0; }
+	//if(cheri_getsealed(act_reference) == 0) { return 0; }
+	//if(cheri_getsealed(act_default_id) == 0) { return 0; }
+	//if(cheri_gettype(act_reference) !=
+	//   cheri_gettype(act_default_id)) { return 0; }
+	///* todo: check otype range and permissions */
 	return 1;
 }
 

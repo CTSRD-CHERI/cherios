@@ -54,7 +54,7 @@ static void buf_puts(char * str) {
 	}
 	assert(uart_ref != NULL);
 	assert(uart_id != NULL);
-	ccall_c_n(uart_ref, uart_id, 1, str);
+	ccall_r_n(uart_ref, uart_id, 1, (register_t)str);
 	#endif
 }
 

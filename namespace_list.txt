@@ -1,0 +1,6 @@
+memmgt      3
+uart        1
+sockets     2
+zlib        9
+virtio-blk  4
+qsort       10

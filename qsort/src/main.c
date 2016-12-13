@@ -1,9 +1,23 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<misc.h> // for countof();
+#include<object.h>
+#include<namespace.h>
 
 #define UNLIMIT
 #define MAXARRAY 2000 /* this number, if too large, will cause a seg. fault!! */
+
+int qsort_receive(int a, int b, int c, int d) {
+    printf("Qsort received a message! Four args are %d, %d, %d, %d.\n", a, b, c, d);
+    act_ctrl_terminate(act_self_ctrl);
+    return 888;
+}
+
+void (*msg_methods[]) = {qsort_receive};
+size_t msg_methods_nb = countof(msg_methods);
+void (*ctrl_methods[]) = {NULL};
+size_t ctrl_methods_nb = countof(ctrl_methods);
 
 char qstring[MAXARRAY][128] = {
     "Kurt",
@@ -5023,15 +5037,21 @@ int compare(const void *elem1, const void *elem2)
 
 int
 main() {
-  int i,count=0;
+    int i,count=0;
   
-  count = MAXARRAY;
-  printf("\nSorting %d elements.\n\n",count);
-  //while(1) {
-      qsort(qstring, count, 128 * sizeof(char),compare);
+    count = MAXARRAY;
+    int ret = namespace_register(10, act_self_ref, act_self_id);
+    if(ret!=0) {
+        printf("QSORT: register failed\n");
+        return -1;
+    }
+    msg_enable = 1;
+    printf("\nSorting %d elements.\n\n",count);
+    //while(1) {
+        qsort(qstring, count, 128 * sizeof(char),compare);
       
-      for(i=0;i<count;i++)
-        printf("%s\n", qstring[i]);
-  //}
-  return 0;
+        for(i=0;i<count;i++)
+          printf("%s\n", qstring[i]);
+    //}
+    return 0;
 }

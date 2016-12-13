@@ -12,9 +12,12 @@
 **  10/21/93 rdg  Fixed bug found by Jeff Dunlop
 */
 
+#include<assert.h>
 #include<stddef.h>
 #include<string.h>
 #include<limits.h>
+#include<object.h>
+#include<namespace.h>
 
 static size_t table[UCHAR_MAX + 1];
 static size_t len;
@@ -2739,18 +2742,32 @@ main()
 "and recycling it for more than its",
 "worth But trust me on the sunscreen"
 };
-      int i;
+    int i;
 
-      for (i = 0; find_strings[i][0]; i++)
-      {
-            init_search(find_strings[i]);
-            here = strsearch(search_strings[i]);
-            printf("\"%s\" is%s in \"%s\"", find_strings[i],
-                  here ? "" : " not", search_strings[i]);
-            if (here)
-                  printf(" [\"%s\"]", here);
-            putchar('\n');
-      }
+    for (i = 0; find_strings[i][0]; i++) {
+          init_search(find_strings[i]);
+          here = strsearch(search_strings[i]);
+          printf("\"%s\" is%s in \"%s\"", find_strings[i],
+                here ? "" : " not", search_strings[i]);
+          if (here)
+                printf(" [\"%s\"]", here);
+          putchar('\n');
+    }
+        
+	void * u_ref = namespace_get_ref(10);
+	assert(u_ref != NULL);
+	void * u_id  = namespace_get_id(10);
+	//assert(u_id != NULL);
+    int sent_a = 326;
+    int sent_b = -21356;
+    int sent_c = 44;
+    int sent_d = -65536;
+    printf("Stringsearch sent a message to Qsort with args: %d, %d, %d, %d.\n", sent_a, sent_b, sent_c, sent_d);
+    /* Trying so hard to kill qsort */
+    register_t ret;
+	while((ret = ccall_1(u_ref, u_id, 0, sent_a, sent_b, sent_c, sent_d)) == 1) {
+    }
+    printf("Stringsearch send success.\n");
 
-      return 0;
+    return 0;
 }

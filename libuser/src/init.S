@@ -104,6 +104,7 @@ start_common:
     #clc		$c3, $t0, 0($c17)
 	li		$v1, 26
 	syscall
+    nop
 
 to_msg:
 	# CReturn to go in waiting state.

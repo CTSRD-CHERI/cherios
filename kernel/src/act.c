@@ -160,6 +160,7 @@ uint64_t act_get_id(act_t * ctrl) {
 
 int act_get_status(act_t * ctrl) {
 	aid_t aid = ctrl->aid;
+    //printf("Guy: %d is of status %d!\n", aid, kernel_acts[aid].status);
 	return kernel_acts[aid].status;
 }
 
