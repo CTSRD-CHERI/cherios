@@ -39,6 +39,7 @@
 #include "assert.h"
 #include "stdio.h"
 #include "elf.h"
+#include "namespace.h"
 
 static void * init_act_register(reg_frame_t * frame, const char * name) {
 	void * ret;
@@ -186,9 +187,14 @@ void * load_module(module_t type, const char * file, int arg, const void *carg) 
 	}
 	if(type == m_namespace) {
 		ns_ref = act_ctrl_get_ref(ctrl);
-		ns_id = act_ctrl_get_id(ctrl);
+		ns_id  = act_ctrl_get_id(ctrl);
+		namespace_init(ns_ref, ns_id);
 	}
 	return ctrl;
+}
+
+int num_registered_modules(void) {
+	return namespace_get_num_services();
 }
 
 static int act_alive(void * ctrl) {

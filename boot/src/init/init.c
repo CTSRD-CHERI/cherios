@@ -104,14 +104,17 @@ static void load_modules(void) {
 	static void * c_memmgt = NULL;
 
 	for(size_t i=0; i<init_list_len; i++) {
+		int cnt;
 		init_elem_t * be = init_list + i;
-		if(be->cond == 0) {
+
+		if(be->cond == 0)
 			continue;
-		}
+
 		if(be->type == m_fence) {
 			nssleep(3);
 			continue;
 		}
+
 		be->ctrl = load_module(be->type, be->name, be->arg, NULL);
 		printf("Loaded module %s\n", be->name);
 		switch(init_list[i].type) {
@@ -127,6 +130,9 @@ static void load_modules(void) {
 			break;
 		default:{}
 		}
+
+		cnt = num_registered_modules();
+		printf("%d modules registered with namespace-mgr.\n", cnt);
 	}
 }
 
