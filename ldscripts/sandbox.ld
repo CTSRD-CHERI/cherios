@@ -38,9 +38,9 @@ __code_base__ = 0x1000;
 SECTIONS
 {
 	. = __code_base__;
-	.text ALIGN(0x8): { *(.text) }
-	.bss  ALIGN(0x8): { *(.bss) }
-	.data ALIGN(0x8): { *(.data) }
+	.text ALIGN(0x10): { *(.text) }
+	.bss  ALIGN(0x10): { *(.bss) }
+	.data ALIGN(0x10): { *(.data) }
 
 	/*
 	 * Force zero-filling of previous segments in generated image.
@@ -50,5 +50,5 @@ SECTIONS
 	}
 
 	__start_bss = ADDR(.bss);
-	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), 0x8);
+	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), 0x10);
 }
