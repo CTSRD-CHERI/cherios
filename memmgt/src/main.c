@@ -42,9 +42,8 @@ size_t pagesz;			/* page size */
 void register_ns(void * ns_ref, void * ns_id) {
 	namespace_init(ns_ref, ns_id);
 	int ret = namespace_register(3, act_self_ref, act_self_id);
-	if(ret!=0) {
+	if (ret!=0)
 		syscall_puts(KRED"Register failed\n");
-	}
 }
 
 int main(void) {
@@ -60,12 +59,12 @@ int main(void) {
 	 * align break pointer so all data will be page aligned.
 	 */
 	pagesz = CHERIOS_PAGESIZE;
-	#if MMAP
+#if MMAP
 	minit(heap);
-	#else
+#else
 	init_pagebucket();
 	__init_heap(heap);
-	#endif
+#endif
 
 	/* init release mecanism */
 	release_init();
