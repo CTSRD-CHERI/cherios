@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.4)
 # before it checks the C compiler features. We can then use enable_language()
 # to initialize all the C and ASM rules
 project(CheriOS LANGUAGES NONE VERSION 0.0.1)
+set(CMAKE_C_COMPILER_WORKS 1)
 
 #
 # Configure hardare at compile time.  Default to "qemu" for CHERI QEMU MALTA.
@@ -65,9 +66,9 @@ set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this 
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # make sure we compile for cheri:
-set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_ASM_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_C_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_CXX_COMPILER_TARGET mips64-unknown-freebsd)
 # sysroot should not be needed as we are in a freestanding environment
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 
@@ -90,15 +91,15 @@ enable_language(ASM)
 
 include(CMakeParseArguments)
 include(CheckCSourceCompiles)
-check_c_source_compiles([===[
-#if !__has_feature(capabilities)
-#error need compiler with capability support
-#endif
-int main(int argc, char** argv) { return 0; }
-]===] HAVE_CAPABILITIES)
-if(NOT HAVE_CAPABILITIES)
-    message(FATAL_ERROR "Compiler doesn't have capabilities support, set CHERI_SDK_DIR correctly.")
-endif()
+#check_c_source_compiles([===[
+##if !__has_feature(capabilities)
+##error need compiler with capability support
+##endif
+#int main(int argc, char** argv) { return 0; }
+#]===] HAVE_CAPABILITIES)
+#if(NOT HAVE_CAPABILITIES)
+#    message(FATAL_ERROR "Compiler doesn't have capabilities support, set CHERI_SDK_DIR correctly.")
+#endif()
 
 #
 # Configure a console driver at compile time.  Default to the UART found in
