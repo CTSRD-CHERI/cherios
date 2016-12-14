@@ -2742,17 +2742,23 @@ main()
 "and recycling it for more than its",
 "worth But trust me on the sunscreen"
 };
-    int i;
+    int i, j, foundcnt = 0, nfoundcnt = 0;
 
     for (i = 0; find_strings[i][0]; i++) {
-          init_search(find_strings[i]);
-          here = strsearch(search_strings[i]);
-          printf("\"%s\" is%s in \"%s\"", find_strings[i],
-                here ? "" : " not", search_strings[i]);
-          if (here)
-                printf(" [\"%s\"]", here);
-          putchar('\n');
+        init_search(find_strings[i]);
+        here = strsearch(search_strings[i]);
+        /*
+           printf("\"%s\" is%s in \"%s\"", find_strings[i],
+           here ? "" : " not", search_strings[i]);
+           */
+        if (here)
+            //printf(" [\"%s\"]", here);
+            foundcnt++;
+        else
+            nfoundcnt++;
+        //putchar('\n');
     }
+    printf("Stringsearch with %d successes, %d fails.\n", foundcnt, nfoundcnt);
         
 	void * u_ref = namespace_get_ref(10);
 	assert(u_ref != NULL);

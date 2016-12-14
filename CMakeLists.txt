@@ -257,7 +257,7 @@ function(add_cherios_module _target)
     -mxgot
     -nostartfiles
     -nodefaultlibs
-#-pie
+    #-pie
     )
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
@@ -275,6 +275,7 @@ endfunction()
 
 add_subdirectory(libuser)
 #
+add_subdirectory(bitcount)
 add_subdirectory(qsort)
 add_subdirectory(spam)
 add_subdirectory(CRC32)

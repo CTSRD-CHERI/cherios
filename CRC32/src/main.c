@@ -19,6 +19,9 @@
 
 /* Need an unsigned type capable of holding 32 bits; */
 
+extern char __pcm_start;
+extern char __pcm_end;
+
 typedef WORD UNS_32_BITS;
 
 /* Copyright (C) 1986 Gary S. Brown.  You may use this program, or
@@ -1209,15 +1212,17 @@ WORD updateCRC32(unsigned char ch, WORD crc)
       return UPDC32(ch, crc);
 }
 
-Boolean_T crc32file(const char *name, WORD *crc, long *charcnt)
+Boolean_T crc32file(const char *name, unsigned long pcm_size, WORD *crc, unsigned long *charcnt)
 {
       register WORD oldcrc32;
       register int c;
       const char *ptr = name;
 
-      while ((c = *ptr) != '\0')
+      while (1)
       {
+            c = *ptr;
             ++*charcnt;
+            if(*charcnt == pcm_size) break;
             ptr++;
             oldcrc32 = UPDC32(c, oldcrc32);
       }
@@ -1245,11 +1250,13 @@ int
 main()
 {
     WORD crc = 0;
-    long charcnt = 0;
+    unsigned long charcnt = 0;
+    unsigned long pcm_size = &__pcm_end - &__pcm_start;
     register int errors = 0;
     //while(1) {
-        errors |= crc32file(superbigstr, &crc, &charcnt);
+        errors |= crc32file(&__pcm_start, pcm_size, &crc, &charcnt);
         printf("CRC: %08X, char count: %7ld\n", crc, charcnt);
+        printf("pcm size: %ld\n", &__pcm_end - &__pcm_start);
         charcnt = 0;
     //}
     return(errors != 0);

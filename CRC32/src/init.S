@@ -41,3 +41,14 @@ start:
     dadd $t9, $s4, $t9
     jr  $t9
     nop
+
+.rodata
+.global __pcm_start
+.global __pcm_end
+
+__pcm_start:
+.incbin "large.pcm"
+__pcm_end:
+nop
+.size __pcm_start, __pcm_end - __pcm_start
+.size __pcm_end, 1

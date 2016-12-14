@@ -6,7 +6,7 @@
 #include<namespace.h>
 
 #define UNLIMIT
-#define MAXARRAY 2000 /* this number, if too large, will cause a seg. fault!! */
+#define MAXARRAY 5000 /* this number, if too large, will cause a seg. fault!! */
 
 int qsort_receive(int a, int b, int c, int d) {
     printf("Qsort received a message! Four args are %d, %d, %d, %d.\n", a, b, c, d);
@@ -2016,9 +2016,7 @@ char qstring[MAXARRAY][128] = {
     "you",
     "buy",
     "but",
-    "be"
-};
-/*
+    "be",
     "patient",
     "with",
     "those",
@@ -5023,6 +5021,8 @@ char qstring[MAXARRAY][128] = {
     "its",
     "only"
 };
+/*
+};
  */
 
 int compare(const void *elem1, const void *elem2)
@@ -5049,9 +5049,8 @@ main() {
     printf("\nSorting %d elements.\n\n",count);
     //while(1) {
         qsort(qstring, count, 128 * sizeof(char),compare);
+        printf("The first element: %s\n The last element: %s\n", qstring[0], qstring[MAXARRAY-1]);
       
-        for(i=0;i<count;i++)
-          printf("%s\n", qstring[i]);
     //}
     return 0;
 }
