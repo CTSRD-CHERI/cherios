@@ -70,7 +70,7 @@ control:
     dadd    $t1, $s4, $t1
 	sub		$v0, $0, $v0
 call:
-	cld		$t1, $t1, 0($c17)
+	ld		$t1, 0($t1)
 	sub		$t1, $t1, $v0
 	blez		$t1, overflow
 	nop
@@ -82,7 +82,7 @@ call:
 
 	sll		$v0, $v0, REG_SIZE_BITS
 	add		$t0, $t0, $v0
-	cld		$t9, $t0, 0($c17)
+	ld		$t9, 0($t0)
 	jalr    $t9
 	nop
 #b		end
