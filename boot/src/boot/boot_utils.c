@@ -38,6 +38,8 @@
 #include "uart.h"
 #include "elf.h"
 
+extern u8 __fs_start, __fs_end;
+
 static void *kernel_alloc_mem(size_t _size) {
 	/* The kernel is direct-mapped. */
 	(void) _size;
@@ -155,6 +157,8 @@ boot_info_t *load_init() {
 	bi.init_frame.mf_pc  = (size_t)pcc + entry;
 	//bi.init_frame.cf_c11 = stack;
 	bi.init_frame.mf_sp  = (size_t)stack + INIT_STACK_SIZE;
+    bi.init_frame.mf_t0 = (register_t)&__fs_start;
+    bi.init_frame.mf_t1 = (register_t)&__fs_end;
 	//bi.init_frame.cf_c12 = pcc;
 	//bi.init_frame.cf_c0  = 0;
 

@@ -53,16 +53,16 @@ fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep);
 ssize_t
 fsread(ufs_ino_t inode, void *buf, size_t nbyte);
 
-extern u8 __fs_start, __fs_end;
+extern size_t __init_fs_start, __init_fs_stop;
 
 int dskread(u8 *buf, u_int64_t lba, int nblk) {
 	size_t size  = nblk * DEV_BSIZE;
 	size_t start = lba  * DEV_BSIZE;
 
-	u8 * fsp = &__fs_start;
+	u8 * fsp = (u8 *)__init_fs_start;
 	for(size_t i=0; i<size; i++) {
 		// Check read is not out of bounds
-		assert(fsp + start + i < &__fs_end);
+		assert(fsp + start + i < (u8 *)__init_fs_stop);
 		buf[i] = fsp[start + i];
 	}
 	return 0;

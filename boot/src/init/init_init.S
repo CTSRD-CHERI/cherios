@@ -32,6 +32,7 @@
 .set noreorder
 .set nobopt
 .set noat
+.set REG_SIZE, (64/8)
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
@@ -42,6 +43,11 @@
 	.global start
 	.ent start
 start:
+    
+    dla $t2, __init_fs_start
+    sd  $t0, 0($t2)
+    dla $t2, __init_fs_stop
+    sd  $t1, 0($t2)
 
 	# Jump to write-free $pcc.
 	dla		$t0, cherios_init_jump_target
@@ -87,3 +93,12 @@ cherios_init_jump_target:
     li $v1, 1010
     syscall
     nop
+
+    .data
+    .global __init_fs_start
+    .global __init_fs_stop
+
+__init_fs_start:
+    .skip REG_SIZE, 0
+__init_fs_stop:
+    .skip REG_SIZE, 0

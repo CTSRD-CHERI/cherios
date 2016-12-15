@@ -2742,7 +2742,7 @@ main()
 "and recycling it for more than its",
 "worth But trust me on the sunscreen"
 };
-    int i, j, foundcnt = 0, nfoundcnt = 0;
+    int i, foundcnt = 0, nfoundcnt = 0;
 
     for (i = 0; find_strings[i][0]; i++) {
         init_search(find_strings[i]);

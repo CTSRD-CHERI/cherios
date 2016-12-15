@@ -97,6 +97,8 @@ init_elem_t init_list[] = {
 
 const size_t init_list_len = countof(init_list);
 
+extern size_t __init_fs_start, __init_fs_stop;
+
 void print_build_date(void) {
 	int filelen=0;
 	char * date = load("t1", &filelen);
@@ -142,6 +144,7 @@ int init_main() {
   	stats_init();
 
 	printf("Init loaded\n");
+	printf("__init_fs_start: %p, __init_fs_stop: %p\n", (void *)__init_fs_start, (void *)__init_fs_stop);
 
 	/* Initialize the memory pool. */
 	init_alloc_init();

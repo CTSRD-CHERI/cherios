@@ -29,6 +29,7 @@ set(BOOT_ASM_SRCS
     src/boot/boot_init.S
     src/boot/kernel_elf.S
     src/boot/init_elf.S
+    src/boot/fs.S
     src/boot/trampoline.S
 )
 
@@ -44,7 +45,6 @@ set(INIT_SRCS
 )
 
 set(INIT_ASM_SRCS
-    src/init/fs.S
     src/init/init_init.S
 )
 
@@ -61,7 +61,7 @@ endif()
 include_directories(${CMAKE_CURRENT_BINARY_DIR}) # to find fs.img
 
 # fs.S depends on the fs.img file, kernel_elf.S on kernel.elf, init_elf.S on init.elf
-set_source_files_properties(src/init/fs.S PROPERTIES
+set_source_files_properties(src/boot/fs.S PROPERTIES
   OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
 )
 set_source_files_properties(src/boot/kernel_elf.S PROPERTIES

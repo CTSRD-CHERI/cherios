@@ -5037,7 +5037,7 @@ int compare(const void *elem1, const void *elem2)
 
 int
 main() {
-    int i,count=0;
+    int count=0;
   
     count = MAXARRAY;
     int ret = namespace_register(10, act_self_ref, act_self_id);

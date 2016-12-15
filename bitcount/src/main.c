@@ -18,7 +18,7 @@
 
 static int CDECL bit_shifter(uint32_t x);
 
-int main(int argc, char *argv[])
+int main()
 {
     uint32_t i, j, n, seed;
     uint32_t iterations;

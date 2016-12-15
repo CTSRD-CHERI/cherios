@@ -220,8 +220,9 @@ fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep)
 		dsk_meta = 0;
 		for (n = 0; sblock_try[n] != -1; n++) {
 			if (dskread(dmadat->sbbuf, sblock_try[n] / DEV_BSIZE,
-			    SBLOCKSIZE / DEV_BSIZE))
-				return -1;
+			    SBLOCKSIZE / DEV_BSIZE)) {
+                    return -1;
+                }
 			memcpy(&fs, dmadat->sbbuf, sizeof(struct fs));
 			if ((
 #if defined(UFS1_ONLY)
@@ -250,8 +251,9 @@ fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep)
 		return 0;
 	if (inomap != inode) {
 		n = IPERVBLK(&fs);
-		if (dskread(blkbuf, INO_TO_VBA(&fs, n, inode), DBPERVBLK))
+		if (dskread(blkbuf, INO_TO_VBA(&fs, n, inode), DBPERVBLK)) {
 			return -1;
+        }
 		n = INO_TO_VBO(n, inode);
 #if defined(UFS1_ONLY)
 		memcpy(&dp1, (struct ufs1_dinode *)(void *)blkbuf + n,
@@ -288,8 +290,9 @@ fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep)
 			u = (u_int)(lbn - NDADDR) / n * DBPERVBLK;
 			vbaddr = fsbtodb(&fs, addr2) + u;
 			if (indmap != vbaddr) {
-				if (dskread(indbuf, vbaddr, DBPERVBLK))
+				if (dskread(indbuf, vbaddr, DBPERVBLK)) {
 					return -1;
+                }
 				indmap = vbaddr;
 			}
 			n = (lbn - NDADDR) & (n - 1);
@@ -309,16 +312,18 @@ fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep)
 				memcpy(&addr2, (ufs2_daddr_t *)indbuf + n,
 				    sizeof(ufs2_daddr_t));
 #endif
-		} else
+		} else {
 			return -1;
+        }
 		vbaddr = fsbtodb(&fs, addr2) + (off >> VBLKSHIFT) * DBPERVBLK;
 		vboff = off & VBLKMASK;
 		n = sblksize(&fs, (off_t)size, lbn) - (off & ~VBLKMASK);
 		if (n > VBLKSIZE)
 			n = VBLKSIZE;
 		if (blkmap != vbaddr) {
-			if (dskread(blkbuf, vbaddr, n >> DEV_BSHIFT))
+			if (dskread(blkbuf, vbaddr, n >> DEV_BSHIFT)) {
 				return -1;
+            }
 			blkmap = vbaddr;
 		}
 		n -= vboff;
