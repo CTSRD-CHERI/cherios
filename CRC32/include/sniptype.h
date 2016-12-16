@@ -7,6 +7,7 @@
 #ifndef SNIPTYPE__H
 #define SNIPTYPE__H
 
+#include<mips.h>
 #include <stdlib.h>                             /* For free()           */
 #include <string.h>                             /* For NULL & strlen()  */
 
@@ -15,11 +16,11 @@ typedef enum {Error_ = -1, Success_, False_ = 0, True_} Boolean_T;
 /*#if !defined(WIN32) && !defined(_WIN32) && !defined(__NT__) \
       && !defined(_WINDOWS)
       #if !defined(OS2)*/
-  typedef unsigned char  BYTE;
-  typedef unsigned long  DWORD;
+  typedef uint8_t  BYTE;
+  typedef uint64_t  DWORD;
 /* #endif*/
- typedef unsigned int WORD;
-/*#else
+ typedef uint32_t WORD;
+ /*#else
  #define WIN32_LEAN_AND_MEAN
  #define NOGDI
  #define NOSERVICE
