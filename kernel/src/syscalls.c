@@ -1,4 +1,5 @@
 /*-
+ * Copyright (c) 2016 Hongyan Xia
  * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
@@ -182,7 +183,7 @@ void kernel_exception_syscall(void)
         kernel_ccall(4);
 		break;
 	case 1010:
-		KERNEL_TRACE("exception", "(CCall4)Syscall %ld", sysn);
+		KERNEL_TRACE("exception", "(CReturn)Syscall %ld", sysn);
         kernel_creturn();
 		break;
 	default:

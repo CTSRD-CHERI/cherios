@@ -1,6 +1,7 @@
 /*-
- * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2016 Hongyan Xia
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2011 Robert N. M. Watson
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
