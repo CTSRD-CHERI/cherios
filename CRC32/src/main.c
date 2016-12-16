@@ -1214,15 +1214,15 @@ WORD updateCRC32(unsigned char ch, WORD crc)
 
 Boolean_T crc32file(const char *name, unsigned long pcm_size, WORD *crc, unsigned long *charcnt)
 {
-      register WORD oldcrc32;
+      register WORD oldcrc32 = 0xffffffff;
       register int c;
       const char *ptr = name;
 
       while (1)
       {
             c = *ptr;
-            ++*charcnt;
             if(*charcnt == pcm_size) break;
+            ++*charcnt;
             ptr++;
             oldcrc32 = UPDC32(c, oldcrc32);
       }
