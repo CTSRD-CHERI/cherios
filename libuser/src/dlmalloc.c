@@ -1736,7 +1736,7 @@ struct malloc_chunk {
   size_t               head;       /* Size and inuse bits. */
   struct malloc_chunk* fd;         /* double links -- used only if free. */
   struct malloc_chunk* bk;
-  void * unused; //fixme
+  //void * unused; //fixme
 };
 
 typedef struct malloc_chunk  mchunk;
