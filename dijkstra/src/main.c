@@ -253,7 +253,7 @@ int main() {
   //}
 
   /* finds 10 shortest paths between nodes */
-  for (i_l=0,j=NUM_NODES/2;i_l<100;i_l++,j++) {
+  for (i_l=0,j=NUM_NODES/2;i_l<100;i_l+=10,j+=10) {
 			j=j%NUM_NODES;
       dijkstra(i_l,j);
   }

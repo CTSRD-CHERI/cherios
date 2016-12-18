@@ -4,3 +4,4 @@ sockets     2
 zlib        9
 virtio-blk  4
 qsort       10
+AES         5
