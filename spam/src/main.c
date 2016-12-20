@@ -30,7 +30,7 @@ main() {
     uint64_t decret = ccall_rrrr_r(u_ref, u_id, 0, (register_t)enc, (register_t)encdec, -encret, (register_t)theKey);
     printf("Decryption ended with %ld status.\n", decret);
 
-    printf("The first line of the decenc message:\n%s\n", encdec);
+    printf("The first line of the decenc message:\n%s", encdec);
 
     return 0;
 }

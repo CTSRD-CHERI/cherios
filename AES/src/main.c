@@ -124,8 +124,8 @@ uint64_t encfile(byte *fin, byte *fout, aes *ctx, uint64_t length) {
     while(readbytes < length) {
         /* input 1st 16 bytes to buf[1..16] */
         i = length - readbytes;
-        memcpy(inbuf + 16 - l, fin + readbytes, (i<16)? i:16);
-        readbytes += (i<16)? i:16;
+        memcpy(inbuf + 16 - l, fin + readbytes, (i<l)? i:l);
+        readbytes += (i<l)? i:l;
         if(i < l) break;            /* if end of the input file reached */
 
         for(i = 0; i < 16; ++i)         /* xor in previous cipher text  */
@@ -137,6 +137,7 @@ uint64_t encfile(byte *fin, byte *fout, aes *ctx, uint64_t length) {
         writebytes += 16;
                                     /* in all but first round read 16   */
         l = 16;                     /* bytes into the buffer            */
+        i = 0;
     }
 
     /* except for files of length less than two blocks we now have one  */
