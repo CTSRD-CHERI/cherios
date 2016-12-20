@@ -4,18 +4,23 @@
 #include<stdlib.h>
 #include<mips.h>
 #include<assert.h>
+#include<sha_info.h>
 
 extern char __AES_start, __AES_end;
 
 int
 main() {
-    for(int i=0; i<16; i++) {
+    for(int i=0; i<8; i++) {
         printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     }
 
 	void * u_ref = namespace_get_ref(5);
 	assert(u_ref != NULL);
 	void * u_id  = namespace_get_id(5);
+
+	void * sha_ref = namespace_get_ref(6);
+	assert(sha_ref != NULL);
+	void * sha_id  = namespace_get_id(6);
 
     int64_t len = &__AES_end - &__AES_start;
 
@@ -30,7 +35,9 @@ main() {
     uint64_t decret = ccall_rrrr_r(u_ref, u_id, 0, (register_t)enc, (register_t)encdec, -encret, (register_t)theKey);
     printf("Decryption ended with %ld status.\n", decret);
 
-    printf("The first line of the decenc message:\n%s", encdec);
+    SHA_INFO theinfo;
+    ccall_rrr_n(sha_ref, sha_id, 0, (register_t)&theinfo, (register_t)&__AES_start, (size_t)len);
+    ccall_r_n(sha_ref, sha_id, 1, (register_t)&theinfo);
 
     return 0;
 }

@@ -41,14 +41,3 @@ start:
     dadd $t9, $s4, $t9
     jr  $t9
     nop
-
-.rodata
-.global __input_begin
-.global __input_end
-
-__input_begin:
-.incbin "sha_input_large.asc"
-__input_end:
-nop
-.size __input_begin, __input_end - __input_begin
-.size __input_end, 1
