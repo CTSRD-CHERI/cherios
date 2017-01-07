@@ -71,7 +71,7 @@ __init_heap(void * heap, size_t length)
 
 	//assert(cheri_getoffset(heap) == 0);
 	size_t heaplen = length;
-	pagepool_start = (size_t)0;
+	pagepool_start = (size_t)heap;
 	pagepool_end = pagepool_start + heaplen;
 	pool = heap;
 }
@@ -80,7 +80,7 @@ void *
 __rederive_pointer(void *ptr)
 {
 	if ((char *)ptr > pool)
-		return (void *)((char *)ptr - (char *)pool);
+		return ptr;
 
 	return (NULL);
 }

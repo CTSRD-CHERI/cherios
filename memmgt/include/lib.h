@@ -44,12 +44,13 @@
 
 void register_ns(void * ns_ref, void * ns_id);
 
-#define MMAP 1
+#define MMAP 0
 
 #if !MMAP
 #define malloc __malloc
 #define calloc __calloc
 #define realloc __realloc
+#define free __free
 
 void *	malloc(size_t nbytes);
 void *	calloc(size_t num, size_t size);
@@ -57,13 +58,13 @@ void *	realloc(void *cp, size_t nbytes);
 void	free(void *cp);
 #endif
 
-void	release(void * p);
-void	release_init(void);
+//void	release(void * p);
+//void	release_init(void);
 
-void *	__mmap(void *addr, size_t length, int prot, int flags);
-int	__munmap(void *addr, size_t length);
-void	minit(char *heap, size_t heaplen);
-void	mfree(void *addr);
+//void *	__mmap(void *addr, size_t length, int prot, int flags);
+//int	__munmap(void *addr, size_t length);
+//void	minit(char *heap, size_t heaplen);
+//void	mfree(void *addr);
 
 extern	size_t pagesz;
 extern	char * pool;

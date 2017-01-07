@@ -28,39 +28,47 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-
 #include "mips.h"
-#include "dlmalloc.h"
+#include "sys/mman.h"
+#include "object.h"
+#include "namespace.h"
 
-static mspace mymspace = NULL;
-#define mymalloc(bytes)  mspace_malloc(mymspace, bytes)
-#define mycalloc(elems, size)  mspace_calloc(mymspace, elems, size)
-#define myrealloc(oldmem, size)  mspace_realloc(mymspace, oldmem, size)
-#define myfree(mem)  mspace_free(mymspace, mem)
+static void * memmgt_ref = NULL;
+static void * memmgt_id  = NULL;
 
-static inline void alloc_init() {
-	if(mymspace == NULL) {
-		mymspace = create_mspace(0,0);
+void *malloc(size_t length) {
+	if(memmgt_ref == NULL) {
+		memmgt_ref = namespace_get_ref(3);
+		memmgt_id  = namespace_get_id(3);
 	}
+	return (void *)ccall_r_r(memmgt_ref, memmgt_id, 0,  length);
 }
 
-void * malloc(size_t n) {
-	alloc_init();
-	return mymalloc(n);
+void *calloc(size_t items, size_t length) {
+	if(memmgt_ref == NULL) {
+		memmgt_ref = namespace_get_ref(3);
+		memmgt_id  = namespace_get_id(3);
+	}
+	return (void *)ccall_rr_r(memmgt_ref, memmgt_id, 1,  items, length);
 }
 
-void * calloc(size_t n, size_t s) {
-	alloc_init();
-	return mycalloc(n, s);
+void *realloc(void *ptr, size_t length) {
+	if(memmgt_ref == NULL) {
+		memmgt_ref = namespace_get_ref(3);
+		memmgt_id  = namespace_get_id(3);
+	}
+	return (void *)ccall_rr_r(memmgt_ref, memmgt_id, 2,  (register_t)ptr, length);
 }
 
-void * realloc(void *mem, size_t s) {
-	alloc_init();
-	return myrealloc(mem, s);
+void free(void *addr) {
+	if(memmgt_ref == NULL) {
+		memmgt_ref = namespace_get_ref(3);
+		memmgt_id  = namespace_get_id(3);
+	}
+	ccall_r_n(memmgt_ref, memmgt_id, 3,  (register_t)addr);
 }
 
-void free(void * p) {
-	assert(mymspace != NULL);
-	myfree(p);
-	return;
+void memmgt_set_act(void * ref, void * id) {
+	memmgt_ref = ref;
+	memmgt_id  = id;
 }

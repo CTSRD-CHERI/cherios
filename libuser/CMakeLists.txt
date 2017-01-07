@@ -16,13 +16,13 @@ set(LIBUSER_SRCS
     src/assert.c
     src/ctype.c
     src/debug.c
-    src/dlmalloc.c
+    #src/dlmalloc.c
     src/errno.c
     src/interrupt.c
     src/libuser.c
     src/malloc.c
     src/memcpy.c
-    src/mmap.c
+    #src/mmap.c
     src/msg.c
     src/msg_default.c
     src/namespace.c
