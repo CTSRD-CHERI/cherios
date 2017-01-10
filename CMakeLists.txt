@@ -9,7 +9,7 @@ set(CMAKE_C_COMPILER_WORKS 1)
 # Configure hardare at compile time.  Default to "qemu" for CHERI QEMU MALTA.
 # Other option are "fpga" for CHERI on FPGA and "l3" for the L3 simulator.
 #
-set(HARDWARE "qemu" CACHE STRING
+set(HARDWARE "fpga" CACHE STRING
 "Configure hardare at compile time.  Default to \"qemu\" for CHERI QEMU MALTA.\
  Other option are \"fpga\" for CHERI on FPGA and \"l3\" for the L3 simulator.")
 

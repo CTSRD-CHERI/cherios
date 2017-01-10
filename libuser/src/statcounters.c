@@ -327,7 +327,7 @@ int dump_statcounters (
 		echo(fp, "dcache_set_tag_write: \t%lu\n",b->dcache[SET_TAG_WRITE]);
 		echo(fp, "dcache_set_tag_read:  \t%lu\n",b->dcache[SET_TAG_READ]);
 		echo(fp, "\n");
-		#if 0
+		//#if 0
 		echo(fp, "l2cache_write_hit:    \t%lu\n",b->l2cache[WRITE_HIT]);
 		echo(fp, "l2cache_write_miss:   \t%lu\n",b->l2cache[WRITE_MISS]);
 		echo(fp, "l2cache_read_hit:     \t%lu\n",b->l2cache[READ_HIT]);
@@ -336,7 +336,7 @@ int dump_statcounters (
 		echo(fp, "l2cache_set_tag_write:\t%lu\n",b->l2cache[SET_TAG_WRITE]);
 		echo(fp, "l2cache_set_tag_read: \t%lu\n",b->l2cache[SET_TAG_READ]);
 		echo(fp, "\n");
-		#endif
+		//#endif
 		echo(fp, "tagcache_write_hit:   \t%lu\n",b->tagcache[WRITE_HIT]);
 		echo(fp, "tagcache_write_miss:  \t%lu\n",b->tagcache[WRITE_MISS]);
 		echo(fp, "tagcache_read_hit:    \t%lu\n",b->tagcache[READ_HIT]);
