@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
 #include <stdio.h>
 //#include <unistd.h>
 #include <stdlib.h>
@@ -170,7 +171,7 @@ void diff_statcounters (
 }
 
 int	kernel_vprintf(const char *fmt, va_list ap);
-#define vprintf kernel_vprintf
+//#define vprintf kernel_vprintf
 // fixme ^
 
 static int
