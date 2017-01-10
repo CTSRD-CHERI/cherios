@@ -58,7 +58,7 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
 	B_FENCE
 	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
-	B_DENTRY(m_uart,	"uart.elf",		0,	1)
+	//B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	B_DENTRY(m_core,	"AES.elf",		0, 	1)
 	B_DENTRY(m_core,	"sha.elf",		0, 	1)
 	B_FENCE
