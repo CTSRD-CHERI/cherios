@@ -4,6 +4,7 @@
 #include<misc.h> // for countof();
 #include<object.h>
 #include<namespace.h>
+#include<mibench_iter.h>
 
 #define UNLIMIT
 #define MAXARRAY 5000 /* this number, if too large, will cause a seg. fault!! */
@@ -5037,7 +5038,7 @@ int compare(const void *elem1, const void *elem2)
 
 int
 main() {
-    int count=0;
+    int count=0, i;
   
     count = MAXARRAY;
     int ret = namespace_register(10, act_self_ref, act_self_id);
@@ -5047,10 +5048,10 @@ main() {
     }
     msg_enable = 1;
     printf("\nSorting %d elements.\n\n",count);
-    //while(1) {
+    for(i=0; i<QSORT_ITER; i++) {
         qsort(qstring, count, 128 * sizeof(char),compare);
         printf("The first element: %s\n The last element: %s\n", qstring[0], qstring[MAXARRAY-1]);
       
-    //}
+    }
     return 0;
 }

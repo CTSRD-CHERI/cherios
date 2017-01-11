@@ -136,7 +136,7 @@ set(ASM_COMPILER_FLAGS
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -nostdinc
-    -O2 # TODO: make this depend on the configuration
+    -O3 # TODO: make this depend on the configuration
     -fomit-frame-pointer # TODO: make this depend on the configuration
     -G0
 #    -mxgot

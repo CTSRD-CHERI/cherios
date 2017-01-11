@@ -4,6 +4,7 @@
 
 #include<stdio.h>
 #include"crc.h"
+#include<mibench_iter.h>
 
 /**********************************************************************\
 |* Demonstration program to compute the 32-bit CRC used as the frame  *|
@@ -1252,12 +1253,14 @@ main()
     WORD crc = 0;
     unsigned long charcnt = 0;
     unsigned long pcm_size = &__pcm_end - &__pcm_start;
+    int i;
     register int errors = 0;
-    //while(1) {
+    for(i=0; i<CRC32_ITER; i++) {
         errors |= crc32file(&__pcm_start, pcm_size, &crc, &charcnt);
         printf("CRC: %08X, char count: %7ld\n", crc, charcnt);
         printf("pcm size: %ld\n", &__pcm_end - &__pcm_start);
         charcnt = 0;
-    //}
+        crc = 0;
+    }
     return(errors != 0);
 }
