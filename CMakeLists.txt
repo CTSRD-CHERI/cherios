@@ -66,9 +66,9 @@ set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this 
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # make sure we compile for cheri:
-set(CMAKE_ASM_COMPILER_TARGET mips64-unknown-freebsd)
-set(CMAKE_C_COMPILER_TARGET mips64-unknown-freebsd)
-set(CMAKE_CXX_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
 # sysroot should not be needed as we are in a freestanding environment
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 
@@ -121,6 +121,7 @@ include_directories(include)
 set(ASMC_COMPILER_FLAGS
     -mcpu=mips4
 #-mabi=sandbox
+    -mllvm -cheri128
     -cheri-linker
     -fpic
     -integrated-as
