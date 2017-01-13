@@ -2743,8 +2743,9 @@ main()
 "and recycling it for more than its",
 "worth But trust me on the sunscreen"
 };
+    int i, foundcnt = 0, nfoundcnt = 0;
     for(int iter=0; iter<STRINGSEARCH_ITER; iter++) {
-        int i, foundcnt = 0, nfoundcnt = 0;
+        foundcnt = 0, nfoundcnt = 0;
         for (i = 0; find_strings[i][0]; i++) {
             init_search(find_strings[i]);
             here = strsearch(search_strings[i]);
@@ -2759,8 +2760,8 @@ main()
                 nfoundcnt++;
             //putchar('\n');
         }
-        printf("Stringsearch with %d successes, %d fails.\n", foundcnt, nfoundcnt);
     }
+    printf("Stringsearch iteration: %d, with %d successes, %d fails.\n", STRINGSEARCH_ITER, foundcnt, nfoundcnt);
         
 	void * u_ref = namespace_get_ref(10);
 	assert(u_ref != NULL);

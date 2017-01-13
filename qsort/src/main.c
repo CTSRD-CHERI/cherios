@@ -5050,8 +5050,8 @@ main() {
     printf("\nSorting %d elements.\n\n",count);
     for(i=0; i<QSORT_ITER; i++) {
         qsort(qstring, count, 128 * sizeof(char),compare);
-        printf("The first element: %s\n The last element: %s\n", qstring[0], qstring[MAXARRAY-1]);
-      
     }
+    printf("Qsort iteration: %d, The first element: %s\n The last element: %s\n", QSORT_ITER, qstring[0], qstring[MAXARRAY-1]);
+
     return 0;
 }
