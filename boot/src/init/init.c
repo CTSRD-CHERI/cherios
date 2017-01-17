@@ -37,6 +37,7 @@
 #include "object.h"
 #include "stdio.h"
 #include"string.h"
+#include"statcounters.h"
 
 #define B_FS 1
 #define B_SO 1
@@ -128,13 +129,11 @@ static void load_modules(void) {
 			continue;
 		}
 		be->ctrl = load_module(be->type, be->name, be->arg, NULL);
-        /*
 		printf("Loaded module %s\n", be->name);
         if(strcmp(be->name, "dijkstra.elf") == 0 ) {
-            printf("dijkstra finished loading, init stat counters.\n");
-            stats_init();
+            printf("dijkstra finished loading.\n");
+            stats_display();
         }
-         */
 		switch(init_list[i].type) {
 		case m_memmgt:
 			nssleep(3);
@@ -152,7 +151,7 @@ static void load_modules(void) {
 }
 
 int init_main() {
-  	//stats_init();
+  	stats_init();
 
 	printf("Init loaded\n");
 	printf("__init_fs_start: %p, __init_fs_stop: %p\n", (void *)__init_fs_start, (void *)__init_fs_stop);
