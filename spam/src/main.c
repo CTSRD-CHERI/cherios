@@ -5,6 +5,7 @@
 #include<mips.h>
 #include<assert.h>
 #include<sha_info.h>
+#include<statcounters.h>
 
 #define EACH_BLOCK_SIZE 256
 
@@ -12,6 +13,7 @@ extern char __AES_start, __AES_end;
 
 int
 main() {
+    stats_init();
     for(int i=0; i<8; i++) {
         printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     }
@@ -50,5 +52,6 @@ main() {
     ccall_rrr_n(sha_ref, sha_id, 0, (register_t)&theinfo, (register_t)&__AES_start, (size_t)len);
     ccall_r_n(sha_ref, sha_id, 1, (register_t)&theinfo);
 
+    stats_display();
     return 0;
 }

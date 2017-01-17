@@ -32,6 +32,7 @@ set(LIBUSER_SRCS
     src/ssleep.c
     src/qsort.c
     src/statcounters.c
+    src/stats.c
     src/stdio.c
     src/stdlib.c
     src/strcmp.c

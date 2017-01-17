@@ -5,6 +5,7 @@
 #include<stdio.h>
 #include"crc.h"
 #include<mibench_iter.h>
+#include<statcounters.h>
 
 /**********************************************************************\
 |* Demonstration program to compute the 32-bit CRC used as the frame  *|
@@ -1250,6 +1251,7 @@ WORD crc32buf(char *buf, size_t len)
 int
 main()
 {
+    stats_init();
     WORD crc = 0;
     unsigned long charcnt = 0;
     unsigned long pcm_size = &__pcm_end - &__pcm_start;
@@ -1262,5 +1264,6 @@ main()
         charcnt = 0;
         crc = 0;
     }
+    stats_display();
     return(errors != 0);
 }

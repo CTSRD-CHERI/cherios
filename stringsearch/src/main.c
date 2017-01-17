@@ -19,6 +19,7 @@
 #include<object.h>
 #include<namespace.h>
 #include<mibench_iter.h>
+#include<statcounters.h>
 
 static size_t table[UCHAR_MAX + 1];
 static size_t len;
@@ -76,6 +77,7 @@ char *strsearch(const char *string)
 int
 main()
 {
+      stats_init();
       char *here;
       const char *find_strings[] = { "Kur",
 "gent",
@@ -2778,5 +2780,6 @@ main()
     }
     printf("Stringsearch send success.\n");
 
+    stats_display();
     return 0;
 }

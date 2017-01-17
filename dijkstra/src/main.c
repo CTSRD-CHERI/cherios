@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include<stdlib.h>
+#include<statcounters.h>
 
 #define NUM_NODES                          100
 #define NONE                               9999
@@ -241,6 +242,7 @@ void dijkstra(int chStart, int chEnd)
 }
 
 int main() {
+  stats_init();
   int i_l,j,k;
   
   /* make a fully connected matrix */
@@ -257,5 +259,6 @@ int main() {
 			j=j%NUM_NODES;
       dijkstra(i_l,j);
   }
+  stats_display();
   return 0;
 }

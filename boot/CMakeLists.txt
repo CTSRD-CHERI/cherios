@@ -38,7 +38,6 @@ set(INIT_SRCS
     src/init/init_utils.c
     src/init/init_main.c
     src/init/alloc.c
-    src/init/stats.c
     src/init/ufs_module.c
     src/init/ufs_read.c
     src/init/glue.c
