@@ -120,7 +120,7 @@ static void *make_aligned_data_cap(const char *start, size_t len) {
 static void *make_free_mem_cap(const char *start) {
 	char *cap  = (char *)cheri_getdefault();
 	size_t len = cheri_getlen(cap);
-	size_t ofs = cheri_getbase(start) - cheri_getbase(cap);
+	size_t ofs = cheri_getbase(start) + cheri_getoffset(start) - cheri_getbase(cap);
 
 	cap += ofs;
 	len -= ofs;
