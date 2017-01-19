@@ -134,6 +134,9 @@ void kernel_exception(void) {
 	if(entered > 1) {
 		KERNEL_ERROR("interrupt in interrupt: level %d in %s",
 			     entered, kernel_acts[kernel_curr_act].name);
+	} else {
+		KERNEL_TRACE("exception", "-> entry: in %s",
+			     kernel_acts[kernel_curr_act].name);
 	}
 
 	/*
@@ -175,5 +178,8 @@ void kernel_exception(void) {
 		KERNEL_ERROR("interrupt in interrupt: level %d in %s",
 			     entered, kernel_acts[kernel_curr_act].name);
 		kernel_freeze();
+	} else {
+		KERNEL_TRACE("exception", "<- exit: in %s\n",
+			     kernel_acts[kernel_curr_act].name);
 	}
 }

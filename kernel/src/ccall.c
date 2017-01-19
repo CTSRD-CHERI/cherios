@@ -139,8 +139,6 @@ void kernel_ccall(void) {
 }
 
 void kernel_creturn(void) {
-  	KERNEL_TRACE(__func__, "in %s", kernel_acts[kernel_curr_act].name);
-
 	/* Ack creturn instruction */
 	kernel_skip_instr(kernel_curr_act);
 
@@ -149,6 +147,7 @@ void kernel_creturn(void) {
 		/* Used by asynchronous primitives */
 		//act_wait(kernel_curr_act, 0);
 		act_wait(kernel_curr_act, kernel_curr_act);
+		KERNEL_TRACE(__func__, "act_wait (no sync-token) in %s", kernel_acts[kernel_curr_act].name);
 		return;
 	}
 
@@ -161,6 +160,10 @@ void kernel_creturn(void) {
 		KERNEL_ERROR("bad sync creturn");
 		kernel_freeze();
 	}
+
+	KERNEL_TRACE(__func__, "creturn from %s to %s",
+		     kernel_acts[kernel_curr_act].name,
+		     kernel_acts[ccaller].name);
 
 	/* Make the caller runnable again */
 	kernel_assert(kernel_acts[ccaller].sched_status == sched_sync_block);
