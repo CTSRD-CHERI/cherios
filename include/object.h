@@ -41,6 +41,7 @@ void *	act_ctrl_get_ref(void * ctrl);
 void *	act_ctrl_get_id(void * ctrl);
 int	act_ctrl_revoke(void * ctrl);
 int	act_ctrl_terminate(void * ctrl);
+void *	act_get_ctrl(void);
 void *	act_get_cap(void);
 void *	act_seal_id(void * id);
 
