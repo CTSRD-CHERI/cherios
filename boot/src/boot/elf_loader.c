@@ -33,7 +33,7 @@
 #include "math.h"
 #include "string.h"
 
-#if 0
+#if 1
 #define TRACE(s, ...) trace_elf_loader(KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
 static void trace_elf_loader(const char *fmt, ...) {
 	va_list ap;
@@ -208,9 +208,14 @@ void * elf_loader(const char * file, int direct_map, size_t * maxaddr) {
 	size_t allocsize = 0;
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
-		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX filesz:%lX memsz:%lX align:%lX",
-			seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr,
+		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX paddr:%lX filesz:%lX memsz:%lX align:%lX",
+			seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr, seg->p_paddr,
 			seg->p_filesz, seg->p_memsz, seg->p_align);
+		if(seg->p_filesz > seg->p_memsz) {
+			ERROR("Section is larger in file than in memory");
+			boot_free(addr);
+			return NULL;
+		}
 		if(seg->p_type == 1) {
 			allocsize = umax(allocsize, seg->p_vaddr + seg->p_memsz);
 		} else if(seg->p_type == 0x6474E551) {
