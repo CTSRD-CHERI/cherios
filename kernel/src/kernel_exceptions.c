@@ -30,81 +30,32 @@
 
 #include "klib.h"
 #include "cp0.h"
+#include "kernel_exceptions.h"
 
 /*
  * Exception demux
  */
 
-#ifndef __LITE__
-static const char * capcausestr[0x20] = {
-	"None",
-	"Length Violation",
-	"Tag Violation",
-	"Seal Violation",
-	"Type Violation",
-	"Call Trap",
-	"Return Trap",
-	"Underflow of trusted system stack",
-	"User-defined Permission Violation",
-	"TLB prohibits store capability",
-	"Requested bounds cannot be represented exactly",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"Global Violation",
-	"Permit Execute Violation",
-	"Permit Load Violation",
-	"Permit Store Violation",
-	"Permit Load Capability Violation",
-	"Permit Store Capability Violation",
-	"Permit Store Local Capability Violation",
-	"Permit Seal Violation",
-	"Access System Registers Violation",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved"
-};
-
-#define exception_printf kernel_printf
-#else
-#define exception_printf(...)
-#endif
-
-static inline const char * getcapcause(int cause) {
-	#ifndef __LITE__
-		return capcausestr[cause];
-	#else
-		return ""; cause++;
-	#endif
-}
-
 static void kernel_exception_capability(void) {
 	KERNEL_TRACE("exception", "kernel_capability");
-	register_t capcause = cheri_getcause();
-	int cause = (capcause >> 8) & 0x1F;
 
-	if(cause == 5) { /* todo: give them their own handler */
+	cap_exception_t exception = parse_cause(cheri_getcause());
+
+	if(exception.cause == Call_Trap) { /* todo: give them their own handler */
 		kernel_ccall();
 		return;
 	}
-	if(cause == 6) {
+	if(exception.cause == Return_Trap) {
 		kernel_creturn();
 		return;
 	}
 
-	int reg_num = capcause & 0xFF;
-	exception_printf(KRED "Capability exception catched for activation! %s-%d"
+	exception_printf(KRED "Capability exception caught in activation %s-%d"
 	             " (0x%X: %s) [Reg C%d]" KRST"\n",
 	        kernel_acts[kernel_curr_act].name, kernel_curr_act,
-		cause, getcapcause(cause), reg_num);
+		exception.cause, getcapcause(exception.cause), exception.reg_num);
 
-	regdump(reg_num);
+	regdump(exception.reg_num);
 	kernel_freeze();
 }
 
