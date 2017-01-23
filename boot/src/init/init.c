@@ -145,14 +145,10 @@ int init_main() {
 	init_alloc_init();
 
 	/* Print fs build date */
-	printf("Init:C\n");
 	print_build_date();
 
 	/* Load modules */
-	printf("Init:F\n");
 	load_modules();
-
-	printf("Init:Z\n");
 
 	while(acts_alive(init_list, init_list_len)) {
 		ssleep(0);
