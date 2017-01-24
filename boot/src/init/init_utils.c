@@ -75,16 +75,26 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 	/* set c0 */
 	frame.cf_c0	= c0;
 
+	/* the ctrl cap in cf_c20 will be set by the kernel on
+	   registration
+	*/
+
 	/* set cap */
 	frame.cf_c22	= act_cap;
 
-	/* set namespace */
+	/* set namespace refs.  for the namespace-mgr itself, of
+	   course, these will be NULL, and it will bootstrap these
+	   itself. */
 	frame.cf_c23	= ns_ref;
 	frame.cf_c24	= ns_id;
 
+	printf("init:%s: registering activation %s\n", __func__, name);
 	void * ctrl = init_act_register(&frame, name);
-	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
-	      rarg, 0, 0, carg, NULL, ctrl);
+	printf("init:%s: registered activation, calling %s\n", __func__, name);
+	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl),
+	      /* method_nb */ 0,
+	      /* rargs */ rarg, 0, 0,
+	      /* cargs */ carg, NULL, ctrl);
 	return ctrl;
 }
 

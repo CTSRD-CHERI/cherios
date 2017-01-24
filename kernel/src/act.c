@@ -84,13 +84,11 @@ static void * act_create_ctrl_ref(aid_t aid) {
 }
 
 void * act_register(const reg_frame_t * frame, const char * name) {
+	void * ctrl;
 	aid_t aid = kernel_next_act;
 
-	if(aid >= MAX_ACTIVATIONS) {
-		kernel_panic("no act slot");
-	}
-
 	/* set aid */
+	if(aid >= MAX_ACTIVATIONS) kernel_panic("no act slot");
 	kernel_acts[aid].aid = aid;
 
 #ifndef __LITE__
@@ -125,11 +123,16 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 
 	/* set scheduling status */
 	sched_create(aid);
-
 	KERNEL_TRACE("act", "%s added %s OK! ", __func__, kernel_acts[aid].name);
+
 	/* done, update next_act */
 	kernel_next_act++;
-	return act_create_ctrl_ref(aid);
+
+	/* initialize c20 to the ctrl cap */
+	ctrl = act_create_ctrl_ref(aid);
+	kernel_exception_framep[aid].cf_c20 = ctrl;
+
+	return ctrl;
 }
 
 int act_revoke(act_t * ctrl) {
