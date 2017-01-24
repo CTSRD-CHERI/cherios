@@ -160,7 +160,7 @@ static void load_modules(void) {
 }
 
 int init_main() {
-  	stats_init();
+	stats_init();
 
 	printf("Init loaded\n");
 
