@@ -48,6 +48,9 @@ void register_ns(void * ns_ref, void * ns_id) {
 
 int main(void) {
 	syscall_puts("memmgt Hello world\n");
+	int ret = namespace_register(3, act_self_ref, act_self_id);
+	if (ret!=0)
+		syscall_puts(KRED"Register of memmgt failed\n");
 
 	/* Get capability to heap */
 	void * heap = act_get_cap();
