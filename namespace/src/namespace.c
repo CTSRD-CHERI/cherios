@@ -29,6 +29,7 @@
  */
 
 #include "lib.h"
+#include "sys/mman.h"
 
 typedef struct {
 	void * act_reference;
@@ -40,6 +41,16 @@ bind_t bind[bind_len];
 int count;
 
 void ns_init(void) {
+	/* We need to bootstrap the namespace refs ourselves using our
+	   ctrl cap, since the generic libuser was provided NULL
+	   caps. */
+	void * ctrl;
+	extern void * namespace_ref, * namespace_id;
+
+	ctrl = act_get_ctrl();
+	namespace_ref = act_ctrl_get_ref(ctrl);
+	namespace_id  = act_ctrl_get_id(ctrl);
+
 	bzero(bind, sizeof(bind));
 	count = 0;
 }
@@ -63,8 +74,7 @@ static int validate_act_caps(void * act_reference, void * act_default_id) {
 
 /* Get reference for service 'n' */
 void * ns_get_reference(int nb) {
-	if(!validate_idx(nb))
-		return NULL;
+	if(!validate_idx(nb)) return NULL;
 
 	/* If service not in use, will already return NULL */
 	printf("%s: ref request for port %d\n", __func__, nb);
@@ -73,8 +83,7 @@ void * ns_get_reference(int nb) {
 
 /* Get default identifier for service 'n' */
 void * ns_get_identifier(int nb) {
-	if(!validate_idx(nb))
-		return NULL;
+	if(!validate_idx(nb)) return NULL;
 
 	/* If service not in use, will already return NULL */
 	printf("%s: id request for port %d\n", __func__, nb);
@@ -91,7 +100,17 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id)
 
 	bind[nb].act_reference  = act_reference;
 	bind[nb].act_default_id = act_default_id;
-	printf("%s: #%d registered at port %d\n", __func__, count, nb);
+
+	/* By convention, the first service registration is from the
+	 * mem-mgr.
+	 */
+	if (count == 0) {
+		mmap_set_act(act_reference, act_default_id);
+		printf("%s: #%d (mem-mgr) registered at port %d\n", __func__, count, nb);
+	} else {
+		printf("%s: #%d registered at port %d\n", __func__, count, nb);
+	}
+
 	count++;
 	return 0;
 }

@@ -53,8 +53,37 @@
 	{m_fence, 1, NULL, 0, 0, 0, NULL},
 
 init_elem_t init_list[] = {
-	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
+  /*
+   * The namespace-mgr and mem-mgr are mutually dependent.
+   *
+   * - the namespace-mgr needs to allocate memory for tracking ids,
+   *   and hence its libuser needs the id of the mem-mgr service
+   *
+   * - the mem-mgr is a service that needs to announce itself, and
+   *   hence it needs to know the id of the namespace-mgr to send the
+   *   announcement.
+   *
+   * The current approach to cutting this recursive knot is via the
+   * following:
+   *
+   * - the namespace-mgr is initialized with enough memory to track at
+   *   least one service, i.e. enough to last it until the first
+   *   service announcement it receives.  by convention, it will be
+   *   the first service started.
+   *
+   * - by convention, the memory-mgr will be the second service
+   *   started.  it will be passed the id of the namespace-mgr service
+   *   as an initialization argument.  its very first action will be to
+   *   announce itself to the namespace-mgr.
+   *
+   * - the init process will query the namespace-mgr for the number of
+   *   registered services.  it will start the remaining services once
+   *   it can be sure that the mem-mgr service has registered itself.
+   *
+   */
 	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
+	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
+
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
@@ -117,22 +146,16 @@ static void load_modules(void) {
 
 		be->ctrl = load_module(be->type, be->name, be->arg, NULL);
 		printf("Loaded module %s\n", be->name);
-		switch(init_list[i].type) {
-		case m_memmgt:
-			nssleep(3);
+		if (init_list[i].type == m_memmgt) {
+			/* Ensure that the memory-mgr has been
+			 * properly registered before proceeding.
+			 */
+			do {
+				cnt = num_registered_modules();
+			} while (cnt == 0);
 			c_memmgt = be->ctrl;
 			init_alloc_enable_system(be->ctrl);
-			break;
-		case m_namespace:
-			nssleep(3);
-			/* glue memmgt to namespace */
-			glue_memmgt(c_memmgt, be->ctrl);
-			break;
-		default:{}
 		}
-
-		cnt = num_registered_modules();
-		printf("%d modules registered with namespace-mgr.\n", cnt);
 	}
 }
 
