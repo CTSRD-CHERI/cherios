@@ -99,9 +99,6 @@ static void kernel_ccall_core(int cflags) {
 void kernel_ccall(register_t ccall_selector) {
 	KERNEL_TRACE(__func__, "in %s", kernel_acts[kernel_curr_act].name);
 
-	/* Ack ccall instruction */
-	kernel_skip_instr(kernel_curr_act);
-
 	int cflags;
 
 	switch(ccall_selector) {
@@ -123,9 +120,6 @@ void kernel_ccall(register_t ccall_selector) {
 
 void kernel_creturn(void) {
   	KERNEL_TRACE(__func__, "in %s", kernel_acts[kernel_curr_act].name);
-
-	/* Ack creturn instruction */
-	kernel_skip_instr(kernel_curr_act);
 
 	uint64_t sync_token = kernel_exception_framep_ptr->mf_t2;
 	if(sync_token == 0) {
