@@ -75,7 +75,7 @@ load(const char *filepath, int *bufsize)
 	size_t size;
 	ssize_t read;
 
-	printf("Loading '%s'\n", filepath);
+	printf(KWHT"Loading '%s'\n", filepath);
 
 	if ((ino = lookup(filepath)) == 0) {
 		printf("Failed to lookup '%s' (file not found?)\n", filepath);

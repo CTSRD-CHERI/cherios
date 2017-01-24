@@ -29,6 +29,7 @@
  */
 
 #include "lib.h"
+#include<colors.h>
 
 typedef struct {
 	void * act_reference;
@@ -65,7 +66,7 @@ void * ns_get_reference(int nb) {
 		return NULL;
 
 	/* If service not in use, will already return NULL */
-	printf("%s: ref request for port %d\n", __func__, nb);
+	printf(KWHT"%s: ref request for port %d"KRST"\n", __func__, nb);
 	return bind[nb].act_reference;
 }
 
@@ -75,7 +76,7 @@ void * ns_get_identifier(int nb) {
 		return NULL;
 
 	/* If service not in use, will already return NULL */
-	printf("%s: id request for port %d\n", __func__, nb);
+	printf(KWHT"%s: id request for port %d"KRST"\n", __func__, nb);
 	return bind[nb].act_default_id;
 }
 
@@ -83,13 +84,13 @@ void * ns_get_identifier(int nb) {
 /* Register a module a service 'nb' */
 static int ns_register_core(int nb, void * act_reference, void * act_default_id) {
 	if(bind[nb].act_reference != NULL) {
-		printf("%s: port already in use\n", __func__);
+		printf(KWHT"%s: port already in use"KRST"\n", __func__);
 		return -1;
 	}
 
 	bind[nb].act_reference  = act_reference;
 	bind[nb].act_default_id = act_default_id;
-	printf("%s: registered at port %d\n", __func__, nb);
+	printf(KWHT"%s: registered at port %d"KRST"\n", __func__, nb);
 	return 0;
 }
 

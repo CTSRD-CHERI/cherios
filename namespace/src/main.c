@@ -29,6 +29,7 @@
  */
 
 #include "lib.h"
+#include<colors.h>
 
 extern void msg_entry;
 void (*msg_methods[]) = {ns_register, ns_get_reference, ns_get_identifier};

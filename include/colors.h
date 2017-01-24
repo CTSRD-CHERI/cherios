@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#define NO_COLORS
+//#define NO_COLORS
 #ifndef NO_COLORS
 	#define COLORS
 #endif
