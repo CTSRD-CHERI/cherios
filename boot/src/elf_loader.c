@@ -46,7 +46,10 @@
 #include "string.h"
 #include "elf.h"
 
-#if 0
+#define TRACE_ELF_LOADER	0
+
+#if TRACE_ELF_LOADER
+
 #define TRACE(s, ...) trace_elf_loader(env, KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
 static void trace_elf_loader(Elf_Env *env, const char *fmt, ...) {
 	va_list ap;
@@ -54,8 +57,24 @@ static void trace_elf_loader(Elf_Env *env, const char *fmt, ...) {
 	env->vprintf(fmt, ap);
 	va_end(ap);
 }
+
+#define ENV_PRINT_CAP(env, cap)						\
+	env->printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
+	       "b:%016jx l:%016zx o:%jx\n",				\
+	   __func__,							\
+	   #cap,							\
+	   cheri_gettag(cap),						\
+	   cheri_getsealed(cap),					\
+	   cheri_getperm(cap),						\
+	   cheri_getbase(cap),						\
+	   cheri_getlen(cap),						\
+	   cheri_getoffset(cap))
+
 #else
+
 #define TRACE(...)
+#define ENV_PRINT_CAP(...)
+
 #endif
 
 #define ERROR(s) error_elf_loader(env, KRED"elf_loader: " s KRST"\n")
@@ -173,6 +192,7 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 	}
 
 	TRACE("Allocated %lx bytes of target memory", allocsize);
+	ENV_PRINT_CAP(env, prgmp);
 
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
