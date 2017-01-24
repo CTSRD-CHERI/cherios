@@ -39,6 +39,21 @@
 #include "uart.h"
 #include "elf.h"
 
+#define TRACE_BOOT_LOADER	0
+
+#if TRACE_BOOT_LOADER
+
+#define TRACE_PRINT_PTR(ptr) BOOT_PRINT_PTR(ptr)
+#define TRACE_PRINT_CAP(cap) BOOT_PRINT_CAP(cap)
+
+#else
+
+#define TRACE_PRINT_PTR(...)
+#define TRACE_PRINT_CAP(...)
+
+#endif
+
+
 static void *kernel_alloc_mem(size_t _size) {
 	/* The kernel is direct-mapped. */
 	(void) _size;
@@ -84,14 +99,19 @@ void load_kernel() {
 
 	if(&__kernel_entry_point != prgmp + entry) {
 		boot_printf(KRED"Bad kernel entry point:"KRST"\n");
-		BOOT_PRINT_CAP(prgmp);
+		TRACE_PRINT_CAP(prgmp);
 		boot_printf("Expected kernel entry point:\n");
-		BOOT_PRINT_CAP(&__kernel_entry_point);
+		TRACE_PRINT_CAP(&__kernel_entry_point);
 		goto err;
 	}
 
 	caches_invalidate(&__kernel_load_virtaddr,
 	                  maxaddr - (size_t)(&__kernel_load_virtaddr));
+
+	boot_printf(KRED"Loaded kernel: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
+		    minaddr, maxaddr, entry);
+	TRACE_PRINT_CAP(prgmp);
+	TRACE_PRINT_CAP(&__kernel_load_virtaddr);
 
 	bzero(&bi, sizeof(bi));
 	bi.kernel_start_addr = &__kernel_load_virtaddr;
@@ -152,11 +172,19 @@ boot_info_t *load_init() {
 	caches_invalidate(&__init_load_virtaddr,
 	                  maxaddr - (size_t)(&__init_load_virtaddr));
 
+	boot_printf(KRED"Loaded init: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
+		    minaddr, maxaddr, entry);
+	TRACE_PRINT_CAP(prgmp);
+	TRACE_PRINT_CAP(&__init_load_virtaddr);
+
 	/* set up a stack region just after the loaded executable */
 	void * stack = make_aligned_data_cap(prgmp + maxaddr, INIT_STACK_SIZE);
 
 	/* free memory starts beyond this stack */
 	bi.start_free_mem = make_free_mem_cap((char *)stack + INIT_STACK_SIZE);
+
+	TRACE_PRINT_CAP(stack);
+	TRACE_PRINT_CAP(bi.start_free_mem);
 
 	/* set up pcc */
 	void *pcc = cheri_getpcc();
