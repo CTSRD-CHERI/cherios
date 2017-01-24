@@ -140,7 +140,7 @@ static void load_modules(void) {
 			continue;
 
 		if(be->type == m_fence) {
-			nssleep(3);
+			/* nssleep(3); */
 			continue;
 		}
 
