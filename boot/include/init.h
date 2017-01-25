@@ -36,6 +36,7 @@
 #include "mips.h"
 #include "cdefs.h"
 #include "stdio.h"
+#include "boot/boot_info.h"
 
 typedef enum module_type {
 	m_memmgt,
@@ -59,6 +60,8 @@ typedef struct init_elem_s {
 
 extern char	__start_heap;
 extern char	__stop_heap;
+
+extern init_info_t * init_info;
 
 /*
  * Memory routines

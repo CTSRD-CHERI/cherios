@@ -45,9 +45,21 @@ typedef struct boot_info {
 
 	void		*init_start_addr;	/* Lowest init memory address */
 	uint64_t	init_mem_size;		/* Size of contiguous memory for loaded init */
+	void		*init_stack;		/* Stack region for init */
+
 	reg_frame_t	init_frame;		/* Initial frame for initial activation */
 
-	void		*start_free_mem;	/* Start of free memory (which will include the bootloader) */
+	void		*free_mem;		/* Free memory (which will include the bootloader) */
 } boot_info_t;
+
+/* Information copied from the boot_info by the kernel, and given to
+ * the init activation.
+ */
+typedef struct init_info {
+	void		*init_start_addr;	/* Lowest init memory address */
+	uint64_t	init_mem_size;		/* Size of contiguous memory for loaded init */
+	void		*init_stack;		/* Stack region for init */
+	void		*free_mem;		/* Free memory (which will include the bootloader) */
+} init_info_t;
 
 #endif /* _BOOT_INFO_H_ */

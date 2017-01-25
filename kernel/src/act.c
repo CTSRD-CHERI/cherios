@@ -38,10 +38,20 @@
 struct reg_frame		kernel_exception_framep[MAX_ACTIVATIONS];
 struct reg_frame *		kernel_exception_framep_ptr;
 act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
-aid_t 				kernel_curr_act;
+aid_t				kernel_curr_act;
 aid_t				kernel_next_act;
 
-static const void *            act_default_id = NULL;
+static const void *		act_default_id = NULL;
+
+static struct init_info		init_info;
+
+void * make_init_info(boot_info_t *bi) {
+	init_info.init_start_addr = bi->init_start_addr;
+	init_info.init_mem_size   = bi->init_mem_size;
+	init_info.init_stack      = bi->init_stack;
+	init_info.free_mem        = bi->free_mem;
+	return &init_info;
+}
 
 void act_init(boot_info_t *bi) {
 	KERNEL_TRACE("init", "activation init");
@@ -64,6 +74,15 @@ void act_init(boot_info_t *bi) {
 	/* create the activation for init, passed in the boot_info */
 	kernel_curr_act = kernel_next_act = 1;
 	act_register(&bi->init_frame, "init");
+
+	/* provide config info to init.  the init activation frame is
+	 * special since it cannot be given any namespace refs;
+	 * instead use those slots (C23, C24) to provide any initial
+	 * config info.
+	 */
+	void * info = make_init_info(bi);
+	kernel_exception_framep[kernel_curr_act].cf_c23 = info;
+
 	kernel_exception_framep_ptr = &kernel_exception_framep[kernel_curr_act];
 	sched_d2a(kernel_curr_act, sched_runnable);
 }

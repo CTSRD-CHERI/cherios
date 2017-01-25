@@ -180,11 +180,14 @@ boot_info_t *load_init() {
 	/* set up a stack region just after the loaded executable */
 	void * stack = make_aligned_data_cap(prgmp + maxaddr, INIT_STACK_SIZE);
 
+	bi.init_start_addr = &__init_elf_start;
+	bi.init_mem_size   = maxaddr - minaddr;
+	bi.init_stack      = stack;
 	/* free memory starts beyond this stack */
-	bi.start_free_mem = make_free_mem_cap((char *)stack + INIT_STACK_SIZE);
+	bi.free_mem = make_free_mem_cap((char *)stack + INIT_STACK_SIZE);
 
 	TRACE_PRINT_CAP(stack);
-	TRACE_PRINT_CAP(bi.start_free_mem);
+	TRACE_PRINT_CAP(bi.free_mem);
 
 	/* set up pcc */
 	void *pcc = cheri_getpcc();

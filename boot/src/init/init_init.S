@@ -80,6 +80,11 @@ cherios_init_jump_target:
 	cjalr		$c12, $c17
 	nop
 
+	# Initialize the init_info pointer from $c23
+	cgetdefault	$c12
+	dla		$t0, init_info
+	csc		$c23, $t0, 0($c12)
+
 	# Initialise globals.
 	cgetpcc		$c12
 	dla		$t0, crt_init_globals

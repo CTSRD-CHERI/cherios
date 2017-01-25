@@ -118,7 +118,9 @@ init_elem_t init_list[] = {
 
 const size_t init_list_len = countof(init_list);
 
-void print_build_date(void) {
+init_info_t * init_info;
+
+static void print_build_date(void) {
 	int filelen=0;
 	char * date = load("t1", &filelen);
 	if(date == NULL) {
@@ -127,6 +129,17 @@ void print_build_date(void) {
 	}
 	date[filelen-1] = '\0';
 	printf("%s\n", date);
+}
+
+static void print_init_info() {
+	CHERI_PRINT_CAP(init_info);
+
+	if (init_info) {
+		CHERI_PRINT_CAP(init_info->init_start_addr);
+		printf("%s: init_mem_size   = %lx\n", __func__, init_info->init_mem_size);
+		CHERI_PRINT_CAP(init_info->init_stack);
+		CHERI_PRINT_CAP(init_info->free_mem);
+	}
 }
 
 static void load_modules(void) {
@@ -169,6 +182,7 @@ int init_main() {
 
 	/* Print fs build date */
 	print_build_date();
+	print_init_info();
 
 	/* Load modules */
 	load_modules();
