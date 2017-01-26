@@ -46,7 +46,15 @@ void register_ns(void * ns_ref, void * ns_id) {
 		syscall_puts(KRED"Register failed\n");
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+	/* We are passed the reference to free memory as our first
+	 * capability argument, which is argv.  For now, we don't yet
+	 * use this for the heap below.
+	 */
+	void * free_mem = argv;
+	//CHERI_PRINT_CAP(free_mem);
+	assert(free_mem != NULL);
+
 	syscall_puts("memmgt Hello world\n");
 	int ret = namespace_register(3, act_self_ref, act_self_id);
 	if (ret!=0)

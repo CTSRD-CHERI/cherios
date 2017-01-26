@@ -157,7 +157,9 @@ static void load_modules(void) {
 			continue;
 		}
 
-		be->ctrl = load_module(be->type, be->name, be->arg, NULL);
+		void *carg = (be->type == m_memmgt) ? init_info->free_mem : NULL;
+
+		be->ctrl = load_module(be->type, be->name, be->arg, carg);
 		printf("Loaded module %s\n", be->name);
 		if (init_list[i].type == m_memmgt) {
 			/* Ensure that the memory-mgr has been
