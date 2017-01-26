@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -49,7 +50,7 @@ static void syscall_act_register(void) {
 }
 
 static void syscall_act_ctrl_get_ref(void) {
-	kernel_exception_framep_ptr->cf_c3 = act_get_ref(kernel_exception_framep_ptr->cf_c3);
+	kernel_exception_framep_ptr->cf_c3 = act_get_sealed_ref_from_ctrl(kernel_exception_framep_ptr->cf_c3);
 }
 
 static void syscall_act_ctrl_get_id(void) {
@@ -78,7 +79,7 @@ static void syscall_act_seal_identifier(void) {
 }
 
 static void syscall_puts() {
-	void * msg = kernel_exception_framep_ptr->cf_c3;
+	capability msg = kernel_exception_framep_ptr->cf_c3;
 	#ifndef __LITE__
 	printf(KGRN"%s" KREG KRST, msg);
 	#else
@@ -106,6 +107,8 @@ static void syscall_gc(void) {
 	         kernel_exception_framep_ptr->cf_c4);
 }
 
+//FIXME should send message not handle itself
+
 /*
  * Syscall demux
  */
@@ -113,7 +116,7 @@ void kernel_exception_syscall(void)
 {
 	long sysn = kernel_exception_framep_ptr->mf_v0;
 	KERNEL_TRACE("exception", "Syscall number %ld", sysn);
-	aid_t kca = kernel_curr_act;
+	act_t * kca = kernel_curr_act;
 	switch(sysn) {
 		case 13:
 			syscall_sleep();

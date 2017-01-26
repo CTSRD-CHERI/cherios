@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -33,22 +34,22 @@
 #include "cheric.h"
 #include "assert.h"
 
-void * namespace_ref = NULL;
-void * namespace_id  = NULL;
+capability namespace_ref = NULL;
+capability namespace_id  = NULL;
 
-void namespace_init(void *ns_ref, void *ns_id) {
+void namespace_init(capability ns_ref, capability ns_id) {
 	namespace_ref = ns_ref;
 	namespace_id  = ns_id;
 }
 
-int namespace_register(int nb, void *ref, void *id) {
+int namespace_register(int nb, capability ref, capability id) {
 	return ccall_rcc_r(namespace_ref, namespace_id, 0, nb, ref, id);
 }
 
-void * namespace_get_ref(int nb) {
+capability namespace_get_ref(int nb) {
 	return ccall_r_c(namespace_ref, namespace_id, 1, nb);
 }
 
-void * namespace_get_id(int nb) {
+capability namespace_get_id(int nb) {
 	return ccall_r_c(namespace_ref, namespace_id, 2, nb);
 }

@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -30,7 +31,8 @@
 
 #include "klib.h"
 
-static queue_t msg_queues[MAX_ACTIVATIONS];
+// FIXME: These are still here until userspace provides them properly, but they are now pointed to be the OARef
+queue_t kernel_message_queues[MAX_ACTIVATIONS];
 
 /*
  * Routines to handle the message queue
@@ -49,70 +51,72 @@ static inline int empty(queue_t * queue) {
 	return queue->start == queue->end;
 }
 
-int msg_push(int dest, int src, void * identifier, void * sync_token) {
-	queue_t * queue = msg_queues + dest;
-	msg_nb_t  qmask  = kernel_acts[dest].queue_mask;
+int msg_push(act_t * dest, act_t * src, capability identifier, capability sync_token) {
+	queue_t * queue = dest->msg_queue;
+	msg_nb_t  qmask  = dest->queue_mask;
 	kernel_assert(qmask > 0);
 	int next_slot = queue->end;
 	if(full(queue, qmask)) {
 		return -1;
 	}
 
-	queue->msg[next_slot].a0  = kernel_exception_framep[src].mf_a0;
-	queue->msg[next_slot].a1  = kernel_exception_framep[src].mf_a1;
-	queue->msg[next_slot].a2  = kernel_exception_framep[src].mf_a2;
+	queue->msg[next_slot].a0  = src->saved_registers.mf_a0;
+	queue->msg[next_slot].a1  = src->saved_registers.mf_a1;
+	queue->msg[next_slot].a2  = src->saved_registers.mf_a2;
 
-	queue->msg[next_slot].c3  = kernel_exception_framep[src].cf_c3;
-	queue->msg[next_slot].c4  = kernel_exception_framep[src].cf_c4;
-	queue->msg[next_slot].c5  = kernel_exception_framep[src].cf_c5;
+	queue->msg[next_slot].c3  = src->saved_registers.cf_c3;
+	queue->msg[next_slot].c4  = src->saved_registers.cf_c4;
+	queue->msg[next_slot].c5  = src->saved_registers.cf_c5;
 
-	queue->msg[next_slot].v0  = kernel_exception_framep[src].mf_v0;
+	queue->msg[next_slot].v0  = src->saved_registers.mf_v0;
 	queue->msg[next_slot].idc = identifier;
 	queue->msg[next_slot].c1  = sync_token;
+	queue->msg[next_slot].c2  = (sync_token == NULL) ? NULL : kernel_seal(src, act_sync_ref_type);
 
 	queue->end = safe(queue->end+1, qmask);
 
-	if(kernel_acts[dest].sched_status == sched_waiting) {
+	if(dest->sched_status == sched_waiting) {
 		sched_d2a(dest, sched_schedulable);
 	}
 	return 0;
 }
 
-void msg_pop(aid_t act) {
-	queue_t * queue = msg_queues + act;
-	msg_nb_t  qmask  =  kernel_acts[act].queue_mask;
+void msg_pop(act_t * act) {
+	queue_t * queue = act->msg_queue;
+	msg_nb_t  qmask  =  act->queue_mask;
 
-	kernel_assert(kernel_acts[act].sched_status == sched_schedulable);
+	kernel_assert(act->sched_status == sched_schedulable);
 	kernel_assert(!empty(queue));
 
 	int start = queue->start;
 
-	kernel_exception_framep[act].mf_a0  = queue->msg[start].a0;
-	kernel_exception_framep[act].mf_a1  = queue->msg[start].a1;
-	kernel_exception_framep[act].mf_a2  = queue->msg[start].a2;
+	act->saved_registers.mf_a0  = queue->msg[start].a0;
+	act->saved_registers.mf_a1  = queue->msg[start].a1;
+	act->saved_registers.mf_a2  = queue->msg[start].a2;
 
-	kernel_exception_framep[act].cf_c3  = queue->msg[start].c3;
-	kernel_exception_framep[act].cf_c4  = queue->msg[start].c4;
-	kernel_exception_framep[act].cf_c5  = queue->msg[start].c5;
+	act->saved_registers.cf_c3  = queue->msg[start].c3;
+	act->saved_registers.cf_c4  = queue->msg[start].c4;
+	act->saved_registers.cf_c5  = queue->msg[start].c5;
 
-	kernel_exception_framep[act].mf_v0  = queue->msg[start].v0;
-	kernel_exception_framep[act].cf_idc = queue->msg[start].idc;
-	kernel_exception_framep[act].cf_c1  = queue->msg[start].c1;
+	act->saved_registers.mf_v0  = queue->msg[start].v0;
+	act->saved_registers.cf_idc = queue->msg[start].idc;
+	act->saved_registers.cf_c1  = queue->msg[start].c1;
+	act->saved_registers.cf_c2  = queue->msg[start].c2;
 
 	queue->start = safe(start+1, qmask);
 }
 
-int msg_queue_empty(aid_t act) {
-	queue_t * queue = msg_queues + act;
+int msg_queue_empty(act_t * act) {
+	queue_t * queue = act->msg_queue;
 	if(empty(queue)) {
 		return 1;
 	}
 	return 0;
 }
 
-void msg_queue_init(aid_t act) {
-	msg_queues[act].start = 0;
-	msg_queues[act].end = 0;
-	msg_queues[act].len = MAX_MSG;
+void msg_queue_init(act_t * act) {
+	act->msg_queue->start = 0;
+	act->msg_queue->end = 0;
+	act->msg_queue->len = MAX_MSG;
 	//todo: zero queue?
 }

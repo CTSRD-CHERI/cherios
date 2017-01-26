@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -61,10 +62,22 @@
 	#define KERNEL_ERROR(...)
 #endif
 
+// FIXME we need to really think about the types of IDs and REFs
+
+/* The type of object activation references */
+static const uint64_t act_ref_type = 42002;
+/* The type of object identifier references */
+static const uint64_t act_id_type = act_ref_type;
+/* The type of object activation identifier control references */
+static const uint64_t act_ctrl_ref_type = 42001;
+/* The type of the synchronous sequence reply token */
+static const uint64_t act_sync_type = 42000;
+/* The type of object activation response references */
+static const uint64_t act_sync_ref_type = 42003;
 /*
  * Kernel library routines.
  */
-void	kernel_skip_instr(aid_t act);
+void	kernel_skip_instr(act_t * act);
 void	kernel_ccall(void);
 void	kernel_creturn(void);
 void	kernel_exception_syscall(void);
@@ -94,21 +107,25 @@ void	kernel_freeze(void) __dead2;
 
 int	try_gc(void * p, void * pool);
 
-int	msg_push(int dest, int src, void *, void *);
-void	msg_pop(aid_t act);
-void	msg_queue_init(aid_t act);
-int	msg_queue_empty(aid_t act);
+int	msg_push(act_t * dest, act_t * src, capability, capability);
+void	msg_pop(act_t* act);
+void	msg_queue_init(act_t* act);
+int	msg_queue_empty(act_t* act);
 
 void	act_init(void);
-void	act_wait(int act, aid_t next_hint);
-void *	act_register(const reg_frame_t * frame, const char * name);
-void *	act_get_ref(act_t * ctrl);
-void *	act_get_id(act_t * ctrl);
-int	act_get_status(act_t * ctrl);
-int	act_revoke(act_t * ctrl);
-int	act_terminate(act_t * ctrl);
-void *	act_seal_identifier(void * identifier);
+void	act_wait(act_t* act, act_t* next_hint);
+act_control_t *	act_register(const reg_frame_t * frame, const char * name);
+act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
+capability act_get_id(act_control_t * ctrl);
+
+int	act_get_status(act_control_t * ctrl);
+int	act_revoke(act_control_t * ctrl);
+int	act_terminate(act_control_t * ctrl);
+capability act_seal_identifier(capability identifier);
 
 void	regdump(int reg_num);
+
+//FIXME this is also temporary
+extern queue_t kernel_message_queues[];
 
 #endif /* _CHERIOS_KLIB_H_ */

@@ -130,6 +130,7 @@ int vblk_interrupt(void) {
 	set_curr_cookie(expected_session);
 	int ret = vblk_rw_ret(expected_i);
 	sync_token = expected_session->reqs[expected_i].sync_token;
+	sync_caller = expected_session->reqs[expected_i].sync_caller;
 	interrupt_enable(4);
 	return ret;
 }
@@ -158,7 +159,7 @@ int vblk_read(void * buf, size_t sector) {
 	assert(i < session->req_nb);
 	reqs[i].used = 1;
 	reqs[i].sync_token = sync_token;
-
+	reqs[i].sync_caller = sync_caller;
 	reqs[i].outhdr.type = VIRTIO_BLK_T_IN;
 	reqs[i].outhdr.sector = sector;
 
@@ -205,7 +206,7 @@ int vblk_write(void * buf, size_t sector) {
 	assert(i < session->req_nb);
 	reqs[i].used = 1;
 	reqs[i].sync_token = sync_token;
-
+	reqs[i].sync_caller = sync_caller;
 	reqs[i].outhdr.type = VIRTIO_BLK_T_OUT;
 	reqs[i].outhdr.sector = sector;
 

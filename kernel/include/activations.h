@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -36,11 +37,6 @@
 
 typedef u32 aid_t;
 
-typedef struct
-{
-	uint32_t expected_reply;
-}  sync_t;
-
 /*
  * Possible status for an activation
  */
@@ -66,30 +62,43 @@ typedef enum sched_status_e
 /*
  * Kernel structure for an activation
  */
+typedef	uint64_t sync_t;
+
 #define ACT_NAME_MAX_LEN (0x10)
 typedef struct
 {
 	/* Activation related */
-	aid_t aid;			/* Activation id -- redundant with array index */
 	status_e status;		/* Activation status flags */
+
 	/* Queue related */
+	queue_t * msg_queue;		/* A pointer to the message queue */
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
 					   which has write access to queue) */
 	/* Scheduling related */
 	sched_status_e sched_status;	/* Current status */
+	reg_frame_t saved_registers;	/* Space to put saved registers for restore */
+
 	/* CCall related */
 	sync_t sync_token;		/* Helper for the synchronous CCall mecanism */
-	void * act_reference;		/* Sealed reference for the activation */
+
 	void * act_default_id;		/* Default object identifier */
 	#ifndef __LITE__
 	char name[ACT_NAME_MAX_LEN];	/* Activation name (for debuging) */
-	#endif
+    #endif
+
 } act_t;
 
-extern reg_frame_t	kernel_exception_framep[];
+/* Control references are just references with a different type */
+typedef act_t act_control_t;
+
+/* This pointer is used by the exception handler to save restore state */
 extern reg_frame_t *	kernel_exception_framep_ptr;
+/* global array of all activations */
 extern act_t		kernel_acts[];
-extern aid_t 		kernel_curr_act;
+/* The index of the next activation to put in the above array. NOT to do with scheduling.*/
 extern aid_t 		kernel_next_act;
+
+/* The currently scheduled activation */
+extern act_t* 		kernel_curr_act;
 
 #endif

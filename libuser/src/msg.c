@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,6 +30,10 @@
  */
 
 #include "mips.h"
+#include "cheric.h"
 
-void *	sync_token = NULL;
+/* These are used by the runtime to know who to respond to */
+capability sync_token = NULL;
+capability sync_caller = NULL;
+
 long	msg_enable = 0;

@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -32,7 +33,7 @@
 #include "klib.h"
 #include "cp0.h"
 
-static aid_t int_child[7];
+static act_t * int_child[7];
 
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */
 int get_others_interrupts_mask(void) {
@@ -64,10 +65,12 @@ static void kernel_interrupt_others(register_t pending) {
 				continue;
 			}
 			cp0_status_im_disable(1<<i);
-			struct reg_frame * frame = kernel_exception_framep + 0;
+			// FIXME this seems dubious?
+			struct reg_frame * frame = &kernel_acts[0].saved_registers;
 			frame->mf_v0 = -3;
 			frame->mf_a0 = i;
-			if(msg_push(int_child[i], 0, NULL, NULL)) {
+			// FIXME we probabably want a seperate interrupt source from the kernel
+			if(msg_push(int_child[i], &kernel_acts[0], NULL, NULL)) {
 				kernel_panic("queue full (int)");
 			}
 		}
@@ -78,11 +81,18 @@ void kernel_interrupt(void) {
 	register_t ipending = cp0_cause_ipending_get();
 	register_t toprocess = ipending & get_others_interrupts_mask();
 	KERNEL_TRACE("interrupt", "%x %x", ipending, toprocess);
+	if ((ipending & MIPS_CP0_CAUSE_IP_TIMER) && toprocess) {
+		kernel_panic("This will cause a bug, the wrong frame will be delivered");
+	}
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
+		KERNEL_TRACE("interrupt", "timer start");
 		kernel_timer();
+		KERNEL_TRACE("interrupt", "timer end");
 	}
 	if(toprocess) {
+		KERNEL_TRACE("interrupt", "toprocess start");
 		kernel_interrupt_others(toprocess);
+		KERNEL_TRACE("interrupt", "toprocess start");
 	}
 }
 

@@ -32,6 +32,7 @@
 #include "object.h"
 #include "namespace.h"
 #include "assert.h"
+#include "cheric.h"
 
 extern void * vblk_ref;
 extern void * vblk_id;

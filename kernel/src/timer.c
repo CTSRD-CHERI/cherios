@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -58,7 +59,7 @@ void kernel_timer(void)
 	/*
 	 * Forced context switch of user process.
 	 */
-	sched_reschedule(0);
+	sched_reschedule(NULL);
 
 	/*
 	 * Reschedule timer for a future date -- if we've almost missed a

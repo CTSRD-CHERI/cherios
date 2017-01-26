@@ -33,7 +33,7 @@
 #include "math.h"
 #include "string.h"
 
-#if 1
+#if 0
 #define TRACE(s, ...) trace_elf_loader(KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
 static void trace_elf_loader(const char *fmt, ...) {
 	va_list ap;

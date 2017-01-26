@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,10 +29,11 @@
  * SUCH DAMAGE.
  */
 
+#include "cheric.h"
 #include "object.h"
 #include "namespace.h"
 
-void libuser_init(void * self_ctrl, void * self_cap, void * ns_ref, void * ns_id) {
+void libuser_init(capability self_ctrl, capability self_cap, capability ns_ref, capability ns_id) {
 	object_init(self_ctrl, self_cap);
 	namespace_init(ns_ref, ns_id);
 }

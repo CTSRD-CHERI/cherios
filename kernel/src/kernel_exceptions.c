@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -52,7 +53,7 @@ static void kernel_exception_capability(void) {
 
 	exception_printf(KRED "Capability exception caught in activation %s-%d"
 	             " (0x%X: %s) [Reg C%d]" KRST"\n",
-	        kernel_acts[kernel_curr_act].name, kernel_curr_act,
+	        kernel_curr_act->name, kernel_curr_act,
 		exception.cause, getcapcause(exception.cause), exception.reg_num);
 
 	regdump(exception.reg_num);
@@ -62,7 +63,7 @@ static void kernel_exception_capability(void) {
 static void kernel_exception_data(register_t excode) {
 	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s-%d\n",
 	       excode, cp0_badvaddr_get(),
-	       kernel_acts[kernel_curr_act].name, kernel_curr_act);
+	       kernel_curr_act->name, kernel_curr_act);
 	regdump(-1);
 	kernel_freeze();
 }
@@ -70,7 +71,7 @@ static void kernel_exception_data(register_t excode) {
 
 static void kernel_exception_unknown(register_t excode) {
 	exception_printf(KRED"Unknown exception type '%d' in  %s-%d"KRST"\n",
-	       excode, kernel_acts[kernel_curr_act].name, kernel_curr_act);
+	       excode, kernel_curr_act->name, kernel_curr_act);
 	regdump(-1);
 	kernel_freeze();
 }
@@ -86,6 +87,7 @@ void kernel_exception(void) {
 	KERNEL_TRACE("exception", "enters %d", entered);
 	if(entered > 1) {
 		KERNEL_ERROR("interrupt in interrupt");
+		kernel_freeze();
 	}
 
 	/*

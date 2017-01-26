@@ -47,7 +47,8 @@ typedef struct req_s {
 	int used;
 	struct virtio_blk_outhdr outhdr;
 	struct virtio_blk_inhdr inhdr;
-	void * sync_token;
+	capability sync_token;
+	capability sync_caller;
 } req_t;
 
 typedef struct session_s {

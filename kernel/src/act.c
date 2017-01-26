@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -35,13 +36,11 @@
  */
 
 /* We only create activations for now, no delete */
-struct reg_frame		kernel_exception_framep[MAX_ACTIVATIONS];
 struct reg_frame *		kernel_exception_framep_ptr;
 act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
-aid_t 				kernel_curr_act;
 aid_t				kernel_next_act;
-
-static const void *            act_default_id = NULL;
+act_t * 			kernel_curr_act;
+static capability            act_default_id = NULL;
 
 void act_init(void) {
 	KERNEL_TRACE("init", "activation init");
@@ -62,36 +61,38 @@ void act_init(void) {
 	kernel_acts[0].sched_status = sched_terminated;
 
 	/* create the boot activation (activation that called us) */
-	kernel_curr_act = 1;
-	kernel_exception_framep_ptr = &kernel_exception_framep[kernel_curr_act];
-	act_register(kernel_exception_framep, "boot");
-	sched_d2a(kernel_curr_act, sched_runnable);
+	aid_t boot_id = 1;
+	act_t* boot_act = &kernel_acts[boot_id];
+	kernel_curr_act = boot_act;
+
+	kernel_exception_framep_ptr = &boot_act->saved_registers;
+	act_register(&boot_act->saved_registers, "boot");
+	sched_d2a(boot_act, sched_runnable);
 }
 
-void kernel_skip_instr(aid_t act) {
-	kernel_exception_framep[act].mf_pc += 4; /* assumes no branch delay slot */
-	void * pcc = (void *) kernel_exception_framep[act].cf_pcc;
+void kernel_skip_instr(act_t* act) {
+	act->saved_registers.mf_pc += 4; /* assumes no branch delay slot */
+	void * pcc = (void *) act->saved_registers.cf_pcc;
 	pcc = __builtin_memcap_offset_increment(pcc, 4);
-	kernel_exception_framep[act].cf_pcc = pcc;
+	act->saved_registers.cf_pcc = pcc;
 }
 
-static void * act_create_ref(aid_t aid) {
-	return kernel_seal(kernel_cap_to_exec(kernel_acts + aid), aid);
+static act_t * act_create_sealed_ref(act_t * act) {
+	return kernel_seal(kernel_cap_make_rx(act), act_ref_type);
 }
 
-static void * act_create_ctrl_ref(aid_t aid) {
-	return kernel_seal(kernel_acts + aid, 42001);
+static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
+	return kernel_seal(act, act_ctrl_ref_type);
 }
 
-void * act_register(const reg_frame_t * frame, const char * name) {
-	aid_t aid = kernel_next_act;
+act_control_t * act_register(const reg_frame_t * frame, const char * name) {
 
-	if(aid >= MAX_ACTIVATIONS) {
+	KERNEL_TRACE("act", "Registering activation %s", name);
+	if(kernel_next_act >= MAX_ACTIVATIONS) {
 		kernel_panic("no act slot");
 	}
 
-	/* set aid */
-	kernel_acts[aid].aid = aid;
+	act_t * act = kernel_acts + kernel_next_act;
 
 	#ifndef __LITE__
 	/* set name */
@@ -102,87 +103,85 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 	}
 	for(int i = 0; i < name_len; i++) {
 		char c = name[i];
-		kernel_acts[aid].name[i] = c; /* todo: sanitize the name if we do not trust it */
+		act->name[i] = c; /* todo: sanitize the name if we do not trust it */
 	}
-	kernel_acts[aid].name[name_len] = '\0';
+	act->name[name_len] = '\0';
 	#endif
 
 	/* set status */
-	kernel_acts[aid].status = status_alive;
+	act->status = status_alive;
 
 	/* set register frame */
-	memcpy(kernel_exception_framep + aid, frame, sizeof(struct reg_frame));
+	memcpy(&(act->saved_registers), frame, sizeof(struct reg_frame));
 
 	/* set queue */
-	msg_queue_init(aid);
-	kernel_acts[aid].queue_mask = MAX_MSG-1;
-
-	/* set reference */
-	kernel_acts[aid].act_reference = act_create_ref(aid);
+	//FIXME queue should come from user!
+	act->msg_queue = kernel_message_queues + kernel_next_act;
+	act->queue_mask = MAX_MSG-1;
+	msg_queue_init(act);
 
 	/* set default identifier */
-	kernel_acts[aid].act_default_id = kernel_seal(act_default_id, aid);
+	act->act_default_id = kernel_seal(act_default_id, act_id_type);
 
 	/* set scheduling status */
-	sched_create(aid);
+	sched_create(act);
+
+	/* set expected sequence to not expecting */
+	act->sync_token = 0;
 
 	KERNEL_TRACE("act", "%s OK! ", __func__);
 	/* done, update next_act */
 	kernel_next_act++;
-	return act_create_ctrl_ref(aid);
+	return act_create_sealed_ctrl_ref(act);
 }
 
-int act_revoke(act_t * ctrl) {
+int act_revoke(act_control_t * ctrl) {
 	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	if(kernel_acts[aid].status == status_terminated) {
+	if(ctrl->status == status_terminated) {
 		return -1;
 	}
-	kernel_acts[aid].status = status_revoked;
+	ctrl->status = status_revoked;
 	return 0;
 }
 
-int act_terminate(act_t * ctrl) {
+int act_terminate(act_control_t * ctrl) {
 	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t act = ctrl->aid;
-	kernel_acts[act].status = status_terminated;
-	sched_delete(act);
-	kernel_acts[act].sched_status = sched_terminated;
-	KERNEL_TRACE("act", "Terminated %s:%d", kernel_acts[act].name, act);
-	if(act == kernel_curr_act) { /* terminated itself */
+	ctrl->status = status_terminated;
+	sched_delete(ctrl);
+	ctrl->sched_status = sched_terminated;
+	KERNEL_TRACE("act", "Terminated %s", ctrl->name);
+	if(ctrl == kernel_curr_act) { /* terminated itself */
 		return 1;
 	}
 	return 0;
 }
 
-void * act_get_ref(act_t * ctrl) {
+act_t * act_get_sealed_ref_from_ctrl(act_control_t * ctrl) {
 	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	return kernel_acts[aid].act_reference;
+	return act_create_sealed_ref(ctrl);
 }
 
-void * act_get_id(act_t * ctrl) {
+capability act_get_id(act_control_t * ctrl) {
 	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	return kernel_acts[aid].act_default_id;
+	return ctrl->act_default_id;
 }
 
-int act_get_status(act_t * ctrl) {
+int act_get_status(act_control_t * ctrl) {
 	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	return kernel_acts[aid].status;
+	return ctrl->status;
 }
 
-void act_wait(int act, aid_t next_hint) {
-	kernel_assert(kernel_acts[act].sched_status == sched_runnable);
+void act_wait(act_t* act, act_t* next_hint) {
+	kernel_assert(act->sched_status == sched_runnable);
 	if(msg_queue_empty(act)) {
 		sched_a2d(act, sched_waiting);
 	} else {
-		kernel_acts[act].sched_status = sched_schedulable;
+		act->sched_status = sched_schedulable;
 	}
 	sched_reschedule(next_hint);
 }
 
-void * act_seal_identifier(void * identifier) {
-	return kernel_seal(cheri_andperm(identifier, 0b111100011111101), kernel_curr_act);
+/* FIXME have to think about these as well */
+capability act_seal_identifier(capability identifier) {
+	return kernel_seal(cheri_andperm(identifier, 0b111100011111101), act_id_type);
 }

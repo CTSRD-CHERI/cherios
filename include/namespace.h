@@ -1,7 +1,7 @@
-void	namespace_init(void *ns_ref, void *ns_id);
-int	namespace_register(int nb, void *ref, void *id);
-void *	namespace_get_ref(int nb);
-void *	namespace_get_id(int nb);
+void	namespace_init(capability ns_ref, capability ns_id);
+int	namespace_register(int nb, capability ref, capability id);
+capability	namespace_get_ref(int nb);
+capability	namespace_get_id(int nb);
 
 extern void * namespace_ref;
 extern void * namespace_id;

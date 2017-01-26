@@ -1,5 +1,6 @@
 #-
 # Copyright (c) 2016 Hadrien Barral
+# Copyright (c) 2017 Lawrence Esswood
 # All rights reserved.
 #
 # This software was developed by SRI International and the University of
@@ -70,6 +71,9 @@ call:
 	#Save sync_token
 	dla		$t1, sync_token
 	csc		$c1, $t1, 0($c17)
+    #Save caller
+    dla     $t1, sync_caller
+    csc     $c2, $t1, 0($c17)
 
 	sll		$v0, $v0, CAP_SIZE_BITS
 	add		$t0, $t0, $v0
@@ -91,6 +95,9 @@ end:
 	cgetdefault	$c17
 	dla		$t1, sync_token
 	clc		$c1, $t1, 0($c17)
+	#Restore caller activation reference
+	dla     $t1, sync_caller
+	clc     $c2, $t1, 0($c17)
 	creturn
 
 	#We are scheduled again: new message

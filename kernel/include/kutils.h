@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -35,20 +36,28 @@
  */
 
 /* Converts RW pointer to RX pointer */
-static inline void * kernel_cap_to_exec(const void * p) {
-	void * c = cheri_getpcc();
+static inline capability kernel_cap_make_rx(const_capability p) {
+	capability c = cheri_getpcc();
 	c = cheri_setoffset(c, cheri_getbase(p));
 	c = cheri_setbounds(c, cheri_getlen(p));
 	c = cheri_setoffset(c, cheri_getoffset(p));
 	return c;
 }
 
-static inline void * kernel_seal(const void * p, uint64_t otype) {
-	void * seal = cheri_setoffset(cheri_getdefault(), otype);
+static inline capability kernel_cap_make_rw(const_capability p) {
+	capability c = cheri_getdefault();
+	c = cheri_setoffset(c, cheri_getbase(p));
+	c = cheri_setbounds(c, cheri_getlen(p));
+	c = cheri_setoffset(c, cheri_getoffset(p));
+	return c;
+}
+
+static inline capability kernel_seal(const_capability p, uint64_t otype) {
+	capability seal = cheri_setoffset(cheri_getdefault(), otype);
 	return cheri_seal(p, seal);
 }
 
-static inline void * kernel_unseal(void * p, uint64_t otype) {
-	void * seal = cheri_setoffset(cheri_getdefault(), otype);
+static inline capability kernel_unseal(capability p, uint64_t otype) {
+	capability seal = cheri_setoffset(cheri_getdefault(), otype);
 	return cheri_unseal(p, seal);
 }

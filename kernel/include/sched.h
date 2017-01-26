@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -32,12 +33,12 @@
 #ifndef _CHERIOS_SCHED_H_
 #define	_CHERIOS_SCHED_H_
 
-void	sched_reschedule(aid_t hint);
+void	sched_reschedule(act_t * hint);
 
-void	sched_create(aid_t act);
-void	sched_delete(aid_t act);
+void	sched_create(act_t * act);
+void	sched_delete(act_t * act);
 
-void	sched_d2a(aid_t act, sched_status_e status);
-void	sched_a2d(aid_t act, sched_status_e status);
+void	sched_d2a(act_t * act, sched_status_e status);
+void	sched_a2d(act_t * act, sched_status_e status);
 
 #endif /* _CHERIOS_SCHED_H_ */

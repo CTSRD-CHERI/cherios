@@ -287,7 +287,8 @@ static inline int VCAPS(const void * cap, size_t len, unsigned flags) {
 /*
  * Canonical C-language representation of a capability.
  */
-typedef void * capability;
+typedef __capability void * capability;
+typedef __capability const void * const_capability;
 
 /*
  * Register frame to be preserved on context switching. The order of

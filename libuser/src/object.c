@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -34,12 +35,12 @@
 #include "assert.h"
 #include "namespace.h"
 
-void * act_self_ctrl = NULL;
-void * act_self_ref  = NULL;
-void * act_self_id   = NULL;
-void * act_self_cap   = NULL;
+capability act_self_ctrl = NULL;
+capability act_self_ref  = NULL;
+capability act_self_id   = NULL;
+capability act_self_cap   = NULL;
 
-void object_init(void * self_ctrl, void* self_cap) {
+void object_init(capability self_ctrl, capability self_cap) {
 	assert(self_ctrl != NULL);
 	act_self_ctrl = self_ctrl;
 	act_self_ref  = act_ctrl_get_ref(self_ctrl);
@@ -48,12 +49,12 @@ void object_init(void * self_ctrl, void* self_cap) {
 	act_self_cap = self_cap;
 }
 
-void * act_get_cap(void) {
+capability act_get_cap(void) {
 	return act_self_cap;
 }
 
-void * act_ctrl_get_ref(void * ctrl) {
-	void * ref;
+capability act_ctrl_get_ref(capability ctrl) {
+	capability ref;
 	__asm__ (
 		"li    $v0, 21      \n"
 		"cmove $c3, %[ctrl] \n"
@@ -65,8 +66,8 @@ void * act_ctrl_get_ref(void * ctrl) {
 	return ref;
 }
 
-void * act_ctrl_get_id(void * ctrl) {
-	void * ref;
+capability act_ctrl_get_id(capability ctrl) {
+	capability ref;
 	__asm__ (
 		"li    $v0, 22      \n"
 		"cmove $c3, %[ctrl] \n"
@@ -78,7 +79,7 @@ void * act_ctrl_get_id(void * ctrl) {
 	return ref;
 }
 
-int act_ctrl_revoke(void * ctrl) {
+int act_ctrl_revoke(capability ctrl) {
 	int ret;
 	__asm__ (
 		"li    $v0, 25      \n"
@@ -91,7 +92,7 @@ int act_ctrl_revoke(void * ctrl) {
 	return ret;
 }
 
-int act_ctrl_terminate(void * ctrl) {
+int act_ctrl_terminate(capability ctrl) {
 	int ret;
 	__asm__ (
 		"li    $v0, 26      \n"
@@ -104,8 +105,8 @@ int act_ctrl_terminate(void * ctrl) {
 	return ret;
 }
 
-void * act_seal_id(void * id) {
-	void * sid;
+capability act_seal_id(capability id) {
+	capability sid;
 	__asm__ (
 		"li    $v0, 29      \n"
 		"cmove $c3, %[id]   \n"
@@ -139,21 +140,22 @@ void set_curr_cookie(void * cookie) {
 		:: [cookie]"C" (cookie));
 }
 
-void * get_cookie(void * cb, void * cs) {
-	return ccall_n_c(cb, cs, -1);
+void * get_cookie(capability act_ref, capability act_ctrl_ref
+) {
+	return ccall_n_c(act_ref, act_ctrl_ref, -1);
 }
 
 /*
  * CCall helpers
  */
 
-#define CCALL_ASM_CSCB "cmove $c1, %[cb] \n" "cmove $c2, %[cs] \n" "move $v0, %[method_nb] \n"
+#define CCALL_ASM_CSCB "cmove $c1, %[act_ref] \n" "cmove $c2, %[act_ctrl_ref] \n" "move $v0, %[method_nb] \n"
 #define CCALL_INSTR(n) "ccall $c1, $c2, " #n "\n"
-#define CCALL_INOPS [cb]"C" (cb), [cs]"C" (cs), [method_nb]"r" (method_nb)
+#define CCALL_INOPS [act_ref]"C" (act_ref), [act_ctrl_ref]"C" (act_ctrl_ref), [method_nb]"r" (method_nb)
 #define CCALL_CLOBS "$c1","$c2","$c3","$c4","$c5","v0","v1","a0","a1","a2"
 #define CCALL_TOP \
-	assert(VCAPS(cb, 0, VCAP_X)); \
-	assert(VCAPS(cs, 0, VCAP_W)); \
+	assert(VCAPS(act_ref, 0, VCAP_X)); \
+	assert(VCAPS(act_ctrl_ref, 0, VCAP_W)); \
 	ret_t ret; \
 	__asm__ __volatile__ ( \
 		CCALL_ASM_CSCB \
@@ -174,27 +176,30 @@ void * get_cookie(void * cb, void * cs) {
 
 #define CCALLS(...) CCALL(4, __VA_ARGS__)
 
-register_t ccall_1(void * cb, void * cs, int method_nb,
+register_t ccall_1(capability act_ref, capability act_ctrl_ref
+		, int method_nb,
 		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3) {
+                  const_capability carg1, const_capability carg2, const_capability carg3) {
 	CCALL_TOP
 		CCALL_INSTR(1)
 	CCALL_BOTTOM
 	return ret.rret;
 }
 
-register_t ccall_2(void * cb, void * cs, int method_nb,
+register_t ccall_2(capability act_ref, capability act_ctrl_ref
+		, int method_nb,
 		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3) {
+                  const_capability carg1, const_capability carg2, const_capability carg3) {
 	CCALL_TOP
 		CCALL_INSTR(2)
 	CCALL_BOTTOM
 	return ret.rret;
 }
 
-inline ret_t ccall_4(void * cb, void * cs, int method_nb,
+inline ret_t ccall_4(capability act_ref, capability act_ctrl_ref
+		, int method_nb,
 		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3) {
+                  const_capability carg1, const_capability carg2, const_capability carg3) {
 	CCALL_TOP
 		CCALL_INSTR(4)
 	CCALL_BOTTOM
@@ -202,77 +207,92 @@ inline ret_t ccall_4(void * cb, void * cs, int method_nb,
 }
 
 
-void ccall_c_n(void * cb, void * cs, int method_nb, const void * carg) {
-	CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
+void ccall_c_n(capability act_ref, capability act_ctrl_ref
+		, int method_nb, const_capability carg) {
+	CCALLS(act_ref, act_ctrl_ref, method_nb, 0, 0, 0, carg, NULL, NULL);
 }
 
-void * ccall_n_c(void * cb, void * cs, int method_nb) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, NULL, NULL, NULL);
+capability ccall_n_c(capability act_ref, capability act_ctrl_ref
+		, int method_nb) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, 0, 0, 0, NULL, NULL, NULL);
 	return ret.cret;
 }
 
-void * ccall_r_c(void * cb, void * cs, int method_nb, int rarg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, NULL, NULL, NULL);
+capability ccall_r_c(capability act_ref, capability act_ctrl_ref
+		, int method_nb, int rarg) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg, 0, 0, NULL, NULL, NULL);
 	return ret.cret;
 }
 
-void * ccall_c_c(void * cb, void * cs, int method_nb, const void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
+capability ccall_c_c(capability act_ref, capability act_ctrl_ref
+		, int method_nb, const_capability carg) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, 0, 0, 0, carg, NULL, NULL);
 	return ret.cret;
 }
 
 
-void * ccall_rr_c(void * cb, void * cs, int method_nb, int rarg1, int rarg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
+capability ccall_rr_c(capability act_ref, capability act_ctrl_ref
+		, int method_nb, int rarg1, int rarg2) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
 	return ret.cret;
 }
 
-register_t ccall_n_r(void * cb, void * cs, int method_nb) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, NULL, NULL, NULL);
+register_t ccall_n_r(capability act_ref, capability act_ctrl_ref
+		, int method_nb) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, 0, 0, 0, NULL, NULL, NULL);
 	return ret.rret;
 }
 
-register_t ccall_r_r(void * cb, void * cs, int method_nb, int rarg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, NULL, NULL, NULL);
+register_t ccall_r_r(capability act_ref, capability act_ctrl_ref
+		, int method_nb, int rarg) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg, 0, 0, NULL, NULL, NULL);
 	return ret.rret;
 }
 
-register_t ccall_c_r(void * cb, void * cs, int method_nb, void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, carg, NULL, NULL);
+register_t ccall_c_r(capability act_ref, capability act_ctrl_ref
+		, int method_nb, capability carg) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, 0, 0, 0, carg, NULL, NULL);
 	return ret.rret;
 }
 
-register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg1, int rarg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
+register_t ccall_rr_r(capability act_ref, capability act_ctrl_ref
+		, int method_nb, int rarg1, int rarg2) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg1, rarg2, 0, NULL, NULL, NULL);
 	return ret.rret;
 }
 
-register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, const void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, carg, NULL, NULL);
+register_t ccall_rc_r(capability act_ref, capability act_ctrl_ref
+		, int method_nb, int rarg, const_capability carg) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg, 0, 0, carg, NULL, NULL);
 	return ret.rret;
 }
 
-void ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg) {
-	CCALLS(cb, cs, method_nb, rarg, 0, 0, carg, NULL, NULL);
+void ccall_rc_n(capability act_ref, capability act_ctrl_ref
+		, int method_nb, int rarg, capability carg) {
+	CCALLS(act_ref, act_ctrl_ref, method_nb, rarg, 0, 0, carg, NULL, NULL);
 }
 
-void ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2) {
-	CCALLS(cb, cs, method_nb, 0, 0, 0, carg1, carg2, NULL);
+void ccall_cc_n(capability act_ref, capability act_ctrl_ref
+		, int method_nb, capability carg1, capability carg2) {
+	CCALLS(act_ref, act_ctrl_ref, method_nb, 0, 0, 0, carg1, carg2, NULL);
 }
 
-register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg, void * carg1, void * carg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg, 0, 0, carg1, carg2, NULL);
+register_t ccall_rcc_r(capability act_ref, capability act_ctrl_ref
+		, int method_nb, register_t rarg, capability carg1, capability carg2) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg, 0, 0, carg1, carg2, NULL);
 	return ret.rret;
 }
 
-void * ccall_rrrc_c(void * cb, void * cs, int method_nb,
-                    register_t rarg1, register_t rarg2, register_t rarg3, void * carg) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, carg, NULL, NULL);
+capability ccall_rrrc_c(capability act_ref, capability act_ctrl_ref
+		, int method_nb,
+                    register_t rarg1, register_t rarg2, register_t rarg3, capability carg) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg1, rarg2, rarg3, carg, NULL, NULL);
 	return ret.cret;
 }
 
-register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
-                    register_t rarg1, register_t rarg2, void * carg1, void * carg2) {
-	ret_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, carg1, carg2, NULL);
+register_t ccall_rrcc_r(capability act_ref, capability act_ctrl_ref
+		, int method_nb,
+                    register_t rarg1, register_t rarg2, capability carg1, capability carg2) {
+	ret_t ret = CCALLS(act_ref, act_ctrl_ref, method_nb, rarg1, rarg2, 0, carg1, carg2, NULL);
 	return ret.rret;
 }

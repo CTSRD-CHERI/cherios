@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,13 +32,13 @@
 #include "klib.h"
 
 /* turn 'schedulable' activation 'act' in 'runnable' state */
-static void sched_schedule(aid_t act) {
-	kernel_assert(kernel_acts[act].sched_status == sched_schedulable);
+static void sched_schedule(act_t* act) {
+	kernel_assert(act->sched_status == sched_schedulable);
 	/* Set message */
 	msg_pop(act);
 
 	/* Activation ready to be run */
-	kernel_acts[act].sched_status = sched_runnable;
+	act->sched_status = sched_runnable;
 }
 
 /* todo: sleep cpu */
@@ -46,64 +47,72 @@ static void sched_nothing_to_run(void) {
 	kernel_freeze();
 }
 
-static u32   aqueue[MAX_ACTIVATIONS];
-static aid_t squeue_a[MAX_ACTIVATIONS];
-static u32   squeue_a_idx = 0;
-static u32   squeue_a_end = 0;
+static act_t * act_queue[MAX_ACTIVATIONS];
+static size_t   act_queue_current = 0;
+static size_t   act_queue_end = 0;
 
-#define QADD(act, squeue, aqueue)    \
-	aqueue[act] = squeue##_end;  \
-	squeue[squeue##_end++] = act;
-
-#define QDEL(act, squeue, aqueue)                  \
-	kernel_assert(squeue[aqueue[act]] == act); \
-	squeue##_end--;                            \
-	aid_t replacement = squeue[squeue##_end];  \
-	squeue[aqueue[act]] = replacement;         \
-	aqueue[replacement] = aqueue[act];
-
-void sched_create(aid_t act) {
-	KERNEL_TRACE("sched", "create %ld", act);
-	kernel_acts[act].sched_status = sched_waiting;
+static void add_act_to_queue(act_t * act) {
+	kernel_assert(act_queue_end != MAX_ACTIVATIONS);
+	act_queue[act_queue_end++] = act;
 }
 
-void sched_delete(aid_t act) {
-	KERNEL_TRACE("sched", "delete %ld", act);
-	if(squeue_a[aqueue[act]] == act) {
-		QDEL(act, squeue_a, aqueue);
-	}
-	kernel_acts[act].status = status_terminated;
-}
-
-void sched_d2a(aid_t act, sched_status_e status) {
-	KERNEL_TRACE("sched", "add %ld", act);
-	QADD(act, squeue_a, aqueue);
-	kernel_assert((status == sched_runnable) || (status == sched_schedulable));
-	kernel_acts[act].sched_status = status;
-}
-
-void sched_a2d(aid_t act, sched_status_e status) {
-	KERNEL_TRACE("sched", "rem %ld", act);
-	QDEL(act, squeue_a, aqueue);
-	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
-	kernel_acts[act].sched_status = status;
-}
-
-static aid_t sched_picknext(void) {
-	if(squeue_a_end == 0) {
-		return 0;
-	}
-	if(squeue_a_idx >= squeue_a_end) {
-		squeue_a_idx = 0;
+static void delete_act_from_queue(act_t * act) {
+	size_t index = 0;
+	if (act_queue[act_queue_current] == act) {
+		index = act_queue_current;
 	} else {
-		squeue_a_idx = (squeue_a_idx+1) % squeue_a_end;
+		size_t i;
+		for(i = 0; i < act_queue_end; i++) {
+			if(act_queue[i] == act) {
+				index = i;
+				break;
+			}
+		}
+		kernel_assert(i != act_queue_end);
 	}
-	return squeue_a[squeue_a_idx];
+	act_queue_end--;
+	act_queue[index] = act_queue[act_queue_end];
 }
 
-void sched_reschedule(aid_t hint) {
+void sched_create(act_t * act) {
+	KERNEL_TRACE("sched", "create %s", act->name);
+	act->sched_status = sched_waiting;
+}
+
+void sched_delete(act_t * act) {
+	KERNEL_TRACE("sched", "delete %s", act->name);
+	if(act->sched_status != sched_waiting) {
+		delete_act_from_queue(act);
+	}
+	act->status = status_terminated;
+}
+
+void sched_d2a(act_t * act, sched_status_e status) {
+	KERNEL_TRACE("sched", "add %s", act->name);
+	add_act_to_queue(act);
+	kernel_assert((status == sched_runnable) || (status == sched_schedulable));
+	act->sched_status = status;
+}
+
+void sched_a2d(act_t * act, sched_status_e status) {
+	KERNEL_TRACE("sched", "rem %s", act->name);
+	delete_act_from_queue(act);
+	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
+	act->sched_status = status;
+}
+
+static act_t * sched_picknext(void) {
+	if(act_queue_end == 0) {
+		return NULL;
+	}
+	act_queue_current = (act_queue_current + 1) % act_queue_end;
+	return act_queue[act_queue_current];
+}
+
+/* FIXME do not pop on wakeup */
+void sched_reschedule(act_t * hint) {
 	#ifdef __TRACE__
-	size_t old_kernel_curr_act = kernel_curr_act;
+	act_t * old_kernel_curr_act = kernel_curr_act;
 	#endif
 	if(!hint) {
 		again:
@@ -112,16 +121,15 @@ void sched_reschedule(aid_t hint) {
 	if(!hint) {
 		sched_nothing_to_run();
 	}
-	if(kernel_acts[hint].sched_status == sched_schedulable) {
+	if(hint->sched_status == sched_schedulable) {
 		sched_schedule(hint);
 	}
-	if(kernel_acts[hint].sched_status != sched_runnable) {
+	if(hint->sched_status != sched_runnable) {
 		goto again;
 	}
 
 	kernel_curr_act = hint;
-	kernel_exception_framep_ptr = kernel_exception_framep + hint;
-	KERNEL_TRACE("sched", "Reschedule from task '%s-%ld' to task '%s-%ld'",
-	        kernel_acts[old_kernel_curr_act].name, old_kernel_curr_act,
-	        kernel_acts[kernel_curr_act].name, kernel_curr_act);
+	kernel_exception_framep_ptr = &hint->saved_registers;
+	KERNEL_TRACE("sched", "Reschedule from activation '%s' to activation '%s'",
+	        old_kernel_curr_act->name, kernel_curr_act->name);
 }
