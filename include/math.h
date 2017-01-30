@@ -46,12 +46,16 @@ static inline size_t umax(size_t a, size_t b) {
 }
 
 static inline int slog2(size_t s) {
-	int i=0;
+	int i=-1;
 	while(s) {
 		i++;
 		s >>= 1;
 	}
 	return i;
+}
+
+static inline int is_power_2(size_t x) {
+	return (x & (x-1)) == 0;
 }
 
 #endif
