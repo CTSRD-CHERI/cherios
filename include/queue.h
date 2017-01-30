@@ -58,10 +58,16 @@ typedef struct
 
 typedef struct
 {
-	msg_nb_t start;
-	msg_nb_t end;
-	msg_nb_t len;
-	msg_t msg[MAX_MSG];
+	struct header_t {
+		msg_nb_t start;
+		msg_nb_t end;
+		msg_nb_t len;
+	} header;
+	msg_t msg[0];
 }  queue_t;
 
+typedef struct {
+	queue_t queue;
+	msg_t msgs[MAX_MSG];
+} queue_default_t;
 #endif

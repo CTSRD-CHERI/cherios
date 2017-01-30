@@ -35,7 +35,7 @@
  * Various util functions
  */
 
-/* Converts RW pointer to RX pointer */
+/* Converts any capability to RX capability */
 static inline capability kernel_cap_make_rx(const_capability p) {
 	capability c = cheri_getpcc();
 	c = cheri_setoffset(c, cheri_getbase(p));
@@ -44,6 +44,7 @@ static inline capability kernel_cap_make_rx(const_capability p) {
 	return c;
 }
 
+/* Converts any capability to RW capability */
 static inline capability kernel_cap_make_rw(const_capability p) {
 	capability c = cheri_getdefault();
 	c = cheri_setoffset(c, cheri_getbase(p));

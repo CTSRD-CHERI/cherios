@@ -109,12 +109,12 @@ int	try_gc(void * p, void * pool);
 
 int	msg_push(act_t * dest, act_t * src, capability, capability);
 void	msg_pop(act_t* act);
-void	msg_queue_init(act_t* act);
+void	msg_queue_init(act_t* act, queue_t * queue);
 int	msg_queue_empty(act_t* act);
 
 void	act_init(void);
 void	act_wait(act_t* act, act_t* next_hint);
-act_control_t *	act_register(const reg_frame_t * frame, const char * name);
+act_control_t *	act_register(const reg_frame_t * frame, queue_t * queue, const char * name);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);
 

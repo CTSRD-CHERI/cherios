@@ -30,9 +30,7 @@
  */
 
 #include "klib.h"
-
-// FIXME: These are still here until userspace provides them properly, but they are now pointed to be the OARef
-queue_t kernel_message_queues[MAX_ACTIVATIONS];
+#include "queue.h"
 
 /*
  * Routines to handle the message queue
@@ -44,18 +42,18 @@ static inline msg_nb_t safe(msg_nb_t n, msg_nb_t qmask) {
 
 static int full(queue_t * queue, msg_nb_t qmask) {
 	kernel_assert(qmask > 0);
-	return safe(queue->end+1, qmask) == queue->start;
+	return safe(queue->header.end+1, qmask) == queue->header.start;
 }
 
 static inline int empty(queue_t * queue) {
-	return queue->start == queue->end;
+	return queue->header.start == queue->header.end;
 }
 
 int msg_push(act_t * dest, act_t * src, capability identifier, capability sync_token) {
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
 	kernel_assert(qmask > 0);
-	int next_slot = queue->end;
+	int next_slot = queue->header.end;
 	if(full(queue, qmask)) {
 		return -1;
 	}
@@ -73,7 +71,7 @@ int msg_push(act_t * dest, act_t * src, capability identifier, capability sync_t
 	queue->msg[next_slot].c1  = sync_token;
 	queue->msg[next_slot].c2  = (sync_token == NULL) ? NULL : kernel_seal(src, act_sync_ref_type);
 
-	queue->end = safe(queue->end+1, qmask);
+	queue->header.end = safe(queue->header.end+1, qmask);
 
 	if(dest->sched_status == sched_waiting) {
 		sched_d2a(dest, sched_schedulable);
@@ -88,7 +86,7 @@ void msg_pop(act_t * act) {
 	kernel_assert(act->sched_status == sched_schedulable);
 	kernel_assert(!empty(queue));
 
-	int start = queue->start;
+	int start = queue->header.start;
 
 	act->saved_registers.mf_a0  = queue->msg[start].a0;
 	act->saved_registers.mf_a1  = queue->msg[start].a1;
@@ -103,7 +101,7 @@ void msg_pop(act_t * act) {
 	act->saved_registers.cf_c1  = queue->msg[start].c1;
 	act->saved_registers.cf_c2  = queue->msg[start].c2;
 
-	queue->start = safe(start+1, qmask);
+	queue->header.start = safe(start+1, qmask);
 }
 
 int msg_queue_empty(act_t * act) {
@@ -114,9 +112,21 @@ int msg_queue_empty(act_t * act) {
 	return 0;
 }
 
-void msg_queue_init(act_t * act) {
-	act->msg_queue->start = 0;
-	act->msg_queue->end = 0;
-	act->msg_queue->len = MAX_MSG;
+void msg_queue_init(act_t * act, queue_t * queue) {
+	size_t total_length_bytes = cheri_getlen(queue);
+
+	kernel_assert(total_length_bytes > sizeof(queue_t));
+
+	size_t queue_len = (total_length_bytes - sizeof(queue->header)) / sizeof(msg_t);
+
+	kernel_assert(is_power_2(queue_len));
+	kernel_assert(queue_len != 0);
+
+	act->msg_queue = queue;
+	act->queue_mask = queue_len-1;
+
+	act->msg_queue->header.start = 0;
+	act->msg_queue->header.end = 0;
+	act->msg_queue->header.len = queue_len;
 	//todo: zero queue?
 }

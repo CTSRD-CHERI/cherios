@@ -37,22 +37,24 @@
 #include "uart.h"
 #include "assert.h"
 #include "stdio.h"
+#include "queue.h"
 
-static void * boot_act_register(reg_frame_t * frame, const char * name) {
+static void * boot_act_register(reg_frame_t * frame, queue_t* queue, const char * name) {
 	void * ret;
 	__asm__ __volatile__ (
 		"li    $v0, 20       \n"
 		"cmove $c3, %[frame] \n"
 		"cmove $c4, %[name] \n"
+		"cmove $c5, %[queue] \n"
 		"syscall             \n"
 		"cmove %[ret], $c3   \n"
 		: [ret] "=C" (ret)
-		: [frame] "C" (frame), [name] "C" (name)
-		: "v0", "$c3", "$c4");
+		: [frame] "C" (frame), [queue] "C" (queue), [name] "C" (name)
+		: "v0", "$c3", "$c4", "$c5");
 	return ret;
 }
 
-static void * boot_act_create(const char * name, void * c0, void * pcc, void * stack,
+static void * boot_act_create(const char * name, void * c0, void * pcc, void * stack, queue_t * queue,
 	                 void * act_cap, void * ns_ref, void * ns_id, register_t a0) {
 	reg_frame_t frame;
 	memset(&frame, 0, sizeof(reg_frame_t));
@@ -78,7 +80,7 @@ static void * boot_act_create(const char * name, void * c0, void * pcc, void * s
 	frame.cf_c23	= ns_ref;
 	frame.cf_c24	= ns_id;
 
-	void * ctrl = boot_act_register(&frame, name);
+	void * ctrl = boot_act_register(&frame, queue, name);
 	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
 	      a0, 0, 0, NULL, NULL, ctrl);
 	return ctrl;
@@ -134,17 +136,27 @@ void * load_module(module_t type, const char * file, int arg) {
 	size_t allocsize = cheri_getlen(prgmp);
 
 	size_t stack_size = 0x10000;
+	size_t stack_align = 0x40;
+	size_t queue_size = ((sizeof(queue_default_t) + stack_align - 1) / stack_align) * stack_align;
 	void * stack = boot_alloc(stack_size);
 	if(!stack) {
 		assert(0);
 		return NULL;
 	}
+
+	/* Steal a few bytes from the bottom of the stack to use as the message queue */
+	/* TODO, this is a bit hacky, but I guess this is only for boot programs */
+	queue_t* queue = (queue_t*)((char*)stack + stack_size - queue_size);
+
+	queue = cheri_setbounds(queue, queue_size);
+	stack = cheri_setbounds(stack, stack_size - queue_size);
+
 	void * pcc = cheri_getpcc();
 	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)) , allocsize);
 	pcc = cheri_setoffset(pcc, cheri_getoffset(prgmp));
 	pcc = cheri_andperm(pcc, 0b10111);
 	void * ctrl = boot_act_create(file, cheri_setoffset(prgmp, 0),
-	              pcc, stack, get_act_cap(type), ns_ref, ns_id, arg);
+	              pcc, stack, queue, get_act_cap(type), ns_ref, ns_id, arg);
 	if(ctrl == NULL) {
 		return NULL;
 	}

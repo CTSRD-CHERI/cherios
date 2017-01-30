@@ -30,6 +30,7 @@
  */
 
 #include "klib.h"
+#include "queue.h"
 
 /*
  * Routines to handle activations
@@ -41,6 +42,9 @@ act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
 aid_t				kernel_next_act;
 act_t * 			kernel_curr_act;
 static capability            act_default_id = NULL;
+
+// TODO: Put these somewhere sensible;
+queue_default_t boot_queue, kernel_queue;
 
 void act_init(void) {
 	KERNEL_TRACE("init", "activation init");
@@ -56,7 +60,7 @@ void act_init(void) {
 	kernel_next_act = 0;
 	struct reg_frame dummy_frame;
 	bzero(&dummy_frame, sizeof(struct reg_frame));
-	act_register(&dummy_frame, "kernel");
+	act_register(&dummy_frame, &kernel_queue.queue, "kernel");
 	kernel_acts[0].status = status_terminated;
 	kernel_acts[0].sched_status = sched_terminated;
 
@@ -66,7 +70,7 @@ void act_init(void) {
 	kernel_curr_act = boot_act;
 
 	kernel_exception_framep_ptr = &boot_act->saved_registers;
-	act_register(&boot_act->saved_registers, "boot");
+	act_register(&boot_act->saved_registers, &boot_queue.queue, "boot");
 	sched_d2a(boot_act, sched_runnable);
 }
 
@@ -85,7 +89,7 @@ static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return kernel_seal(act, act_ctrl_ref_type);
 }
 
-act_control_t * act_register(const reg_frame_t * frame, const char * name) {
+act_control_t * act_register(const reg_frame_t * frame, queue_t * queue, const char * name) {
 
 	KERNEL_TRACE("act", "Registering activation %s", name);
 	if(kernel_next_act >= MAX_ACTIVATIONS) {
@@ -115,10 +119,7 @@ act_control_t * act_register(const reg_frame_t * frame, const char * name) {
 	memcpy(&(act->saved_registers), frame, sizeof(struct reg_frame));
 
 	/* set queue */
-	//FIXME queue should come from user!
-	act->msg_queue = kernel_message_queues + kernel_next_act;
-	act->queue_mask = MAX_MSG-1;
-	msg_queue_init(act);
+	msg_queue_init(act, queue);
 
 	/* set default identifier */
 	act->act_default_id = kernel_seal(act_default_id, act_id_type);

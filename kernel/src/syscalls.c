@@ -46,7 +46,8 @@ static void syscall_sleep(void) {
 static void syscall_act_register(void) {
 	reg_frame_t * frame = kernel_exception_framep_ptr->cf_c3;
 	char * name = kernel_exception_framep_ptr->cf_c4;
-	kernel_exception_framep_ptr->cf_c3 = act_register(frame, name);
+	queue_t * queue = kernel_exception_framep_ptr->cf_c5;
+	kernel_exception_framep_ptr->cf_c3 = act_register(frame, queue, name);
 }
 
 static void syscall_act_ctrl_get_ref(void) {
