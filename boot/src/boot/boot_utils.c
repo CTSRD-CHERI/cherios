@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -38,24 +39,27 @@
 #include "assert.h"
 #include "stdio.h"
 #include "queue.h"
+#include "types.h"
+#include "syscalls.h"
 
-static void * boot_act_register(reg_frame_t * frame, queue_t* queue, const char * name) {
+static void * boot_act_register(reg_frame_t * frame, queue_t* queue, const char * name, register_t a0) {
 	void * ret;
 	__asm__ __volatile__ (
 		"li    $v0, 20       \n"
 		"cmove $c3, %[frame] \n"
-		"cmove $c4, %[name] \n"
+		"cmove $c4, %[name]  \n"
 		"cmove $c5, %[queue] \n"
+		"move  $a0, %[a0]	 \n"
 		"syscall             \n"
 		"cmove %[ret], $c3   \n"
 		: [ret] "=C" (ret)
-		: [frame] "C" (frame), [queue] "C" (queue), [name] "C" (name)
-		: "v0", "$c3", "$c4", "$c5");
+		: [frame] "C" (frame), [queue] "C" (queue), [name] "C" (name), [a0] "r" (a0)
+		: "v0", "$c3", "$c4", "$c5", "a0");
 	return ret;
 }
 
 static void * boot_act_create(const char * name, void * c0, void * pcc, void * stack, queue_t * queue,
-	                 void * act_cap, void * ns_ref, void * ns_id, register_t a0) {
+	                 void * act_cap, register_t a0) {
 	reg_frame_t frame;
 	memset(&frame, 0, sizeof(reg_frame_t));
 
@@ -73,16 +77,10 @@ static void * boot_act_create(const char * name, void * c0, void * pcc, void * s
 	/* set c0 */
 	frame.cf_c0	= c0;
 
-	/* set cap */
+	/* set self cap */
 	frame.cf_c22	= act_cap;
 
-	/* set namespace */
-	frame.cf_c23	= ns_ref;
-	frame.cf_c24	= ns_id;
-
-	void * ctrl = boot_act_register(&frame, queue, name);
-	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
-	      a0, 0, 0, NULL, NULL, ctrl);
+	capability ctrl = boot_act_register(&frame, queue, name, a0);
 	return ctrl;
 }
 
@@ -124,9 +122,6 @@ static void * get_act_cap(module_t type) {
 	return cap;
 }
 
-static void * ns_ref = NULL;
-static void * ns_id  = NULL;
-
 void * load_module(module_t type, const char * file, int arg) {
 	char *prgmp = elf_loader(file, 0, NULL);
 	if(!prgmp) {
@@ -156,13 +151,9 @@ void * load_module(module_t type, const char * file, int arg) {
 	pcc = cheri_setoffset(pcc, cheri_getoffset(prgmp));
 	pcc = cheri_andperm(pcc, 0b10111);
 	void * ctrl = boot_act_create(file, cheri_setoffset(prgmp, 0),
-	              pcc, stack, queue, get_act_cap(type), ns_ref, ns_id, arg);
+	              pcc, stack, queue, get_act_cap(type), arg);
 	if(ctrl == NULL) {
 		return NULL;
-	}
-	if(type == m_namespace) {
-		ns_ref = act_ctrl_get_ref(ctrl);
-		ns_id = act_ctrl_get_id(ctrl);
 	}
 	return ctrl;
 }
@@ -209,20 +200,14 @@ void hw_init(void) {
 	cp0_hwrena_set(cp0_hwrena_get() | (1<<2));
 }
 
-static int act_alive(void * ctrl) {
+static int act_alive(capability ctrl) {
 	if(!ctrl) {
 		return 0;
 	}
-	int ret;
-	__asm__ __volatile__ (
-		"li    $v0, 23      \n"
-		"cmove $c3, %[ctrl] \n"
-		"syscall            \n"
-		"move %[ret], $v0   \n"
-		: [ret] "=r" (ret)
-		: [ctrl] "C" (ctrl)
-		: "v0", "$c3");
-	if(ret == 2) {
+	status_e ret;
+	SYSCALL_c3_retr(ACT_CTRL_GET_STATUS, ctrl, ret);
+
+	if(ret == status_terminated) {
 		return 0;
 	}
 	return 1;

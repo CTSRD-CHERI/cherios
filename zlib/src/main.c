@@ -298,7 +298,7 @@ int main(void)
 	printf("zlib Hello world\n");
 
 	/* Register ourself to the kernel as being the zlib module */
-	int ret = namespace_register(9, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_zlib, act_self_ref, act_self_id);
 	if(ret!=0) {
 		printf("zlib: register failed\n");
 		return -1;

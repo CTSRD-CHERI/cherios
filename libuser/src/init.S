@@ -1,6 +1,7 @@
 #-
 # Copyright (c) 2016 Robert N. M. Watson
 # Copyright (c) 2016 Hadrien Barral
+# Copyright (c) 2017 Lawrence Esswood
 # All rights reserved.
 #
 # This software was developed by SRI International and the University of
@@ -44,9 +45,9 @@ start_common:
 	# Save arguments
 	move		$s0, $a0
 	move		$s1, $a1
-	cmove		$c17, $c3
-	cmove		$c18, $c4
-	cmove		$c19, $c5
+	cmove		$c17, $c3 # return address set to null
+	cmove		$c18, $c4 # set to null
+	cmove		$c19, $c5 # self_ctrl
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -74,10 +75,12 @@ start_common:
 	nop
 
 	# Call object init.
-	cmove		$c3, $c19
-	cmove		$c4, $c22
-	cmove		$c5, $c23
-	cmove		$c6, $c24
+	cmove		$c3, $c19 #self_ctrl
+	cmove		$c4, $c22 #self_cap
+	cmove		$c5, $c23 #ns_ref
+	cmove		$c6, $c24 #ns_id
+	cmove       $c7, $c25 #queue
+
 	cgetpcc		$c12
 	dla		$t0, libuser_init
 	csetoffset	$c12, $c12, $t0
@@ -101,18 +104,9 @@ start_common:
 	dla		$t0, msg_enable
 	cgetdefault	$c17
 	cld		$t0, $t0, 0($c17)
-	bne		$t0, $zero, to_msg
+	bne		$t0, $zero, msg_entry
 	nop
 	dla		$t0, act_self_ctrl
 	clc		$c3, $t0, 0($c17)
 	li		$v0, 26
 	syscall
-
-to_msg:
-	# CReturn to go in waiting state.
-	cfromptr	$c1, $c1, $0
-	creturn
-
-	#First 'real' message. Go to appropriate handler
-	j msg_entry
-	nop

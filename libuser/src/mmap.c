@@ -32,14 +32,18 @@
 #include "sys/mman.h"
 #include "object.h"
 #include "namespace.h"
+#include "stdio.h"
+#include "assert.h"
 
 static void * memmgt_ref = NULL;
 static void * memmgt_id  = NULL;
 
 static void *_mmap(void *addr, size_t length, int prot, int flags) {
 	if(memmgt_ref == NULL) {
-		memmgt_ref = namespace_get_ref(3);
-		memmgt_id  = namespace_get_id(3);
+		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
+		memmgt_id  = namespace_get_id(namespace_num_memmgt);
+		assert(memmgt_id != NULL);
+		assert(memmgt_ref != NULL);
 	}
 	return ccall_rrrc_c(memmgt_ref, memmgt_id, 0, length, prot, flags, addr);
 }

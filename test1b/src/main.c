@@ -37,7 +37,7 @@ typedef struct id_s {
 
 static void sum(void) {
 	static int i=0x1800;
-	//id_t * id = get_curr_cookie();
+	//id_t * id = get_idc();
 	//id->sum += id->buf[0];
 	if(!(++i&0x1FFF)) {
 		printf("T1B: %x\n", i);

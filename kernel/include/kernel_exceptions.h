@@ -31,45 +31,43 @@
 #ifndef CHERIOS_KERNEL_EXCEPTIONS_H
 #define CHERIOS_KERNEL_EXCEPTIONS_H
 
-#define CAP_CAUSE_LIST \
-	X(None) \
-	X(Length_Violation) \
-	X(Tag_Violation) \
-	X(Seal_Violation) \
-	X(Type_Violation) \
-	X(Call_Trap) \
-	X(Return_Trap) \
-	X(Underflow_of_trusted_system_stack) \
-	X(User_defined_Permission_Violation) \
-	X(TLB_prohibits_store_capability) \
-	X(Requested_bounds_cannot_be_represented_exactly) \
-	X(reserved1) \
-	X(reserved2) \
-	X(reserved3) \
-	X(reserved4) \
-	X(reserved5) \
-	X(Global_Violation) \
-	X(Permit_Execute_Violation) \
-	X(Permit_Load_Violation) \
-	X(Permit_Store_Violation) \
-	X(Permit_Load_Capability_Violation) \
-	X(Permit_Store_Capability_Violation) \
-	X(Permit_Store_Local_Capability_Violation) \
-	X(Permit_Seal_Violation) \
-	X(Access_System_Registers_Violation) \
-	X(reserved6) \
-	X(reserved7) \
-	X(reserved8) \
-	X(reserved9) \
-	X(reserved10) \
-	X(reserved11) \
-	X(reserved12)
+#include "string_enums.h"
 
-#define X(Arg) Arg ,
-typedef enum cap_cause_exception_t {
-    CAP_CAUSE_LIST
-} cap_cause_exception_t;
-#undef X
+#define CAP_CAUSE_LIST(ITEM) \
+	ITEM(None) \
+	ITEM(Length_Violation) \
+	ITEM(Tag_Violation) \
+	ITEM(Seal_Violation) \
+	ITEM(Type_Violation) \
+	ITEM(Call_Trap) \
+	ITEM(Return_Trap) \
+	ITEM(Underflow_of_trusted_system_stack) \
+	ITEM(User_defined_Permission_Violation) \
+	ITEM(TLB_prohibits_store_capability) \
+	ITEM(Requested_bounds_cannot_be_represented_exactly) \
+	ITEM(reserved1) \
+	ITEM(reserved2) \
+	ITEM(reserved3) \
+	ITEM(reserved4) \
+	ITEM(reserved5) \
+	ITEM(Global_Violation) \
+	ITEM(Permit_Execute_Violation) \
+	ITEM(Permit_Load_Violation) \
+	ITEM(Permit_Store_Violation) \
+	ITEM(Permit_Load_Capability_Violation) \
+	ITEM(Permit_Store_Capability_Violation) \
+	ITEM(Permit_Store_Local_Capability_Violation) \
+	ITEM(Permit_Seal_Violation) \
+	ITEM(Access_System_Registers_Violation) \
+	ITEM(reserved6) \
+	ITEM(reserved7) \
+	ITEM(reserved8) \
+	ITEM(reserved9) \
+	ITEM(reserved10) \
+	ITEM(reserved11) \
+	ITEM(reserved12)
+
+DECLARE_ENUM(cap_cause_exception_t, CAP_CAUSE_LIST)
 
 typedef struct cap_exception_t {
     cap_cause_exception_t cause;
@@ -81,23 +79,9 @@ static inline cap_exception_t parse_cause(register_t packed_cause) {
 }
 
 #ifndef __LITE__
-	#define X(Arg)  #Arg ,
-	static const char * capcausestr[0x20] = {
-			CAP_CAUSE_LIST
-	};
-	#undef X
-
 	#define exception_printf kernel_printf
 #else
 	#define exception_printf(...)
 #endif
-
-static inline const char * getcapcause(int cause) {
-#ifndef __LITE__
-    return capcausestr[cause];
-#else
-    return ""; cause++;
-#endif
-}
 
 #endif //CHERIOS_KERNEL_EXCEPTIONS_H

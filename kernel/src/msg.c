@@ -74,16 +74,18 @@ int msg_push(act_t * dest, act_t * src, capability identifier, capability sync_t
 	queue->header.end = safe(queue->header.end+1, qmask);
 
 	if(dest->sched_status == sched_waiting) {
-		sched_d2a(dest, sched_schedulable);
+		sched_receives_msg(dest);
 	}
 	return 0;
 }
 
 void msg_pop(act_t * act) {
+
+	kernel_panic("Kernel should not pop");
+
 	queue_t * queue = act->msg_queue;
 	msg_nb_t  qmask  =  act->queue_mask;
 
-	kernel_assert(act->sched_status == sched_schedulable);
 	kernel_assert(!empty(queue));
 
 	int start = queue->header.start;

@@ -29,12 +29,16 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "klib.h"
+#include "syscalls.h"
 #include "cp0.h"
 
 /*
  * CCall/CReturn handler
  */
+
+DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
 /* Creates a token for synchronous CCalls. This ensures the answer is unique. */
 static capability get_and_set_sealed_sync_token(act_t* ccaller) {
@@ -58,21 +62,25 @@ static sync_t unseal_sync_token(capability token) {
 
 static int token_expected(act_t* ccaller, capability token) {
 	sync_t got = unseal_sync_token(token);
+	if(ccaller->sync_token != got) {
+		KERNEL_TRACE("creturn", "caller %s expected %ld got %ld", ccaller->name, ccaller->sync_token, got);
+	}
 	return ccaller->sync_token == got;
 }
 
-static void kernel_ccall_core(int cflags) {
+static void kernel_ccall_core(ccall_selector_t ccall_selector) {
 	/* Unseal CCall cs and cb */
 	/* cb is the activation and cs the identifier */
 	capability object_identifier = kernel_exception_framep_ptr->cf_c2;
-	act_t * act = kernel_exception_framep_ptr->cf_c1;
+	act_t * act = (act_t *)kernel_exception_framep_ptr->cf_c1;
 
-	int otype = cheri_gettype(act);
+	uint64_t otype = cheri_gettype(act);
 	object_identifier = kernel_unseal(object_identifier, otype);
-	act = kernel_unseal(act, otype);
+	act = (act_t *) kernel_unseal(act, otype);
 	/* FIXME: This is needed because we have screwed CCall */
-	act = kernel_cap_make_rw(act);
+	act = (act_t *) kernel_cap_make_rw(act);
 
+	KERNEL_TRACE("ccall", "call is from %s to %s", kernel_curr_act->name, act->name);
 	if(!(cheri_getperm(object_identifier) & CHERI_PERM_STORE)) {
 		KERNEL_ERROR("Bad identifier: missing store permission");
 		return;
@@ -90,24 +98,23 @@ static void kernel_ccall_core(int cflags) {
 	}
 
 	capability sync_token = NULL;
-	if(cflags & 2) {
+	if(ccall_selector == SYNC_CALL) {
 		sync_token = get_and_set_sealed_sync_token(kernel_curr_act);
 	}
 
 	/* Push the message on the queue */
 	if(msg_push(act, kernel_curr_act, object_identifier, sync_token)) {
 		//KERNEL_ERROR("Queue full");
-		if(cflags & 2) {
+		if(ccall_selector == SYNC_CALL) {
 			kernel_panic("queue full (csync)");
 		}
 		kernel_exception_framep_ptr->mf_v0 = 0;
 	}
 
-	if(cflags & 2) {
-		sched_a2d(kernel_curr_act, sched_sync_block);
-		sched_reschedule(act);
+	if(ccall_selector == SYNC_CALL) {
+		sched_block(kernel_curr_act, sched_sync_block, act);
 	}
-	if(cflags & 1) {
+	if(ccall_selector == SEND_SWITCH) {
 		act_wait(kernel_curr_act, act);
 	}
 }
@@ -115,7 +122,7 @@ static void kernel_ccall_core(int cflags) {
 void kernel_ccall(void) {
 	KERNEL_TRACE(__func__, "in");
 
-	register_t ccall_selector =
+	ccall_selector_t ccall_selector = (ccall_selector_t)
 	#ifdef HARDWARE_fpga
 	        cp0_badinstr_get();
 	#else
@@ -123,26 +130,16 @@ void kernel_ccall(void) {
 	#endif
 	ccall_selector &= 0x7FF;
 
+	KERNEL_TRACE(__func__, "Selector = %s", enum_ccall_selector_t_tostring(ccall_selector));
 	/* Ack ccall instruction */
 	kernel_skip_instr(kernel_curr_act);
 
-	int cflags;
-
-	switch(ccall_selector) {
-		case 1: /* send */
-			cflags = 0;
-			break;
-		case 2: /* send & switch */
-			cflags = 1;
-			break;
-		case 4: /* sync call */
-			cflags = 2;
-			break;
-		default:
-			KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
-			return;
+	if(ccall_selector != SEND && ccall_selector != SEND_SWITCH && ccall_selector != SYNC_CALL) {
+		KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
+		return;
 	}
-	kernel_ccall_core(cflags);
+
+	kernel_ccall_core(ccall_selector);
 }
 
 void kernel_creturn(void) {
@@ -153,25 +150,22 @@ void kernel_creturn(void) {
 
 	capability sync_token = kernel_exception_framep_ptr->cf_c1;
 	if(sync_token == NULL) {
-		KERNEL_TRACE(__func__, "%s makes a non synchronous return", kernel_curr_act->name);
-		/* Used by asynchronous primitives */
-		//act_wait(kernel_curr_act, 0);
-		act_wait(kernel_curr_act, kernel_curr_act);
-		return;
+		KERNEL_TRACE(__func__, "%s did not provide a sync token", kernel_curr_act->name);
+		kernel_freeze();
 	}
 
 	/* Check if we expect this anwser */
-	act_t * caller = kernel_exception_framep_ptr->cf_c2;
+	act_t * caller = (act_t *)kernel_exception_framep_ptr->cf_c2;
 	if (cheri_gettype(caller) != act_sync_ref_type) {
 		KERNEL_ERROR("Activation %s tried to make a synchronous return but provided an incorrect caller",
 					 kernel_curr_act->name);
 		CHERI_PRINT_CAP(caller);
 		kernel_freeze();
 	}
-	caller = kernel_unseal(caller, act_sync_ref_type);
+	caller = (act_t*)kernel_unseal(caller, act_sync_ref_type);
 
 	if(!token_expected(caller, sync_token)) {
-		KERNEL_ERROR("bad sync creturn");
+		KERNEL_ERROR("wrong sequence token from creturn");
 		kernel_freeze();
 	}
 
@@ -182,7 +176,7 @@ void kernel_creturn(void) {
 
 	/* Make the caller runnable again */
 	kernel_assert(caller->sched_status == sched_sync_block);
-	sched_d2a(caller, sched_runnable);
+	sched_recieve_ret(caller);
 
 	/* Copy return values */
 	caller->saved_registers.cf_c3 =
@@ -192,6 +186,6 @@ void kernel_creturn(void) {
 	caller->saved_registers.mf_v1 =
 	   kernel_exception_framep_ptr->mf_v1;
 
-	/* Try to set the callee in waiting mode */
+	/* TODO: does this make sense? The activation may want to continue even if there are no more messages*/
 	act_wait(kernel_curr_act, caller);
 }

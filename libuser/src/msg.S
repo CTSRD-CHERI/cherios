@@ -35,21 +35,74 @@
 
 .ifeq _MIPS_SZCAP-256
 .set CAP_SIZE_BITS, 5
+.set CAP_SIZE,     32
+.set CAP_IN_MESSAGE, 7
 .else
 .ifeq _MIPS_SZCAP-128
 .set CAP_SIZE_BITS, 4
+.set CAP_SIZE,     16
+.set CAP_IN_MESSAGE, 6
 .else
 .error "Unknown cap size"
 .endif
 .endif
 
-# Dispatch CCalls
+.set WAIT_NO,               14
+.set MSG_NB_T_SIZE,         8
+.set HEADER_START_OFFSET,   0
+.set HEADER_END_OFFSET,     MSG_NB_T_SIZE
+.set HEADER_LEN_OFFSET,     MSG_NB_T_SIZE * 2
+
+# TODO this should be calculated properly, depends on alignment of cap and msg_nb_t
+# TODO this will work for MSG_NB_T_SIZE = 8, and either CHERI-128 or CHERI-256
+.set MSGS_START_OFFSET,     32
+
+#define queue               $c18
+
+# Message read loop
 
 	.text
 	.global msg_entry
 	.ent msg_entry
 msg_entry:
-	cgetdefault	$c17
+    cgetdefault	$c17
+    dla         $t0, act_self_queue
+    clc         queue, $t0, 0($c17)
+msg_entry_loop:
+
+# Check for items in queue
+    cld     $t0, $zero, HEADER_START_OFFSET(queue)        # $t0 = start
+    cld     $t1, $zero, HEADER_END_OFFSET(queue)          # $t1 = end
+    bne    $t0, $t1, pop                                  # $t0 != $t1
+
+# TODO in a multicore world we may wish to spin a few times before resorting to WAIT
+    li      $v0, WAIT_NO                                  #
+    syscall                                               # SYSCALL(WAIT)
+
+pop:
+    sll     $t1, $t0, (CAP_SIZE_BITS + 3)                 # 8 capabilities worth of stuff in a message
+
+    # pops message #
+    clc     $c3, $t1,  (MSGS_START_OFFSET)(queue)
+    clc     $c4, $t1,  (MSGS_START_OFFSET + CAP_SIZE)(queue)
+    clc     $c5, $t1,  (MSGS_START_OFFSET + 2 * CAP_SIZE)(queue)
+    clc     $idc, $t1, (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
+    clc     $c1, $t1,  (MSGS_START_OFFSET + 4 * CAP_SIZE)(queue)
+    clc     $c2, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
+    cld     $a0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE)(queue)
+    cld     $a1, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 8)(queue)
+    cld     $a2, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 16)(queue)
+    cld     $v0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 24)(queue)
+
+    cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        #
+    addi    $t0, $t0, 1                                 #
+    bne    $t0, $t1, update_start                       #
+    nop                                                 #
+    li      $t0, 0                                      # $t0 = ($t0 + 1) % len
+
+update_start:
+    csd     $t0, $zero, HEADER_START_OFFSET(queue)      # start = $t0
+
 	bltz		$v0, control
 	nop
 
@@ -98,11 +151,17 @@ end:
 	#Restore caller activation reference
 	dla     $t1, sync_caller
 	clc     $c2, $t1, 0($c17)
-	creturn
-
-	#We are scheduled again: new message
-	b msg_entry
+#FIXME this instruction cannot jump backwards due to a QEMU bug
+	cbts    $c1, make_return
 	nop
+    b msg_entry_loop
+	nop
+
+make_return:
+	creturn
+	b msg_entry_loop
+    nop
+
 msg_entry_end:
 	.end msg_entry
 	.size msg_entry, msg_entry_end - msg_entry

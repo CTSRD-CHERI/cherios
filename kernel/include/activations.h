@@ -34,30 +34,10 @@
 
 #include "cheric.h"
 #include "queue.h"
+#include "types.h"
 
 typedef u32 aid_t;
 
-/*
- * Possible status for an activation
- */
-typedef enum status_e
-{
-	status_alive = 0,
-	status_revoked = 1,
-	status_terminated = 2
-} status_e;
-
-/*
- * Scheduling status for an activation
- */
-typedef enum sched_status_e
-{
-	sched_waiting,
-	sched_schedulable,
-	sched_runnable,
-	sched_sync_block,
-	sched_terminated
-} sched_status_e;
 
 /*
  * Kernel structure for an activation
@@ -69,6 +49,9 @@ typedef struct
 {
 	/* Activation related */
 	status_e status;		/* Activation status flags */
+
+	/* Debug related */
+	size_t image_base;
 
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */

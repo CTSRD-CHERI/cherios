@@ -30,6 +30,7 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "klib.h"
 #include "cp0.h"
 
@@ -60,7 +61,7 @@ void kernel_interrupts_init(int enable_timer) {
 static void kernel_interrupt_others(register_t pending) {
 	for(size_t i=0; i<7; i++) {
 		if(pending & (1<<i)) {
-			if(int_child[i] == 0) {
+			if(int_child[i] == NULL) {
 				KERNEL_ERROR("unknown interrupt %lx", i);
 				continue;
 			}
@@ -69,6 +70,7 @@ static void kernel_interrupt_others(register_t pending) {
 			struct reg_frame * frame = &kernel_acts[0].saved_registers;
 			frame->mf_v0 = -3;
 			frame->mf_a0 = i;
+			KERNEL_TRACE("interrupt","delivering interrupt %d to activation %s", i, int_child[i]->name);
 			// FIXME we probabably want a seperate interrupt source from the kernel
 			if(msg_push(int_child[i], &kernel_acts[0], NULL, NULL)) {
 				kernel_panic("queue full (int)");
@@ -81,18 +83,11 @@ void kernel_interrupt(void) {
 	register_t ipending = cp0_cause_ipending_get();
 	register_t toprocess = ipending & get_others_interrupts_mask();
 	KERNEL_TRACE("interrupt", "%x %x", ipending, toprocess);
-	if ((ipending & MIPS_CP0_CAUSE_IP_TIMER) && toprocess) {
-		kernel_panic("This will cause a bug, the wrong frame will be delivered");
-	}
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
-		KERNEL_TRACE("interrupt", "timer start");
 		kernel_timer();
-		KERNEL_TRACE("interrupt", "timer end");
 	}
 	if(toprocess) {
-		KERNEL_TRACE("interrupt", "toprocess start");
 		kernel_interrupt_others(toprocess);
-		KERNEL_TRACE("interrupt", "toprocess start");
 	}
 }
 
@@ -120,7 +115,7 @@ int kernel_interrupt_register(int number) {
 	if(number < 0) {
 		return -1;
 	}
-	if(int_child[number] != 0) {
+	if(int_child[number] != NULL) {
 		return -1;
 	}
 	int_child[number] = kernel_curr_act;

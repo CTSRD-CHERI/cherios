@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "klib.h"
 
 #ifndef __LITE__
@@ -71,10 +72,79 @@ static void regdump_c(const char * str_cap, int hl, const void * cap) {
 	printf(KRST"\n");
 }
 
+static inline size_t correct_base(size_t image_base, capability pcc) {
+	return ((cheri_getoffset(pcc) + cheri_getbase(pcc)) - image_base);
+}
+
+static inline void print_frame(int num, size_t ra, char * sp) {
+	printf("%2d| [0x%016lx] (sp=%p)\n", num, ra, sp);
+}
+
+static inline void backtrace(size_t image_base, char* stack_pointer, capability return_address) {
+	int i = 0;
+
+	// Function prolog:
+	// daddiu  sp,sp,-size			// allocates space
+	// ...
+	// csc     c17,sp,offset(c11)		// stores return address
+
+	// Instruction Format
+
+	// daddiu 	rs,rt, im				// |011001|rs   |rt   |im(16)
+	// |011001|11101|11101|im(16)
+
+	// csc     cs,rt,im(cb)				// |111110|cs   |cb   |rt   |im(11)
+	// |111110|10001|01011|11101|im(11)
+
+	uint32_t daddiu_form_mask = 0xFFFF0000;
+	uint32_t csc_form_mask    = 0xFFFFF800;
+	uint32_t daddiu_form_val  = 0b0110011110111101U << 16U;
+	uint32_t csc_form_val	  = 0b111110100010101111101U << 11U;
+	uint32_t daddiu_i_mask 	  = (1 << 16) - 1;
+	uint32_t csc_i_mask		  = (1 << 11) - 1;
+
+	// FIXME assumes a function prolog with daddiu. Not true for leaf functions
+
+	do {
+		print_frame(i++, correct_base(image_base, return_address), stack_pointer);
+
+		//scan backwards for daddiu
+		int16_t stack_size = 0;
+		int16_t offset = 0;
+		for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
+			if(cheri_getoffset(instr) > cheri_getlen(instr)) {
+				printf("***bad frame***\n");
+				return;
+			}
+			uint32_t val = *instr;
+			if((val & daddiu_form_mask) == daddiu_form_val) {
+				stack_size = (int16_t)(val & daddiu_i_mask);
+				break;
+			}
+			if((val & csc_form_mask) == csc_form_val) {
+				offset = (int16_t)((val & csc_i_mask) << 4);
+			}
+		}
+
+		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
+
+		if(cheri_getoffset(ra_ptr) > cheri_getlen(ra_ptr)) {
+			printf("***bad frame***\n");
+			return;
+		}
+
+		return_address = *ra_ptr;
+		// Offset by 2 instructions for the cjal + nop
+		return_address = (capability)((uint32_t*)return_address-2);
+		stack_pointer = stack_pointer - stack_size;
+	} while(cheri_getoffset(stack_pointer) != cheri_getlen(stack_pointer));
+	print_frame(i++, correct_base(image_base, return_address), stack_pointer);
+}
+
 void regdump(int reg_num) {
 	int creg = 0;
-
 	printf("Regdump:\n");
+	kernel_assert(kernel_exception_framep_ptr == &(kernel_curr_act->saved_registers));
 
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
 
@@ -114,6 +184,20 @@ void regdump(int reg_num) {
 	REG_DUMP_C(c22); REG_DUMP_C(c23); REG_DUMP_C(c24); REG_DUMP_C(c25); printf("\n");
 
 	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
+
+	size_t offset_index = correct_base(kernel_curr_act->image_base, kernel_exception_framep_ptr->cf_pcc);
+	printf("pcc at %lx in %s\n", offset_index, kernel_curr_act->name);
+
+	printf("\nLoaded images:\n");
+	for(size_t i = 0; i < kernel_next_act; i++) {
+		act_t* act = &kernel_acts[i];
+		printf("%16s: %lx\n", act->name, act->image_base);
+	}
+
+	printf("\nAttempting backtrace:\n\n");
+	char * stack_pointer = (char*)kernel_curr_act->saved_registers.cf_c11 + kernel_curr_act->saved_registers.mf_sp;
+	capability return_address = kernel_curr_act->saved_registers.cf_pcc;
+	backtrace(kernel_curr_act->image_base, stack_pointer, return_address);
 }
 
 #else

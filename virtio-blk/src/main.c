@@ -51,7 +51,7 @@ int main(void) {
 	printf("Virtio-blk Hello world\n");
 
 	/* Register ourself to the kernel as being the Virtio-blk module */
-	int ret = namespace_register(4, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_virtio, act_self_ref, act_self_id);
 	if(ret!=0) {
 		printf("Virtio-blk: register failed\n");
 		return -1;

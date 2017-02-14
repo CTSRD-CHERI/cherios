@@ -7,8 +7,8 @@ static void * zlib_id  = NULL;
 int ZEXPORT deflateInit_ OF((z_streamp strm, int level,
                                      const char *version, int stream_size)) {
 	if(zlib_ref == NULL) {
-		zlib_ref = namespace_get_ref(9);
-		zlib_id  = namespace_get_id(9);
+		zlib_ref = namespace_get_ref(namespace_num_zlib);
+		zlib_id  = namespace_get_id(namespace_num_zlib);
 	}
 	return ccall_rrcc_r(zlib_ref, zlib_id, 0, level, stream_size, strm, (char *)version);
 }

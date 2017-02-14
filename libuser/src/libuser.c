@@ -32,8 +32,9 @@
 #include "cheric.h"
 #include "object.h"
 #include "namespace.h"
+#include "queue.h"
 
-void libuser_init(capability self_ctrl, capability self_cap, capability ns_ref, capability ns_id) {
-	object_init(self_ctrl, self_cap);
+void libuser_init(capability self_ctrl, capability self_cap, capability ns_ref, capability ns_id, queue_t * queue) {
+	object_init(self_ctrl, self_cap, queue);
 	namespace_init(ns_ref, ns_id);
 }

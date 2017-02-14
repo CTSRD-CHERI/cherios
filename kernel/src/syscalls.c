@@ -30,6 +30,9 @@
  */
 
 #include "klib.h"
+#include "syscalls.h"
+
+DEFINE_ENUM_CASE(syscalls_t, SYS_CALL_LIST)
 
 /*
  * These functions abstract the syscall register convention
@@ -43,11 +46,17 @@ static void syscall_sleep(void) {
 	}
 }
 
+static void syscall_wait(void) {
+	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
+	act_wait(kernel_curr_act, NULL);
+}
+
 static void syscall_act_register(void) {
 	reg_frame_t * frame = kernel_exception_framep_ptr->cf_c3;
 	char * name = kernel_exception_framep_ptr->cf_c4;
 	queue_t * queue = kernel_exception_framep_ptr->cf_c5;
-	kernel_exception_framep_ptr->cf_c3 = act_register(frame, queue, name);
+	register_t a0 = kernel_exception_framep_ptr->mf_a0;
+	kernel_exception_framep_ptr->cf_c3 = act_register(frame, queue, name, a0, status_alive);
 }
 
 static void syscall_act_ctrl_get_ref(void) {
@@ -68,9 +77,7 @@ static void syscall_act_revoke(void) {
 
 static void syscall_act_terminate(void) {
 	int ret = act_terminate(kernel_exception_framep_ptr->cf_c3);
-	if(ret == 1) {
-		sched_reschedule(0);
-	} else {
+	if(ret != 1) {
 		kernel_exception_framep_ptr->mf_v0 = ret;
 	}
 }
@@ -89,6 +96,7 @@ static void syscall_puts() {
 }
 
 static void syscall_panic(void) { //fixme: temporary
+	regdump(-1);
 	kernel_freeze();
 }
 
@@ -115,47 +123,50 @@ static void syscall_gc(void) {
  */
 void kernel_exception_syscall(void)
 {
-	long sysn = kernel_exception_framep_ptr->mf_v0;
-	KERNEL_TRACE("exception", "Syscall number %ld", sysn);
+	syscalls_t sysn = (syscalls_t)kernel_exception_framep_ptr->mf_v0;
+	KERNEL_TRACE("exception", "Syscall %s", enum_syscalls_t_tostring(sysn));
 	act_t * kca = kernel_curr_act;
 	switch(sysn) {
-		case 13:
+		case SLEEP:
 			syscall_sleep();
 			break;
-		case 20:
+		case WAIT:
+			syscall_wait();
+			break;
+		case ACT_REGISTER:
 			syscall_act_register();
 			break;
-		case 21:
+		case ACT_CTRL_GET_REF:
 			syscall_act_ctrl_get_ref();
 			break;
-		case 22:
+		case ACT_CTRL_GET_ID:
 			syscall_act_ctrl_get_id();
 			break;
-		case 23:
+		case ACT_CTRL_GET_STATUS:
 			syscall_act_ctrl_get_status();
 			break;
-		case 25:
+		case ACT_REVOKE:
 			syscall_act_revoke();
 			break;
-		case 26:
+		case ACT_TERMINATE:
 			syscall_act_terminate();
 			break;
-		case 29:
+		case ACT_SEAL_IDENTIFIER:
 			syscall_act_seal_identifier();
 			break;
-		case 34:
+		case PUTS:
 			syscall_puts();
 			break;
-		case 42:
+		case PANIC:
 			syscall_panic();
 			break;
-		case 50:
+		case INTERRUPT_REGISTER:
 			syscall_interrupt_register();
 			break;
-		case 51:
+		case INTERRUPT_ENABLE:
 			syscall_interrupt_enable();
 			break;
-		case 66:
+		case GC:
 			syscall_gc();
 			break;
 		default:

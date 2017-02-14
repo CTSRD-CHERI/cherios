@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "klib.h"
 #include "cp0.h"
 #include "kernel_exceptions.h"
@@ -37,10 +38,12 @@
  * Exception demux
  */
 
-static void kernel_exception_capability(void) {
-	KERNEL_TRACE("exception", "kernel_capability");
+DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
 
+static void kernel_exception_capability(void) {
 	cap_exception_t exception = parse_cause(cheri_getcause());
+
+	KERNEL_TRACE("exception", "kernel_capability %s", enum_cap_cause_exception_t_tostring(exception.cause));
 
 	if(exception.cause == Call_Trap) { /* todo: give them their own handler */
 		kernel_ccall();
@@ -51,27 +54,33 @@ static void kernel_exception_capability(void) {
 		return;
 	}
 
-	exception_printf(KRED "Capability exception caught in activation %s-%d"
+	exception_printf(KRED "Capability exception caught in activation %s"
 	             " (0x%X: %s) [Reg C%d]" KRST"\n",
-	        kernel_curr_act->name, kernel_curr_act,
-		exception.cause, getcapcause(exception.cause), exception.reg_num);
+	        kernel_curr_act->name,
+		exception.cause, enum_cap_cause_exception_t_tostring(exception.cause), exception.reg_num);
 
 	regdump(exception.reg_num);
 	kernel_freeze();
 }
 
 static void kernel_exception_data(register_t excode) {
-	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s-%d\n",
+	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s\n",
 	       excode, cp0_badvaddr_get(),
-	       kernel_curr_act->name, kernel_curr_act);
+	       kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();
 }
 
+static void kernel_exception_trap() {
+	exception_printf(KRED"trap in %s"KRST"\n"
+					 , kernel_curr_act->name);
+	regdump(-1);
+	kernel_freeze();
+}
 
 static void kernel_exception_unknown(register_t excode) {
-	exception_printf(KRED"Unknown exception type '%d' in  %s-%d"KRST"\n",
-	       excode, kernel_curr_act->name, kernel_curr_act);
+	exception_printf(KRED"Unknown exception type '%d' in  %s"KRST"\n",
+	       excode, kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();
 }
@@ -84,6 +93,8 @@ static void kernel_exception_unknown(register_t excode) {
 void kernel_exception(void) {
 	static int entered = 0;
 	entered++;
+	KERNEL_TRACE("exception", "saving %s with pc %lx",
+				 kernel_curr_act->name, cheri_getoffset(kernel_curr_act->saved_registers.cf_pcc));
 	KERNEL_TRACE("exception", "enters %d", entered);
 	if(entered > 1) {
 		KERNEL_ERROR("interrupt in interrupt");
@@ -119,6 +130,9 @@ void kernel_exception(void) {
 		kernel_exception_data(excode);
 		break;
 
+	case MIPS_CP0_EXCODE_TRAP:
+		kernel_exception_trap();
+		break;
 	default:
 		kernel_exception_unknown(excode);
 		break;
@@ -130,4 +144,8 @@ void kernel_exception(void) {
 		KERNEL_ERROR("interrupt in interrupt");
 		kernel_freeze();
 	}
+
+	kernel_assert(kernel_exception_framep_ptr == &kernel_curr_act->saved_registers);
+	KERNEL_TRACE("exception", "restoring %s with pc %x",
+				 kernel_curr_act->name, cheri_getoffset(kernel_curr_act->saved_registers.cf_pcc));
 }

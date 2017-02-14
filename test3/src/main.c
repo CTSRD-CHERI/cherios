@@ -76,8 +76,8 @@ void fwd(void*, void *);
 void ft(void) {
 	for(int i=0; i<nmsg; i++) {
 		__asm("li $0, 0xdd42");
-		ccall_1(t_ref, t_id, 0,
-		      i, cp0_count_get(), 0, NULL, NULL, NULL);
+		ccall_SEND(t_ref, t_id, 0,
+				   i, cp0_count_get(), 0, NULL, NULL, NULL);
 		ssleep(0);
 		//nssleep(last-first);
 	}

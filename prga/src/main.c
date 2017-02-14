@@ -175,9 +175,9 @@ int main(int argc, __attribute__((unused)) char *argv[]) {
 	printf("User Hello world [%d]\n", argc);
 
 	/* Use the UART module to print an Hello World */
-	void * u_ref = namespace_get_ref(1);
+	void * u_ref = namespace_get_ref(namespace_num_uart);
 	assert(u_ref != NULL);
-	void * u_id  = namespace_get_id(1);
+	void * u_id  = namespace_get_id(namespace_num_uart);
 	assert(u_id != NULL);
 	ccall_c_n(u_ref, u_id, 1, "CCall Hello world\n");
 
@@ -233,9 +233,9 @@ int main(int argc, __attribute__((unused)) char *argv[]) {
 	#endif
 
 	/* Initialize CCalls to the sockets module */
-	s_cb = namespace_get_ref(2);
+	s_cb = namespace_get_ref(namespace_num_sockets);
 	assert(s_cb != NULL);
-	s_cs = get_cookie(s_cb, namespace_get_id(2));
+	s_cs = get_idc_from_ref(s_cb, namespace_get_id(namespace_num_sockets));
 	assert(s_cs != NULL);
 
 	if(argc%2) {

@@ -39,8 +39,8 @@ extern void * vblk_id;
 
 static inline void virtio_check_refs(void) {
 	if(vblk_ref == NULL) {
-		vblk_ref = namespace_get_ref(4);
-		vblk_id  = namespace_get_id(4);
+		vblk_ref = namespace_get_ref(namespace_num_virtio);
+		vblk_id  = namespace_get_id(namespace_num_virtio);
 	}
 	assert(vblk_ref != NULL);
 	assert(vblk_id  != NULL);

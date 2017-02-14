@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,48 +28,5 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "malloc_heap.h"
+#include "syscalls.h"
 
-extern void msg_entry;
-void (*msg_methods[]) = {__mmap, __munmap};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
-
-size_t pagesz;			/* page size */
-
-
-int main(void) {
-	syscall_puts("memmgt Hello world\n");
-
-	int ret = namespace_register(namespace_num_memmgt, act_self_ref, act_self_id);
-	if(ret!=0) {
-		syscall_puts(KRED"Register failed\n");
-	}
-
-	/* Get capability to heap */
-	void * heap = act_get_cap();
-	//CHERI_PRINT_CAP(heap);
-	assert(heap != NULL);
-
-	/*
-	 * setup memory and
-	 * align break pointer so all data will be page aligned.
-	 */
-	pagesz = CHERIOS_PAGESIZE;
-	#if MMAP
-	minit(heap);
-	#else
-	init_pagebucket();
-	__init_heap(heap);
-	#endif
-
-	/* init release mecanism */
-	release_init();
-
-	syscall_puts("memmgt: setup done\n");
-
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-	return 0;
-}

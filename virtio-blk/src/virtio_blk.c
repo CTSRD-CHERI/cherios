@@ -21,7 +21,7 @@ static void mmio_set32(size_t offset, u32 value) {
 
 int vblk_init(void) {
 	//printf(KBLU"%s\n"KRST, __func__);
-	session = get_curr_cookie();
+	session = get_idc();
 	assert(session != NULL);
 
 	/* INIT1: reset device */
@@ -83,7 +83,7 @@ int vblk_init(void) {
 
 int vblk_status(void) {
 	//printf(KBLU"%s\n"KRST, __func__);
-	session = get_curr_cookie();
+	session = get_idc();
 	if(session->init == 0) {
 		return 1;
 	}
@@ -95,7 +95,7 @@ int vblk_status(void) {
 
 size_t vblk_size(void) {
 	//printf(KBLU"%s\n"KRST, __func__);
-	session = get_curr_cookie();
+	session = get_idc();
 	struct virtio_blk_config * config =
 	   (struct virtio_blk_config *)(session->mmio_cap + VIRTIO_MMIO_CONFIG);
 	return config->capacity;
@@ -103,7 +103,7 @@ size_t vblk_size(void) {
 
 static int vblk_rw_ret(size_t i) {
 	//printf(KBLU"%s\n"KRST, __func__);
-	session = get_curr_cookie();
+	session = get_idc();
 	struct virtq * queue = &(session->queue);
 	req_t * reqs = session->reqs;
 
@@ -127,7 +127,7 @@ static int vblk_rw_ret(size_t i) {
 }
 
 int vblk_interrupt(void) {
-	set_curr_cookie(expected_session);
+	set_idc(expected_session);
 	int ret = vblk_rw_ret(expected_i);
 	sync_token = expected_session->reqs[expected_i].sync_token;
 	sync_caller = expected_session->reqs[expected_i].sync_caller;
@@ -144,7 +144,7 @@ static int vblk_send_done(size_t i) {
 
 int vblk_read(void * buf, size_t sector) {
 	//printf(KBLU"%s\n"KRST, __func__);
-	session = get_curr_cookie();
+	session = get_idc();
 	struct virtq * queue = &(session->queue);
 	assert(!(mmio_read32(VIRTIO_MMIO_STATUS)&(STATUS_DEVICE_NEEDS_RESET)));
 
@@ -191,7 +191,7 @@ int vblk_read(void * buf, size_t sector) {
 
 int vblk_write(void * buf, size_t sector) {
 	//printf(KBLU"%s\n"KRST, __func__);
-	session = get_curr_cookie();
+	session = get_idc();
 	struct virtq * queue = &(session->queue);
 	assert(!(mmio_read32(VIRTIO_MMIO_STATUS)&(STATUS_DEVICE_NEEDS_RESET)));
 

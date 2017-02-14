@@ -34,6 +34,7 @@
 #include "misc.h"
 #include "object.h"
 #include "string.h"
+#include "syscalls.h"
 
 #define B_FS 1
 #define B_SO 1
@@ -52,8 +53,9 @@
 	{m_fence, 1, NULL, 0, 0, 0, NULL},
 
 boot_elem_t boot_list[] = {
-	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
+	// TODO other end of the hack. The kernel assumes the first activation will be the namespace service
 	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
+	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
@@ -100,7 +102,6 @@ void print_build_date(void) {
 }
 
 static void load_modules(void) {
-	static void * c_memmgt = NULL;
 
 	for(size_t i=0; i<boot_list_len; i++) {
 		boot_elem_t * be = boot_list + i;
@@ -114,14 +115,10 @@ static void load_modules(void) {
 		be->ctrl = load_module(be->type, be->name, be->arg);
 		switch(boot_list[i].type) {
 			case m_memmgt:
-				nssleep(3);
-				c_memmgt = be->ctrl;
 				boot_alloc_enable_system(be->ctrl);
 				break;
 			case m_namespace:
 				nssleep(3);
-				/* glue memmgt to namespace */
-				glue_memmgt(c_memmgt, be->ctrl);
 				break;
 			default:{}
 		}

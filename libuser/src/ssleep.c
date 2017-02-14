@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,13 +30,10 @@
  */
 
 #include "all.h"
+#include "syscalls.h"
+
 void ssleep(int n) {
-	__asm__ __volatile__ (
-		"li   $v0, 13 \n"
-		"move $a0, %[n] \n"
-		"syscall      \n"
-		:: [n]"r" (n)
-		: "v0", "a0");
+	SYSCALL_a0(SLEEP, n);
 }
 
 void nssleep(int n) {

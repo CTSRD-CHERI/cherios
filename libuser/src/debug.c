@@ -28,10 +28,8 @@
  * SUCH DAMAGE.
  */
 
+#include "syscalls.h"
+
 void syscall_puts(const char * str) {
-	__asm__ __volatile__ (
-		"li   $v0, 34 \n"
-		"cmove $c3, %[str] \n"
-		"syscall      \n"
-		:: [str]"C" (str): "v0", "$c3");
+	SYSCALL_c3(PUTS, str);
 }

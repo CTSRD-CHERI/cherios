@@ -33,6 +33,7 @@
 #include "object.h"
 #include "cheric.h"
 #include "assert.h"
+#include "stdio.h"
 
 capability namespace_ref = NULL;
 capability namespace_id  = NULL;

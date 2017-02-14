@@ -1,3 +1,5 @@
+#include <syscalls.h>
+
 /*-
  * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
@@ -30,26 +32,12 @@
 
 int interrupt_register(int number) {
 	int ret;
-	__asm__ (
-		"li      $v0, 50        \n"
-		"move    $a0, %[number] \n"
-		"syscall                \n"
-		"move    %[ret], $v0    \n"
-		: [ret]"=r" (ret)
-		: [number]"r" (number)
-		: "v0", "a0");
+	SYSCALL_a0_retr(INTERRUPT_REGISTER, number, ret);
 	return ret;
 }
 
 int interrupt_enable(int number) {
 	int ret;
-	__asm__ (
-		"li      $v0, 51        \n"
-		"move    $a0, %[number] \n"
-		"syscall                \n"
-		"move    %[ret], $v0    \n"
-		: [ret]"=r" (ret)
-		: [number]"r" (number)
-		: "v0", "a0");
+	SYSCALL_a0_retr(INTERRUPT_ENABLE, number, ret);
 	return ret;
 }

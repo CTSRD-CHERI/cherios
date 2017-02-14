@@ -29,8 +29,11 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
+#include "activations.h"
 #include "klib.h"
 #include "queue.h"
+#include "namespace.h"
 
 /*
  * Routines to handle activations
@@ -51,7 +54,7 @@ void act_init(void) {
 
 	/* initialize the default identifier to a known value */
 	act_default_id = cheri_setbounds(cheri_getdefault(), 0);
-
+	CHERI_PRINT_CAP(act_default_id);
 	/*
 	 * create kernel activation
 	 * used to have a 'free' reg frame.
@@ -60,18 +63,14 @@ void act_init(void) {
 	kernel_next_act = 0;
 	struct reg_frame dummy_frame;
 	bzero(&dummy_frame, sizeof(struct reg_frame));
-	act_register(&dummy_frame, &kernel_queue.queue, "kernel");
-	kernel_acts[0].status = status_terminated;
-	kernel_acts[0].sched_status = sched_terminated;
+	act_register(&dummy_frame, &kernel_queue.queue, "kernel", 0, status_terminated);
 
 	/* create the boot activation (activation that called us) */
-	aid_t boot_id = 1;
-	act_t* boot_act = &kernel_acts[boot_id];
-	kernel_curr_act = boot_act;
+	act_t* boot_act = &kernel_acts[namespace_num_boot];
 
-	kernel_exception_framep_ptr = &boot_act->saved_registers;
-	act_register(&boot_act->saved_registers, &boot_queue.queue, "boot");
-	sched_d2a(boot_act, sched_runnable);
+	act_register(&boot_act->saved_registers, &boot_queue.queue, "boot", 0, status_alive);
+
+	sched_schedule(boot_act);
 }
 
 void kernel_skip_instr(act_t* act) {
@@ -89,14 +88,30 @@ static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return kernel_seal(act, act_ctrl_ref_type);
 }
 
-act_control_t * act_register(const reg_frame_t * frame, queue_t * queue, const char * name) {
+static act_t* ns_ref = NULL;
+static capability ns_id  = NULL;
+
+act_control_t * act_register(const reg_frame_t * frame,
+							 queue_t * queue, const char * name,
+							 register_t a0,
+							 status_e create_in_status) {
 
 	KERNEL_TRACE("act", "Registering activation %s", name);
 	if(kernel_next_act >= MAX_ACTIVATIONS) {
 		kernel_panic("no act slot");
 	}
 
+
 	act_t * act = kernel_acts + kernel_next_act;
+
+	act->image_base = cheri_getbase(frame->cf_c0);
+
+	//TODO bit of a hack. the kernel needs to know what namespace service to use
+	if(kernel_next_act == namespace_num_namespace) {
+		KERNEL_TRACE("act", "found namespace");
+		ns_ref = act_create_sealed_ref(act);
+		ns_id = kernel_seal(act_default_id, act_id_type);
+	}
 
 	#ifndef __LITE__
 	/* set name */
@@ -113,31 +128,43 @@ act_control_t * act_register(const reg_frame_t * frame, queue_t * queue, const c
 	#endif
 
 	/* set status */
-	act->status = status_alive;
+	act->status = create_in_status;
 
 	/* set register frame */
 	memcpy(&(act->saved_registers), frame, sizeof(struct reg_frame));
+	/* Setup frame to have its own ctrl and a0 */
+	//FIXME this convention needs work, it was copied from what was expected by init.S in libuser.
+	//FIXME we might as well have every reference needed, and not then have the user get them from the ctrl.
+	//FIXME I also feel that getting the namespace should be a syscall?
+	/* set namespace */
+	act->saved_registers.cf_c23	= ns_ref;
+	act->saved_registers.cf_c24	= ns_id;
+	act->saved_registers.cf_c25	= queue;
 
+	act->saved_registers.mf_a0 = a0;
+	act->saved_registers.cf_c5 = act_create_sealed_ctrl_ref(act);
 	/* set queue */
 	msg_queue_init(act, queue);
 
 	/* set default identifier */
 	act->act_default_id = kernel_seal(act_default_id, act_id_type);
 
-	/* set scheduling status */
-	sched_create(act);
 
 	/* set expected sequence to not expecting */
 	act->sync_token = 0;
 
-	KERNEL_TRACE("act", "%s OK! ", __func__);
-	/* done, update next_act */
+	/* set scheduling status */
+	sched_create(act);
+
+	/*update next_act */
 	kernel_next_act++;
+	KERNEL_TRACE("register", "image base of %s is %lx", act->name, act->image_base);
+	KERNEL_TRACE("act", "%s OK! ", __func__);
 	return act_create_sealed_ctrl_ref(act);
 }
 
 int act_revoke(act_control_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
+	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
 	if(ctrl->status == status_terminated) {
 		return -1;
 	}
@@ -146,7 +173,7 @@ int act_revoke(act_control_t * ctrl) {
 }
 
 int act_terminate(act_control_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
+	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
 	ctrl->status = status_terminated;
 	sched_delete(ctrl);
 	ctrl->sched_status = sched_terminated;
@@ -158,28 +185,27 @@ int act_terminate(act_control_t * ctrl) {
 }
 
 act_t * act_get_sealed_ref_from_ctrl(act_control_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
+	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
 	return act_create_sealed_ref(ctrl);
 }
 
 capability act_get_id(act_control_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
+	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
 	return ctrl->act_default_id;
 }
 
 int act_get_status(act_control_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
+	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
+	KERNEL_TRACE("get status", "%s", ctrl->name);
 	return ctrl->status;
 }
 
 void act_wait(act_t* act, act_t* next_hint) {
-	kernel_assert(act->sched_status == sched_runnable);
 	if(msg_queue_empty(act)) {
-		sched_a2d(act, sched_waiting);
+		sched_block(act, sched_waiting, next_hint);
 	} else {
-		act->sched_status = sched_schedulable;
+		return;
 	}
-	sched_reschedule(next_hint);
 }
 
 /* FIXME have to think about these as well */

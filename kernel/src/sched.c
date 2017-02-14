@@ -29,17 +29,8 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "klib.h"
-
-/* turn 'schedulable' activation 'act' in 'runnable' state */
-static void sched_schedule(act_t* act) {
-	kernel_assert(act->sched_status == sched_schedulable);
-	/* Set message */
-	msg_pop(act);
-
-	/* Activation ready to be run */
-	act->sched_status = sched_runnable;
-}
 
 /* todo: sleep cpu */
 static void sched_nothing_to_run(void) {
@@ -76,29 +67,66 @@ static void delete_act_from_queue(act_t * act) {
 
 void sched_create(act_t * act) {
 	KERNEL_TRACE("sched", "create %s", act->name);
-	act->sched_status = sched_waiting;
+	if(act->status == status_alive) {
+		KERNEL_TRACE("sched", "add %s", act->name);
+		add_act_to_queue(act);
+		act->sched_status = sched_runnable;
+	} else {
+		act->sched_status = sched_terminated;
+	}
 }
 
 void sched_delete(act_t * act) {
 	KERNEL_TRACE("sched", "delete %s", act->name);
-	if(act->sched_status != sched_waiting) {
+	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
 		delete_act_from_queue(act);
+	}
+	if(act->sched_status == sched_running) {
+		sched_reschedule(NULL);
 	}
 	act->status = status_terminated;
 }
 
-void sched_d2a(act_t * act, sched_status_e status) {
-	KERNEL_TRACE("sched", "add %s", act->name);
+void sched_receives_msg(act_t * act) {
+	if(act->sched_status == sched_waiting) {
+		KERNEL_TRACE("sched", "now unblocked %s", act->name);
+		add_act_to_queue(act);
+	}
+	act->sched_status = sched_runnable;
+}
+
+void sched_recieve_ret(act_t * act) {
+	kernel_assert(act->sched_status == sched_sync_block);
+	KERNEL_TRACE("sched", "now unblocked %s", act->name);
 	add_act_to_queue(act);
-	kernel_assert((status == sched_runnable) || (status == sched_schedulable));
+	act->sched_status = sched_runnable;
+}
+
+void sched_block(act_t *act, sched_status_e status, act_t* next_hint) {
+	KERNEL_TRACE("sched", "blocking %s", act->name);
+	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
+
+	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
+		delete_act_from_queue(act);
+	}
+	if(act->sched_status == sched_running) {
+		sched_reschedule(next_hint);
+	}
 	act->sched_status = status;
 }
 
-void sched_a2d(act_t * act, sched_status_e status) {
-	KERNEL_TRACE("sched", "rem %s", act->name);
-	delete_act_from_queue(act);
-	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
-	act->sched_status = status;
+static void sched_deschedule(act_t * act) {
+	kernel_assert(act->sched_status == sched_running);
+	KERNEL_TRACE("sched", "Reschedule from activation '%s'", act->name);
+	act->sched_status = sched_runnable;
+}
+
+void sched_schedule(act_t * act) {
+	kernel_assert(act->sched_status == sched_runnable);
+	act->sched_status = sched_running;
+	kernel_curr_act = act;
+	kernel_exception_framep_ptr = &act->saved_registers;
+	KERNEL_TRACE("sched", "Reschedule to activation '%s'", kernel_curr_act->name);
 }
 
 static act_t * sched_picknext(void) {
@@ -106,30 +134,32 @@ static act_t * sched_picknext(void) {
 		return NULL;
 	}
 	act_queue_current = (act_queue_current + 1) % act_queue_end;
-	return act_queue[act_queue_current];
+	act_t * next = act_queue[act_queue_current];
+	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
+		KERNEL_TRACE("sched", "%s should not be waiting", next->name);
+	}
+	kernel_assert(next->sched_status == sched_runnable || next->sched_status == sched_running);
+	return next;
 }
 
-/* FIXME do not pop on wakeup */
 void sched_reschedule(act_t * hint) {
-	#ifdef __TRACE__
-	act_t * old_kernel_curr_act = kernel_curr_act;
-	#endif
-	if(!hint) {
-		again:
+
+	KERNEL_TRACE("sched", "being asked to schedule someone else. have %d choices.", act_queue_end);
+	if(hint != NULL) {
+		KERNEL_TRACE("sched", "hint is %s", hint->name);
+	}
+
+	if(!hint || hint->sched_status != sched_runnable) {
 		hint = sched_picknext();
 	}
+
 	if(!hint) {
 		sched_nothing_to_run();
 	}
-	if(hint->sched_status == sched_schedulable) {
+
+	if(hint != kernel_curr_act) {
+		sched_deschedule(kernel_curr_act);
 		sched_schedule(hint);
 	}
-	if(hint->sched_status != sched_runnable) {
-		goto again;
-	}
 
-	kernel_curr_act = hint;
-	kernel_exception_framep_ptr = &hint->saved_registers;
-	KERNEL_TRACE("sched", "Reschedule from activation '%s' to activation '%s'",
-	        old_kernel_curr_act->name, kernel_curr_act->name);
 }

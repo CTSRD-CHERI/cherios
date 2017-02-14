@@ -56,7 +56,7 @@ int main(void)
 	assert(VCAP(uart_cap, 0, VCAP_RW));
 
 	/* Register ourself to the kernel as being the UART module */
-	int ret = namespace_register(1, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_uart, act_self_ref, act_self_id);
 	if(ret!=0) {
 		syscall_puts("UART: register failed\n");
 		return -1;

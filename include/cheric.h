@@ -41,7 +41,7 @@
 
 #if _MIPS_SZCAP == 256
 	#define _CHERI256_
-#elif _MIPS_SZCAP == 256
+#elif _MIPS_SZCAP == 128
 	#define _CHERI128_
 #else
 	#error Unknown capability size
@@ -227,7 +227,7 @@ cheri_zerocap(void)
 
 #define CHERI_PRINT_CAP(cap)						\
 	printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
-	       "b:%016jx l:%016zx o:%jx\n",				\
+	       "b:%016jx l:%016zx o:%jx type:%lx\n",				\
 	   __func__,							\
 	   #cap,							\
 	   cheri_gettag(cap),						\
@@ -235,7 +235,8 @@ cheri_zerocap(void)
 	   cheri_getperm(cap),						\
 	   cheri_getbase(cap),						\
 	   cheri_getlen(cap),						\
-	   cheri_getoffset(cap))
+	   cheri_getoffset(cap),						\
+	   cheri_gettype(cap))
 
 #define CHERI_PRINT_CAP_LITE(cap)					\
 	printf("t:%x s:%x b:0x%16jx l:0x%16zx o:0x%jx",			\

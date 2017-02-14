@@ -55,8 +55,8 @@ int main(void)
 	
 	buf[0] = 0;
 	for(int i=0; i<0x1000 *0x1000; i++) {
-		while(!ccall_1(t_ref, t_id, 1,
-		      0, 0, 0, buf, NULL, NULL)) {
+		while(!ccall_SEND(t_ref, t_id, 1,
+						  0, 0, 0, buf, NULL, NULL)) {
 			ssleep(0);      
 		}
 	}

@@ -93,9 +93,9 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id)
 }
 
 int ns_register(int nb, void * act_reference, void * act_default_id) {
+	printf("Regiter id %d", nb);
 	if(!validate_idx(nb) || !validate_act_caps(act_reference, act_default_id)) {
 		return -1;
 	}
-
 	return ns_register_core(nb, act_reference, act_default_id);
 }
