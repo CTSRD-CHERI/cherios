@@ -33,6 +33,7 @@
 #include "stdlib.h"
 #include "sys/mman.h"
 #include "object.h"
+#include "boot/boot.h"
 
 static inline void *align_upwards(void *p, uintptr_t align)
 {
@@ -60,7 +61,7 @@ static void *boot_alloc_core(size_t s) {
 	}
 	void * p = pool_next;
 	p = __builtin_memcap_bounds_set(p, s);
-	pool_next = align_upwards(pool_next+s, 4096);
+	pool_next = align_upwards(pool_next+s, 12);
 	return p;
 }
 
