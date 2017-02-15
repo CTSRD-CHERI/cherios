@@ -38,6 +38,10 @@
  * Exception demux
  */
 
+#ifndef HARDWARE_fpga
+register_t badinstr_glob = 0;
+#endif
+
 DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
 
 static void kernel_exception_capability(void) {

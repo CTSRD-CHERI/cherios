@@ -1,6 +1,7 @@
 #-
 # Copyright (c) 2011 Robert N. M. Watson
 # Copyright (c) 2016 Hadrien Barral
+# Copyright (c) 2017 Lawrence Esswood
 # All rights reserved.
 #
 # This software was developed by SRI International and the University of
@@ -75,6 +76,11 @@ kernel_exception_trampoline_end:
 		.global kernel_cp2_exception_handler
 		.ent kernel_cp2_exception_handler
 kernel_cp2_exception_handler:
+
+#set bad instruction global as QEMU does not support it
+        clw $k0, $zero, 0($epcc)
+        dla $k1, badinstr_glob
+        csd $k0, $k1, 0($kdc)
 
 		#
 		# Since we are still running with user capabilities in most
