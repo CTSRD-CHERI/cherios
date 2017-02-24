@@ -1,6 +1,5 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,27 +30,9 @@
 
 #include "klib.h"
 
-/*
- * Various util functions
- */
-
-/* Converts any capability to RX capability */
-static inline capability kernel_cap_make_rx(const_capability p) {
-	capability c = cheri_getpcc();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	c = cheri_setoffset(c, cheri_getoffset(p));
-	return c;
+int cherios_main(void) {
+	kernel_printf("Kernel Hello world\n");
+	act_init();
+	KERNEL_TRACE("init", "init done");
+	return 0;
 }
-
-/* Converts any capability to RW capability */
-static inline capability kernel_cap_make_rw(const_capability p) {
-	capability c = cheri_getdefault();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	c = cheri_setoffset(c, cheri_getoffset(p));
-	return c;
-}
-
-capability kernel_seal(const_capability p, uint64_t otype);
-capability kernel_unseal(capability p, uint64_t otype);

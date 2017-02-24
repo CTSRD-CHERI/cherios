@@ -31,27 +31,12 @@
 
 #include "klib.h"
 
-/*
- * Various util functions
- */
-
-/* Converts any capability to RX capability */
-static inline capability kernel_cap_make_rx(const_capability p) {
-	capability c = cheri_getpcc();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	c = cheri_setoffset(c, cheri_getoffset(p));
-	return c;
+capability kernel_seal(const_capability p, uint64_t otype) {
+	capability seal = cheri_setoffset(cheri_getdefault(), otype);
+	return cheri_seal(p, seal);
 }
 
-/* Converts any capability to RW capability */
-static inline capability kernel_cap_make_rw(const_capability p) {
-	capability c = cheri_getdefault();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	c = cheri_setoffset(c, cheri_getoffset(p));
-	return c;
+capability kernel_unseal(capability p, uint64_t otype) {
+	capability seal = cheri_setoffset(cheri_getdefault(), otype);
+	return cheri_unseal(p, seal);
 }
-
-capability kernel_seal(const_capability p, uint64_t otype);
-capability kernel_unseal(capability p, uint64_t otype);

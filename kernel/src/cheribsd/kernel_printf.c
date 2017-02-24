@@ -1,6 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2011 Robert N. M. Watson
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -30,28 +29,36 @@
  */
 
 #include "klib.h"
+#ifndef __LITE__
+#include "stdio.h"
+#endif
+#include "uart.h"
 
 /*
- * Various util functions
+ * Provide a kernel-compatible version of printf and puts, which invokes the
+ * UART driver.
  */
-
-/* Converts any capability to RX capability */
-static inline capability kernel_cap_make_rx(const_capability p) {
-	capability c = cheri_getpcc();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	c = cheri_setoffset(c, cheri_getoffset(p));
-	return c;
+void kernel_puts(const char *s) {
+	while(*s) {
+		uart_putc(*s++);
+	}
 }
 
-/* Converts any capability to RW capability */
-static inline capability kernel_cap_make_rw(const_capability p) {
-	capability c = cheri_getdefault();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	c = cheri_setoffset(c, cheri_getoffset(p));
-	return c;
+#ifndef __LITE__
+int kernel_vprintf(const char *fmt, va_list ap) {
+	return vprintf(fmt, ap);
 }
 
-capability kernel_seal(const_capability p, uint64_t otype);
-capability kernel_unseal(capability p, uint64_t otype);
+int kernel_printf(const char *fmt, ...) {
+	va_list ap;
+	int retval;
+
+	va_start(ap, fmt);
+	retval = kernel_vprintf(fmt, ap);
+	va_end(ap);
+
+	return (retval);
+}
+#else
+
+#endif
