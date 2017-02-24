@@ -35,3 +35,11 @@ add_cherios_executable(kernel ADD_TO_FILESYSTEM LINKER_SCRIPT kernel.ld SOURCES
     ${KERNEL_ASM_SRCS}
 )
 #set_target_properties(kernel PROPERTIES COMPILE_FLAGS "-mllvm -cheri-no-global-bounds")
+add_library(libkernel OBJECT ${KERNEL_SRCS})
+add_executable(kernel.o $<TARGET_OBJECTS:libkernel>)
+set_target_properties(kernel.o PROPERTIES LINK_FLAGS "-r")
+
+add_library(libkernel_pic OBJECT ${KERNEL_SRCS})
+set_target_properties(libkernel_pic PROPERTIES POSITION_INDEPENDENT_CODE "True")
+add_executable(kernel.pico $<TARGET_OBJECTS:libkernel_pic>)
+set_target_properties(kernel.pico PROPERTIES LINK_FLAGS "-r -fPIC")
