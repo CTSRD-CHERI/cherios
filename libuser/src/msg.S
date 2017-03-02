@@ -51,21 +51,44 @@
 .endif
 .endif
 
+# We have so many registers, we may as well use a few rather than using dla all the time
+
 #define queue               $c18
 #define message_reply       $c19
 #define msg_entry_loop_cap  $c20
 #define def_cap             $c21
+#define sync_state_cap      $c22
+#define msg_table           $c23
+#define ctrl_table          $c24
+
+#define msg_methods_nb_g    $s0
+#define ctrl_methods_nb_g   $s1
+
 # Message read loop
 
 	.text
 	.global msg_entry
 	.ent msg_entry
+
+# Load a bunch of symbols using the default capability.
+# If we were doing this robustly we would also set bounds. I can't be bothered.
+
 msg_entry:
     cgetdefault	def_cap
     dla         $t0, act_self_queue
     clc         queue, $t0, 0(def_cap)
     dla         $t0, kernel_if
     clc         message_reply, $t0, CAP_SIZE(def_cap)
+    dla         $t0, sync_state
+    csetoffset  sync_state_cap, def_cap, $t0
+    dla         $t0, msg_methods_nb
+    cld         msg_methods_nb_g, $t0, 0(def_cap)
+    dla         $t0, ctrl_methods_nb
+    cld         ctrl_methods_nb_g, $t0, 0(def_cap)
+    dla		    $t0, msg_methods
+    csetoffset  msg_table, def_cap, $t0
+    dla		    $t0, ctrl_methods
+    csetoffset  ctrl_table, def_cap, $t0
     cgetpcc     msg_entry_loop_cap
 
 msg_entry_loop:
@@ -106,31 +129,27 @@ update_start:
 	bltz		$v0, control
 	nop
 
-	dla		$t0, msg_methods
-	dla		$t1, msg_methods_nb
+    cmove   $c12, msg_table
+	move    $t1, msg_methods_nb_g
 	b		call
 	nop
 
 control:
-	dla		$t0, ctrl_methods
-	dla		$t1, ctrl_methods_nb
+    cmove   $c12, ctrl_table
+	move    $t1, ctrl_methods_nb_g
 	sub		$v0, $0, $v0
 call:
-	cld		$t1, $t1, 0(def_cap)
 	sub		$t1, $t1, $v0
 	blez		$t1, overflow
 	nop
 
 	#Save sync_token
-	dla		$t1, sync_token
-	csc		$c1, $t1, 0(def_cap)
+	csc		$c1, $zero, 0(sync_state_cap)
     #Save caller
-    dla     $t1, sync_caller
-    csc     $c2, $t1, 0(def_cap)
+    csc     $c2, $zero, CAP_SIZE(sync_state_cap)
 
 	sll		$v0, $v0, CAP_SIZE_BITS
-	add		$t0, $t0, $v0
-	clc		$c12, $t0, 0(def_cap)
+	clc		$c12, $v0, 0($c12)
 	cjalr		$c12, $c17
 	nop
 	b		end
@@ -146,11 +165,10 @@ overflow:
 end:
 
 	#Restore sync_token
-	dla		$t1, sync_token
-	clc		$c4, $t1, 0(def_cap)
+	clc		$c4, $zero, 0(sync_state_cap)
 	#Restore caller activation reference
-	dla     $t1, sync_caller
-	clc     $c2, $t1, 0(def_cap)
+	clc     $c2, $zero, CAP_SIZE(sync_state_cap)
+
 #FIXME this instruction cannot jump backwards due to a QEMU bug
 	cbts    $c4, make_return
 	nop

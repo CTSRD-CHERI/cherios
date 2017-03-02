@@ -37,6 +37,7 @@
 #include "ccall.h"
 #include "msg.h"
 #include "types.h"
+#include "stddef.h"
 
 extern capability act_self_ctrl;
 extern capability act_self_ref;
@@ -64,8 +65,16 @@ void	dtor_null(void);
 
 void * get_idc_from_ref(capability act_ref, capability act_id);
 
-extern capability sync_token;
-extern capability sync_caller;
+typedef struct sync_state_t {
+    capability sync_token;
+    capability sync_caller;
+} sync_state_t;
+
+_Static_assert(offsetof(sync_state_t, sync_token) == 0, "used by assembly");
+_Static_assert(offsetof(sync_state_t, sync_caller) == sizeof(capability), "used by assembly");
+
+extern sync_state_t sync_state;
+
 extern kernel_if_t kernel_if;
 
 extern long msg_enable;

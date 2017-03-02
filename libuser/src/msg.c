@@ -38,8 +38,7 @@
 
 /* These are used by the runtime to know who to respond to */
 //FIXME should be local to the pop loop, anybody who wants to use creturn should do so to a creturn method
-capability sync_token = NULL;
-capability sync_caller = NULL;
+sync_state_t sync_state = {.sync_caller = NULL, .sync_token = NULL};
 
 long	msg_enable = 0;
 
