@@ -30,7 +30,7 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
+#include "activations.h"
 #include "klib.h"
 #include "cp0.h"
 
@@ -72,7 +72,7 @@ static void kernel_interrupt_others(register_t pending) {
 			frame->mf_a0 = i;
 			KERNEL_TRACE("interrupt","delivering interrupt %d to activation %s", i, int_child[i]->name);
 			// FIXME we probabably want a seperate interrupt source from the kernel
-			if(msg_push(int_child[i], &kernel_acts[0], NULL, NULL)) {
+			if(msg_push_deprecated(int_child[i], &kernel_acts[0], NULL, NULL)) {
 				kernel_panic("queue full (int)");
 			}
 		}

@@ -32,11 +32,21 @@
 #ifndef _CHERIOS_QUEUE_H_
 #define	_CHERIOS_QUEUE_H_
 
-#include "cheric.h"
-#include "mips.h"
-
 #define MAX_MSG_B 4
 #define MAX_MSG (1 << MAX_MSG_B)
+
+#define MSG_NB_T_SIZE 8
+#define HEADER_START_OFFSET 0
+#define HEADER_END_OFFSET MSG_NB_T_SIZE
+#define HEADER_LEN_OFFSET (MSG_NB_T_SIZE * 2)
+#define MSGS_START_OFFSET 32
+
+#ifndef __ASSEMBLY__
+
+#include "cheric.h"
+#include "mips.h"
+#include "stddef.h"
+
 typedef size_t msg_nb_t;
 
 /* WARNING
@@ -49,6 +59,7 @@ typedef struct
 	capability c4;
 	capability c5;
 
+	/* Deprecated. Nobody should use this */
 	capability idc; /* identifier */
 	capability c1;  /* sync token */
 	capability c2;	/* message sender cap */
@@ -65,13 +76,15 @@ typedef struct
 	register_t v0;  /* method nb */
 }  msg_t;
 
+struct header_t {
+	volatile msg_nb_t start;
+	volatile msg_nb_t end;
+	msg_nb_t len;
+};
+
 typedef struct
 {
-	struct header_t {
-		volatile msg_nb_t start;
-		volatile msg_nb_t end;
-		msg_nb_t len;
-	} header;
+	struct header_t header;
 	msg_t msg[0];
 }  queue_t;
 
@@ -79,4 +92,13 @@ typedef struct {
 	queue_t queue;
 	msg_t msgs[MAX_MSG];
 } queue_default_t;
+
+_Static_assert(sizeof(msg_nb_t) == MSG_NB_T_SIZE, "size used by msg.S");
+_Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, start)) == HEADER_START_OFFSET, "offset used by msg.S");
+_Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, end)) == HEADER_END_OFFSET, "offset used by msg.S");
+_Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, len)) == HEADER_LEN_OFFSET, "offset used by msg.S");
+_Static_assert((offsetof(queue_t, msg) == MSGS_START_OFFSET), "offset used by msg.S");
+
+#endif // __ASSEMBLY__
+
 #endif

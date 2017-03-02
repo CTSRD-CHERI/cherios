@@ -66,7 +66,7 @@ int main(void)
 	syscall_puts("Test1B Hello world\n");
 
 	/* Register ourself to the kernel as being the UART module */
-	int ret = namespace_register(12, act_self_ref, act_self_id);
+	int ret = namespace_register(12, act_self_ref);
 	if(ret!=0) {
 		printf("Test1B: register failed\n");
 		return -1;

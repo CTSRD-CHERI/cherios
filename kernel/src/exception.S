@@ -33,6 +33,9 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 .include "asm.S"
 
+#define __ASSEMBLY__ 1
+#include "critical.h"
+
 #
 # Capability-aware exception handler.
 #
@@ -82,6 +85,28 @@ kernel_cp2_exception_handler:
         dla $k1, badinstr_glob
         csd $k0, $k1, 0($kdc)
 
+#cancel if we are in critical section. We assume that critical code never throws exceptions and only async interrupts happen.
+        dla $k0, critical_state
+        cld $k1, $k0, CRIT_STATE_LEVEL_OFFSET($kdc)
+        bgtz $k1, skip_exception
+        cgetoffset $k0, $epcc
+        dla $k1, context_critical_start
+        slt $k1, $k0, $k1
+        bne $k1, $zero, take_exception
+        dla $k1, context_critical_end
+        slt $k1, $k1, $k0
+        bne $k1, $zero, take_exception
+
+skip_exception:
+        li      $k1, 1
+        csd     $k1, $k0, CRIT_STATE_CAUSE_OFFSET($kdc)
+        move	$k0, $zero
+        move	$k1, $zero
+        eret
+
+take_exception:
+
+
 		#
 		# Since we are still running with user capabilities in most
 		# capability registers, we must access all kernel data
@@ -91,34 +116,8 @@ kernel_cp2_exception_handler:
 		dla	$k0, kernel_exception_framep_ptr
 		clc	$kr1c, $k0, 0($kdc)
 
-		# Notice correspondence to the layout of struct reg_frame.
-		# Notice also that KCC and KDC are not preserved.
-		#
-		cgetdefault	$kr2c
-		# Expands to a list of the form
-		# csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-		foreachi csave, 0, $kr1c,					\
-			$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-			$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-			$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
-
-		#
-		# Context switch save; step all over k0 and k1 as is usual
-		# for MIPS exception handlers.  Notice correspondence to the
-		# layout of struct reg_frame.
-		#
-		# Expands to a list of the form
-		# csd	$greg, $0, offset*REG_SIZE($kr1c)
-		foreachi gsave, 0, $kr1c,					\
-			$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
-			$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
-			$s7, $t8, $t9, $gp, $sp, $fp, $ra
-		mfhi	$k1
-		csd	$k1, $0, 29*REG_SIZE($kr1c)
-		mflo	$k1
-		csd	$k1, $0, 30*REG_SIZE($kr1c)
-		dmfc0	$k1, $14		# EPC
-		csd	$k1, $0, 31*REG_SIZE($kr1c)
+        cgetdefault	$kr2c
+        save_reg_frame $kr1c, $k1, $kr2c, $epcc
 
 		# Set up exception stack
 		dla		$t0, __start_exception_stack
@@ -145,42 +144,18 @@ kernel_cp2_exception_handler:
 		cjalr		$c12, $c17
 		nop
 
-		#
-		# Restore context from exception frame, which may have had
-		# its contents replaced by the kernel.  Notice correspondence
-		# to the layout of struct reg_frame.
-		#
-		dla	$k0, kernel_exception_framep_ptr
-		clc	$kr1c, $k0, 0($kdc)
+.global kernel_exception_restore
+kernel_exception_restore:
 
-		# Expands to a list of the form
-		# cld	$greg, $0, offset*REG_SIZE($kr1c)
-		foreachi grestore, 0, $kr1c,					\
-			$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
-			$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
-			$s7, $t8, $t9, $gp, $sp, $fp, $ra
-		cld	$k1, $0, 29*REG_SIZE($kr1c)
-		mthi	$k1
-		cld	$k1, $0, 30*REG_SIZE($kr1c)
-		mtlo	$k1
-		cld	$k1, $0, 31*REG_SIZE($kr1c)
-		dmtc0	$k1, $14		# EPC
+        dla	$k0, kernel_exception_framep_ptr
+        clc	$kr1c, $k0, 0($kdc)
 
-		#
-		# Restore the capability exception frame -- after
-		# general-purpose registers, since the above code is done
-		# relative to $c0.  Note that, after this point, no further
-		# memory access can be done using MIPS load and store
-		# instructions.
-		# Notice correspondence to the layout of struct reg_frame.
-		#
-		# Expands to a list of the form
-		# clc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-		foreachi crestore, 0, $kr1c,					\
-			$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-			$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-			$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
-		csetdefault	$kr2c
+        restore_reg_frame $kr1c, $k1, $kr2c, $epcc
+        csetdefault	$kr2c
+
+        # Counter eret bug
+        cgetoffset $k0, $epcc
+        dmtc0      $k0, $14
 
 		#
 		# On general principle, flush the contents of $k0 and $k1

@@ -76,8 +76,7 @@ void fwd(void*, void *);
 void ft(void) {
 	for(int i=0; i<nmsg; i++) {
 		__asm("li $0, 0xdd42");
-		ccall_SEND(t_ref, t_id, 0,
-				   i, cp0_count_get(), 0, NULL, NULL, NULL);
+		MESSAGE_SEND_MODE_r(t_ref, i, cp0_count_get(), 0, NULL, NULL, NULL, SEND, 0);
 		ssleep(0);
 		//nssleep(last-first);
 	}
@@ -93,11 +92,9 @@ int main(int argc, __attribute__((unused)) char *argv[])
 		again:{}
 		t_ref = namespace_get_ref(n+1);
 		if(t_ref == NULL) {ssleep(0); goto again; }
-		t_id  = namespace_get_id(n+1);
-		assert(t_id != NULL);
 	}
 
-	int ret = namespace_register(n, act_self_ref, act_self_id);
+	int ret = namespace_register(n, act_self_ref);
 	if(ret!=0) {
 		printf("Test3_%d: register failed\n", n);
 		return -1;

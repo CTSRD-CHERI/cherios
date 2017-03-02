@@ -2,7 +2,6 @@ include_directories(include)
 
 set(KERNEL_SRCS
     src/act.c
-    src/ccall.c
     src/cp0.c
     src/gc.c
     src/init.c
@@ -16,10 +15,14 @@ set(KERNEL_SRCS
     src/syscalls.c
     src/timer.c
     src/uart.c
+    src/critical.c
 )
 set(KERNEL_ASM_SRCS
     src/exception.S
     src/init.S
+    src/ccall_soft.S
+    src/ccall_trampoline.S
+    src/context_switch.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")

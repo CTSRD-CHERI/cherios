@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,46 +28,39 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "uart.h"
+#ifndef CHERIOS_CRITICAL_H
+#define CHERIOS_CRITICAL_H
 
-void * uart_cap = NULL;
 
-static void user_putc(char c) {
-	printf(KGRN KBLD"%c"KRST, c);
-}
 
-static void user_puts(const void * s) {
-	printf(KGRN KBLD"%s"KRST, s);
-}
+#define CRIT_STATE_CAUSE_OFFSET 0
+#define CRIT_STATE_LEVEL_OFFSET 8
 
-extern void msg_entry;
-void (*msg_methods[]) = {user_putc, user_puts};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
+#ifndef __ASSEMBLY__
 
-int main(void)
-{
-	syscall_puts("UART Hello world\n");
+#include "cheric.h"
+#include "stddef.h"
 
-	/* Get capability to use uart */
-	uart_cap = act_get_cap();
-	assert(VCAP(uart_cap, 0, VCAP_RW));
 
-	/* Register ourself to the kernel as being the UART module */
-	int ret = namespace_register(namespace_num_uart, act_self_ref);
-	if(ret!=0) {
-		syscall_puts("UART: register failed\n");
-		return -1;
-	}
+typedef struct critical_state {
+/* If in a critical section the exception handler will set this to getcause and then just return */
+    register_t delayed_cause;
+/* If not zero we are in a critical section */
+    register_t critical_level;
+} critical_state_t;
 
-	#if 0
-	uart_init(); /* done during boot process */
-	#endif
+/* For use by the context switcher to save a few registers so it can exit the critical section */
+extern critical_state_t critical_state;
 
-	syscall_puts("UART: setup OK\n");
 
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-	return 0;
-}
+void kernel_critical_section_enter();
+void kernel_critical_section_exit();
+void handle_delayed_interrupt();
+
+/* THese offsets are used by context_switch.S and exception.S */
+_Static_assert(offsetof(critical_state_t, delayed_cause) == CRIT_STATE_CAUSE_OFFSET, "offset assumed by assembly");
+_Static_assert(offsetof(critical_state_t, critical_level) == CRIT_STATE_LEVEL_OFFSET, "offset assumed by assembly");
+
+#endif
+
+#endif //CHERIOS_CRITICAL_H

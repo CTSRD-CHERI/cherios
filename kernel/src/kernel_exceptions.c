@@ -29,10 +29,11 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
+#include "activations.h"
 #include "klib.h"
 #include "cp0.h"
 #include "kernel_exceptions.h"
+#include "critical.h"
 
 /*
  * Exception demux
@@ -49,13 +50,11 @@ static void kernel_exception_capability(void) {
 
 	KERNEL_TRACE("exception", "kernel_capability %s", enum_cap_cause_exception_t_tostring(exception.cause));
 
-	if(exception.cause == Call_Trap) { /* todo: give them their own handler */
-		kernel_ccall();
-		return;
+	if(exception.cause == Call_Trap) {
+		kernel_panic("ccall No longer an exception\n");
 	}
 	if(exception.cause == Return_Trap) {
-		kernel_creturn();
-		return;
+		kernel_panic("creturn No longer an exception\n");
 	}
 
 	exception_printf(KRED "Capability exception caught in activation %s"
@@ -68,7 +67,7 @@ static void kernel_exception_capability(void) {
 }
 
 static void kernel_exception_data(register_t excode) {
-	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s\n",
+	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s"KRST"\n",
 	       excode, cp0_badvaddr_get(),
 	       kernel_curr_act->name);
 	regdump(-1);
@@ -97,8 +96,11 @@ static void kernel_exception_unknown(register_t excode) {
 void kernel_exception(void) {
 	static int entered = 0;
 	entered++;
-	KERNEL_TRACE("exception", "saving %s with pc %lx",
-				 kernel_curr_act->name, cheri_getoffset(kernel_curr_act->saved_registers.cf_pcc));
+
+	handle_delayed_interrupt();
+
+	KERNEL_TRACE("exception", "saving %s",
+				 kernel_curr_act->name);
 	KERNEL_TRACE("exception", "enters %d", entered);
 	if(entered > 1) {
 		KERNEL_ERROR("interrupt in interrupt");
@@ -150,6 +152,6 @@ void kernel_exception(void) {
 	}
 
 	kernel_assert(kernel_exception_framep_ptr == &kernel_curr_act->saved_registers);
-	KERNEL_TRACE("exception", "restoring %s with pc %x",
-				 kernel_curr_act->name, cheri_getoffset(kernel_curr_act->saved_registers.cf_pcc));
+	KERNEL_TRACE("exception", "restoring %s",
+				 kernel_curr_act->name);
 }

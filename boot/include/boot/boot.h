@@ -68,8 +68,6 @@ void	install_exception_vector(void);
 
 void	caches_invalidate(void * addr, size_t size);
 
-void	glue_memmgt(void * memmgt_ctrl, void* ns_ctrl);
-
 int	acts_alive(boot_elem_t * boot_list, size_t  boot_list_len);
 
 void	stats_init(void);

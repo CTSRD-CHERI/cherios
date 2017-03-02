@@ -43,9 +43,9 @@ size_t pagesz;			/* page size */
 int main(void) {
 	syscall_puts("memmgt Hello world\n");
 
-	int ret = namespace_register(namespace_num_memmgt, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
 	if(ret!=0) {
-		syscall_puts(KRED"Register failed\n");
+		printf(KRED"memmgt Register failed %d\n", ret);
 	}
 
 	/* Get capability to heap */

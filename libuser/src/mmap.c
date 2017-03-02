@@ -36,16 +36,13 @@
 #include "assert.h"
 
 static void * memmgt_ref = NULL;
-static void * memmgt_id  = NULL;
 
 static void *_mmap(void *addr, size_t length, int prot, int flags) {
 	if(memmgt_ref == NULL) {
 		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
-		memmgt_id  = namespace_get_id(namespace_num_memmgt);
-		assert(memmgt_id != NULL);
 		assert(memmgt_ref != NULL);
 	}
-	return ccall_rrrc_c(memmgt_ref, memmgt_id, 0, length, prot, flags, addr);
+	return MESSAGE_SYNC_SEND_c(memmgt_ref, length, prot, flags, addr, NULL, NULL, 0);
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
@@ -53,10 +50,9 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 }
 
 int munmap(void *addr, size_t length) {
-	return ccall_rc_r(memmgt_ref, memmgt_id, 1, length, addr);
+	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, 0, 0, addr, NULL, NULL, 1);
 }
 
-void mmap_set_act(void * ref, void * id) {
+void mmap_set_act(void * ref) {
 	memmgt_ref = ref;
-	memmgt_id  = id;
 }

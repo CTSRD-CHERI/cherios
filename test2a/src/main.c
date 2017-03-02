@@ -42,7 +42,7 @@ int main(void)
 {
 	printf("Test2A Hello world\n");
 
-	int ret = namespace_register(14, act_self_ref, act_self_id);
+	int ret = namespace_register(14, act_self_ref);
 	if(ret!=0) {
 		printf("Test2A: register failed\n");
 		return -1;
@@ -52,9 +52,6 @@ int main(void)
 	again:{}
 	void * t_ref = namespace_get_ref(13);
 	if(t_ref == NULL) {ssleep(0); goto again; }
-	void * t_id  = namespace_get_id(13);
-	assert(t_id != NULL);
 
 	printf("Test2A to rcv\n");
-	rcv(t_ref, t_id);
 }

@@ -30,4 +30,3 @@
 
 #include "mips.h"
 void * vblk_ref = NULL;
-void * vblk_id  = NULL;

@@ -29,6 +29,7 @@
  */
 
 #include "lib.h"
+#include "syscalls.h"
 
 static void hello(void) {
 }
@@ -48,15 +49,10 @@ int main(void)
 	/* get ref to Test1B */
 	void * t_ref = namespace_get_ref(12);
 	assert(t_ref != NULL);
-	void * t_id  = namespace_get_id(12);
-	assert(t_id != NULL);
-	t_id = ccall_c_c(t_ref, t_id, 0, buf);
-	assert(t_id != NULL);
 	
 	buf[0] = 0;
 	for(int i=0; i<0x1000 *0x1000; i++) {
-		while(!ccall_SEND(t_ref, t_id, 1,
-						  0, 0, 0, buf, NULL, NULL)) {
+		while(!MESSAGE_SEND_MODE_r(t_ref, 0, 0, 0, buf, NULL, NULL, SEND, 1)) {
 			ssleep(0);      
 		}
 	}

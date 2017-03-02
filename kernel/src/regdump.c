@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
+#include "activations.h"
 #include "klib.h"
 
 #ifndef __LITE__

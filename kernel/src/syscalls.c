@@ -42,7 +42,7 @@ static void syscall_sleep(void) {
 	if(time != 0) {
 		KERNEL_ERROR("sleep >0 not implemented");
 	} else {
-		sched_reschedule(0);
+		sched_reschedule(NULL, sched_runnable, 1);
 	}
 }
 
@@ -63,10 +63,6 @@ static void syscall_act_ctrl_get_ref(void) {
 	kernel_exception_framep_ptr->cf_c3 = act_get_sealed_ref_from_ctrl(kernel_exception_framep_ptr->cf_c3);
 }
 
-static void syscall_act_ctrl_get_id(void) {
-	kernel_exception_framep_ptr->cf_c3 = act_get_id(kernel_exception_framep_ptr->cf_c3);
-}
-
 static void syscall_act_ctrl_get_status(void) {
 	kernel_exception_framep_ptr->mf_v0 = act_get_status(kernel_exception_framep_ptr->cf_c3);
 }
@@ -80,10 +76,6 @@ static void syscall_act_terminate(void) {
 	if(ret != 1) {
 		kernel_exception_framep_ptr->mf_v0 = ret;
 	}
-}
-
-static void syscall_act_seal_identifier(void) {
-	kernel_exception_framep_ptr->cf_c3 = act_seal_identifier(kernel_exception_framep_ptr->cf_c3);
 }
 
 static void syscall_puts() {
@@ -139,9 +131,6 @@ void kernel_exception_syscall(void)
 		case ACT_CTRL_GET_REF:
 			syscall_act_ctrl_get_ref();
 			break;
-		case ACT_CTRL_GET_ID:
-			syscall_act_ctrl_get_id();
-			break;
 		case ACT_CTRL_GET_STATUS:
 			syscall_act_ctrl_get_status();
 			break;
@@ -150,9 +139,6 @@ void kernel_exception_syscall(void)
 			break;
 		case ACT_TERMINATE:
 			syscall_act_terminate();
-			break;
-		case ACT_SEAL_IDENTIFIER:
-			syscall_act_seal_identifier();
 			break;
 		case PUTS:
 			syscall_puts();
@@ -171,6 +157,7 @@ void kernel_exception_syscall(void)
 			break;
 		default:
 			KERNEL_ERROR("unknown syscall '%d'", sysn);
+			regdump(-1);
 			kernel_freeze();
 	}
 
