@@ -34,6 +34,7 @@
  * Todo: Needs a good memory model to be made safe
  */
 
+/* Checks if c refers to anything inside range p. returns 1 if it does */
 /* takes two tagged pointers */
 static inline register_t derives_of(void * c, void * p) {
 	size_t cb = cheri_getbase(c);
@@ -47,14 +48,26 @@ static inline register_t derives_of(void * c, void * p) {
 		CHERI_PRINT_CAP(c);
 		CHERI_PRINT_CAP(p);
 	}
-	#endif
-	kernel_assert((pb<=cb) || (pb>=ce)); /* cb pb   ce  */
-	kernel_assert(!((pb<=cb) && (cb<=pe) && (pe<ce))); /* pb cb pe ce */
-	if((cb>=pb) && (ce<=pe)) {
+    #endif
+
+	if(ce < pb) { // capability before p
+		return 0;
+	} else if(cb > pe) { // capability after p
+		return 0;
+	} else if((cb>=pb) && (ce<=pe)) { // capability inside than p
 		return 1;
+	} else {
+		//TODO this is actually very problematic. We probably want to be more specific in our interface as
+		//TODO to what types needs collected. This is obviously not secure, but for now we will NOT
+		// TODO collect any sealed capabilities. Later we will use its type to judge, maybe.
+		return (cheri_getsealed(c) == 0) ? 1 : 0;
 	}
-	return 0;
 }
+
+/* I -believe- this function intends to find any capabilities in pool that refer to any part of p and clear
+ * those capabilitiy's tags. This will probably break things if there is partial overlap, it would be far better to
+ * use set bounds, but I will keep this the same for now.
+ */
 
 int try_gc(void * p, void * pool) {
 	#ifndef __LITE__
@@ -64,7 +77,7 @@ int try_gc(void * p, void * pool) {
 	/*todo: (if userspace) we can be prempted here and memory could move */
 	/*todo: also gc saved regs in kernel*/
 	void **gc = pool;
-	size_t len = cheri_getlen(gc) * sizeof(char) / sizeof(void *);
+	size_t len = cheri_getlen(gc) * sizeof(char) / sizeof(capability);
 	for(size_t i=0; i<len; i++) {
 		void * c = gc[i];
 		if(!cheri_gettag(c)) {

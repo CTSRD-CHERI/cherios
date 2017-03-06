@@ -1,5 +1,3 @@
-#include <syscalls.h>
-
 /*-
  * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
@@ -29,6 +27,8 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+
+#include "syscalls.h"
 
 int interrupt_register(int number) {
 	int ret;

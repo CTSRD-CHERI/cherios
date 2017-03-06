@@ -47,9 +47,6 @@ void libuser_init(capability self_ctrl,
 	// I feel like as we use these methods on every syscall we should remove the indirection
 	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
 
-	assert(cheri_gettype(kernel_if.message_send) == 0x42002);
-	assert(cheri_gettype(kernel_if.message_reply) == 0x42003);
-
 	object_init(self_ctrl, self_cap, queue);
 	namespace_init(ns_ref);
 }

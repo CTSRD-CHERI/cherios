@@ -66,11 +66,8 @@ void * ns_get_reference(int nb) {
 /* Register a module a service 'nb' */
 static int ns_register_core(int nb, void * act_reference) {
 	if(bind[nb].act_reference != NULL) {
-		printf("%s: port already in use\n", __func__);
 		return -4;
 	}
-
-	printf("Register activation %d success\n", nb);
 
 	bind[nb].act_reference  = act_reference;
 
@@ -78,7 +75,6 @@ static int ns_register_core(int nb, void * act_reference) {
 }
 
 int ns_register(int nb, void * act_reference) {
-	printf("Register id %d\n", nb);
 
 	int ret = validate_idx(nb);
 	if(ret != 0) return ret;
