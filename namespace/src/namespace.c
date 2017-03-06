@@ -56,7 +56,7 @@ static int validate_act_caps(void * act_reference) {
 
 /* Get reference for service 'n' */
 void * ns_get_reference(int nb) {
-	if(!validate_idx(nb)) {
+	if(validate_idx(nb) != 0) {
 		return NULL;
 	}
 	/* If service not in use, will already return NULL */
@@ -70,13 +70,15 @@ static int ns_register_core(int nb, void * act_reference) {
 		return -4;
 	}
 
+	printf("Register activation %d success\n", nb);
+
 	bind[nb].act_reference  = act_reference;
 
 	return 0;
 }
 
 int ns_register(int nb, void * act_reference) {
-	printf("Register id %d", nb);
+	printf("Register id %d\n", nb);
 
 	int ret = validate_idx(nb);
 	if(ret != 0) return ret;
