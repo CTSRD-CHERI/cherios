@@ -44,6 +44,7 @@
 #include "string.h"
 #include "kutils.h"
 #include "ccall_trampoline.h"
+#include "syscalls.h"
 
 #ifdef __TRACE__
 	#define KERNEL_TRACE kernel_trace
@@ -79,12 +80,11 @@ static const uint64_t act_sync_ref_type = 0x42003;
 void	kernel_skip_instr(act_t * act);
 void	kernel_ccall(void);
 void	kernel_creturn(void);
-void	kernel_exception_syscall(void);
 
 void	kernel_interrupts_init(int enable_timer);
 void	kernel_interrupt(void);
-int	kernel_interrupt_register(int number);
-int	kernel_interrupt_enable(int number);
+int kernel_interrupt_register(int number, act_control_t *ctrl);
+int kernel_interrupt_enable(int number, act_control_t *ctrl);
 
 void	kernel_timer_init(void);
 void	kernel_timer(void);
@@ -120,18 +120,18 @@ int	msg_queue_empty(act_t* act);
 
 void	act_init(void);
 void	act_wait(act_t* act, act_t* next_hint);
-act_control_t *	act_register(const reg_frame_t * frame, queue_t * queue, const char * name, register_t a0, status_e create_in_status);
+act_control_t *act_register(const reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+							status_e create_in_status, act_control_t *parent);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);
 
-int	act_get_status(act_control_t * ctrl);
+status_e act_get_status(act_control_t *ctrl);
 int	act_revoke(act_control_t * ctrl);
 int	act_terminate(act_control_t * ctrl);
 capability act_seal_identifier(capability identifier);
 
 void	regdump(int reg_num);
 
-//FIXME this is also temporary
-extern queue_t kernel_message_queues[];
+void setup_syscall_interface(kernel_if_t* kernel_if);
 
 #endif /* _CHERIOS_KLIB_H_ */

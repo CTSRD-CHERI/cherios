@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "sys/types.h"
 #include "activations.h"
 #include "klib.h"
@@ -75,8 +76,7 @@ void act_init(void) {
 
 	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
 	internel_if.message_reply = kernel_seal(act_send_return_get_trampoline(), act_sync_ref_type);
-
-	CHERI_PRINT_CAP(internel_if.message_send);
+	setup_syscall_interface(&internel_if);
 
 	kernel_next_act = 0;
 
@@ -84,16 +84,17 @@ void act_init(void) {
 
 	/* We are currently inside the kernel act and it is never restored. So we can just zero its saved context */
 	bzero(&kernel_act->saved_registers, sizeof(struct reg_frame));
-	act_register(&kernel_act->saved_registers, &kernel_queue.queue, "kernel", 0, status_terminated);
+	act_register(&kernel_act->saved_registers, &kernel_queue.queue, "kernel", 0, status_terminated, NULL);
 
 	/* create the boot activation. This is NOT the activation that called this function.*/
 	act_t* boot_act = &kernel_acts[namespace_num_boot];
 
-	act_register(&kernel_init_save_frame, &boot_queue.queue, "boot", 0, status_alive);
-
-	/* As boot was created before the kernel, it does not have the enqueue cap. we can give it this by setting the
-	 * return capability to picked up after the bootstrap exception returns*/
+	/* As boot was created before the kernel, it does not have the normal interface capabilities. As currently it
+	 * users libuser it will need a few capabilities to bootstrap object init */
+	boot_act->saved_registers.cf_c4 =
+			(capability)act_register(&kernel_init_save_frame, &boot_queue.queue, "boot", 0, status_alive, NULL);
 	boot_act->saved_registers.cf_c3 = (capability)get_if();
+	boot_act->saved_registers.cf_c5 = (capability)boot_act->msg_queue;
 
 	//boot_act->image_base = 0xffffffff80000000 + 0x100000;
 	sched_schedule(boot_act);
@@ -107,17 +108,15 @@ void kernel_skip_instr(act_t* act) {
 }
 
 static act_t * act_create_sealed_ref(act_t * act) {
-	return kernel_seal(act, act_ref_type);
+	return (act_t *)kernel_seal(act, act_ref_type);
 }
 
 static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
-	return kernel_seal(act, act_ctrl_ref_type);
+	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
 }
 
-act_control_t * act_register(const reg_frame_t * frame,
-							 queue_t * queue, const char * name,
-							 register_t a0,
-							 status_e create_in_status) {
+act_control_t *act_register(const reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+							status_e create_in_status, act_control_t *parent) {
 
 	KERNEL_TRACE("act", "Registering activation %s", name);
 	if(kernel_next_act >= MAX_ACTIVATIONS) {
@@ -184,7 +183,6 @@ act_control_t * act_register(const reg_frame_t * frame,
 }
 
 int act_revoke(act_control_t * ctrl) {
-	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
 	if(ctrl->status == status_terminated) {
 		return -1;
 	}
@@ -193,7 +191,6 @@ int act_revoke(act_control_t * ctrl) {
 }
 
 int act_terminate(act_control_t * ctrl) {
-	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
 	ctrl->status = status_terminated;
 	sched_delete(ctrl);
 	ctrl->sched_status = sched_terminated;
@@ -205,20 +202,18 @@ int act_terminate(act_control_t * ctrl) {
 }
 
 act_t * act_get_sealed_ref_from_ctrl(act_control_t * ctrl) {
-	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
 	return act_create_sealed_ref(ctrl);
 }
 
 
-int act_get_status(act_control_t * ctrl) {
-	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
+status_e act_get_status(act_control_t *ctrl) {
 	KERNEL_TRACE("get status", "%s", ctrl->name);
 	return ctrl->status;
 }
 
 void act_wait(act_t* act, act_t* next_hint) {
 	if(msg_queue_empty(act)) {
-		sched_block(act, sched_waiting, next_hint, 1);
+		sched_block(act, sched_waiting, next_hint, 0);
 	} else {
 		return;
 	}

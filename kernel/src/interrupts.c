@@ -66,13 +66,8 @@ static void kernel_interrupt_others(register_t pending) {
 				continue;
 			}
 			cp0_status_im_disable(1<<i);
-			// FIXME this seems dubious?
-			struct reg_frame * frame = &kernel_acts[0].saved_registers;
-			frame->mf_v0 = -3;
-			frame->mf_a0 = i;
-			KERNEL_TRACE("interrupt","delivering interrupt %d to activation %s", i, int_child[i]->name);
 			// FIXME we probabably want a seperate interrupt source from the kernel
-			if(msg_push_deprecated(int_child[i], &kernel_acts[0], NULL, NULL)) {
+			if(msg_push(NULL, NULL, NULL, i, 0, 0, -3, int_child[i], &kernel_acts[0], NULL)) {
 				kernel_panic("queue full (int)");
 			}
 		}
@@ -98,19 +93,19 @@ static int validate_number(int number) {
 	return number;
 }
 
-int kernel_interrupt_enable(int number) {
+int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 	number = validate_number(number);
 	if(number < 0) {
 		return -1;
 	}
-	if(int_child[number] != kernel_curr_act) {
+	if(int_child[number] != ctrl) {
 		return -1;
 	}
 	cp0_status_im_enable(1<<number);
 	return 0;
 }
 
-int kernel_interrupt_register(int number) {
+int kernel_interrupt_register(int number, act_control_t * ctrl) {
 	number = validate_number(number);
 	if(number < 0) {
 		return -1;
@@ -118,6 +113,6 @@ int kernel_interrupt_register(int number) {
 	if(int_child[number] != NULL) {
 		return -1;
 	}
-	int_child[number] = kernel_curr_act;
+	int_child[number] = (act_t*)ctrl;
 	return 0;
 }

@@ -39,9 +39,8 @@
 #include "types.h"
 #include "stddef.h"
 
-extern capability act_self_ctrl;
-extern capability act_self_ref;
-extern capability act_self_id;
+extern act_control_kt act_self_ctrl;
+extern act_kt act_self_ref;
 extern capability act_self_cap;
 extern queue_t * act_self_queue;
 //TODO these should be provided by the linker/runtime
@@ -50,15 +49,10 @@ extern size_t msg_methods_nb;
 extern void (*ctrl_methods[]);
 extern size_t ctrl_methods_nb;
 
-
-capability	act_ctrl_get_ref(capability ctrl);
-capability	act_ctrl_get_id(capability ctrl);
-int	act_ctrl_revoke(capability ctrl);
-int	act_ctrl_terminate(capability ctrl);
 capability	act_get_cap(void);
-capability	act_seal_id(capability id);
+capability act_seal_id(capability id);
 
-void	object_init(capability self_ctrl, capability self_cap, queue_t * queue);
+void	object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue);
 
 void	ctor_null(void);
 void	dtor_null(void);

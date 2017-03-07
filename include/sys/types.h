@@ -61,10 +61,7 @@ typedef struct
     register_t v1;
 }  ret_t;
 
-typedef struct
-{
-    capability message_send;
-    capability message_reply;
-} kernel_if_t;
+typedef capability act_kt;
+typedef capability act_control_kt;
 
 #endif

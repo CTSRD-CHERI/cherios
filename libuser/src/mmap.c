@@ -35,7 +35,7 @@
 #include "stdio.h"
 #include "assert.h"
 
-static void * memmgt_ref = NULL;
+static act_kt memmgt_ref = NULL;
 
 static void *_mmap(void *addr, size_t length, int prot, int flags) {
 	if(memmgt_ref == NULL) {
@@ -53,6 +53,6 @@ int munmap(void *addr, size_t length) {
 	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, 0, 0, addr, NULL, NULL, 1);
 }
 
-void mmap_set_act(void * ref) {
+void mmap_set_act(act_kt ref) {
 	memmgt_ref = ref;
 }

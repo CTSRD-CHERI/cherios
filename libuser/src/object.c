@@ -37,39 +37,35 @@
 #include "queue.h"
 #include "syscalls.h"
 
-capability act_self_ctrl = NULL;
-capability act_self_ref  = NULL;
+act_control_kt act_self_ctrl = NULL;
+act_kt act_self_ref  = NULL;
 capability act_self_cap   = NULL;
 queue_t * act_self_queue = NULL;
 kernel_if_t kernel_if;
 
-void object_init(capability self_ctrl, capability self_cap, queue_t * queue) {
+void object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue) {
 	act_self_ctrl = self_ctrl;
-	act_self_ref  = act_ctrl_get_ref(self_ctrl);
+	act_self_ref  = SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, self_ctrl);
+
+#define SET_SYSCALL_DEFAULT(name, ret, sig) \
+    (name ## _ ## default_obj).code = kernel_if . name;\
+	(name ## _ ## default_obj).data = self_ctrl;	      \
+
+	SYS_CALL_LIST(SET_SYSCALL_DEFAULT)
+#undef SET_SYSCALL_DEFAULT
+
+	// The message send has a different default obj
+	message_send_default_obj.data = (capability)act_self_ref;
+
+	// TODO default reply should be set automatically in msg.S
+	message_reply_default_obj.data = NULL;
+
 	act_self_queue = queue;
 	act_self_cap = self_cap;
 }
 
 capability act_get_cap(void) {
 	return act_self_cap;
-}
-
-capability act_ctrl_get_ref(capability ctrl) {
-	capability ref;
-	SYSCALL_c3_retc(ACT_CTRL_GET_REF, ctrl, ref);
-	return ref;
-}
-
-int act_ctrl_revoke(capability ctrl) {
-	int ret;
-	SYSCALL_c3_retr(ACT_REVOKE, ctrl, ret);
-	return ret;
-}
-
-int act_ctrl_terminate(capability ctrl) {
-	int ret;
-	SYSCALL_c3_retr(ACT_TERMINATE, ctrl, ret);
-	return ret;
 }
 
 capability act_seal_id(capability id) {

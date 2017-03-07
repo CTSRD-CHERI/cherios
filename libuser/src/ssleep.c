@@ -33,7 +33,7 @@
 #include "syscalls.h"
 
 void ssleep(int n) {
-	SYSCALL_a0(SLEEP, n);
+	sleep(n);
 }
 
 void nssleep(int n) {

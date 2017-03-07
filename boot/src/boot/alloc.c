@@ -75,8 +75,8 @@ void boot_alloc_init(void) {
 	system_alloc = 0;
 }
 
-void boot_alloc_enable_system(void * c_memmgt) {
-	mmap_set_act(act_ctrl_get_ref(c_memmgt));
+void boot_alloc_enable_system(act_control_kt c_memmgt) {
+	mmap_set_act(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, c_memmgt));
 	system_alloc = 1;
 }
 

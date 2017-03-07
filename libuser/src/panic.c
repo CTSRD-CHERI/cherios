@@ -31,9 +31,6 @@
 #include "mips.h"
 #include "stdio.h"
 #include "syscalls.h"
-static void syscall_panic(void) {
-	SYSCALL(PANIC);
-}
 
 __attribute__((noreturn))
 void panic(const char *str) {

@@ -30,11 +30,12 @@
 
 #include "cdefs.h"
 #include "errno.h"
+#include "types.h"
 
 void *	mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
 int	munmap(void *addr, size_t length);
 
-void	mmap_set_act(void* ref);
+void	mmap_set_act(act_kt ref);
 
 enum mmap_prot
 {

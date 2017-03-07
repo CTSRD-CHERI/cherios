@@ -31,22 +31,19 @@
 #include "boot/boot.h"
 #include "stdio.h"
 #include "uart.h"
+#include "syscalls.h"
 
-static int syscall_print = 0;
+static int syscall_print_enable = 0;
 
 void boot_printf_syscall_enable(void) {
-	syscall_print = 1;
+	syscall_print_enable = 1;
 }
 
 static void buf_puts(const char * str) {
-	if(syscall_print == 0) {
+	if(syscall_print_enable == 0) {
 		kernel_printf("%s", str);
 	} else {
-		__asm__ __volatile__ (
-		"li   $v0, 34 \n"
-		"cmove $c3, %[str] \n"
-		"syscall      \n"
-		:: [str]"C" (str): "v0", "$c3");
+		syscall_puts(str);
 	}
 }
 

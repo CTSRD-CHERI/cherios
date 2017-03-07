@@ -51,10 +51,10 @@ static void kernel_exception_capability(void) {
 	KERNEL_TRACE("exception", "kernel_capability %s", enum_cap_cause_exception_t_tostring(exception.cause));
 
 	if(exception.cause == Call_Trap) {
-		kernel_panic("ccall No longer an exception\n");
+		exception_printf("ccall No longer an exception\n");
 	}
 	if(exception.cause == Return_Trap) {
-		kernel_panic("creturn No longer an exception\n");
+		exception_printf("creturn No longer an exception\n");
 	}
 
 	exception_printf(KRED "Capability exception caught in activation %s"
@@ -120,7 +120,8 @@ void kernel_exception(void) {
 		break;
 
 	case MIPS_CP0_EXCODE_SYSCALL:
-		kernel_exception_syscall();
+		regdump(-1);
+		kernel_panic("Synchronous syscalls now use the ccall interface");
 		break;
 
 	case MIPS_CP0_EXCODE_C2E:

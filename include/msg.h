@@ -31,34 +31,32 @@
 #define CHERIOS_MSG_H
 
 #include "ccall.h"
+#include "syscalls.h"
 
 //TODO We have a slightly different ABI than libcheri, we don't use an argument number
 //TODO Our ccall is more analogous to function pointers than objects, but we consider a function pointer to have
 //TODO both a code and data componant.
 
 //Leftmost arguments are for the message recipient. Other arguments are to the message enqueue function
-__attribute__((cheri_ccall))
-__attribute__((cheri_method_suffix("_inst")))
-__attribute__((cheri_method_class(default_obj)))
-register_t message_send_r(register_t a0, register_t a1, register_t a2,
-                          const_capability c3, const_capability c4, const_capability c5
-        ,register_t selector, register_t v0);
 
+// We define pretty much the same function in syscall.h, but we do it here again with a capability return type
 __attribute__((cheri_ccall))
 __attribute__((cheri_method_suffix("_inst")))
-__attribute__((cheri_method_class(default_obj)))
+__attribute__((cheri_method_class(message_send_default_obj)))
 capability message_send_c(register_t a0, register_t a1, register_t a2,
                           capability c3, capability c4, capability c5
         ,ccall_selector_t selector, register_t v0);
 
 
+// Some nice wrappers
+
 #define MESSAGE_SEND_MODE_r(REF, a0, a1, a2, c3, c4, c5, SELECTOR, v0) \
-    (assert(kernel_if.message_send != NULL), message_send_r_inst(CONTEXT(kernel_if.message_send, REF), a0, a1, a2, c3, c4, c5, SELECTOR, v0))
+    (assert(kernel_if.message_send != NULL), message_send_inst(CONTEXT(kernel_if.message_send, REF), a0, a1, a2, c3, c4, c5, SELECTOR, v0))
 
 #define MESSAGE_SYNC_SEND_r(REF, a0, a1, a2, c3, c4, c5, v0) MESSAGE_SEND_MODE_r(REF, a0, a1, a2, c3, c4, c5, SYNC_CALL, v0)
 
 #define MESSAGE_SEND_MODE_c(REF, a0, a1, a2, c3, c4, c5, SELECTOR, v0) \
-    (assert(kernel_if.message_send != NULL), assert(cheri_gettype(kernel_if.message_send) == 0x42002), message_send_c_inst(CONTEXT(kernel_if.message_send, REF), a0, a1, a2, c3, c4, c5, SELECTOR, v0))
+    (assert(kernel_if.message_send != NULL), message_send_c_inst(CONTEXT(kernel_if.message_send, REF), a0, a1, a2, c3, c4, c5, SELECTOR, v0))
 
 #define MESSAGE_SYNC_SEND_c(REF, a0, a1, a2, c3, c4, c5, v0) MESSAGE_SEND_MODE_c(REF, a0, a1, a2, c3, c4, c5, SYNC_CALL, v0)
 

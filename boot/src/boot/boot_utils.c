@@ -42,22 +42,6 @@
 #include "types.h"
 #include "syscalls.h"
 
-static void * boot_act_register(reg_frame_t * frame, queue_t* queue, const char * name, register_t a0) {
-	void * ret;
-	__asm__ __volatile__ (
-		"li    $v0, 20       \n"
-		"cmove $c3, %[frame] \n"
-		"cmove $c4, %[name]  \n"
-		"cmove $c5, %[queue] \n"
-		"move  $a0, %[a0]	 \n"
-		"syscall             \n"
-		"cmove %[ret], $c3   \n"
-		: [ret] "=C" (ret)
-		: [frame] "C" (frame), [queue] "C" (queue), [name] "C" (name), [a0] "r" (a0)
-		: "v0", "$c3", "$c4", "$c5", "a0");
-	return ret;
-}
-
 static void * boot_act_create(const char * name, void * c0, void * pcc, void * stack, queue_t * queue,
 	                 void * act_cap, register_t a0) {
 	reg_frame_t frame;
@@ -80,8 +64,7 @@ static void * boot_act_create(const char * name, void * c0, void * pcc, void * s
 	/* set self cap */
 	frame.cf_c22	= act_cap;
 
-	capability ctrl = boot_act_register(&frame, queue, name, a0);
-	return ctrl;
+	return syscall_act_register(&frame, name, queue, a0);
 }
 
 /* Return the capability needed by the activation */
@@ -204,8 +187,8 @@ static int act_alive(capability ctrl) {
 	if(!ctrl) {
 		return 0;
 	}
-	status_e ret;
-	SYSCALL_c3_retr(ACT_CTRL_GET_STATUS, ctrl, ret);
+
+	status_e ret = SYSCALL_OBJ_void(syscall_act_ctrl_get_status, ctrl);
 
 	if(ret == status_terminated) {
 		return 0;

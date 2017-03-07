@@ -84,7 +84,7 @@ void sched_delete(act_t * act) {
 	}
 	act->status = status_terminated;
 	if(act->sched_status == sched_running) {
-		sched_reschedule(NULL, sched_terminated, 1);
+		sched_reschedule(NULL, sched_terminated, 0);
 	} else {
 		act->sched_status = sched_terminated;
 	}

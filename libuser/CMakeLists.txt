@@ -10,10 +10,8 @@ set(LIBUSER_SRCS
     src/crtendC.c
     src/assert.c
     src/ctype.c
-    src/debug.c
     src/dlmalloc.c
     src/errno.c
-    src/interrupt.c
     src/libuser.c
     src/malloc.c
     src/memset.c

@@ -45,7 +45,7 @@ long	msg_enable = 0;
 void pop_msg(msg_t * msg) {
     // TODO what are the blocking semantics of pop? Fow now just do the safe thing
     if(act_self_queue->header.start == act_self_queue->header.end) {
-        SYSCALL(WAIT);
+        wait();
     }
     *msg = act_self_queue->msg[act_self_queue->header.start];
     act_self_queue->header.start = (act_self_queue->header.start + 1) % act_self_queue->header.len;

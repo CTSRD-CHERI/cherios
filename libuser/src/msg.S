@@ -29,14 +29,6 @@
 # SUCH DAMAGE.
 #
 
-#define __ASSEMBLY__ 1
-#include "queue.h"
-#include "syscalls.h"
-
-.set noreorder
-.set nobopt
-.set noat
-
 .ifeq _MIPS_SZCAP-256
 .set CAP_SIZE_BITS, 5
 .set CAP_SIZE,     32
@@ -51,12 +43,22 @@
 .endif
 .endif
 
+#define __ASSEMBLY__ 1
+#include "queue.h"
+#include "syscalls.h"
+
+.set noreorder
+.set nobopt
+.set noat
+
 # We have so many registers, we may as well use a few rather than using dla all the time
 
+#define def_cap             $c13
+
 #define queue               $c18
-#define message_reply       $c19
+#define kernel_if_cap       $c19
 #define msg_entry_loop_cap  $c20
-#define def_cap             $c21
+#define self_ctrl_cap       $c21
 #define sync_state_cap      $c22
 #define msg_table           $c23
 #define ctrl_table          $c24
@@ -78,7 +80,7 @@ msg_entry:
     dla         $t0, act_self_queue
     clc         queue, $t0, 0(def_cap)
     dla         $t0, kernel_if
-    clc         message_reply, $t0, CAP_SIZE(def_cap)
+    csetoffset  kernel_if_cap, def_cap, $t0
     dla         $t0, sync_state
     csetoffset  sync_state_cap, def_cap, $t0
     dla         $t0, msg_methods_nb
@@ -89,6 +91,8 @@ msg_entry:
     csetoffset  msg_table, def_cap, $t0
     dla		    $t0, ctrl_methods
     csetoffset  ctrl_table, def_cap, $t0
+    dla         $t0, act_self_ctrl
+    clc         self_ctrl_cap, $t0, 0(def_cap)
     cgetpcc     msg_entry_loop_cap
 
 msg_entry_loop:
@@ -99,8 +103,9 @@ msg_entry_loop:
     bne    $t0, $t1, pop                                  # $t0 != $t1
 
 # TODO in a multicore world we may wish to spin a few times before resorting to WAIT
-    li      $v0, WAIT                                     #
-    syscall                                               # SYSCALL(WAIT)
+    clc     $c1, $zero, wait_offset(kernel_if_cap)
+    cmove   $c2, self_ctrl_cap
+    ccall   $c1, $c2
 
 pop:
     sll     $t1, $t0, (CAP_SIZE_BITS + 3)                 # 8 capabilities worth of stuff in a message
@@ -184,7 +189,7 @@ make_return:
     # c17 needs a good return address. We took the address of the loop symbol which is as good as any
     move  $a0, $v0
     move  $a1, $v1
-    cmove $c1, message_reply
+    clc   $c1, $zero, message_reply_offset(kernel_if_cap)
     cmove $c17, msg_entry_loop_cap
 	ccall $c1, $c2
 	b msg_entry_loop

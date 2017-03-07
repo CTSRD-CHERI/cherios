@@ -33,16 +33,11 @@
 #define CHERIOS_CCALL_H
 
 #include "cheric.h"
-#include "object.h"
-#include "syscalls.h"
 
 struct cheri_object {
     capability code;
     capability data;
 };
-
-
-struct cheri_object default_obj;
 
 #define CONTEXT(C, D) (struct cheri_object){.code = C, .data = D}
 

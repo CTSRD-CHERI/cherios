@@ -150,19 +150,25 @@ int cherios_main(void) {
 	install_exception_vector();
 	boot_printf("D.2\n");
 
+	/* If boot wants to be an activation (really it should create an init activation) it will have to call object_init */
 	kernel_if_t* kernel_if_c;
+	act_control_kt self_ctrl;
+	queue_t* queue;
+
 	__asm__ __volatile__ (
 		"li    $v0, 0        \n"
 		"syscall             \n"
-		"cmove %[msg_send_cap], $c3\n"
-		:[msg_send_cap]"=C"(kernel_if_c)
+		"cmove %[kernel_if], $c3\n"
+		"cmove %[self_ctrl], $c4\n"
+		"cmove %[queue], $c5\n"
+		:[kernel_if]"=C"(kernel_if_c), [self_ctrl]"=C"(self_ctrl), [queue]"=C"(queue)
 		:
-		: "v0", "$c3");
+		: "v0", "$c3", "$c4", "$c5");
 
 	kernel_assert(kernel_if_c != NULL);
 	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
-	kernel_assert(cheri_gettype(kernel_if.message_send) == 0x42002);
-	kernel_assert(cheri_gettype(kernel_if.message_reply) == 0x42003);
+
+	object_init(self_ctrl, NULL, queue);
 
 	/* Interrupts are ON from here */
 	boot_printf("E\n");
