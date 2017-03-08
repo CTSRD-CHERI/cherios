@@ -68,11 +68,6 @@ capability act_get_cap(void) {
 	return act_self_cap;
 }
 
-capability act_seal_id(capability id) {
-	assert(0 && "TODO");
-	return NULL;
-}
-
 void ctor_null(void) {
 	return;
 }

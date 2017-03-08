@@ -37,7 +37,7 @@
 #include "string.h"
 #include "syscalls.h"
 
-#define B_FS 0
+#define B_FS 1
 // TODO I question the need for this kind of socket. We have a message passing mechanism with far more fine grained
 // TODO semantics. Why do we want to reduce this to a single integer 'port' interface? Currently broken due to use
 // TODO of idc.

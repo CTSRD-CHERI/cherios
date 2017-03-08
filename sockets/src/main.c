@@ -36,7 +36,8 @@ void * new_identifier(void) {
 	int * object = malloc(sizeof(int));
 	assert(object != NULL);
 	*object = oid++;
-	return act_seal_id(object);
+	//TODO use a seal manager
+	return object;
 }
 
 extern void msg_entry;

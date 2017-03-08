@@ -57,15 +57,25 @@ static inline int empty(queue_t * queue) {
 	return queue->header.start == queue->header.end;
 }
 
+static msg_nb_t msg_queue_fill(queue_t* queue) {
+	return (queue->header.end - queue->header.start + queue->header.len) % queue->header.len;
+}
+
 int msg_push(capability c3, capability c4, capability c5,
 			 register_t a0, register_t a1, register_t a2,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
+
+	//FIXME this is still really racey, this critical section function stops interrupts, but will not work on multicore
+
+	kernel_critical_section_enter();
+
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
 	kernel_assert(qmask > 0);
 	int next_slot = queue->header.end;
 	if(full(queue, qmask)) {
+		kernel_critical_section_exit();
 		return -1;
 	}
 
@@ -85,8 +95,12 @@ int msg_push(capability c3, capability c4, capability c5,
 
 	queue->header.end = safe(queue->header.end+1, qmask);
 
+	KERNEL_TRACE("msg push", "now %d items in %s's queue", msg_queue_fill(queue), dest->name);
 	kernel_assert(!empty(queue));
 
+	sched_receives_msg(dest);
+
+	kernel_critical_section_exit();
 	return 0;
 }
 
@@ -234,11 +248,7 @@ void act_send_message(capability c3, capability c4, capability c5,
 	//FIXME critical section here might be a bit much?
 
 	//TODO if we are going to switch we can (maybe) deliver this message without buffering
-	kernel_critical_section_enter();
 	msg_push(c3, c4, c5, a0, a1, a2, v0, target_activation, source_activation, sync_token);
-	kernel_critical_section_exit();
-
-	sched_receives_msg(target_activation);
 
 	if(selector == SYNC_CALL) {
 		//TODO in a multicore world we may spin a little if we expect the answer to be fast

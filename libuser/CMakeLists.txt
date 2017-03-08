@@ -1,3 +1,5 @@
+include_directories(include)
+
 set(LIBUSER_ASM_SRCS
     src/init.S
     src/memcpy_c.S

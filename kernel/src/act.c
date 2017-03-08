@@ -30,6 +30,7 @@
  */
 
 #include <activations.h>
+#include <critical.h>
 #include "sys/types.h"
 #include "activations.h"
 #include "klib.h"
@@ -192,11 +193,11 @@ int act_revoke(act_control_t * ctrl) {
 
 int act_terminate(act_control_t * ctrl) {
 	ctrl->status = status_terminated;
+	KERNEL_TRACE("act", "Terminating %s", ctrl->name);
+	/* This will never return if this is a self terminate. We will be removed from the queue and descheduled */
 	sched_delete(ctrl);
-	ctrl->sched_status = sched_terminated;
-	KERNEL_TRACE("act", "Terminated %s", ctrl->name);
 	if(ctrl == kernel_curr_act) { /* terminated itself */
-		return 1;
+		kernel_panic("Should not reach here");
 	}
 	return 0;
 }
@@ -209,12 +210,4 @@ act_t * act_get_sealed_ref_from_ctrl(act_control_t * ctrl) {
 status_e act_get_status(act_control_t *ctrl) {
 	KERNEL_TRACE("get status", "%s", ctrl->name);
 	return ctrl->status;
-}
-
-void act_wait(act_t* act, act_t* next_hint) {
-	if(msg_queue_empty(act)) {
-		sched_block(act, sched_waiting, next_hint, 0);
-	} else {
-		return;
-	}
 }

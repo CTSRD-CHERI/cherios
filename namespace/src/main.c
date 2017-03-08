@@ -38,10 +38,13 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 
 int main(void)
 {
-	syscall_puts("Namespace Hello world\n");
+	syscall_puts("Namespace: Hello world\n");
 
 	ns_init();
 
 	msg_enable = 1; /* Go in waiting state instead of exiting */
+
+	syscall_puts("Namespace: Going into daemon mode\n");
+
 	return 0;
 }

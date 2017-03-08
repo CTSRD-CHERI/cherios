@@ -54,7 +54,7 @@ void kernel_syscall_sleep(int time) {
 
 void kernel_syscall_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
-	act_wait(kernel_curr_act, NULL);
+	sched_block_until_msg(kernel_curr_act, NULL);
 }
 
 act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue, register_t a0) {
@@ -103,7 +103,7 @@ int kernel_syscall_interrupt_enable(int number) {
 }
 
 int kernel_syscall_gc(capability p, capability pool) {
-	  return try_gc(p , pool);
+	return try_gc(p , pool);
 }
 
 DEFINE_TRAMPOLINE(kernel_syscall_sleep);

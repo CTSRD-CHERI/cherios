@@ -93,9 +93,9 @@ void sched_delete(act_t * act) {
 void sched_receives_msg(act_t * act) {
 	if(act->sched_status == sched_waiting) {
 		KERNEL_TRACE("sched", "now unblocked %s", act->name);
+		act->sched_status = sched_runnable;
 		add_act_to_queue(act);
 	}
-	act->sched_status = sched_runnable;
 }
 
 void sched_recieve_ret(act_t * act) {
@@ -103,6 +103,20 @@ void sched_recieve_ret(act_t * act) {
 	KERNEL_TRACE("sched", "now unblocked %s", act->name);
 	add_act_to_queue(act);
 	act->sched_status = sched_runnable;
+}
+
+void sched_block_until_msg(act_t * act, act_t * next_hint) {
+	// would MUCH prefer to use a lighter lock here, or better yet go lockless and just check nothing went wrong at the
+	// end
+	kernel_critical_section_enter();
+	if(msg_queue_empty(act)) {
+		// This block will result in a critical section exit
+		sched_block(act, sched_waiting, next_hint, 0);
+	} else {
+		kernel_critical_section_exit();
+	}
+
+
 }
 
 void sched_block(act_t *act, sched_status_e status, act_t* next_hint, int in_kernel) {
@@ -170,7 +184,7 @@ void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
 		sched_schedule(to);
 		if(!in_kernel) {
 			/* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
-			/* swap state will exit the critical section and will seem like a no-op from the users perspective */
+			/* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
 
 			swap_state(&from->saved_registers, &to->saved_registers);
 

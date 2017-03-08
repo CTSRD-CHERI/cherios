@@ -88,18 +88,15 @@ kernel_cp2_exception_handler:
 #cancel if we are in critical section. We assume that critical code never throws exceptions and only async interrupts happen.
         dla $k0, critical_state
         cld $k1, $k0, CRIT_STATE_LEVEL_OFFSET($kdc)
-        bgtz $k1, skip_exception
-        cgetoffset $k0, $epcc
-        dla $k1, context_critical_start
-        slt $k1, $k0, $k1
-        bne $k1, $zero, take_exception
-        dla $k1, context_critical_end
-        slt $k1, $k1, $k0
-        bne $k1, $zero, take_exception
+        beqz $k1, take_exception
+        nop
 
 skip_exception:
-        li      $k1, 1
+        dmfc0   $k1, $13
         csd     $k1, $k0, CRIT_STATE_CAUSE_OFFSET($kdc)
+        dmfc0   $k1, $12
+        daddiu  $k1, -1     # As interrupts had to be enabled
+        mtc0    $k1, $12    # Disable interrupts, we are happy to take the hit as this is rare
         move	$k0, $zero
         move	$k1, $zero
         eret

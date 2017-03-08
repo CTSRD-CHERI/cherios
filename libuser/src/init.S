@@ -34,6 +34,23 @@
 .set nobopt
 .set noat
 
+.ifeq _MIPS_SZCAP-256
+.set CAP_SIZE_BITS, 5
+.set CAP_SIZE,     32
+.set CAP_IN_MESSAGE, 7
+.else
+.ifeq _MIPS_SZCAP-128
+.set CAP_SIZE_BITS, 4
+.set CAP_SIZE,     16
+.set CAP_IN_MESSAGE, 6
+.else
+.error "Unknown cap size"
+.endif
+.endif
+
+#define __ASSEMBLY__ 1
+#include "syscalls.h"
+
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Jump to various startup functions to initialise the C
 # runtime, and then call main().
@@ -100,13 +117,15 @@ start_common:
 	cjalr		$c12, $c17
 	nop
 
-	# main() done. Exit or CReturn
+	# main() done. Go to msg_entry if msg_enable, call terminate otherwise
 	dla		$t0, msg_enable
 	cgetdefault	$c17
 	cld		$t0, $t0, 0($c17)
 	bne		$t0, $zero, msg_entry
 	nop
 	dla		$t0, act_self_ctrl
-	clc		$c3, $t0, 0($c17)
-	li		$v0, 26
-	syscall
+	clc		$c2, $t0, 0($c17)
+	dla     $t0, kernel_if
+	clc     $c1, $t0, syscall_act_terminate_offset($c17)
+	# We don't bother setting up a return as this will terminate us
+	ccall   $c1, $c2

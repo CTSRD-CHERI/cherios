@@ -49,7 +49,7 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 
 int main(void)
 {
-	syscall_puts("UART Hello world\n");
+	syscall_puts("UART: Hello world\n");
 
 	/* Get capability to use uart */
 	uart_cap = act_get_cap();
@@ -66,7 +66,7 @@ int main(void)
 	uart_init(); /* done during boot process */
 	#endif
 
-	syscall_puts("UART: setup OK\n");
+	syscall_puts("UART: Going into daemon mode\n");
 
 	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;

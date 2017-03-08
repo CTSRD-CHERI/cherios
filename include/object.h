@@ -50,7 +50,6 @@ extern void (*ctrl_methods[]);
 extern size_t ctrl_methods_nb;
 
 capability	act_get_cap(void);
-capability act_seal_id(capability id);
 
 void	object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue);
 

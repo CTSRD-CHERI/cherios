@@ -42,8 +42,7 @@
 .global swap_state
 swap_state:
 
-    #c3 = from_frame, c4 = to_frame
-    # An exception here will trash $k0 and $k1. However we are safe to use $kr1c and $kr2c
+    # c3 = from_frame, c4 = to_frame
 
     # Save state
     cgetdefault $c13
@@ -51,41 +50,73 @@ swap_state:
 
     # At this point we could reschedule 'from', so we are officially in the 'to' activation
     # However, 'to' is currently in an inconsistent state and an exception here would destroy it
-    # We need to exit the critical section of 'from', and enter a critical section for the 'to'
-    # As we cannot restore AND set a flag, we use two labels to identify this critical region
+    # We need to exit the critical section of 'from'. If an interrupt is then pending we don't
+    # Bother restoring 'to' as it would immediately have its context saved. Instead we just jump
+    # to the kernel_exception handler.
 
-.global context_critical_start
-context_critical_start:
+    dmfc0 $t0, $12
+    ori   $t0, 2        # set SR(EXL)
+    mtc0  $t0, $12
 
-        cgetdefault $kr1c
-        dla $t0, critical_state
-        csetoffset $kr1c, $kr1c, $t0 # Critical state.
-        # Exit from's critical. We assume that we are at level one, or else this is an error.
-        csd $zero, $zero, CRIT_STATE_LEVEL_OFFSET($kr1c)
+    # Now we are in an exception we are safe to use all kernel registers
 
-        # Restore everything, we don't have a register spare for $c0 so set default while restoring
-        # We use exception registers here. These are not used by the critical section check in exception.S
+    # Check if we had supressed any interrupts. If we did, we can pretty much treat this like the
+    # Beginning of an exception, but skip the part where we save our state (it is already saved)
 
-        cmove $kr1c, $c4             # Our frame, and later pcc
+    # Exit from's critical, we drop ALL levels.
+    cgetdefault $kr1c
+    dla $t0, critical_state
+    csetoffset $kr1c, $kr1c, $t0 # Critical state.
 
-        .macro crestore_setc0 greg, offset, frame
-            crestore \greg, \offset, \frame
-            .if \offset == 0
-                csetdefault \greg
-            .endif
-        .endm
+    cld $t1, $zero, CRIT_STATE_CAUSE_OFFSET($kr1c)
+    beqz $t1, no_delayed_exception
+    csd $zero, $zero, CRIT_STATE_LEVEL_OFFSET($kr1c)   # critical_state.level = 0
 
-        # Afterwards $kr1c will have pcc, and we will have lost the frame.
-        # c0 is not really stored in $c1, we just use it as temporary
+    # Here we set the cause register. If we were doing it properly we would modify it to have the faulting
+    # Instruction be from the 'to' activation. However, as only the bits to check the type of interrupt are used
+    # we will just use this.
+    mtc0        $t1, $13
+    csd         $zero, $zero, CRIT_STATE_CAUSE_OFFSET($kr1c)
 
-        restore_reg_frame_gen crestore_setc0, grestore, $kr1c, $t0, $c1, $kr1c
+    # Set up exception stack and default capability in the same way as the exception handler
+    dla		$t0, __start_exception_stack
+    dla		$t1, __size_exception_stack
+    csetoffset	$c11, $kdc, $t0
+    csetbounds	$c11, $c11, $t1
+    move		$sp, $t1
+    csetdefault	$kdc
 
+    # We then call kernel_exception as if we had just taken an exception. On return we go back to the exception handler
+    cgetpcc     $c12
+    dla         $k0,    kernel_exception
+    dla         $k1,    kernel_exception_restore
+    csetoffset  $c17,   $c12, $k1
+    csetoffset  $c12,   $c12, $k0
+    cjr         $c12
 
-        # finally set pcc, and drop our final level of privilege (the kernel capabilities)
-        cjr         $kr1c
-        nop
+no_delayed_exception:
 
-.global context_critical_end
-context_critical_end:
+    # Restore everything, we don't have a register spare for $c0 so set default while restoring
+    # We use exception registers here. These are not used by the critical section check in exception.S
+
+    cmove $kr1c, $c4             # Our frame
+
+    .macro crestore_setc0 greg, offset, frame
+        crestore \greg, \offset, \frame
+        .if \offset == 0
+            csetdefault \greg
+        .endif
+    .endm
+
+    # Afterwards $kr1c will have pcc, and we will have lost the frame.
+    # c0 is not really stored in $c1, we just use it as temporary
+
+    restore_reg_frame_gen crestore_setc0, grestore, $kr1c, $t0, $c1, $epcc
+
+    # finally set pcc, and drop our final level of privilege (the kernel capabilities)
+    # Counter eret bug
+    cgetoffset $k0, $epcc
+    dmtc0      $k0, $14
+    eret
 
 nop

@@ -30,12 +30,21 @@
 
 #include "critical.h"
 #include "kutils.h"
+#include "cp0.h"
 
 critical_state_t critical_state;
 
 void kernel_critical_section_enter() {
     critical_state.critical_level++;
 }
+
+
+/* Critical exit is only called as a user, and is never in an exception. it CAN be pre-empted. However, the context
+ * switch code will also modify critical state. It will first save the caller state, then set SR(EXL) = 1,
+ * then set critical level to 0, then check cause. If cause is non-zero it spoofs the exception AS IF IT HAD HAPPENED
+ * AT THE ACTIVATION TO BE SCHEDULED. It then enters the normal exception path, which CANNOT be pre-empted.
+ *
+ * Critical level is a soft interrupt disable. If an interrupt occurs, cause will be set and all interrupts disabled. */
 
 void kernel_critical_section_exit() {
     critical_state.critical_level--;
@@ -47,8 +56,17 @@ void kernel_critical_section_exit() {
 void handle_delayed_interrupt() {
     kernel_assert(critical_state.critical_level == 0);
     if(critical_state.delayed_cause != 0) {
+        KERNEL_TRACE("critical", "handled a delayed interrupt");
         //FIXME write some code here.
-        kernel_panic("got exception in critical section");
+        register_t excode = cp0_cause_excode_get();
+        if(excode == MIPS_CP0_EXCODE_INT) {
+            kernel_interrupt();
+            KERNEL_TRACE("critical", "Now turning interrupts back on");
+            // The interrupt delay causes interrupts to be globally disabled. We must now turn them back on
+            cp0_status_ie_enable();
+        } else {
+            kernel_panic("Got non async interrupt in critical section. Fix yo shit.");
+        }
         critical_state.delayed_cause = 0;
     }
 }

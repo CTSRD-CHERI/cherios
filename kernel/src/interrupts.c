@@ -33,7 +33,7 @@
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"
-
+#include "critical.h"
 static act_t * int_child[7];
 
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */

@@ -97,8 +97,6 @@ void kernel_exception(void) {
 	static int entered = 0;
 	entered++;
 
-	handle_delayed_interrupt();
-
 	KERNEL_TRACE("exception", "saving %s",
 				 kernel_curr_act->name);
 	KERNEL_TRACE("exception", "enters %d", entered);
@@ -112,6 +110,8 @@ void kernel_exception(void) {
 	 * non-preemptive and will fail horribly if this isn't true.
 	 */
 	kernel_assert(cp0_status_exl_get() != 0);
+	kernel_assert(critical_state.critical_level == 0);
+	kernel_assert(critical_state.delayed_cause == 0);
 
 	register_t excode = cp0_cause_excode_get();
 	switch (excode) {
@@ -120,8 +120,9 @@ void kernel_exception(void) {
 		break;
 
 	case MIPS_CP0_EXCODE_SYSCALL:
+		exception_printf(KRED"Synchronous syscalls now use the ccall interface"KRST"\n");
 		regdump(-1);
-		kernel_panic("Synchronous syscalls now use the ccall interface");
+		kernel_freeze();
 		break;
 
 	case MIPS_CP0_EXCODE_C2E:

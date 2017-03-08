@@ -256,7 +256,7 @@ add_subdirectory(test2a)
 add_subdirectory(test2b)
 add_subdirectory(test3)
 add_subdirectory(uart)
-#add_subdirectory(virtio-blk)
+add_subdirectory(virtio-blk)
 add_subdirectory(zlib)
 add_subdirectory(zlib_test)
 

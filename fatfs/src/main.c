@@ -31,7 +31,7 @@
 #include "lib.h"
 
 int main(void) {
-	printf("Fatfs Hello world\n");
+	printf("Fatfs: Hello world\n");
 
 	/* Init virtio-blk session */
 	virtio_blk_session(act_get_cap());

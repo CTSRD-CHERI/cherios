@@ -41,11 +41,11 @@ size_t pagesz;			/* page size */
 
 
 int main(void) {
-	syscall_puts("memmgt Hello world\n");
+	syscall_puts("memmgt: Hello world\n");
 
 	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
 	if(ret!=0) {
-		printf(KRED"memmgt Register failed %d\n", ret);
+		printf(KRED"memmgt: Register failed %d\n", ret);
 	}
 
 	/* Get capability to heap */
@@ -68,7 +68,7 @@ int main(void) {
 	/* init release mecanism */
 	release_init();
 
-	syscall_puts("memmgt: setup done\n");
+	syscall_puts("memmgt: Going into daemon mode\n");
 
 	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;

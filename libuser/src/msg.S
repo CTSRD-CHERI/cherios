@@ -29,6 +29,10 @@
 # SUCH DAMAGE.
 #
 
+.set noreorder
+.set nobopt
+.set noat
+
 .ifeq _MIPS_SZCAP-256
 .set CAP_SIZE_BITS, 5
 .set CAP_SIZE,     32
@@ -47,10 +51,6 @@
 #include "queue.h"
 #include "syscalls.h"
 
-.set noreorder
-.set nobopt
-.set noat
-
 # We have so many registers, we may as well use a few rather than using dla all the time
 
 #define def_cap             $c13
@@ -65,6 +65,8 @@
 
 #define msg_methods_nb_g    $s0
 #define ctrl_methods_nb_g   $s1
+
+#define start_g             $s2
 
 # Message read loop
 
@@ -98,17 +100,20 @@ msg_entry:
 msg_entry_loop:
 
 # Check for items in queue
-    cld     $t0, $zero, HEADER_START_OFFSET (queue)       # $t0 = start
+    cld     start_g, $zero, HEADER_START_OFFSET(queue)    # load start
     cld     $t1, $zero, HEADER_END_OFFSET(queue)          # $t1 = end
-    bne    $t0, $t1, pop                                  # $t0 != $t1
+    bne     start_g, $t1, pop                             # start_g != $t1
 
 # TODO in a multicore world we may wish to spin a few times before resorting to WAIT
     clc     $c1, $zero, wait_offset(kernel_if_cap)
     cmove   $c2, self_ctrl_cap
+    li      $t0, 12                                       # to increment pcc just past the ccall
+    cgetpcc $c17
+    cincoffset $c17, $c17, $t0
     ccall   $c1, $c2
 
 pop:
-    sll     $t1, $t0, (CAP_SIZE_BITS + 3)                 # 8 capabilities worth of stuff in a message
+    sll     $t1, start_g, (CAP_SIZE_BITS + 3)                 # 8 capabilities worth of stuff in a message
 
     # pops message #
     clc     $c3, $t1,  (MSGS_START_OFFSET)(queue)
@@ -122,16 +127,15 @@ pop:
     cld     $a2, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 16)(queue)
     cld     $v0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 24)(queue)
 
-    cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        #
-    addi    $t0, $t0, 1                                 #
-    bne    $t0, $t1, update_start                       #
+    cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        # load length
+    addi    start_g, start_g, 1                         #
+    bne     start_g, $t1, update_start                  #
     nop                                                 #
-    li      $t0, 0                                      # $t0 = ($t0 + 1) % len
+    li      start_g, 0                                  # start_g = (start_g + 1) % len
 
 update_start:
-    csd     $t0, $zero, HEADER_START_OFFSET(queue)      # start = $t0
-
-	bltz		$v0, control
+    csd     start_g, $zero, HEADER_START_OFFSET(queue)  # save start
+	bltz	$v0, control
 	nop
 
     cmove   $c12, msg_table

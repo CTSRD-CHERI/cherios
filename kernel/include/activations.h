@@ -66,6 +66,8 @@ typedef struct
 	queue_t * msg_queue;		/* A pointer to the message queue */
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
 					   which has write access to queue) */
+	/* Used by the scheduler to beat races without having to turn off premption */
+	int message_recieve_flag;
 	/* Scheduling related */
 	sched_status_e sched_status;	/* Current status */
 	reg_frame_t saved_registers;	/* Space to put saved registers for restore */
