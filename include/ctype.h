@@ -28,5 +28,5 @@
  * SUCH DAMAGE.
  */
 
-char toupper(char c);
+int toupper(int c);
 char * strtoupper(char * s);
