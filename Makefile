@@ -8,6 +8,8 @@ all: build/build.ninja
 build:
 	mkdir -p ${BUILDDIR}
 	ln -sf ${BUILDDIR}/boot/cherios.elf .
+
+build/build.ninja: build
 	cd ${BUILDDIR} && cmake -GNinja ..
 
 clean:
