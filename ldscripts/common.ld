@@ -34,10 +34,13 @@ __kernel_load_physaddr =   0x080000;
 __init_load_physaddr   =   0x0d0000;
 __boot_load_physaddr   =  0x1890000;
 
+__beri_load_physaddr   =   0x100000;
+
 __kernel_load_virtaddr = __cached_base + __kernel_load_physaddr;
 __kernel_entry_point   = __kernel_load_virtaddr + 0xC0;
 
 __init_load_virtaddr   = __cached_base + __init_load_physaddr;
 __init_entry_point     = __init_load_virtaddr + 0xC0;
 
+__beri_load_virtaddr   = __cached_base + __beri_load_physaddr;
 __boot_load_virtaddr   = __cached_base + __boot_load_physaddr;

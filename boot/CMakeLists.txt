@@ -24,6 +24,7 @@ set(BOOT_SRCS
 )
 
 set(BOOT_ASM_SRCS
+    src/boot/boot_tramp.S
     src/boot/boot_init.S
     src/boot/kernel_elf.S
     src/boot/init_elf.S
@@ -77,10 +78,10 @@ add_cherios_init(init LINKER_SCRIPT init.ld SOURCES
 )
 
 add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
+    ${BOOT_ASM_SRCS}
     ${LIBCRT_SRCS}
     ${COMMON_SRCS}
     ${BOOT_SRCS}
-    ${BOOT_ASM_SRCS}
 )
 set_target_properties(cherios PROPERTIES COMPILE_FLAGS -DCHERIOS_BOOT)
 

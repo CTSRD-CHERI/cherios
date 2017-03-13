@@ -38,15 +38,28 @@ PAGE_ALIGN = 0x1000;
 
 OUTPUT_FORMAT("elf64-tradbigmips");
 OUTPUT_ARCH(mips)
-ENTRY(start)
+
+PHDRS
+{
+	header PT_PHDR PHDRS ;
+	boot PT_LOAD FILEHDR PHDRS AT (0xffffffff80100000) FLAGS(0x7) ;
+	text PT_LOAD ;
+}
+
+ENTRY(beri_boot_start)
 SECTIONS
 {
-	. += __boot_load_virtaddr;
+	. += __beri_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
+	.boot ALIGN(CAP_ALIGN): {
+		*(.boot)
+	} :boot = 0x0
+
+	. = __boot_load_virtaddr;
 	.text ALIGN(CAP_ALIGN): {
 		*(.text)
-	}
+	} :text
 
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
