@@ -118,7 +118,6 @@ endif()
 include_directories(include)
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
-    -mcpu=mips4
     -mabi=sandbox
     -cheri-linker
     -integrated-as
