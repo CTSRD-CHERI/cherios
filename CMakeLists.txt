@@ -161,6 +161,7 @@ set(C_WARNING_FLAGS
     -Wno-error=unused-function
     -Wno-error=unused-variable
     -Wno-error=unused-parameter
+    -Wno-error=expansion-to-defined
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
