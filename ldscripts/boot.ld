@@ -44,15 +44,9 @@ SECTIONS
 	. += __boot_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
-	.init : {
-		KEEP (*(.init))
-	} = 0
 	.text ALIGN(CAP_ALIGN): {
 		*(.text)
 	}
-	.fini ALIGN(CAP_ALIGN): {
-		KEEP (*(.fini))
-	} = 0
 
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
@@ -73,23 +67,6 @@ SECTIONS
 		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
 		KEEP (*(SORT(.dtors.*)))
 		KEEP (*/crtendC.o(.dtors))
-	}
-	.preinit_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__preinit_array_start = .);
-		KEEP (*(.preinit_array))
-		PROVIDE_HIDDEN (__preinit_array_end = .);
-	}
-	.init_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__init_array_start = .);
-		KEEP (*(SORT(.init_array.*)))
-		KEEP (*(.init_array))
-		PROVIDE_HIDDEN (__init_array_end = .);
-	}
-	.fini_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__fini_array_start = .);
-		KEEP (*(.fini_array))
-		KEEP (*(SORT(.fini_array.*)))
-		PROVIDE_HIDDEN (__fini_array_end = .);
 	}
 	.data ALIGN(CAP_ALIGN): {
 		*(.data)
