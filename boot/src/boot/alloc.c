@@ -29,6 +29,7 @@
  */
 
 #include "mips.h"
+#include "misc.h"
 #include "string.h"
 #include "stdlib.h"
 #include "sys/mman.h"
@@ -36,12 +37,12 @@
 
 static inline void *align_upwards(void *p, uintptr_t align)
 {
-    uint8_t * addr = (uint8_t *)p;
-    uintptr_t offset = (uintptr_t)addr - ((uintptr_t)addr & ~(align-1));
-    if(offset > 0) {
-    addr += align - offset;
-    }
-    return (void *)addr;
+    size_t rounded;
+
+    rounded = roundup2((size_t)p, align);
+    p += (rounded - (size_t)p);
+
+    return (p);
 }
 
 static const size_t pool_size = 1024*1024;
