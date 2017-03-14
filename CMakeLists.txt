@@ -133,6 +133,7 @@ set(ASM_COMPILER_FLAGS
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -nostdinc
+    -fno-builtin
     -mcpu=cheri
     -mllvm
     -mxmxgot
