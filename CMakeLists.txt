@@ -164,6 +164,12 @@ set(C_WARNING_FLAGS
     -Wundef
     -Wwrite-strings
 
+    # We are the operating system, we are allowed to use underscores.
+    # There's also nothing wrong with those dollars, or padding.
+    -Wno-reserved-id-macro
+    -Wno-dollar-in-identifier-extension
+    -Wno-padded
+
     -Wno-error=cast-align
     -Wno-error=cast-qual
     -Wno-error=comma
