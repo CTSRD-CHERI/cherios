@@ -123,11 +123,12 @@ set(ASMC_COMPILER_FLAGS
     -integrated-as
     -msoft-float
     -fcolor-diagnostics
+    -fno-pic
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
 set(ASM_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
-    -mllvm -asm-macro-max-nesting-depth=100 -fno-pic
+    -mllvm -asm-macro-max-nesting-depth=100
 )
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
@@ -136,8 +137,6 @@ set(C_COMPILER_FLAGS
     -mllvm
     -mxmxgot
     -O0 # TODO: make this depend on the configuration
-    -fno-pic
-    -Werror
     -std=c11
     -DHARDWARE_${HARDWARE}
     -DCONSOLE_${CONSOLE}
@@ -146,6 +145,7 @@ set(C_WARNING_FLAGS
     -Wall
     -Wextra
     -Weverything
+    -Werror
 
     # Explicitly error out on constructs that would always result in a crash.
     -Werror=cheri-capability-misuse
