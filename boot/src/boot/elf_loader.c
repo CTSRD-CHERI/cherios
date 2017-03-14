@@ -162,10 +162,12 @@ int elf_check_supported(Elf64_Ehdr *hdr) {
 		ERROR("Bad e_version");
 		return 0;
 	}
+#ifdef notyet
 	if(hdr->e_flags != 0x30000007) {
 		ERRORM("Bad e_flags: %X", hdr->e_flags);
 		return 0;
 	}
+#endif
 	return 1;
 }
 
