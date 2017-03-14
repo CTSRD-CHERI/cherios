@@ -134,6 +134,7 @@ set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -nostdinc
     -fno-builtin
+    -ffreestanding
     -mcpu=cheri
     -mllvm
     -mxmxgot
@@ -185,6 +186,7 @@ set(C_WARNING_FLAGS
     -Wno-error=padded
     -Wno-error=pedantic
     -Wno-error=reserved-id-macro
+    -Wno-error=return-type
     -Wno-error=sign-conversion
     -Wno-error=switch-enum
     -Wno-error=unreachable-code
