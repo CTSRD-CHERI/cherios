@@ -179,7 +179,6 @@ set(C_WARNING_FLAGS
     -Wno-error=covered-switch-default
     -Wno-error=expansion-to-defined
     -Wno-error=extra-semi
-    -Wno-error=missing-noreturn
     -Wno-error=missing-prototypes
     -Wno-error=missing-variable-declarations
     -Wno-error=pedantic

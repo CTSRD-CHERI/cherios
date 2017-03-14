@@ -31,6 +31,7 @@
 #include "mips.h"
 #include "stdio.h"
 #include "misc.h"
+#include "assert.h"
 
 void __assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
