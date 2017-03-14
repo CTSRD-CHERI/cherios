@@ -125,8 +125,8 @@ typedef  struct
 int elf_check_supported(Elf64_Ehdr *hdr) {
 	if (hdr->e_ident[0] != 0x7f ||
 	    hdr->e_ident[1] != 'E' ||
-	    hdr->e_ident[1] != 'L' ||
-	    hdr->e_ident[1] != 'F') {
+	    hdr->e_ident[2] != 'L' ||
+	    hdr->e_ident[3] != 'F') {
 		ERROR("Bad magic number");
 		return 0;
 	}
