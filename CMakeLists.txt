@@ -145,21 +145,50 @@ set(C_COMPILER_FLAGS
 set(C_WARNING_FLAGS
     -Wall
     -Wextra
+    -Weverything
+
+    # Explicitly error out on constructs that would always result in a crash.
+    -Werror=cheri-capability-misuse
+    -Werror=implicit-function-declaration
+    -Werror=format
+    -Werror=undefined-internal
+
+    -Wcast-qual
     -Wdisabled-optimization
-    -Wformat=2
     -Winit-self
     -Winline
     -Wpointer-arith
     -Wredundant-decls
+    -Wshadow
     -Wswitch-default
     -Wundef
     -Wwrite-strings
-    -Wshadow
 
-    -Wno-error=unused-function
-    -Wno-error=unused-variable
-    -Wno-error=unused-parameter
+    -Wno-error=cast-align
+    -Wno-error=cast-qual
+    -Wno-error=comma
+    -Wno-error=conversion
+    -Wno-error=covered-switch-default
+    -Wno-error=dollar-in-identifier-extension
     -Wno-error=expansion-to-defined
+    -Wno-error=extra-semi
+    -Wno-error=missing-noreturn
+    -Wno-error=missing-prototypes
+    -Wno-error=missing-variable-declarations
+    -Wno-error=padded
+    -Wno-error=pedantic
+    -Wno-error=reserved-id-macro
+    -Wno-error=sign-conversion
+    -Wno-error=switch-enum
+    -Wno-error=unreachable-code
+    -Wno-error=unreachable-code-break
+    -Wno-error=unreachable-code-return
+    -Wno-error=unused-function
+    -Wno-error=unused-macros
+    -Wno-error=unused-parameter
+    -Wno-error=unused-variable
+    -Wno-error=used-but-marked-unused
+    -Wno-error=vla
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
