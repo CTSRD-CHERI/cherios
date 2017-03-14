@@ -196,7 +196,7 @@ register_t ccall_2(void * cb, void * cs, int method_nb,
 	return ret.rret;
 }
 
-inline ret_t ccall_4(void * cb, void * cs, int method_nb,
+static inline ret_t ccall_4(void * cb, void * cs, int method_nb,
 		  register_t rarg1, register_t rarg2, register_t rarg3,
                   const void * carg1, const void * carg2, const void * carg3) {
 	CCALL_TOP
