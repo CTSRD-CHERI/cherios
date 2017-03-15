@@ -3,7 +3,7 @@ BUILDDIR=	build
 default: all
 
 run: all
-	../output/sdk256/bin/qemu-system-cheri -M malta -m 2048 -nographic -kernel ${BUILDDIR}/boot/cherios.elf -drive format=raw,file=${BUILDDIR}/boot/fs.img -net nic -net user -redir tcp:12818::22
+	../output/sdk256/bin/qemu-system-cheri -M malta -m 2048 -nographic -kernel ${BUILDDIR}/boot/cherios.elf -drive format=raw,file=${BUILDDIR}/boot/fs.img
 
 all: ${BUILDDIR}/build.ninja
 	cd ${BUILDDIR} && ninja
