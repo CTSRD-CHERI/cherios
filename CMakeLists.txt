@@ -167,10 +167,13 @@ set(C_WARNING_FLAGS
     -Wwrite-strings
 
     # We are the operating system, we are allowed to use underscores.
-    # There's also nothing wrong with those dollars, or padding.
+    # There's also nothing wrong with those dollars, or padding, or not
+    # explicitly handling each and every enum when there's the default
+    # clause.
     -Wno-reserved-id-macro
     -Wno-dollar-in-identifier-extension
     -Wno-padded
+    -Wno-switch-enum
 
     -Wno-error=cast-align
     -Wno-error=cast-qual
@@ -184,7 +187,6 @@ set(C_WARNING_FLAGS
     -Wno-error=pedantic
     -Wno-error=return-type
     -Wno-error=sign-conversion
-    -Wno-error=switch-enum
     -Wno-error=unreachable-code
     -Wno-error=unreachable-code-break
     -Wno-error=unreachable-code-return
