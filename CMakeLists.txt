@@ -188,10 +188,7 @@ set(C_WARNING_FLAGS
     -Wno-error=unreachable-code
     -Wno-error=unreachable-code-break
     -Wno-error=unreachable-code-return
-    -Wno-error=unused-function
     -Wno-error=unused-macros
-    -Wno-error=unused-parameter
-    -Wno-error=unused-variable
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
