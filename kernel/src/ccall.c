@@ -120,7 +120,7 @@ void kernel_ccall(void) {
 			cflags = 2;
 			break;
 		default:
-			KERNEL_ERROR("unknown ccall selector '%x'", ccall_selector);
+			KERNEL_ERROR("unknown ccall selector '%lu'", ccall_selector);
 			return;
 	}
 	kernel_ccall_core(cflags);

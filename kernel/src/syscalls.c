@@ -156,7 +156,7 @@ void kernel_exception_syscall(void)
 			syscall_gc();
 			break;
 		default:
-			KERNEL_ERROR("unknown syscall '%d'", sysn);
+			KERNEL_ERROR("unknown syscall '%ld'", sysn);
 			kernel_freeze();
 	}
 

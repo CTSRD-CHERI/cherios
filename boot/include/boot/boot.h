@@ -39,9 +39,9 @@ extern void	__kernel_entry_point;
 #define	kernel_assert(e)	((e) ? (void)0 : __kernel_assert(__func__, \
 				__FILE__, __LINE__, #e))
 void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
-void	kernel_panic(const char *fmt, ...) __dead2;
+void	kernel_panic(const char *fmt, ...) __dead2 __printflike(1, 2);
 #define printf kernel_printf
-int	kernel_printf(const char *fmt, ...);
+int	kernel_printf(const char *fmt, ...) __printflike(1, 2);
 void	hw_reboot(void) __dead2;
 int	kernel_vprintf(const char *fmt, va_list ap);
 
@@ -53,7 +53,7 @@ void	boot_alloc_enable_system(void * ctrl);
 void *	boot_alloc(size_t s);
 void	boot_free(void * p);
 
-int	boot_printf(const char *fmt, ...);
+int	boot_printf(const char *fmt, ...) __printflike(1, 2);
 int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 

@@ -64,12 +64,12 @@ static u32   squeue_a_end = 0;
 	aqueue[replacement] = aqueue[act];
 
 void sched_create(aid_t act) {
-	KERNEL_TRACE("sched", "create %ld", act);
+	KERNEL_TRACE("sched", "create %u", act);
 	kernel_acts[act].sched_status = sched_waiting;
 }
 
 void sched_delete(aid_t act) {
-	KERNEL_TRACE("sched", "delete %ld", act);
+	KERNEL_TRACE("sched", "delete %u", act);
 	if(squeue_a[aqueue[act]] == act) {
 		QDEL(act, squeue_a, aqueue);
 	}
@@ -77,14 +77,14 @@ void sched_delete(aid_t act) {
 }
 
 void sched_d2a(aid_t act, sched_status_e status) {
-	KERNEL_TRACE("sched", "add %ld", act);
+	KERNEL_TRACE("sched", "add %u", act);
 	QADD(act, squeue_a, aqueue);
 	kernel_assert((status == sched_runnable) || (status == sched_schedulable));
 	kernel_acts[act].sched_status = status;
 }
 
 void sched_a2d(aid_t act, sched_status_e status) {
-	KERNEL_TRACE("sched", "rem %ld", act);
+	KERNEL_TRACE("sched", "rem %u", act);
 	QDEL(act, squeue_a, aqueue);
 	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
 	kernel_acts[act].sched_status = status;
@@ -122,7 +122,7 @@ void sched_reschedule(aid_t hint) {
 
 	kernel_curr_act = hint;
 	kernel_exception_framep_ptr = kernel_exception_framep + hint;
-	KERNEL_TRACE("sched", "Reschedule from task '%s-%ld' to task '%s-%ld'",
+	KERNEL_TRACE("sched", "Reschedule from task '%s-%ld' to task '%s-%u'",
 	        kernel_acts[old_kernel_curr_act].name, old_kernel_curr_act,
 	        kernel_acts[kernel_curr_act].name, kernel_curr_act);
 }
