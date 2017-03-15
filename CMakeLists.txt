@@ -192,7 +192,6 @@ set(C_WARNING_FLAGS
     -Wno-error=unused-macros
     -Wno-error=unused-parameter
     -Wno-error=unused-variable
-    -Wno-error=vla
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 

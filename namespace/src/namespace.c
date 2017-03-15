@@ -36,8 +36,8 @@ typedef  struct
 	void * act_default_id;
 } bind_t;
 
-const int bind_len = 0x80;
-bind_t bind[bind_len];
+#define	BIND_LEN 0x80
+bind_t bind[BIND_LEN];
 
 void ns_init(void) {
 	bzero(bind, sizeof(bind));
@@ -45,7 +45,7 @@ void ns_init(void) {
 
 static int validate_idx(int nb) {
 	if(nb <  0       ) { return 0; }
-	if(nb >= bind_len) { return 0; }
+	if(nb >= BIND_LEN) { return 0; }
 	return 1;
 }
 
