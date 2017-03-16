@@ -80,7 +80,6 @@ void	kernel_timer(void);
 void	kernel_puts(const char *s);
 void	kernel_panic(const char *s) __dead2;
 #ifndef __LITE__
-#define printf kernel_printf
 int	kernel_printf(const char *fmt, ...) __printflike(1, 2);
 int	kernel_vprintf(const char *fmt, va_list ap);
 void	__kernel_assert(const char *, const char *, int, const char *) __dead2;

@@ -80,7 +80,7 @@ static void syscall_act_seal_identifier(void) {
 static void syscall_puts() {
 	void * msg = kernel_exception_framep_ptr->cf_c3;
 	#ifndef __LITE__
-	printf(KGRN"%s" KREG KRST, msg);
+	kernel_printf(KGRN"%s" KREG KRST, msg);
 	#else
 	kernel_puts(msg);
 	#endif
