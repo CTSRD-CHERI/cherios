@@ -83,7 +83,7 @@ void ft(void) {
 	}
 }
 
-int main(int argc, __attribute__((unused)) char *argv[])
+int main(int argc, char *argv[] __unused)
 {
 	n = argc;
 	//printf("Test3_%d Hello world\n", n);

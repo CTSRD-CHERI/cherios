@@ -52,7 +52,7 @@ static void buf_puts(const char * str) {
 	}
 }
 
-static void buf_putc(int c, __attribute__((unused)) void *arg) {
+static void buf_putc(int c, void *arg __unused) {
 	char chr = (char)c;
 	static size_t offset;
 	static char buf[BUF_SIZE + 1];

@@ -37,7 +37,7 @@
  * driver.
  */
 void
-uart_putchar(int c, __attribute__((unused)) void *arg)
+uart_putchar(int c, void *arg __unused)
 {
 
 	uart_putc(c);
