@@ -1,6 +1,5 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -65,6 +64,7 @@ static void kernel_exception_capability(void) {
 	kernel_freeze();
 }
 
+static void kernel_exception_data(register_t excode) __dead2;
 static void kernel_exception_data(register_t excode) {
 	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s"KRST"\n",
 	       excode, cp0_badvaddr_get(),
@@ -80,6 +80,7 @@ static void kernel_exception_trap() {
 	kernel_freeze();
 }
 
+static void kernel_exception_unknown(register_t excode) __dead2;
 static void kernel_exception_unknown(register_t excode) {
 	exception_printf(KRED"Unknown exception type '%d' in  %s"KRST"\n",
 	       excode, kernel_curr_act->name);

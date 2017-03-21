@@ -109,6 +109,13 @@ memset_c(void *dst0, int c0, size_t length)
 	return (dst0);
 }
 
+void *
+memset(void *dst0, int c0, size_t length)
+{
+
+	return (memset_c(dst0, c0, length));
+}
+
 void
 bzero(void *b, size_t s)
 {

@@ -92,12 +92,11 @@ void	kernel_timer(void);
 void	kernel_puts(const char *s);
 void	kernel_panic(const char *s) __dead2;
 #ifndef __LITE__
-#define printf kernel_printf
-int	kernel_printf(const char *fmt, ...);
+int	kernel_printf(const char *fmt, ...) __printflike(1, 2);
 int	kernel_vprintf(const char *fmt, va_list ap);
 void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
-void	kernel_trace(const char *context, const char *fmt, ...);
-void 	kernel_error(const char *file, const char *func, int line, const char *fmt, ...);
+void	kernel_trace(const char *context, const char *fmt, ...) __printflike(2, 3);
+void 	kernel_error(const char *file, const char *func, int line, const char *fmt, ...) __printflike(4, 5);
 void	kernel_vtrace(const char *context, const char *fmt, va_list ap);
 #endif
 

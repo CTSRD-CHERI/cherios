@@ -49,7 +49,7 @@
 
 #
 # Capability Memcpy - copies from one capability to another.
-# __capability void *memcpy_c(__capability void *dst,
+# __capability void *memcpy(__capability void *dst,
 #                            __capability void *src,
 #                            size_t len)
 # dst: $c3
@@ -57,14 +57,14 @@
 # len: $4
 # Copies len bytes from src to dst.  Returns dst.
 		.text
-		.global memcpy_c
-		.ent memcpy_c
-memcpy_c:
-	beq      $4, $zero, memcpy_c_return  # Only bother if len != 0.  Unlikely to
+		.global memcpy
+		.ent memcpy
+memcpy:
+	beq      $4, $zero, memcpy_return  # Only bother if len != 0.  Unlikely to
 	                               # be taken, so we make it a forward branch
 	                               # to give the predictor a hint.
 	# Note: We use v0 to store the base linear address because memcpy() must
-	# return that value in v0, allowing memcpy_c() to be tail-called from
+	# return that value in v0, allowing memcpy() to be tail-called from
 	# memcpy().  This is in the delay slot, so it happens even if len == 0.
 	CGetBase $v0, $c3            # v0 = linear address of dst
 	CGetOffset $at, $c3
@@ -129,7 +129,7 @@ copy_caps:
 	dsub    $v1, $a0, $a2        # Subtract the number of bytes copied from the
 	                             # number to copy.  This should give the number
 	                             # of unaligned bytes that we still need to copy
-	beqzl   $v1, memcpy_c_return # If we have an aligned copy (which we probably
+	beqzl   $v1, memcpy_return # If we have an aligned copy (which we probably
 	                             # do) then return
 	nop
 	dadd    $v1, $a1, $v1
@@ -139,7 +139,7 @@ unaligned_end:
 	bne      $v1, $a1, unaligned_end
 	csb      $a2, $a1, -1($c3)
 
-memcpy_c_return:
+memcpy_return:
 	ret                          # Return value remains in c1
 	nop
 
@@ -150,6 +150,6 @@ slow_memcpy_loop:                # byte-by-byte copy
 	csb      $a2, $a1, -1($c3)
 	ret                          # Return value remains in c1
 	nop
-memcpy_c_end:
-.size memcpy_c, memcpy_c_end - memcpy_c
-.end memcpy_c
+memcpy_end:
+.size memcpy, memcpy_end - memcpy
+.end memcpy

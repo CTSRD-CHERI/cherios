@@ -29,6 +29,7 @@
  */
 
 #include "mips.h"
+#include "misc.h"
 #include "string.h"
 #include "stdlib.h"
 #include "sys/mman.h"
@@ -37,17 +38,16 @@
 
 static inline void *align_upwards(void *p, uintptr_t align)
 {
-    align = 1 << align;
-    uint8_t * addr = (uint8_t *)p;
-    uintptr_t offset = (uintptr_t)addr - ((uintptr_t)addr & ~(align-1));
-    if(offset > 0) {
-    addr += align - offset;
-    }
-    return (void *)addr;
+    size_t rounded;
+
+    rounded = roundup2((size_t)p, align);
+    p += (rounded - (size_t)p);
+
+    return (p);
 }
 
-static const size_t pool_size = 1024*1024;
-static char pool[pool_size];
+#define	POOL_SIZE 1024*1024
+static char pool[POOL_SIZE];
 
 static char * pool_start = NULL;
 static char * pool_end = NULL;
@@ -67,11 +67,11 @@ static void *boot_alloc_core(size_t s) {
 
 void boot_alloc_init(void) {
 	pool_start = (char *)(pool);
-	pool_end = pool + pool_size;
-	pool_start = __builtin_memcap_bounds_set(pool_start, pool_size);
+	pool_end = pool + POOL_SIZE;
+	pool_start = __builtin_memcap_bounds_set(pool_start, POOL_SIZE);
 	pool_start = __builtin_memcap_perms_and(pool_start, 0b11111101);
 	pool_next = pool_start;
-	bzero(pool, pool_size);
+	bzero(pool, POOL_SIZE);
 	system_alloc = 0;
 }
 

@@ -32,7 +32,8 @@
 #include "activations.h"
 #include "klib.h"
 
-#ifndef __LITE__
+//#ifndef __LITE__
+#ifdef notyet
 
 /*
  * Prints a nice regump

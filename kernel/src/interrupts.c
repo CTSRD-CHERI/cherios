@@ -76,7 +76,7 @@ static void kernel_interrupt_others(register_t pending) {
 void kernel_interrupt(void) {
 	register_t ipending = cp0_cause_ipending_get();
 	register_t toprocess = ipending & get_others_interrupts_mask();
-	KERNEL_TRACE("interrupt", "%x %x", ipending, toprocess);
+	KERNEL_TRACE("interrupt", "%lx %lx", ipending, toprocess);
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
 		kernel_timer();
 	}

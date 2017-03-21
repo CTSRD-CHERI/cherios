@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-char toupper(char c) {
+int toupper(int c) {
 	if(c>='a' && c<='z') {
 		c += 'A'-'a';
 	}

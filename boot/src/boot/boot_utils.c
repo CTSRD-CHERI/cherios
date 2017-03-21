@@ -156,7 +156,7 @@ capability load_kernel(const char * file) {
 	}
 
 	if(&__kernel_entry_point != prgmp) {
-		boot_printf(KRED"Bad kernel entry point: %lx"KRST"\n", prgmp);
+		boot_printf(KRED"Bad kernel entry point: %p"KRST"\n", prgmp);
 		goto err;
 	}
 

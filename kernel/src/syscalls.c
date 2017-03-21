@@ -1,6 +1,5 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -83,12 +82,13 @@ int kernel_act_terminate(void) {
 
 void kernel_syscall_puts(char *msg) {
 	#ifndef __LITE__
-	printf(KGRN"%s" KREG KRST, msg);
+	kernel_printf(KGRN"%s" KREG KRST, msg);
 	#else
 	kernel_puts(msg);
 	#endif
 }
 
+void kernel_syscall_panic(void) __dead2
 void kernel_syscall_panic(void) { //fixme: temporary
 	regdump(-1);
 	kernel_freeze();

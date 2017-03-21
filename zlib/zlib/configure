@@ -98,7 +98,7 @@ rm -f configure.log
 shared=0
 CROSS_PREFIX="cheri-unknown-freebsd-"
 CC="cheri-unknown-freebsd-clang"
-CFLAGS="-mcpu=mips4 -mabi=sandbox -cheri-linker -integrated-as"
+CFLAGS="-mabi=sandbox -cheri-linker -integrated-as"
 CFLAGS="$CFLAGS -nostdinc -O2 -G0 -mxgot -Werror -std=c11"
 CFLAGS="$CFLAGS -I../../include"
 

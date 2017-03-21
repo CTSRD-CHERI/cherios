@@ -54,7 +54,7 @@ static inline register_t TMOD(register_t count) {
  */
 void kernel_timer(void)
 {
-	KERNEL_TRACE(__func__, "in %x", cp0_count_get());
+	KERNEL_TRACE(__func__, "in %lu", cp0_count_get());
 
 	/*
 	 * Forced context switch of user process.
