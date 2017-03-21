@@ -103,6 +103,7 @@ void act_init(context_t boot_context, context_t own_context, struct boot_hack_t*
 
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
 							status_e create_in_status, act_control_t *parent, size_t base) {
+	(void)parent;
 	KERNEL_TRACE("act", "Registering activation %s", name);
 	if(kernel_next_act >= MAX_ACTIVATIONS) {
 		kernel_panic("no act slot");

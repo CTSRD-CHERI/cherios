@@ -43,6 +43,7 @@ register_t badinstr_glob = 0;
 
 DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
 
+static void kernel_exception_capability(void) __dead2;
 static void kernel_exception_capability(void) {
 	cap_exception_t exception = parse_cause(cheri_getcause());
 
@@ -66,14 +67,15 @@ static void kernel_exception_capability(void) {
 
 static void kernel_exception_data(register_t excode) __dead2;
 static void kernel_exception_data(register_t excode) {
-	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s"KRST"\n",
+	exception_printf(KRED"Data abort type %ld, BadVAddr:0x%lx in %s"KRST"\n",
 	       excode, cp0_badvaddr_get(),
 	       kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();
 }
 
-static void kernel_exception_trap() {
+static void kernel_exception_trap(void) __dead2;
+static void kernel_exception_trap(void) {
 	exception_printf(KRED"trap in %s"KRST"\n"
 					 , kernel_curr_act->name);
 	regdump(-1);
@@ -82,7 +84,7 @@ static void kernel_exception_trap() {
 
 static void kernel_exception_unknown(register_t excode) __dead2;
 static void kernel_exception_unknown(register_t excode) {
-	exception_printf(KRED"Unknown exception type '%d' in  %s"KRST"\n",
+	exception_printf(KRED"Unknown exception type '%ld' in  %s"KRST"\n",
 	       excode, kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();

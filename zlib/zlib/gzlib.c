@@ -352,7 +352,7 @@ int ZEXPORT gzrewind(file)
         return -1;
 
     /* back up and start over */
-    if (LSEEK(state->fd, state->start, SEEK_SET) == -1)
+    if (LSEEK(state->fd, state->start, SEEK_SET) == (unsigned long)-1)
         return -1;
     gz_reset(state);
     return 0;

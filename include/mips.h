@@ -48,7 +48,7 @@ typedef unsigned long	vaddr_t;		/* Virtual address */
 typedef long		ssize_t;
 typedef	unsigned long	size_t;
 
-typedef long		off_t;
+typedef unsigned long		off_t;
 
 /*
  * Useful integer type names that we can't pick up from the compile-time
@@ -269,7 +269,7 @@ static inline uint16_t
 byteswap16(uint16_t v)
 {
 
-	return ((v & 0xff00) >> 8 | (v & 0xff) << 8);
+	return (uint16_t)((v & 0xff00) >> 8 | (v & 0xff) << 8);
 }
 
 static inline uint32_t

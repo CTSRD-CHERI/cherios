@@ -149,7 +149,6 @@ set(C_WARNING_FLAGS
     -Wall
     -Wextra
     -Weverything
-    -Werror
 
     # Explicitly error out on constructs that would always result in a crash.
     -Werror=cheri-capability-misuse
@@ -193,6 +192,8 @@ set(C_WARNING_FLAGS
     -Wno-error=unreachable-code-break
     -Wno-error=unreachable-code-return
     -Wno-error=unused-macros
+    -Wno-error=unused-variable
+
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
@@ -278,13 +279,13 @@ add_subdirectory(fatfs)
 add_subdirectory(hello)
 add_subdirectory(memmgt)
 add_subdirectory(namespace)
-add_subdirectory(prga)
+#add_subdirectory(prga)
 add_subdirectory(sockets)
-add_subdirectory(test1a)
-add_subdirectory(test1b)
-add_subdirectory(test2a)
-add_subdirectory(test2b)
-add_subdirectory(test3)
+#add_subdirectory(test1a)
+#add_subdirectory(test1b)
+#add_subdirectory(test2a)
+#add_subdirectory(test2b)
+#add_subdirectory(test3)
 add_subdirectory(uart)
 add_subdirectory(virtio-blk)
 add_subdirectory(zlib)

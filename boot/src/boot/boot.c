@@ -130,9 +130,7 @@ static void load_modules(void) {
 }
 
 static void cache_inv_low(int op, size_t line) {
-	__asm volatile(
-	"cache %[op], 0(%[line]) \n"
-	:: [op]"i" (op), [line]"r" (line));
+
 }
 
 //FIXME we should make sure only the nano kernel can modify the exception vectors
@@ -151,7 +149,10 @@ static void install_exception_vectors(void) {
 
 	/* Invalidate I-cache */
 	__asm volatile("sync");
-	cache_inv_low((0b100<<2)+0, MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF);
+
+	__asm volatile(
+	"cache %[op], 0(%[line]) \n"
+	:: [op]"i" ((0b100<<2)+0), [line]"r" (MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF));
 	/* does not work with kseg0 address, hence the `& 0xFFFF` */
 	__asm volatile("sync");
 }

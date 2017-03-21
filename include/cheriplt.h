@@ -56,7 +56,7 @@
                         __attribute__((cheri_method_class(PLT_UNIQUE_OBJECT(name))))            \
                         ret name sig;
 
-    #define MAKE_DEFAULT(name, ...) struct cheri_object PLT_UNIQUE_OBJECT(name);
+    #define MAKE_DEFAULT(name, ...) static struct cheri_object PLT_UNIQUE_OBJECT(name);
 
     #define INIT_OBJ(name, ret, sig, data)    \
         PLT_UNIQUE_OBJECT(name).code = plt_if -> name;  \

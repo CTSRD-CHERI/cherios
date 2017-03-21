@@ -28,6 +28,8 @@
  * SUCH DAMAGE.
  */
 
+#include "ctype.h"
+
 int toupper(int c) {
 	if(c>='a' && c<='z') {
 		c += 'A'-'a';
@@ -38,7 +40,7 @@ int toupper(int c) {
 char * strtoupper(char * s) {
 	char* p = s;
 	while (*p != '\0') {
-		*p = toupper(*p);
+		*p = (char)toupper(*p);
 		p++;
 	}
 

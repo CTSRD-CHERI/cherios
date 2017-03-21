@@ -36,11 +36,11 @@
  * Provide a kernel-compatible version of printf, which invokes the UART
  * driver.
  */
-void
+static void
 uart_putchar(int c, __attribute__((unused)) void *arg)
 {
 
-	uart_putc(c);
+	uart_putc((char)c);
 }
 
 int

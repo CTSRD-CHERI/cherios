@@ -88,7 +88,7 @@ void kernel_syscall_puts(char *msg) {
 	#endif
 }
 
-void kernel_syscall_panic(void) __dead2
+void kernel_syscall_panic(void) __dead2;
 void kernel_syscall_panic(void) { //fixme: temporary
 	regdump(-1);
 	kernel_freeze();

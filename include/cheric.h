@@ -50,8 +50,8 @@
 /*
  * Canonical C-language representation of a capability.
  */
-typedef __capability void * capability;
-typedef __capability const void * const_capability;
+typedef void __capability *  capability;
+typedef const void * __capability const_capability;
 
 /*
  * Programmer-friendly macros for CHERI-aware C code -- requires use of

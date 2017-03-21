@@ -91,21 +91,21 @@ nano_kernel_init:
 	cgetdefault	$kr1c                                   # kr1c will hold the data global capability
 
     dla         $k0, locals_start
-    li          $k1, (locals_end - locals_start)
+    dla         $k1, locals_end - locals_start
     csetoffset  $kdc, $kr1c, $k0
     csetbounds  $kdc, $kdc, $k1                         # kdc will hold a capability to our locals
 
-    li          $k0, CONTEXT_SIZE
-    li          $k1, (N_CONTEXTS * CONTEXT_SIZE)
+    dli          $k0, CONTEXT_SIZE
+    dli          $k1, (N_CONTEXTS * CONTEXT_SIZE)
     csetoffset  $kr2c, $kdc, $k0
     csetbounds  $kr2c, $kr2c, $k1                       # Create capability to context_table
 
     csetbounds  $c3, $kr2c, $k0
-    li          $k0, CHERI_FRAME_SIZE
+    dli          $k0, CHERI_FRAME_SIZE
     csd         $zero, $k0, 0($c3)
     csc         $c3, $zero, current_context($kdc)       # Create first context and make it the current context
 
-    li          $k0, CONTEXT_TYPE
+    dli          $k0, CONTEXT_TYPE
     csetoffset  $kr2c, $kr1c, $k0
     csc         $kr2c, $zero, sealing_cap($kdc)         # Create and store sealing cap for contexts
 
@@ -122,7 +122,7 @@ nano_kernel_init:
 
     # NOTE: context_table does not need initialising. This is done as we allocate new contexts.
 
-    li          $k0, NANO_KERNEL_TYPE
+    dli          $k0, NANO_KERNEL_TYPE
     csetoffset  $kr2c, $kr1c, $k0                       # kr2c holds the sealing capability for our locals
 
 .macro init_table name
@@ -142,9 +142,9 @@ nano_kernel_init:
     init_table unlock_context
 
     # Pass a read-only capability to the cap table
-    li          $k0, (cap_table_end - cap_table_start)
+    dla          $k0, cap_table_end - cap_table_start
     csetbounds  $c1, $kdc, $k0
-    li          $k0, (Perm_Load | Perm_Load_Capability)
+    dli          $k0, (Perm_Load | Perm_Load_Capability)
     candperm   $c1, $c1, $k0
 
 
@@ -154,7 +154,7 @@ nano_kernel_init:
     # TODO: and the tlb and our own code/data and certain sealing types
     # TODO: and writing exception vectors
 
-    li          $k0, (Perm_All & ~(Perm_Access_System_Registers))
+    dli          $k0, (Perm_All & ~(Perm_Access_System_Registers))
     candperm   $kr1c, $kr2c, $k0
     candperm   $c17,  $c17,  $k0
     cclearlo    (1 << 13)                               # Used $c13 as a tmp.
@@ -183,14 +183,14 @@ context_switch:
     ori     $k0, 2                                      # set SR(EXL)
     mtc0    $k0, $12
 
-    li      $k0, 0
+    dli      $k0, 0
     # FIXME check $c3/$c4 so this cant throw an exception.
 
 context_switch_local_entry:                             # void context_switch_local_entry(reg_t cause)
     clc     $kr2c, $zero, current_context($kdc)
 
     cgetdefault $c13
-    li      $v0, 0
+    dli      $v0, 0
     csetbounds  $c12, $c12, $zero                       # We set c12 as NULL or we will leak
     save_reg_frame_idc $kr2c, $t0, $c13, $c17, $c18     # Save state TODO mock up a creturn rather than return
 
@@ -260,7 +260,7 @@ create_context:
     clc         $c13, $zero, sealing_cap($idc)              # Load sealing capability
     cmove       $c4,  $c3
     move        $t1,  $a0                                   # TODO remove this when possible
-    li          $a0, CONTEXT_SIZE                           # TODO atomic increment
+    dli          $a0, CONTEXT_SIZE                           # TODO atomic increment
     clc         $c3, $zero, next_context($idc)
     cincoffset  $c14, $c3, $a0
     csc         $c14, $zero, next_context($idc)             # increment next context
@@ -268,7 +268,7 @@ create_context:
 
 
     csetbounds  $c3, $c3, $a0
-    li          $t0, CHERI_FRAME_SIZE
+    dli          $t0, CHERI_FRAME_SIZE
     csd         $zero, $t0, 0($c3)                          # set state to allocated for new context
     # FIXME we dont need all of memcpy_c. We should either remove the need for it (and use a coventional fork)
     # FIXME or inline and remove all the fluff we know we dont need
@@ -306,8 +306,8 @@ destroy_context: #TODO ALL
     cunseal     $c3, $c3, $c13                              # unseal context we are destroying
     clc         $c14, $zero, current_context($idc)          # load current context
     ceq         $k0, $c3, $c14                              # k0 = 1 if we are deleting ourselves
-    li          $k1, 1
-    li          $t0, CHERI_FRAME_SIZE
+    dli          $k1, 1
+    dli          $t0, CHERI_FRAME_SIZE
     beqz        $k0, destroy_context_end
     csd         $k1, $t0, 0($c3)                            # set state to dead (in delay slot)
 
@@ -371,7 +371,7 @@ critical_section_exit:
     dmfc0      $k0, $12
     ori        $k0, 3                                       # set SR(EXL) and SR(IE)
     mtc0       $k0, $12
-    li         $k0, 1
+    dli         $k0, 1
     j          context_switch_local_entry                   # calling context switch with k0 = 1 will
                                                             # will switch to the exception context
 

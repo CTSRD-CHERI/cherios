@@ -122,7 +122,7 @@ typedef  struct
 	Elf64_Xword	p_align;	/*  Alignment  of  segment  */
 }  Elf64_Phdr;
 
-int elf_check_supported(Elf64_Ehdr *hdr) {
+static int elf_check_supported(Elf64_Ehdr *hdr) {
 	if (hdr->e_ident[0] != 0x7f ||
 	    hdr->e_ident[1] != 'E' ||
 	    hdr->e_ident[2] != 'L' ||
