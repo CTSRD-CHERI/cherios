@@ -129,7 +129,55 @@ static void load_modules(void) {
 	}
 }
 
-int cherios_main(void) {
+static void cache_inv_low(int op, size_t line) {
+	__asm volatile(
+	"cache %[op], 0(%[line]) \n"
+	:: [op]"i" (op), [line]"r" (line));
+}
+
+//FIXME we should make sure only the nano kernel can modify the exception vectors
+static void install_exception_vectors(void) {
+	/* Copy exception trampoline to exception vector */
+	char * all_mem = cheri_getdefault() ;
+	void *mips_bev0_exception_vector_ptr =
+			(void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
+	memcpy(mips_bev0_exception_vector_ptr, &kernel_exception_trampoline,
+		   (char *)&kernel_exception_trampoline_end - (char *)&kernel_exception_trampoline);
+
+	void *mips_bev0_ccall_vector_ptr =
+			(void *)(all_mem + MIPS_BEV0_CCALL_VECTOR);
+	memcpy(mips_bev0_ccall_vector_ptr, &kernel_ccall_trampoline,
+		   (char *)&kernel_ccall_trampoline_end - (char *)&kernel_ccall_trampoline);
+
+	/* Invalidate I-cache */
+	__asm volatile("sync");
+	cache_inv_low((0b100<<2)+0, MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF);
+	/* does not work with kseg0 address, hence the `& 0xFFFF` */
+	__asm volatile("sync");
+}
+
+// FIXME remove this when we seperate boot and init
+capability create_context_hack(reg_frame_t* frame, capability table, capability data) {
+	capability res;
+
+	//This actually clobbers a whole lot more, but it clobbers the same things as this function would
+	//As long as the function is not inlined this is fine.
+	__asm__ __volatile__ (
+			"clc	$c1, $zero, 0(%[table])\n"
+			"cmove	$c2, %[data]\n"
+			"cmove  $c3, %[frame]\n"
+			"li		$a0, 1\n"
+			"ccall	$c1, $c2\n"
+			"cmove	%[res], $c3\n"
+	: [res]"=C"(res)
+	: [data]"C"(data), [table]"C"(table), [frame]"C"(frame)
+	: "$c3", "$c1", "$c2"
+	);
+
+	return res;
+}
+
+int cherios_main(capability own_context, capability table, capability data) {
 	/* Init hardware */
 	hw_init();
 
@@ -146,29 +194,32 @@ int cherios_main(void) {
 
 	/* Load and init kernel */
 	boot_printf("D\n");
-	load_kernel("kernel.elf");
-	install_exception_vector();
+
+	install_exception_vectors();
+
+	capability init_func = load_kernel("kernel.elf");
+
+	reg_frame_t k_frame;
+	// FIXME remove this when we have seperated init and boot
+	// FIXME activation to do the rest
+	struct boot_hack_t hack;
+
+	k_frame.cf_c0 = cheri_getdefault();
+	k_frame.cf_pcc = init_func; //FIXME needs to be executable
+	k_frame.cf_c4 = own_context;
+	k_frame.cf_c5 = table;
+	k_frame.cf_c6 = data;
+	k_frame.cf_c7 = (capability)&hack;
+
+	create_context_hack(&k_frame, table, data);
+	// This catch 22 only exists here, and can be fixed by seperating boot and init
+
+
 	boot_printf("D.2\n");
 
 	/* If boot wants to be an activation (really it should create an init activation) it will have to call object_init */
-	kernel_if_t* kernel_if_c;
-	act_control_kt self_ctrl;
-	queue_t* queue;
 
-	__asm__ __volatile__ (
-		"li    $v0, 0        \n"
-		"syscall             \n"
-		"cmove %[kernel_if], $c3\n"
-		"cmove %[self_ctrl], $c4\n"
-		"cmove %[queue], $c5\n"
-		:[kernel_if]"=C"(kernel_if_c), [self_ctrl]"=C"(self_ctrl), [queue]"=C"(queue)
-		:
-		: "v0", "$c3", "$c4", "$c5");
-
-	kernel_assert(kernel_if_c != NULL);
-	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
-
-	object_init(self_ctrl, NULL, queue);
+	object_init(hack.self_ctrl, NULL, hack.queue, hack.kernel_if_c);
 
 	/* Interrupts are ON from here */
 	boot_printf("E\n");

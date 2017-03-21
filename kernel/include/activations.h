@@ -41,7 +41,7 @@
 #include "queue.h"
 #include "types.h"
 #include "stddef.h"
-
+#include "nanokernel.h"
 typedef u32 aid_t;
 
 
@@ -70,7 +70,8 @@ typedef struct
 	int message_recieve_flag;
 	/* Scheduling related */
 	sched_status_e sched_status;	/* Current status */
-	reg_frame_t saved_registers;	/* Space to put saved registers for restore */
+
+	context_t context;	/* Space to put saved context for restore */
 
 	/* CCall related */
 	struct sync_state {
@@ -91,9 +92,6 @@ _Static_assert(offsetof(act_t, user_kernel_stack) == 0, "Kernel ccall trampoline
 
 /* Control references are just references with a different type */
 typedef act_t act_control_t;
-
-/* This pointer is used by the exception handler to save restore state */
-extern reg_frame_t *	kernel_exception_framep_ptr;
 
 //FIXME scrap these, the kernel should not allocate memory.
 /* global array of all activations */

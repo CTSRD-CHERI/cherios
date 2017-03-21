@@ -29,8 +29,6 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
-#include <critical.h>
 #include "sys/types.h"
 #include "activations.h"
 #include "klib.h"
@@ -38,15 +36,11 @@
 #include "namespace.h"
 #include "msg.h"
 #include "ccall_trampoline.h"
+#include "nanokernel.h"
 
 /*
  * Routines to handle activations
  */
-
-/* We only create activations for now, no delete */
-struct reg_frame *		kernel_exception_framep_ptr;
-/* This save frame was used to save boots context during bootload. We move it ASAP and use kernel_exception_framep_ptr */
-extern struct reg_frame kernel_init_save_frame;
 
 act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
 aid_t				kernel_next_act;
@@ -59,53 +53,8 @@ static queue_default_t boot_queue, kernel_queue;
 static kernel_if_t internel_if;
 static act_t* ns_ref = NULL;
 
-kernel_if_t* get_if() {
+static kernel_if_t* get_if() {
 	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
-}
-
-void act_init(void) {
-	KERNEL_TRACE("init", "activation init");
-	/*
-	 * create kernel activation
-	 * used to have a 'free' reg frame.
-	 * aid no longer exists, we simply don't add it to sched by having a creation state of terminated
-	 */
-
-	//TODO does not belong here
-	/* The message enqueue code capability */
-	kernel_setup_trampoline();
-
-	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
-	internel_if.message_reply = kernel_seal(act_send_return_get_trampoline(), act_sync_ref_type);
-	setup_syscall_interface(&internel_if);
-
-	kernel_next_act = 0;
-
-	act_t * kernel_act = &kernel_acts[0];
-
-	/* We are currently inside the kernel act and it is never restored. So we can just zero its saved context */
-	bzero(&kernel_act->saved_registers, sizeof(struct reg_frame));
-	act_register(&kernel_act->saved_registers, &kernel_queue.queue, "kernel", 0, status_terminated, NULL);
-
-	/* create the boot activation. This is NOT the activation that called this function.*/
-	act_t* boot_act = &kernel_acts[namespace_num_boot];
-
-	/* As boot was created before the kernel, it does not have the normal interface capabilities. As currently it
-	 * users libuser it will need a few capabilities to bootstrap object init */
-	boot_act->saved_registers.cf_c4 =
-			(capability)act_register(&kernel_init_save_frame, &boot_queue.queue, "boot", 0, status_alive, NULL);
-	boot_act->saved_registers.cf_c3 = (capability)get_if();
-	boot_act->saved_registers.cf_c5 = (capability)boot_act->msg_queue;
-
-	//boot_act->image_base = 0xffffffff80000000 + 0x100000;
-	sched_schedule(boot_act);
-}
-
-void kernel_skip_instr(act_t* act) {
-	act->saved_registers.mf_pc += 4; /* assumes no branch delay slot */
-	void * pcc = (void *) act->saved_registers.cf_pcc;
-	pcc = __builtin_memcap_offset_increment(pcc, 4);
-	act->saved_registers.cf_pcc = pcc;
 }
 
 static act_t * act_create_sealed_ref(act_t * act) {
@@ -116,19 +65,52 @@ static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
 }
 
-act_control_t *act_register(const reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
-							status_e create_in_status, act_control_t *parent) {
+void act_init(context_t boot_context, context_t own_context, struct boot_hack_t* hack) {
+	KERNEL_TRACE("init", "activation init");
 
+
+	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
+	internel_if.message_reply = kernel_seal(act_send_return_get_trampoline(), act_sync_ref_type);
+	setup_syscall_interface(&internel_if);
+
+	kernel_next_act = 0;
+
+	// This is a dummy. We have already created these contexts
+	reg_frame_t frame;
+	bzero(&frame, sizeof(struct reg_frame));
+
+	// Register these first two contexts
+	act_register(&frame, &kernel_queue.queue, "kernel", 0, status_terminated, NULL, 0);
+	bzero(&frame, sizeof(struct reg_frame));
+	act_register(&frame, &boot_queue.queue, "boot", 0, status_alive, NULL, 0);
+
+	act_t * kernel_act = &kernel_acts[0];
+	act_t * boot_act = &kernel_acts[namespace_num_boot];
+
+	/* The contexts already exist and we set them here */
+	kernel_act->context = own_context;
+	boot_act->context = boot_context;
+
+	/* While boot is still a user program, we need some way to pass these values. It was created too early for them to
+	 * exist */
+	hack->kernel_if_c = get_if();
+	hack->queue = boot_act->msg_queue;
+	hack->self_ctrl = (act_control_kt)act_create_sealed_ctrl_ref(boot_act);
+
+	/* The boot activation should be the current activation */
+	sched_schedule(boot_act);
+}
+
+act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+							status_e create_in_status, act_control_t *parent, size_t base) {
 	KERNEL_TRACE("act", "Registering activation %s", name);
 	if(kernel_next_act >= MAX_ACTIVATIONS) {
 		kernel_panic("no act slot");
 	}
 
-
 	act_t * act = kernel_acts + kernel_next_act;
 
-	// FIXME this should be pcc base, but I have to check.
-	act->image_base = cheri_getbase(frame->cf_c0);
+	act->image_base = base;
 
 	//TODO bit of a hack. the kernel needs to know what namespace service to use
 	if(kernel_next_act == namespace_num_namespace) {
@@ -136,7 +118,7 @@ act_control_t *act_register(const reg_frame_t *frame, queue_t *queue, const char
 		ns_ref = act_create_sealed_ref(act);
 	}
 
-	#ifndef __LITE__
+#ifndef __LITE__
 	/* set name */
 	kernel_assert(ACT_NAME_MAX_LEN > 0);
 	int name_len = 0;
@@ -148,24 +130,23 @@ act_control_t *act_register(const reg_frame_t *frame, queue_t *queue, const char
 		act->name[i] = c; /* todo: sanitize the name if we do not trust it */
 	}
 	act->name[name_len] = '\0';
-	#endif
+#endif
 
 	/* set status */
 	act->status = create_in_status;
 
 	/* set register frame */
-	memcpy(&(act->saved_registers), frame, sizeof(struct reg_frame));
 	/* Setup frame to have its own ctrl and a0 */
 	//FIXME this convention needs work, it was copied from what was expected by init.S in libuser.
 	//FIXME we might as well have every reference needed, and not then have the user get them from the ctrl.
 	//FIXME I also feel that getting the namespace should be a syscall?
 	/* set namespace */
-	act->saved_registers.cf_c23	= ns_ref;
-	act->saved_registers.cf_c24	= (capability)get_if();
-	act->saved_registers.cf_c25	= queue;
+	frame->cf_c23	= (capability)ns_ref;
+	frame->cf_c24	= (capability)get_if();
+	frame->cf_c25	= (capability)queue;
+	frame->mf_a0 = a0;
+	frame->cf_c5 = (capability)act_create_sealed_ctrl_ref(act);
 
-	act->saved_registers.mf_a0 = a0;
-	act->saved_registers.cf_c5 = act_create_sealed_ctrl_ref(act);
 	/* set queue */
 	msg_queue_init(act, queue);
 
@@ -180,6 +161,13 @@ act_control_t *act_register(const reg_frame_t *frame, queue_t *queue, const char
 	kernel_next_act++;
 	KERNEL_TRACE("register", "image base of %s is %lx", act->name, act->image_base);
 	KERNEL_TRACE("act", "%s OK! ", __func__);
+	return act;
+}
+
+act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+							status_e create_in_status, act_control_t *parent) {
+	act_t* act = act_register(frame, queue, name, a0, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc));
+	act->context = create_context(frame, 0);
 	return act_create_sealed_ctrl_ref(act);
 }
 

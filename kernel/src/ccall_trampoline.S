@@ -28,8 +28,8 @@
 # SUCH DAMAGE.
 #
 
+//FIXME set this properly
 .set MIPS_SZCAP, _MIPS_SZCAP
-
 .include "asm.S"
 
 #define __ASSEMBLY__ 1

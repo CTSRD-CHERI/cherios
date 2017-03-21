@@ -141,7 +141,7 @@ void * load_module(module_t type, const char * file, int arg) {
 	return ctrl;
 }
 
-void load_kernel(const char * file) {
+capability load_kernel(const char * file) {
 	size_t maxaddr = 0;
 	char *prgmp = elf_loader(file, 1, &maxaddr);
 	if(!prgmp) {
@@ -163,19 +163,9 @@ void load_kernel(const char * file) {
 	caches_invalidate(&__kernel_load_virtaddr,
 	                  maxaddr - (size_t)(&__kernel_load_virtaddr));
 
-	return;
+	return &__kernel_entry_point;
 	err:
 	hw_reboot();
-}
-
-void install_exception_vector(void) {
-	/* Copy exception trampoline to exception vector */
-	char * all_mem = cheri_getdefault() ;
-	void *mips_bev0_exception_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
-	memcpy(mips_bev0_exception_vector_ptr, &kernel_trampoline,
-	    (char *)&kernel_trampoline_end - (char *)&kernel_trampoline);
-	cp0_status_bev_set(0);
 }
 
 void hw_init(void) {

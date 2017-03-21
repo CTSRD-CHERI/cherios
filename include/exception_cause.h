@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,5 +28,45 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
-#include "object.h"
+#ifndef CHERIOS_EXCEPTION_CAUSE_H
+#define CHERIOS_EXCEPTION_CAUSE_H
+
+#include "string_enums.h"
+
+#define CAP_CAUSE_LIST(ITEM) \
+	ITEM(None) \
+	ITEM(Length_Violation) \
+	ITEM(Tag_Violation) \
+	ITEM(Seal_Violation) \
+	ITEM(Type_Violation) \
+	ITEM(Call_Trap) \
+	ITEM(Return_Trap) \
+	ITEM(Underflow_of_trusted_system_stack) \
+	ITEM(User_defined_Permission_Violation) \
+	ITEM(TLB_prohibits_store_capability) \
+	ITEM(Requested_bounds_cannot_be_represented_exactly) \
+	ITEM(reserved1) \
+	ITEM(reserved2) \
+	ITEM(reserved3) \
+	ITEM(reserved4) \
+	ITEM(reserved5) \
+	ITEM(Global_Violation) \
+	ITEM(Permit_Execute_Violation) \
+	ITEM(Permit_Load_Violation) \
+	ITEM(Permit_Store_Violation) \
+	ITEM(Permit_Load_Capability_Violation) \
+	ITEM(Permit_Store_Capability_Violation) \
+	ITEM(Permit_Store_Local_Capability_Violation) \
+	ITEM(Permit_Seal_Violation) \
+	ITEM(Access_System_Registers_Violation) \
+	ITEM(reserved6) \
+	ITEM(reserved7) \
+	ITEM(reserved8) \
+	ITEM(reserved9) \
+	ITEM(reserved10) \
+	ITEM(reserved11) \
+	ITEM(reserved12)
+
+DECLARE_ENUM(cap_cause_exception_t, CAP_CAUSE_LIST)
+
+#endif //CHERIOS_EXCEPTION_CAUSE_H

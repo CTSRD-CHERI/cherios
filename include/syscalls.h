@@ -32,24 +32,30 @@
 #define CHERIOS_SYSCALLS_H
 
 #include "string_enums.h"
+#include "cheriplt.h"
 
-#define SYS_CALL_LIST(ITEM)                                                                                     \
-        ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2,                            \
-                                        const_capability c3, const_capability c4, const_capability c5,          \
-                                        register_t selector, register_t v0))                                    \
-        ITEM(message_reply, int, (capability c3, capability sync_token, register_t v0, register_t v1))          \
-        ITEM(sleep, void, (int time))                                                                           \
-        ITEM(wait, void, (void))                                                                                \
-        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, register_t a0))  \
-        ITEM(syscall_act_ctrl_get_ref, act_kt, (void))                                                          \
-        ITEM(syscall_act_ctrl_get_status, status_e, (void))                                                     \
-        ITEM(syscall_act_revoke, int, (void))                                                                   \
-        ITEM(syscall_act_terminate, int, (void))                                                                \
-        ITEM(syscall_puts, void, (const char* msg))                                                             \
-        ITEM(syscall_panic, void, (void))                                                                       \
-        ITEM(syscall_interrupt_register, int, (int number))                                                     \
-        ITEM(syscall_interrupt_enable, int, (int number))                                                       \
-        ITEM(syscall_gc,int, (capability p, capability pool))                                                   \
+// FIXME as my understanding of how to use ccall has evolved I realise this has been done incorrectly
+// FIXME the data capability for a ccall should contain c0/a stack/a capability to unseal any arguments
+// FIXME therefore something like message send should have the target activation as an EXPLICIT argument
+// FIXME this will solve many issues. It has been done properly for the nano kernel
+
+#define SYS_CALL_LIST(ITEM, ...)                                                                                   \
+        ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2,                               \
+                                        const_capability c3, const_capability c4, const_capability c5,             \
+                                        register_t selector, register_t v0), __VA_ARGS__)                                    \
+        ITEM(message_reply, int, (capability c3, capability sync_token, register_t v0, register_t v1), __VA_ARGS__)          \
+        ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \
+        ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
+        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, register_t a0), __VA_ARGS__)  \
+        ITEM(syscall_act_ctrl_get_ref, act_kt, (void), __VA_ARGS__)                                                          \
+        ITEM(syscall_act_ctrl_get_status, status_e, (void), __VA_ARGS__)                                                     \
+        ITEM(syscall_act_revoke, int, (void), __VA_ARGS__)                                                                   \
+        ITEM(syscall_act_terminate, int, (void), __VA_ARGS__)                                                                \
+        ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)                                                             \
+        ITEM(syscall_panic, void, (void), __VA_ARGS__)                                                                       \
+        ITEM(syscall_interrupt_register, int, (int number), __VA_ARGS__)                                                     \
+        ITEM(syscall_interrupt_enable, int, (int number), __VA_ARGS__)                                                       \
+        ITEM(syscall_gc,int, (capability p, capability pool), __VA_ARGS__)                                                   \
 
 #define CCALL_SELECTOR_LIST(ITEM)   \
         ITEM(SEND,1)                \
@@ -60,50 +66,14 @@ DECLARE_ENUM(ccall_selector_t, CCALL_SELECTOR_LIST)
 
 #ifndef __ASSEMBLY__
 
-        #include "cheric.h"
-        #include "ccall.h"
-        #include "types.h"
-        #include "queue.h"
+#include "types.h"
+#include "queue.h"
 
-        //TODO once we have proper linker support, we won't have to manually specify the interface like this
-
-        #define PLT_GOT_ENTRY(name, ret, sig) capability name;
-
-        typedef struct
-        {
-            SYS_CALL_LIST(PLT_GOT_ENTRY)
-        } kernel_if_t;
-
-        struct cheri_object default_obj;
-
-        #define CCALL_WRAP(name, ret, sig)                                              \
-                __attribute__((cheri_ccall))                                            \
-                __attribute__((cheri_method_suffix("_inst")))                           \
-                __attribute__((cheri_method_class(name ## _ ## default_obj)))           \
-                ret name sig;
-
-        #define MAKE_DEFAULT(name, ret, sig) struct cheri_object name ## _ ## default_obj;
-
-        SYS_CALL_LIST(MAKE_DEFAULT)
-
-        SYS_CALL_LIST(CCALL_WRAP)
-
-        #undef CCALL_WRAP
-        #undef MAKE_DEFAULT
-        #undef PLT_GOT_ENTRY
-
-
-#define SYSCALL_OBJ(call, obj, ...) call ## _inst (CONTEXT(kernel_if.call, obj),  __VA_ARGS__ )
-#define SYSCALL_OBJ_void(call, obj) call ## _inst (CONTEXT(kernel_if.call, obj))
-
-#else // __ASSEMBLY__
-
-        .set enum_ctr, 0
-        #define SET_NAME(NAME, ret, sig) .set NAME ## _offset, (enum_ctr * CAP_SIZE); .set enum_ctr, enum_ctr + 1;
-        SYS_CALL_LIST(SET_NAME)
+        #define SYSCALL_OBJ(call, obj, ...) call ## _inst (CONTEXT(kernel_if.call, obj),  __VA_ARGS__ )
+        #define SYSCALL_OBJ_void(call, obj) call ## _inst (CONTEXT(kernel_if.call, obj))
 
 #endif
 
-
+PLT(kernel_if_t, SYS_CALL_LIST)
 
 #endif //CHERIOS_SYSCALLS_H

@@ -58,7 +58,7 @@ void kernel_syscall_wait(void) {
 }
 
 act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue, register_t a0) {
-	return act_register(frame, queue, name, a0, status_alive, NULL);
+	return act_register_create(frame, queue, name, a0, status_alive, NULL);
 }
 
 act_t * kernel_act_ctrl_get_ref() {
@@ -120,6 +120,7 @@ DEFINE_TRAMPOLINE(kernel_syscall_interrupt_enable);
 DEFINE_TRAMPOLINE(kernel_syscall_gc);
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
+
 	kernel_if->sleep = kernel_seal(kernel_syscall_sleep_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->wait = kernel_seal(kernel_syscall_wait_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_act_register = kernel_seal(kernel_act_register_get_trampoline(), act_ctrl_ref_type);

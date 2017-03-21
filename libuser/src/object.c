@@ -36,6 +36,7 @@
 #include "namespace.h"
 #include "queue.h"
 #include "syscalls.h"
+#include "string.h"
 
 act_control_kt act_self_ctrl = NULL;
 act_kt act_self_ref  = NULL;
@@ -43,16 +44,15 @@ capability act_self_cap   = NULL;
 queue_t * act_self_queue = NULL;
 kernel_if_t kernel_if;
 
-void object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue) {
+void object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue, kernel_if_t* kernel_if_c) {
+	assert(kernel_if_c != NULL);
+	// I feel like as we use these methods on every syscall we should remove the indirection
+	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
+
 	act_self_ctrl = self_ctrl;
 	act_self_ref  = SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, self_ctrl);
 
-#define SET_SYSCALL_DEFAULT(name, ret, sig) \
-    (name ## _ ## default_obj).code = kernel_if . name;\
-	(name ## _ ## default_obj).data = self_ctrl;	      \
-
-	SYS_CALL_LIST(SET_SYSCALL_DEFAULT)
-#undef SET_SYSCALL_DEFAULT
+	init_kernel_if_t(kernel_if_c, self_ctrl);
 
 	// The message send has a different default obj
 	message_send_default_obj.data = (capability)act_self_ref;

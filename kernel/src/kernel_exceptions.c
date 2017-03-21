@@ -33,7 +33,6 @@
 #include "klib.h"
 #include "cp0.h"
 #include "kernel_exceptions.h"
-#include "critical.h"
 
 /*
  * Exception demux
@@ -93,67 +92,77 @@ static void kernel_exception_unknown(register_t excode) {
  * Exception handler demux to various more specific exception
  * implementations.
  */
-void kernel_exception(void) {
-	static int entered = 0;
-	entered++;
+void kernel_exception(context_t swap_to, context_t own_context) {
+	context_t victim_context = swap_to;
+	context_t own_save; // We never use this, there is currently no reason to restore the exception context
 
-	KERNEL_TRACE("exception", "saving %s",
-				 kernel_curr_act->name);
-	KERNEL_TRACE("exception", "enters %d", entered);
-	if(entered > 1) {
-		KERNEL_ERROR("interrupt in interrupt");
-		kernel_freeze();
+	set_exception_handler(own_context);
+	cp0_status_bev_set(1);
+	kernel_interrupts_init(1);
+
+	while(1) {
+		context_switch(victim_context, &own_save);
+		// We will next to be switched to with c3 containing a victim context
+		__asm__ __volatile__ ("cmove %[x], $c3" : [x]"=C"(victim_context));
+
+		static int entered = 0;
+		entered++;
+
+		KERNEL_TRACE("exception", "saving %s",
+					 kernel_curr_act->name);
+		KERNEL_TRACE("exception", "enters %d", entered);
+		if(entered > 1) {
+			KERNEL_ERROR("interrupt in interrupt");
+			kernel_freeze();
+		}
+
+		/*
+         * Check assumption that kernel is running at EXL=1.  The kernel is
+         * non-preemptive and will fail horribly if this isn't true.
+         */
+		kernel_assert(cp0_status_exl_get() != 0);
+
+		register_t excode = cp0_cause_excode_get();
+		switch (excode) {
+			case MIPS_CP0_EXCODE_INT:
+				kernel_interrupt();
+				break;
+
+			case MIPS_CP0_EXCODE_SYSCALL:
+				exception_printf(KRED"Synchronous syscalls now use the ccall interface"KRST"\n");
+				regdump(-1);
+				kernel_freeze();
+				break;
+
+			case MIPS_CP0_EXCODE_C2E:
+				kernel_exception_capability();
+				break;
+
+			case MIPS_CP0_EXCODE_TLBL:
+			case MIPS_CP0_EXCODE_TLBS:
+			case MIPS_CP0_EXCODE_ADEL:
+			case MIPS_CP0_EXCODE_ADES:
+			case MIPS_CP0_EXCODE_IBE:
+			case MIPS_CP0_EXCODE_DBE:
+				kernel_exception_data(excode);
+				break;
+
+			case MIPS_CP0_EXCODE_TRAP:
+				kernel_exception_trap();
+				break;
+			default:
+				kernel_exception_unknown(excode);
+				break;
+		}
+
+		KERNEL_TRACE("exception", "returns %d", entered);
+		entered--;
+		if(entered) {
+			KERNEL_ERROR("interrupt in interrupt");
+			kernel_freeze();
+		}
+
+		KERNEL_TRACE("exception", "restoring %s",
+					 kernel_curr_act->name);
 	}
-
-	/*
-	 * Check assumption that kernel is running at EXL=1.  The kernel is
-	 * non-preemptive and will fail horribly if this isn't true.
-	 */
-	kernel_assert(cp0_status_exl_get() != 0);
-	kernel_assert(critical_state.critical_level == 0);
-	kernel_assert(critical_state.delayed_cause == 0);
-
-	register_t excode = cp0_cause_excode_get();
-	switch (excode) {
-	case MIPS_CP0_EXCODE_INT:
-		kernel_interrupt();
-		break;
-
-	case MIPS_CP0_EXCODE_SYSCALL:
-		exception_printf(KRED"Synchronous syscalls now use the ccall interface"KRST"\n");
-		regdump(-1);
-		kernel_freeze();
-		break;
-
-	case MIPS_CP0_EXCODE_C2E:
-		kernel_exception_capability();
-		break;
-
-	case MIPS_CP0_EXCODE_TLBL:
-	case MIPS_CP0_EXCODE_TLBS:
-	case MIPS_CP0_EXCODE_ADEL:
-	case MIPS_CP0_EXCODE_ADES:
-	case MIPS_CP0_EXCODE_IBE:
-	case MIPS_CP0_EXCODE_DBE:
-		kernel_exception_data(excode);
-		break;
-
-	case MIPS_CP0_EXCODE_TRAP:
-		kernel_exception_trap();
-		break;
-	default:
-		kernel_exception_unknown(excode);
-		break;
-	}
-
-	KERNEL_TRACE("exception", "returns %d", entered);
-	entered--;
-	if(entered) {
-		KERNEL_ERROR("interrupt in interrupt");
-		kernel_freeze();
-	}
-
-	kernel_assert(kernel_exception_framep_ptr == &kernel_curr_act->saved_registers);
-	KERNEL_TRACE("exception", "restoring %s",
-				 kernel_curr_act->name);
 }

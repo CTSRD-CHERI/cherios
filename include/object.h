@@ -51,7 +51,7 @@ extern size_t ctrl_methods_nb;
 
 capability	act_get_cap(void);
 
-void	object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue);
+void	object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue, kernel_if_t* kernel_if_c);
 
 void	ctor_null(void);
 void	dtor_null(void);

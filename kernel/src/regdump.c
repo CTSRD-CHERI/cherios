@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "activations.h"
 #include "klib.h"
 
@@ -38,13 +39,13 @@
  */
 
 #define REG_DUMP_M(_reg) {\
-	register_t reg = kernel_exception_framep_ptr->mf_##_reg; \
+	register_t reg = frame->mf_##_reg; \
 	__REGDUMP(reg, reg, #_reg, 64); \
 	}
 
 #define REG_DUMP_C(_reg) \
 	regdump_c(#_reg, creg++==reg_num, \
-		kernel_exception_framep_ptr->cf_##_reg);
+		frame->cf_##_reg);
 
 #define __REGDUMP(elem, cond, name, bits) { \
 	printf("%s"name":"KFNT"0x", cond?"":KFNT,elem); \
@@ -144,7 +145,7 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 void regdump(int reg_num) {
 	int creg = 0;
 	printf("Regdump:\n");
-	kernel_assert(kernel_exception_framep_ptr == &(kernel_curr_act->saved_registers));
+	reg_frame_t* frame = unlock_context(kernel_curr_act->context);
 
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
 
@@ -185,7 +186,7 @@ void regdump(int reg_num) {
 
 	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
 
-	size_t offset_index = correct_base(kernel_curr_act->image_base, kernel_exception_framep_ptr->cf_pcc);
+	size_t offset_index = correct_base(kernel_curr_act->image_base, frame->cf_pcc);
 	printf("pcc at %lx in %s\n", offset_index, kernel_curr_act->name);
 
 	printf("\nLoaded images:\n");
@@ -195,8 +196,8 @@ void regdump(int reg_num) {
 	}
 
 	printf("\nAttempting backtrace:\n\n");
-	char * stack_pointer = (char*)kernel_curr_act->saved_registers.cf_c11 + kernel_curr_act->saved_registers.mf_sp;
-	capability return_address = kernel_curr_act->saved_registers.cf_pcc;
+	char * stack_pointer = (char*)frame->cf_c11 + frame->mf_sp;
+	capability return_address = frame->cf_pcc;
 	backtrace(kernel_curr_act->image_base, stack_pointer, return_address);
 }
 

@@ -35,7 +35,6 @@
 #include "queue.h"
 #include "syscalls.h"
 #include "ccall_trampoline.h"
-#include "critical.h"
 #include "stddef.h"
 
 DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
@@ -68,14 +67,14 @@ int msg_push(capability c3, capability c4, capability c5,
 
 	//FIXME this is still really racey, this critical section function stops interrupts, but will not work on multicore
 
-	kernel_critical_section_enter();
+	critical_section_enter();
 
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
 	kernel_assert(qmask > 0);
 	int next_slot = queue->header.end;
 	if(full(queue, qmask)) {
-		kernel_critical_section_exit();
+		critical_section_exit();
 		return -1;
 	}
 
@@ -100,67 +99,8 @@ int msg_push(capability c3, capability c4, capability c5,
 
 	sched_receives_msg(dest);
 
-	kernel_critical_section_exit();
+	critical_section_exit();
 	return 0;
-}
-
-/* Pushes messages based on the saved context of the caller. Deprecated */
-int msg_push_deprecated(act_t *dest, act_t *src, capability identifier, capability sync_token) {
-	queue_t * queue = dest->msg_queue;
-	msg_nb_t  qmask  = dest->queue_mask;
-	kernel_assert(qmask > 0);
-	int next_slot = queue->header.end;
-	if(full(queue, qmask)) {
-		return -1;
-	}
-
-	queue->msg[next_slot].a0  = src->saved_registers.mf_a0;
-	queue->msg[next_slot].a1  = src->saved_registers.mf_a1;
-	queue->msg[next_slot].a2  = src->saved_registers.mf_a2;
-
-	queue->msg[next_slot].c3  = src->saved_registers.cf_c3;
-	queue->msg[next_slot].c4  = src->saved_registers.cf_c4;
-	queue->msg[next_slot].c5  = src->saved_registers.cf_c5;
-
-	queue->msg[next_slot].v0  = src->saved_registers.mf_v0;
-	queue->msg[next_slot].idc = identifier;
-	queue->msg[next_slot].c1  = sync_token;
-	queue->msg[next_slot].c2  = (sync_token == NULL) ? NULL : kernel_seal(src, act_sync_ref_type);
-
-	queue->header.end = safe(queue->header.end+1, qmask);
-
-	if(dest->sched_status == sched_waiting) {
-		sched_receives_msg(dest);
-	}
-	return 0;
-}
-
-/* Pops messages from the activations queue to its saved context. Deprecated */
-void msg_pop_depracated(act_t *act) {
-
-	kernel_panic("Kernel should not pop");
-
-	queue_t * queue = act->msg_queue;
-	msg_nb_t  qmask  =  act->queue_mask;
-
-	kernel_assert(!empty(queue));
-
-	int start = queue->header.start;
-
-	act->saved_registers.mf_a0  = queue->msg[start].a0;
-	act->saved_registers.mf_a1  = queue->msg[start].a1;
-	act->saved_registers.mf_a2  = queue->msg[start].a2;
-
-	act->saved_registers.cf_c3  = queue->msg[start].c3;
-	act->saved_registers.cf_c4  = queue->msg[start].c4;
-	act->saved_registers.cf_c5  = queue->msg[start].c5;
-
-	act->saved_registers.mf_v0  = queue->msg[start].v0;
-	act->saved_registers.cf_idc = queue->msg[start].idc;
-	act->saved_registers.cf_c1  = queue->msg[start].c1;
-	act->saved_registers.cf_c2  = queue->msg[start].c2;
-
-	queue->header.start = safe(start+1, qmask);
 }
 
 int msg_queue_empty(act_t * act) {

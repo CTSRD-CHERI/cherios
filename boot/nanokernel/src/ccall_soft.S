@@ -32,20 +32,17 @@
 .include "asm.S"
 
 #define __ASSEMBLY__ 1
-#include "kernel_exceptions.h"
+#include "exception_cause.h"
 
 #
-# Relocatable ccall vector; checks arguments, sets pcc <- c1 and idc <- c2
+# Relocatable ccall vector; checks arguments, sets c12 <- pcc <- c1 and idc <- c2
 # This runs with KCC installed in PCC.
 #
+
+# Creturn does IF(unsealed($c17)) pcc <- $c17 ELSE c18 <- unseal(c18) ; pcc <- unseal(c17)
 		.global kernel_ccall_trampoline
 		.ent kernel_ccall_trampoline
 kernel_ccall_trampoline:
-
-#set bad instruction global as QEMU does not support it
-        clw $k0, $zero, 0($epcc)
-        dla $k1, badinstr_glob
-        csd $k0, $k1, 0($kdc)
 
 #demux ccall/return
 
@@ -63,7 +60,6 @@ ccall_soft:
 
         # unseal c1 and c2
         cunseal $epcc, $c1, $kr1c
-        cmove   $c12,  $epcc
         cunseal $idc, $c2, $kr1c
 
         j end
@@ -79,13 +75,14 @@ untrusting:
         csetoffset $kr1c, $kdc, $k0
 
         cunseal $epcc, $c17, $kr1c
-        cunseal $c18, $c18, $kr1c
+        cunseal $idc, $c18, $kr1c
         j end
         nop
 
 
 trusting:
 		cmove   $epcc, $17
+        cmove   $idc,  $18
 
 end:
         # Counter eret bug

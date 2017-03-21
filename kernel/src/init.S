@@ -32,7 +32,6 @@
 #Fixme: clean-up code && comment
 
 .set MIPS_SZCAP, _MIPS_SZCAP
-.include "asm.S"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
@@ -44,21 +43,11 @@
 	.global start
 	.ent start
 start:
-	#Add 4 to EPCC.
-	li         $k0 , 4
-	cincoffset $epcc, $epcc, $k0
-
-	#Save register frame
-	dla	$k0, kernel_init_save_frame
-	dla	$k1, kernel_init_save_frame_end
-	cgetdefault $kr1c
-	csetoffset $kr1c, $kr1c, $k0
-	sub	$k0, $k1, $k0
-	csetbounds $kr1c, $kr1c, $k0
-
-	cgetdefault	$kr2c
-    save_reg_frame $kr1c, $k1, $kr2c, $epcc
-
+    cmove       $c18, $c4   # boot_context
+    cmove       $c19, $c3   # own_context
+    cmove       $c20, $c5   # interface
+    cmove       $c21, $c6   # interface data
+    cmove       $c22, $c7   # hack
 
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
@@ -94,16 +83,18 @@ start:
 	cjalr		$c12, $c17
 	nop
 
-	# On the off chance that cherios_main() has been defined as having
-	# arguments, set the first argument (argc) to 0.
 	dli		$a0, 0
+    cmove       $c3, $c18
+    cmove       $c4, $c19
+    cmove       $c5, $c20
+    cmove       $c6, $c21
+    cmove       $c7, $c22
 
-	# Call cherios_main(). Instead of linking to here, link with the normal exception return
+	# Call cherios_main() this should never return as the kernel will set itself up as the exception context.
+	cgetpcc		$c12
 	dla		$t0, cherios_main
-	cgetpccsetoffset $c12, $t0
-	dla     $t0, kernel_exception_restore
-	cgetpccsetoffset $c17, $t0
-	cjr     $c12
+	csetoffset	$c12, $c12, $t0
+	cjalr		$c12, $c17
 	nop
 
 start_end:
@@ -111,9 +102,3 @@ start_end:
 	.end start
 
 	.align 5
-
-.global kernel_init_save_frame
-kernel_init_save_frame:
-	.skip 32*CAP_SIZE + 32*REG_SIZE, 0 #Should be enough
-kernel_init_save_frame_end:
-	.size kernel_init_save_frame, kernel_init_save_frame_end - kernel_init_save_frame

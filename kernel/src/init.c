@@ -29,38 +29,19 @@
  */
 
 #include "klib.h"
+#include "nanokernel.h"
+#include "cp0.h"
 
-static void cache_inv_low(int op, size_t line) {
-	__asm volatile(
-		"cache %[op], 0(%[line]) \n"
-		:: [op]"i" (op), [line]"r" (line));
-}
-
-static void install_exception_vectors(void) {
-	/* Copy exception trampoline to exception vector */
-	char * all_mem = cheri_getdefault() ;
-	void *mips_bev0_exception_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
-	memcpy(mips_bev0_exception_vector_ptr, &kernel_exception_trampoline,
-	    (char *)&kernel_exception_trampoline_end - (char *)&kernel_exception_trampoline);
-
-	void *mips_bev0_ccall_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_CCALL_VECTOR);
-	memcpy(mips_bev0_ccall_vector_ptr, &kernel_ccall_trampoline,
-	    (char *)&kernel_ccall_trampoline_end - (char *)&kernel_ccall_trampoline);
-
-	/* Invalidate I-cache */
-	__asm volatile("sync");
-	cache_inv_low((0b100<<2)+0, MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF);
-	/* does not work with kseg0 address, hence the `& 0xFFFF` */
-	__asm volatile("sync");
-}
-
-int cherios_main(void) {
+int cherios_main(context_t boot_con, context_t own_con,
+				 nano_kernel_if_t* interface, capability def_data,
+				 struct boot_hack_t* hack) {
 	kernel_puts("Kernel Hello world\n");
-	install_exception_vectors();
-	act_init();
-	kernel_interrupts_init(1);
+	kernel_setup_trampoline();
+	init_nano_kernel_if_t(interface, def_data);
+	act_init(boot_con, own_con, hack);
+
+	// We re-use this context as an exception context. Maybe we should create a proper one?
+	kernel_exception(boot_con, own_con); // Only here can we start taking exceptions, otherwise we crash horribly
 	KERNEL_TRACE("init", "init done");
 	return 0;
 }

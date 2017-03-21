@@ -25,7 +25,6 @@ set(BOOT_SRCS
     src/boot/boot_utils.c
     src/boot/caches.c
     src/boot/elf_loader.c
-    src/boot/glue.c
     src/boot/stats.c
     src/boot/ufs_module.c
     src/boot/ufs_read.c
@@ -33,7 +32,12 @@ set(BOOT_SRCS
 set(BOOT_ASM_SRCS
     src/boot/fs.S
     src/boot/init.S
-    src/boot/trampoline.S
+)
+
+set(NANO_ASM_SRCS
+    nanokernel/src/memcpy_c.S
+    nanokernel/src/nano_kernel.S
+    nanokernel/src/ccall_soft.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")
@@ -48,6 +52,7 @@ add_cherios_executable(cherios LINKER_SCRIPT boot.ld SOURCES
     ${LIBKERNEL_SRCS}
     ${BOOT_SRCS}
     ${BOOT_ASM_SRCS}
+    ${NANO_ASM_SRCS}
 )
 
 # Create the file system

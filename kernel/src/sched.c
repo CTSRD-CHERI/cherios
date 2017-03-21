@@ -31,7 +31,7 @@
 
 #include "activations.h"
 #include "klib.h"
-#include "critical.h"
+#include "nanokernel.h"
 
 /* todo: sleep cpu */
 static void sched_nothing_to_run(void) {
@@ -108,12 +108,12 @@ void sched_recieve_ret(act_t * act) {
 void sched_block_until_msg(act_t * act, act_t * next_hint) {
 	// would MUCH prefer to use a lighter lock here, or better yet go lockless and just check nothing went wrong at the
 	// end
-	kernel_critical_section_enter();
+	critical_section_enter();
 	if(msg_queue_empty(act)) {
 		// This block will result in a critical section exit
 		sched_block(act, sched_waiting, next_hint, 0);
 	} else {
-		kernel_critical_section_exit();
+		critical_section_exit();
 	}
 
 
@@ -142,7 +142,6 @@ void sched_schedule(act_t * act) {
 	kernel_assert(act->sched_status == sched_runnable);
 	act->sched_status = sched_running;
 	kernel_curr_act = act;
-	kernel_exception_framep_ptr = &act->saved_registers;
 	KERNEL_TRACE("sched", "Reschedule to activation '%s'", kernel_curr_act->name);
 }
 
@@ -158,8 +157,6 @@ static act_t * sched_picknext(void) {
 	kernel_assert(next->sched_status == sched_runnable || next->sched_status == sched_running);
 	return next;
 }
-
-void swap_state(reg_frame_t* from, reg_frame_t* to);
 
 void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
 	KERNEL_TRACE("sched", "being asked to schedule someone else. in_kernel=%d. have %d choices.",
@@ -179,17 +176,19 @@ void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
 		act_t* from = kernel_curr_act;
 		act_t* to = hint;
 
-		kernel_critical_section_enter();
+		critical_section_enter();
+
 		sched_deschedule(from, into_state);
 		sched_schedule(to);
 		if(!in_kernel) {
+			if(from->status == status_terminated) {
+				destroy_context(from->context, to->context); // This will never return
+			}
 			/* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
 			/* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
-
-			swap_state(&from->saved_registers, &to->saved_registers);
-
+			context_switch(to->context, &from->context);
 		} else {
-			kernel_critical_section_exit();
+			critical_section_exit();
 		}
 
 	}

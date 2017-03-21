@@ -35,7 +35,6 @@
 #include "namespace.h"
 #include "queue.h"
 #include "assert.h"
-#include "string.h"
 #include "syscalls.h"
 
 void libuser_init(act_control_kt self_ctrl,
@@ -43,9 +42,6 @@ void libuser_init(act_control_kt self_ctrl,
 				  act_kt ns_ref,
 				  kernel_if_t* kernel_if_c,
 				  queue_t * queue) {
-	assert(kernel_if_c != NULL);
-	// I feel like as we use these methods on every syscall we should remove the indirection
-	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
-	object_init(self_ctrl, self_cap, queue);
+	object_init(self_ctrl, self_cap, queue, kernel_if_c);
 	namespace_init(ns_ref);
 }

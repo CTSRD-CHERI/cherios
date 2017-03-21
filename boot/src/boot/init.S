@@ -82,11 +82,18 @@ start:
 	cjr		$c12
 	nop
 cherios_init_jump_target:
+    li $zero, 0xbeef
 
-	# Populate exception registers: $kdc and $kcc
-	cgetpcc		$c29
-	cgetdefault	$c30
+    # Transfer control to nano kernel. The nano kernel will remove all capabilities it feels we do not need.
+    dla         $t0, nano_kernel_init
+    cgetpccsetoffset    $c12, $t0
+    cjalr       $c12, $c17
+    nop
 
+    # Nano kernel init will give us a pointer to its plt, and a default data capability
+    cmove       $c18, $c1
+    cmove       $c19, $c2
+    cmove       $c20, $c3
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
 	dla		$t0, __start_boot_stack
@@ -121,9 +128,11 @@ cherios_init_jump_target:
 	cjalr		$c12, $c17
 	nop
 
-	# On the off chance that cherios_main() has been defined as having
-	# arguments, set the first argument (argc) to 0.
+	# We pass the nano kernel if / data cap and handle for the first context
 	dli		$a0, 0
+    cmove   $c3, $c20
+    cmove   $c4, $c18
+    cmove   $c5, $c19
 
 	# Call cherios_main().
 	cgetpcc		$c12

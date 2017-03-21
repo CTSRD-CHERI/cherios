@@ -4,6 +4,7 @@
 #include "mips.h"
 #include "cdefs.h"
 #include "stdio.h"
+#include "syscalls.h"
 
 typedef enum module_type {
 	m_memmgt,
@@ -25,9 +26,6 @@ typedef struct boot_elem_s {
 	void 	   * ctrl;
 } boot_elem_t;
 
-extern void	kernel_trampoline;
-extern void	kernel_trampoline_end;
-
 extern char	__start_heap;
 extern char	__stop_heap;
 
@@ -45,6 +43,12 @@ int	kernel_printf(const char *fmt, ...);
 void	hw_reboot(void) __dead2;
 int	kernel_vprintf(const char *fmt, va_list ap);
 
+extern void	kernel_exception_trampoline;
+extern void	kernel_exception_trampoline_end;
+
+extern void kernel_ccall_trampoline;
+extern void kernel_ccall_trampoline_end;
+
 /*
  * Bootloader routines
  */
@@ -60,11 +64,16 @@ void	boot_printf_syscall_enable(void);
 void *	elf_loader(const char * s, int direct_map, size_t * maxaddr);
 void *	load(const char * filename, int * len);
 
-void	load_kernel(const char * file);
+struct boot_hack_t {
+	kernel_if_t* kernel_if_c;
+	act_control_kt self_ctrl;
+	queue_t* queue;
+};
+
+capability load_kernel(const char * file);
 void *	load_module(module_t type, const char * file, int arg);
 
 void	hw_init(void);
-void	install_exception_vector(void);
 
 void	caches_invalidate(void * addr, size_t size);
 

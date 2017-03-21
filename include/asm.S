@@ -30,9 +30,53 @@
 # SUCH DAMAGE.
 #
 
+#define __ASSEMBLY__ 1
+
 .set CAP_SIZE, (MIPS_SZCAP/8)
 .set REG_SIZE, (64/8)
 .set MIPS_FRAME_SIZE, (32*REG_SIZE)
+.set REG_SIZE_BITS, 3
+.set CHERI_CAP_FRAME_SIZE, (27 * CAP_SIZE)
+.set CHERI_FRAME_SIZE, (MIPS_FRAME_SIZE + CHERI_CAP_FRAME_SIZE)
+.set FRAME_C3_OFFSET, MIPS_FRAME_SIZE + (3 * CAP_SIZE)
+
+.ifeq MIPS_SZCAP-256
+.set CAP_SIZE_BITS, 5
+.else
+.ifeq MIPS_SZCAP-128
+.set CAP_SIZE_BITS, 4
+.else
+.error "Unknown cap size"
+.endif
+.endif
+
+
+.set Perm_Global, 0
+.set Perm_Execute, 1
+.set Perm_Load, 2
+.set Perm_Store, 3
+.set Perm_Load_Capability, 4
+.set Perm_Store_Capability, 5
+.set Perm_Store_Local_Capability, 6
+.set Perm_Seal, 7
+.set Perm_Access_System_Registers, 10
+.set Perm_All, (1 << 10) - 1
+
+.macro local_var name, size, align
+    .align \align
+    \name\()_label : .space \size
+    .set \name, 0 # \name\()_label - locals_start
+.endm
+
+.macro local_reg_var name
+    local_var \name, REG_SIZE, REG_SIZE_BITS
+.endm
+
+.macro local_cap_var name
+    local_var \name, CAP_SIZE, CAP_SIZE_BITS
+.endm
+
+.data
 
 .set noreorder
 .set nobopt
@@ -80,10 +124,10 @@
     # Notice also that KCC and KDC are not preserved.
     #
 
-.macro save_reg_frame frame_ptr, tmp, c0, pcc
+.macro save_reg_frame_idc frame_ptr, tmp, c0, pcc, idc
     # Expands to a list of the form
     # csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame_ptr)
-    foreachi csave, 0, \frame_ptr, \c0, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, \pcc
+    foreachi csave, 0, \frame_ptr, \c0, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25, \idc, \pcc
 
 
     # Expands to a list of the form
@@ -98,7 +142,9 @@
     csd	        \tmp, $0, 31*REG_SIZE(\frame_ptr)
 
 .endm
-
+.macro save_reg_frame frame_ptr, tmp, c0, pcc
+    save_reg_frame_idc \frame_ptr, \tmp, \c0, \pcc, $idc
+.endm
 
     #
     # Restore context from exception frame, which may have had
