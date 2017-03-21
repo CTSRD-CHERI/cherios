@@ -64,4 +64,6 @@ __asm__ (                                                       \
 
 #define DEFINE_TRAMPOLINE(F) DEFINE_TRAMPOLINE_EXTRA(F,,)
 
+#define DECLARE_AND_DEFINE_TRAMPOLINE(F) DECLARE_TRAMPOLINE(F); DEFINE_TRAMPOLINE(F)
+
 #endif //CHERIOS_CCALL_TRAMPOLINE_H

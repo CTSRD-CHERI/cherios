@@ -129,10 +129,6 @@ static void load_modules(void) {
 	}
 }
 
-static void cache_inv_low(int op, size_t line) {
-
-}
-
 //FIXME we should make sure only the nano kernel can modify the exception vectors
 static void install_exception_vectors(void) {
 	/* Copy exception trampoline to exception vector */
@@ -178,7 +174,7 @@ capability create_context_hack(reg_frame_t* frame, capability table, capability 
 	return res;
 }
 
-int cherios_main(capability own_context, capability table, capability data) {
+extern int cherios_main(capability own_context, capability table, capability data) {
 	/* Init hardware */
 	hw_init();
 
@@ -241,6 +237,4 @@ int cherios_main(capability own_context, capability table, capability data) {
 	boot_printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
 	stats_display();
 	hw_reboot();
-
-	return 0;
 }

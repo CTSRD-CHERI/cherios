@@ -42,7 +42,7 @@
  * TODO that is, if we want to sleep it should contain just enough to do a context switch
  * TODO this works nicely when we just want, for example, to get a field from a struct
  */
-
+void kernel_syscall_sleep(int time);
 void kernel_syscall_sleep(int time) {
 	if(time != 0) {
 		KERNEL_ERROR("sleep >0 not implemented");
@@ -51,35 +51,42 @@ void kernel_syscall_sleep(int time) {
 	}
 }
 
+void kernel_syscall_wait(void);
 void kernel_syscall_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
 	sched_block_until_msg(kernel_curr_act, NULL);
 }
 
+act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue, register_t a0);
 act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue, register_t a0) {
 	return act_register_create(frame, queue, name, a0, status_alive, NULL);
 }
 
-act_t * kernel_act_ctrl_get_ref() {
+act_t * kernel_act_ctrl_get_ref(void);
+act_t * kernel_act_ctrl_get_ref(void) {
 	act_control_t * ctrl = (act_control_t *)get_idc();
 	return act_get_sealed_ref_from_ctrl(ctrl);
 }
 
-status_e kernel_act_ctrl_get_status() {
+status_e kernel_act_ctrl_get_status(void);
+status_e kernel_act_ctrl_get_status(void) {
 	act_control_t * ctrl = (act_control_t *)get_idc();
 	return act_get_status(ctrl);
 }
 
+int kernel_act_revoke(void);
 int kernel_act_revoke(void) {
 	act_control_t * ctrl = (act_control_t *)get_idc();
 	return act_revoke(ctrl);
 }
 
+int kernel_act_terminate(void);
 int kernel_act_terminate(void) {
 	act_control_t * ctrl = (act_control_t *)get_idc();
 	return act_terminate(ctrl);
 }
 
+void kernel_syscall_puts(char *msg);
 void kernel_syscall_puts(char *msg) {
 	#ifndef __LITE__
 	kernel_printf(KGRN"%s" KREG KRST, msg);
@@ -94,30 +101,33 @@ void kernel_syscall_panic(void) { //fixme: temporary
 	kernel_freeze();
 }
 
+int kernel_syscall_interrupt_register(int number);
 int kernel_syscall_interrupt_register(int number) {
 	return kernel_interrupt_register(number, (act_control_t *)get_idc());
 }
 
+int kernel_syscall_interrupt_enable(int number);
 int kernel_syscall_interrupt_enable(int number) {
 	return kernel_interrupt_enable(number, (act_control_t *)get_idc());
 }
 
+int kernel_syscall_gc(capability p, capability pool);
 int kernel_syscall_gc(capability p, capability pool) {
 	return try_gc(p , pool);
 }
 
-DEFINE_TRAMPOLINE(kernel_syscall_sleep);
-DEFINE_TRAMPOLINE(kernel_syscall_wait);
-DEFINE_TRAMPOLINE(kernel_act_register);
-DEFINE_TRAMPOLINE(kernel_act_ctrl_get_ref);
-DEFINE_TRAMPOLINE(kernel_act_ctrl_get_status);
-DEFINE_TRAMPOLINE(kernel_act_revoke);
-DEFINE_TRAMPOLINE(kernel_act_terminate);
-DEFINE_TRAMPOLINE(kernel_syscall_puts);
-DEFINE_TRAMPOLINE(kernel_syscall_panic);
-DEFINE_TRAMPOLINE(kernel_syscall_interrupt_register);
-DEFINE_TRAMPOLINE(kernel_syscall_interrupt_enable);
-DEFINE_TRAMPOLINE(kernel_syscall_gc);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_sleep);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_wait);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_register);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_ref);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_status);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_revoke);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_terminate);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_puts);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_panic);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_register);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_enable);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_gc);
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
 

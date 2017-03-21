@@ -194,6 +194,15 @@ set(C_WARNING_FLAGS
     -Wno-error=unused-macros
     -Wno-error=unused-variable
 
+    # These warnings are drowning the more important ones
+    -Wno-deprecated-declarations
+    -Wno-unused-macros
+    -Wno-cast-qual
+    -Wno-sign-conversion
+    -Wno-pedantic
+    -Wno-conversion
+    -Wno-comma
+    -Wunreachable-code-break
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 

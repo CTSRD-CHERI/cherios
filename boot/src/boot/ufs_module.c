@@ -50,6 +50,7 @@ ssize_t
 fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep);
 ssize_t
 fsread(ufs_ino_t inode, void *buf, size_t nbyte);
+int dskread(u8 *buf, u_int64_t lba, int nblk);
 
 extern u8 __fs_start, __fs_end;
 
