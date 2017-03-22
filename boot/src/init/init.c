@@ -88,12 +88,12 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_core,	"virtio-blk.elf",	0,	B_FS)
-	B_DENTRY(m_core,	"test1b.elf",		0,	B_T1)
 	B_FENCE
 	B_PENTRY(m_fs,		"fatfs.elf",		0,	B_FS)
 	B_FENCE
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
 	B_FENCE
+	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
 	B_PENTRY(m_user,	"prga.elf",		2,	B_SO)
 	B_PENTRY(m_user,	"zlib_test.elf",	0,	B_ZL)
@@ -144,6 +144,7 @@ static void print_init_info() {
 
 static void load_modules(void) {
 	static void * c_memmgt = NULL;
+	int core_ready = 0;
 
 	for(size_t i=0; i<init_list_len; i++) {
 		int cnt;
@@ -157,11 +158,27 @@ static void load_modules(void) {
 			continue;
 		}
 
+		/* We don't have a nice dependency system for modules
+		   yet. For example, fatfs depends on virtio-blk being
+		   registered with the nameserver.
+
+		   For now, for all non-core services, ensure that all
+		   core services have registered.
+		*/
+		if ((be->type == m_fs || be->type == m_user) && !core_ready) {
+			do {
+				nssleep(3);
+				cnt = num_registered_modules();
+				printf(" only %d core services registered with ns\n", cnt);
+			} while (cnt < 1 + 1 + 3); /* mem + uart + core */
+			core_ready = 1;
+		}
+
 		void *carg = (be->type == m_memmgt) ? init_info->free_mem : NULL;
 
 		be->ctrl = load_module(be->type, be->name, be->arg, carg);
 		printf("Loaded module %s\n", be->name);
-		if (init_list[i].type == m_memmgt) {
+		if (be->type == m_memmgt) {
 			/* Ensure that the memory-mgr has been
 			 * properly registered before proceeding.
 			 */
