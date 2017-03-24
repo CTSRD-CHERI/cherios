@@ -180,6 +180,7 @@ set(C_WARNING_FLAGS
     -Wno-error=comma
     -Wno-error=conversion
     -Wno-error=covered-switch-default
+    -Wno-error=deprecated-declarations
     -Wno-error=expansion-to-defined
     -Wno-error=extra-semi
     -Wno-error=missing-prototypes
