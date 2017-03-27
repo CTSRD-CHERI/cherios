@@ -1,5 +1,4 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
@@ -29,10 +28,11 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _CHERIOS_QUEUE_H_
-#define	_CHERIOS_QUEUE_H_
+#ifndef _EXPORT_KERNEL_EXCEPTIONS_H
+#define _EXPORT_KERNEL_EXCEPTIONS_H
 
-#include "mips.h"
-#include "export/queue.h"
+#include "cheric.h"
 
-#endif
+extern reg_frame_t *kernel_exception_framep_ptr;
+
+#endif /* _EXPORT_KERNEL_EXCEPTIONS_H */

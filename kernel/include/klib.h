@@ -37,12 +37,12 @@
 #include "mips.h"
 #include "activations.h"
 #include "cdefs.h"
-#include "cheric.h"
 #include "colors.h"
 #include "math.h"
 #include "sched.h"
 #include "string.h"
 #include "kutils.h"
+#include "export/klib.h"
 
 #ifdef __TRACE__
 	#define KERNEL_TRACE kernel_trace
@@ -62,24 +62,10 @@
 	#define KERNEL_ERROR(...)
 #endif
 
-// FIXME we need to really think about the types of IDs and REFs
-
-/* The type of object activation references */
-static const uint64_t act_ref_type = 0x42002;
-/* The type of object identifier references */
-static const uint64_t act_id_type = act_ref_type;
-/* The type of object activation identifier control references */
-static const uint64_t act_ctrl_ref_type = 0x42001;
-/* The type of the synchronous sequence reply token */
-static const uint64_t act_sync_type = 0x42000;
-/* The type of object activation response references */
-static const uint64_t act_sync_ref_type = 0x42003;
 /*
  * Kernel library routines.
  */
 void	kernel_skip_instr(act_t * act);
-void	kernel_ccall(void);
-void	kernel_creturn(void);
 void	kernel_exception_syscall(void);
 
 void	kernel_interrupts_init(int enable_timer);
@@ -114,7 +100,6 @@ int	msg_queue_empty(act_t* act);
 
 void	act_init(void);
 void	act_wait(act_t* act, act_t* next_hint);
-act_control_t *	act_register(const reg_frame_t * frame, queue_t * queue, const char * name, register_t a0, status_e create_in_status);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);
 

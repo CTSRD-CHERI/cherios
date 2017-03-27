@@ -1,4 +1,5 @@
 /*-
+ * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
@@ -29,10 +30,40 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _CHERIOS_QUEUE_H_
-#define	_CHERIOS_QUEUE_H_
+#ifndef _EXPORT_CHERIOS_KLIB_H_
+#define	_EXPORT_CHERIOS_KLIB_H_
 
-#include "mips.h"
-#include "export/queue.h"
+#include "cheric.h"
+#include "queue.h"
 
+// FIXME we need to really think about the types of IDs and REFs
+
+/* The type of object activation references */
+static const uint64_t act_ref_type = 0x42002;
+/* The type of object identifier references */
+static const uint64_t act_id_type = act_ref_type;
+/* The type of object activation identifier control references */
+static const uint64_t act_ctrl_ref_type = 0x42001;
+/* The type of the synchronous sequence reply token */
+static const uint64_t act_sync_type = 0x42000;
+/* The type of object activation response references */
+static const uint64_t act_sync_ref_type = 0x42003;
+
+void	kernel_ccall(void);
+void	kernel_creturn(void);
+
+#ifndef _CHERIOS_KLIB_H_
+#define act_t	void
+#define act_control_t	void
+#define status_e	unsigned
 #endif
+
+act_control_t *	act_register(const reg_frame_t * frame, queue_t * queue, const char * name, register_t a0, status_e create_in_status);
+act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
+
+#ifndef _CHERIOS_KLIB_H_
+#undef act_t
+#undef act_control_t
+#endif
+
+#endif /* _EXPORT_CHERIOS_KLIB_H_ */

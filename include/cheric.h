@@ -34,6 +34,7 @@
 #include "cdefs.h"
 #include "cherireg.h"
 #include "mips.h"
+#include "export/cheric.h"
 
 /*
  * Derive CHERI-flavor from capability size
@@ -284,62 +285,4 @@ static inline int VCAPS(const void * cap, size_t len, unsigned flags) {
 #else
 #define	__sealable
 #endif
-
-/*
- * Canonical C-language representation of a capability.
- */
-typedef __capability void * capability;
-typedef __capability const void * const_capability;
-
-/*
- * Register frame to be preserved on context switching. The order of
- * save/restore is very important for both reasons of correctness and security.
- * Assembler routines know about this layout, so great care should be taken.
- */
-typedef struct reg_frame {
-	/*
-	 * General-purpose MIPS registers.
-	 */
-	/* No need to preserve $zero. */
-	register_t	mf_at, mf_v0, mf_v1;
-	register_t	mf_a0, mf_a1, mf_a2, mf_a3, mf_a4, mf_a5, mf_a6, mf_a7;
-	register_t	mf_t0, mf_t1, mf_t2, mf_t3;
-	register_t	mf_s0, mf_s1, mf_s2, mf_s3, mf_s4, mf_s5, mf_s6, mf_s7;
-	register_t	mf_t8, mf_t9;
-	/* No need to preserve $k0, $k1. */
-	register_t	mf_gp, mf_sp, mf_fp, mf_ra;
-
-	/* Multiply/divide result registers. */
-	register_t	mf_hi, mf_lo;
-
-	/* Program counter. */
-	register_t	mf_pc;
-
-	/*
-	 * Capability registers.
-	 */
-	/* c0 has special properties for MIPS load/store instructions. */
-	capability	cf_c0;
-
-	/*
-	 * General purpose capability registers.
-	 */
-	capability	cf_c1, cf_c2, cf_c3, cf_c4;
-	capability	cf_c5, cf_c6, cf_c7;
-	capability	cf_c8, cf_c9, cf_c10, cf_c11, cf_c12;
-	capability	cf_c13, cf_c14, cf_c15, cf_c16, cf_c17;
-	capability	cf_c18, cf_c19, cf_c20, cf_c21, cf_c22;
-	capability	cf_c23, cf_c24, cf_c25;
-
-	/*
-	 * Special-purpose capability registers that must be preserved on a
-	 * user context switch.  Note that kernel registers are omitted.
-	 */
-	capability	cf_idc;
-
-	/* Program counter capability. */
-	capability	cf_pcc;
-
-
-} reg_frame_t;
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

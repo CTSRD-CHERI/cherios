@@ -28,11 +28,54 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef _EXPORT_CHERIOS_QUEUE_H_
+#define	_EXPORT_CHERIOS_QUEUE_H_
 
-#ifndef _CHERIOS_QUEUE_H_
-#define	_CHERIOS_QUEUE_H_
+#include "cheric.h"
 
-#include "mips.h"
-#include "export/queue.h"
+#define MAX_MSG_B 4
+#define MAX_MSG (1 << MAX_MSG_B)
+typedef size_t msg_nb_t;
 
+/* WARNING
+ * The layout of msg_t and queue_t is depended on by libuser/src/msg.S.
+ */
+
+typedef struct
+{
+	capability c3; /* cap arguments */
+	capability c4;
+	capability c5;
+
+	capability idc; /* identifier */
+	capability c1;  /* sync token */
+	capability c2;	/* message sender cap */
+
+	/* This serves to align msg_t to a power of 2 * sizeof(capability). It made my life easier. also */
+	/* at some point we may wan't more argument passing registers, especially if we use another 2 for a continuation */
+#if _MIPS_SZCAP == 256
+	capability pad;
 #endif
+
+	register_t a0; /* GP arguments */
+	register_t a1;
+	register_t a2;
+	register_t v0;  /* method nb */
+}  msg_t;
+
+typedef struct
+{
+	struct header_t {
+		volatile msg_nb_t start;
+		volatile msg_nb_t end;
+		msg_nb_t len;
+	} header;
+	msg_t msg[0];
+}  queue_t;
+
+typedef struct {
+	queue_t queue;
+	msg_t msgs[MAX_MSG];
+} queue_default_t;
+
+#endif /* _EXPORT_CHERIOS_QUEUE_H_ */
