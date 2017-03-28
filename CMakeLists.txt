@@ -82,7 +82,7 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # CMake will try to link ctr1.o into the executable and this might not exist
 # We don't need it as we are building in a freestanding environment here anyway
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
-set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -G0 -mxgot"
+set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 enable_language(C)
@@ -118,12 +118,12 @@ endif()
 include_directories(include)
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
-    -mcpu=mips4
-    -mabi=sandbox
+    -mabi=purecap
     -cheri-linker
     -integrated-as
     -msoft-float
     -fcolor-diagnostics
+    -fno-pic
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
 set(ASM_COMPILER_FLAGS
@@ -133,11 +133,12 @@ set(ASM_COMPILER_FLAGS
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -nostdinc
-    -O2 # TODO: make this depend on the configuration
-    -fomit-frame-pointer # TODO: make this depend on the configuration
-    -G0
-#    -mxgot
-    -Werror
+    -fno-builtin
+    -ffreestanding
+    -mcpu=cheri
+    -mllvm
+    -mxmxgot
+    -O0 # TODO: make this depend on the configuration
     -std=c11
     -DHARDWARE_${HARDWARE}
     -DCONSOLE_${CONSOLE}
@@ -145,20 +146,52 @@ set(C_COMPILER_FLAGS
 set(C_WARNING_FLAGS
     -Wall
     -Wextra
+    -Weverything
+    -Werror
+
+    # Explicitly error out on constructs that would always result in a crash.
+    -Werror=cheri-capability-misuse
+    -Werror=implicit-function-declaration
+    -Werror=format
+    -Werror=undefined-internal
+
+    -Wcast-qual
     -Wdisabled-optimization
-    -Wformat=2
     -Winit-self
     -Winline
     -Wpointer-arith
     -Wredundant-decls
+    -Wshadow
     -Wswitch-default
     -Wundef
     -Wwrite-strings
-    -Wshadow
 
-    -Wno-error=unused-function
-    -Wno-error=unused-variable
-    -Wno-error=unused-parameter
+    # We are the operating system, we are allowed to use underscores.
+    # There's also nothing wrong with those dollars, or padding, or not
+    # explicitly handling each and every enum when there's the default
+    # clause.
+    -Wno-reserved-id-macro
+    -Wno-dollar-in-identifier-extension
+    -Wno-padded
+    -Wno-switch-enum
+
+    -Wno-error=cast-align
+    -Wno-error=cast-qual
+    -Wno-error=comma
+    -Wno-error=conversion
+    -Wno-error=covered-switch-default
+    -Wno-error=deprecated-declarations
+    -Wno-error=expansion-to-defined
+    -Wno-error=extra-semi
+    -Wno-error=missing-prototypes
+    -Wno-error=missing-variable-declarations
+    -Wno-error=pedantic
+    -Wno-error=return-type
+    -Wno-error=sign-conversion
+    -Wno-error=unreachable-code
+    -Wno-error=unreachable-code-break
+    -Wno-error=unreachable-code-return
+    -Wno-error=unused-macros
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
