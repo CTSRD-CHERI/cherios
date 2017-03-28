@@ -49,12 +49,6 @@
 		      cheri_getlen(cap),				\
 		      cheri_getoffset(cap))
 
-static void cache_inv_low(int op, size_t line) {
-	__asm__ __volatile__ (
-		"cache %[op], 0(%[line]) \n"
-		:: [op]"i" (op), [line]"r" (line));
-}
-
 static void install_exception_vectors(void) {
 	/* Copy exception trampoline to exception vector. */
 	char * all_mem = cheri_getdefault() ;
@@ -69,7 +63,9 @@ static void install_exception_vectors(void) {
 
 	/* Invalidate I-cache */
 	__asm volatile("sync");
-	cache_inv_low((0b100<<2)+0, MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF);
+	__asm volatile(
+		"cache %[op], 0(%[line]) \n"
+		:: [op]"i" ((0b100 << 2) + 0), [line]"r" (MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF));
 	/* does not work with kseg0 address, hence the `& 0xFFFF` */
 	__asm volatile("sync");
 }
