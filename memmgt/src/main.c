@@ -46,7 +46,7 @@ void register_ns(void * ns_ref, void * ns_id) {
 		syscall_puts(KRED"Register failed\n");
 }
 
-int main(int argc, char **argv) {
+int main(int argc __unused, char **argv) {
 	/* We are passed the reference to free memory as our first
 	 * capability argument, which is argv.  For now, we don't yet
 	 * use this for the heap below.
