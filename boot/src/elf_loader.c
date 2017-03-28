@@ -89,7 +89,10 @@ static void error_elf_loader(Elf_Env *env, const char *fmt, ...) {
 }
 
 int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
-	if(memcmp(hdr->e_ident, "\x7F""ELF", 4)) {
+	if (hdr->e_ident[0] != 0x7f ||
+	    hdr->e_ident[1] != 'E'  ||
+	    hdr->e_ident[1] != 'L'  ||
+	    hdr->e_ident[1] != 'F') {
 		ERROR("Bad magic number");
 		return 0;
 	}
