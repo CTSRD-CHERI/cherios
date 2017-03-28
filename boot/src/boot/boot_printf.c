@@ -99,15 +99,6 @@ void boot_trace(const char *context, const char *fmt, ...) {
 	va_end(ap);
 }
 
-void boot_error(const char *file, const char *func, int line, const char *fmt, ...) {
-	boot_printf(KRED "Kernel error: '");
-	va_list ap;
-	va_start(ap, fmt);
-	boot_vprintf(fmt, ap);
-	va_end(ap);
-	boot_printf("' in %s, %s(), L%d"KRST"\n", file, func, line);
-}
-
 void boot_panic(const char *fmt, ...) {
 	va_list ap;
 
