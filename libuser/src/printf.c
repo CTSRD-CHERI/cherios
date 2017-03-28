@@ -36,6 +36,8 @@
 #include "assert.h"
 #include "namespace.h"
 
+#define BUF_SIZE	0x100
+
 static void buf_puts(char * str) {
 	#if 1
 	/* Syscall version */
@@ -60,10 +62,9 @@ static void buf_puts(char * str) {
 
 void buf_putc(char chr) {
 	static size_t offset = 0;
-	const size_t buf_size = 0x100;
-	static char buf[buf_size+1];
+	static char buf[BUF_SIZE+1];
 	buf[offset++] = chr;
-	if((chr == '\n') || (offset == buf_size)) {
+	if((chr == '\n') || (offset == BUF_SIZE)) {
 		buf[offset] = '\0';
 		buf_puts(buf);
 		offset = 0;

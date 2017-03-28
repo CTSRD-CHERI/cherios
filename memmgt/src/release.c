@@ -36,18 +36,18 @@ typedef struct {
 	int	r;
 } rel_t;
 
-static const int release_pending_size = 0x10;
-static rel_t release_pending[release_pending_size];
+#define RELEASE_PENDING_SIZE 0x10
+static rel_t release_pending[RELEASE_PENDING_SIZE];
 static int iteration = 0;
 
 static inline size_t safe(size_t i) {
-	return i%release_pending_size;
+	return i % RELEASE_PENDING_SIZE;
 }
 
 static void rel_push(void * p) {
 	static size_t lastfree = 0;
 	size_t i = lastfree;
-	while(lastfree - i <  release_pending_size) {
+	while(lastfree - i <  RELEASE_PENDING_SIZE) {
 		i++;
 		size_t j = safe(i);
 		if(release_pending[j].used == 0) {
@@ -76,7 +76,7 @@ static int try_gc(void * p) {
 }
 
 static void try_gc_rel(void) {
-	for(size_t i=0; i<release_pending_size; i++) {
+	for(size_t i=0; i<RELEASE_PENDING_SIZE; i++) {
 		if(release_pending[i].used > 0 &&
 		   release_pending[i].r >= iteration) {
 			void * p = release_pending[i].p;
@@ -99,7 +99,7 @@ void release(void * p) {
 }
 
 void release_init(void) {
-	for(size_t i=0; i<release_pending_size; i++)
+	for(size_t i=0; i<RELEASE_PENDING_SIZE; i++)
 		release_pending[i].used = 0;
 }
 

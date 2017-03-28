@@ -45,8 +45,8 @@ static inline void *align_upwards(void *p, uintptr_t align)
     return (p);
 }
 
-static const size_t pool_size = 1024*1024;
-static char pool[pool_size];
+#define POOL_SIZE (1024*1024)
+static char pool[POOL_SIZE];
 
 static char * pool_start = NULL;
 static char * pool_end = NULL;
@@ -66,11 +66,11 @@ static void *init_alloc_core(size_t s) {
 
 void init_alloc_init(void) {
 	pool_start = (char *)(pool);
-	pool_end = pool + pool_size;
-	pool_start = __builtin_memcap_bounds_set(pool_start, pool_size);
+	pool_end = pool + POOL_SIZE;
+	pool_start = __builtin_memcap_bounds_set(pool_start, POOL_SIZE);
 	pool_start = __builtin_memcap_perms_and(pool_start, ~ CHERI_PERM_EXECUTE);
 	pool_next = pool_start;
-	bzero(pool, pool_size);
+	bzero(pool, POOL_SIZE);
 	system_alloc = 0;
 }
 

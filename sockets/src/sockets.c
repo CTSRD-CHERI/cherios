@@ -37,8 +37,9 @@ typedef struct socket_t {
 	void * msg;
 } socket_t;
 
-const int MAX_SOCKET = 0x10;
-const int MAX_PORT = 0x10;
+#define MAX_SOCKET 0x10
+#define MAX_PORT   0x10
+
 int ports[MAX_PORT+1];
 socket_t sockets[MAX_SOCKET+1];
 int next_socket = 0;
