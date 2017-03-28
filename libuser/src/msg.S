@@ -59,6 +59,17 @@
 
 #define queue               $c18
 
+# These are used by the runtime to know who to respond to
+# FIXME should be local, anybody who wants to use creturn should do so to a creturn method
+	.data
+	.global sync_caller
+	.global sync_token
+	.align CAP_SIZE_BITS
+sync_caller:
+	.space CAP_SIZE
+sync_token:
+	.space CAP_SIZE
+
 # Message read loop
 
 	.text

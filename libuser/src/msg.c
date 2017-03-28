@@ -37,11 +37,6 @@
 #include "object.h"
 #include "syscalls.h"
 
-/* These are used by the runtime to know who to respond to */
-//FIXME should be local to the pop loop, anybody who wants to use creturn should do so to a creturn method
-capability sync_token = NULL;
-capability sync_caller = NULL;
-
 long	msg_enable = 0;
 
 void pop_msg(msg_t * msg) {
