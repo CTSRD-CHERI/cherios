@@ -101,7 +101,7 @@ static aid_t sched_picknext(void) {
 
 void sched_reschedule(aid_t hint) {
 	#ifdef __TRACE__
-	size_t old_kernel_curr_act = kernel_curr_act;
+	aid_t old_kernel_curr_act = kernel_curr_act;
 	#endif
 	if(!hint) {
 		again:
