@@ -69,9 +69,9 @@ extern void	__init_entry_point;
 #define	boot_assert(e)	((e) ? (void)0 : __boot_assert(__func__, 	\
 						       __FILE__, __LINE__, #e))
 void	__boot_assert(const char *, const char *, int, const char *) __dead2;
-void	boot_panic(const char *fmt, ...) __dead2;
+void	boot_panic(const char *fmt, ...) __dead2 __printflike(1, 2);
 
-int	boot_printf(const char *fmt, ...);
+int	boot_printf(const char *fmt, ...) __printflike(1, 2);
 int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 
