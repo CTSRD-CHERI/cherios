@@ -75,11 +75,11 @@ int	boot_printf(const char *fmt, ...) __printflike(1, 2);
 int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 
-void		init_elf_loader();
-void		load_kernel();
-boot_info_t*	load_init();
+void		init_elf_loader(void);
+void		load_kernel(void);
+boot_info_t*	load_init(void);
 
-void	hw_init();
+void	hw_init(void);
 void	install_exception_vector(void);
 
 #endif

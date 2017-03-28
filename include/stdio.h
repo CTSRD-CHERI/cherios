@@ -44,7 +44,7 @@ int	vsprintf(char *buf, const char *cfmt, va_list ap);
 int	vsnprintf(char *str, size_t size, const char *format, va_list ap);
 int	printf(const char *fmt, ...) __printflike(1, 2);
 int	vprintf(const char *fmt, va_list ap);
-int	fprintf(FILE * f, const char *fmt, ...) __printflike(1, 2);
+int	fprintf(FILE * f, const char *fmt, ...) __printflike(2, 3);
 int	puts(const char *s);
 int	putc(int character, FILE * stream);
 int	fputc(int character, FILE * stream);
