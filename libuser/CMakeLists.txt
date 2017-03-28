@@ -36,3 +36,6 @@ set(LIBUSER_SRCS
 add_library(user STATIC ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
 set_target_properties(user PROPERTIES COMPILE_FLAGS -mxgot)
 add_library(CheriOS::LibUser ALIAS user)
+
+add_executable(act_invoke.o src/cheribsd/msg.S)
+set_target_properties(act_invoke.o PROPERTIES COMPILE_FLAGS -mxgot LINK_FLAGS "-r")
