@@ -33,6 +33,7 @@
 #include "string.h"
 #include "stdlib.h"
 #include "sys/mman.h"
+#include "cherireg.h"
 #include "object.h"
 
 static inline void *align_upwards(void *p, uintptr_t align)
