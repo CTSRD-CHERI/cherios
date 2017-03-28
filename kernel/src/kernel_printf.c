@@ -45,7 +45,7 @@ void kernel_puts(const char *s) {
 }
 
 #ifndef __LITE__
-static void uart_putchar(int c, __attribute__((unused)) void *arg) {
+static void uart_putchar(int c, void *arg __unused) {
 	uart_putc(c);
 }
 
