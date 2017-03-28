@@ -49,7 +49,7 @@ const int last  = first + 32;
 const int nmsg = 16;
 const int llast = 79;
 
-void lastr(int a __unused, u64 b, int c __unused,
+void lastr(int a, u64 b, int c __unused,
            void * x __unused, void *y __unused, void *z __unused) {
 	static u64 sum = 0;
 	static u64 cnt = 0;
