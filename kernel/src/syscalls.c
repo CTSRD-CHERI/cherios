@@ -86,6 +86,8 @@ static void syscall_puts() {
 	#endif
 }
 
+static void syscall_panic(void) __dead2;
+
 static void syscall_panic(void) { //fixme: temporary
 	kernel_freeze();
 }

@@ -107,6 +107,8 @@ static void kernel_exception_capability(void) {
 	kernel_freeze();
 }
 
+static void kernel_exception_data(register_t excode) __dead2;
+
 static void kernel_exception_data(register_t excode) {
 	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s-%d\n",
 			 excode, cp0_badvaddr_get(),
@@ -115,6 +117,7 @@ static void kernel_exception_data(register_t excode) {
 	kernel_freeze();
 }
 
+static void kernel_exception_unknown(register_t excode) __dead2;
 
 static void kernel_exception_unknown(register_t excode) {
 	exception_printf(KRED"Unknown exception type '%d' in  %s-%d"KRST"\n",
