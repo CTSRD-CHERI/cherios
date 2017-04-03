@@ -133,6 +133,15 @@ call:
 	clc		$c12, $t0, 0($c17)
 	cjalr		$c12, $c17
 	nop
+
+	#Restore sync_token
+	cgetdefault	$c17
+	dla		$t1, sync_token
+	clc		$c1, $t1, 0($c17)
+	#Restore caller activation reference
+	dla     $t1, sync_caller
+	clc     $c2, $t1, 0($c17)
+
 	b		end
 	nop
 
@@ -144,13 +153,6 @@ overflow:
 	nop
 
 end:
-	#Restore sync_token
-	cgetdefault	$c17
-	dla		$t1, sync_token
-	clc		$c1, $t1, 0($c17)
-	#Restore caller activation reference
-	dla     $t1, sync_caller
-	clc     $c2, $t1, 0($c17)
 #FIXME this instruction cannot jump backwards due to a QEMU bug
 	cbts    $c1, make_return
 	nop
