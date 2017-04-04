@@ -60,7 +60,7 @@ static void *boot_alloc_core(size_t s) {
 		return NULL;
 	}
 	void * p = pool_next;
-	p = __builtin_memcap_bounds_set(p, s);
+	p = __builtin_cheri_bounds_set(p, s);
 	pool_next = align_upwards(pool_next+s, 12);
 	return p;
 }
@@ -68,8 +68,8 @@ static void *boot_alloc_core(size_t s) {
 void boot_alloc_init(void) {
 	pool_start = (char *)(pool);
 	pool_end = pool + POOL_SIZE;
-	pool_start = __builtin_memcap_bounds_set(pool_start, POOL_SIZE);
-	pool_start = __builtin_memcap_perms_and(pool_start, 0b11111101);
+	pool_start = __builtin_cheri_bounds_set(pool_start, POOL_SIZE);
+	pool_start = __builtin_cheri_perms_and(pool_start, 0b11111101);
 	pool_next = pool_start;
 	bzero(pool, POOL_SIZE);
 	system_alloc = 0;
