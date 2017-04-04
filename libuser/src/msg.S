@@ -76,7 +76,7 @@ msg_entry_loop:
     bne    $t0, $t1, pop                                  # $t0 != $t1
 
 # TODO in a multicore world we may wish to spin a few times before resorting to WAIT
-    li      $v0, WAIT_NO                                  #
+    li      $v0, WAIT_NO                                 #
     syscall                                               # SYSCALL(WAIT)
 
 pop:
@@ -98,7 +98,7 @@ pop:
     addi    $t0, $t0, 1                                 #
     bne    $t0, $t1, update_start                       #
     nop                                                 #
-    li      $t0, 0                                      # $t0 = ($t0 + 1) % len
+    li      $t0, 0                                     # $t0 = ($t0 + 1) % len
 
 update_start:
     csd     $t0, $zero, HEADER_START_OFFSET(queue)      # start = $t0
@@ -128,8 +128,8 @@ call:
     dla     $t1, sync_caller
     csc     $c2, $t1, 0($c17)
 
-	sll		$v0, $v0, CAP_SIZE_BITS
-	add		$t0, $t0, $v0
+	dsll	$v0, $v0, CAP_SIZE_BITS
+	dadd	$t0, $t0, $v0
 	clc		$c12, $t0, 0($c17)
 	cjalr		$c12, $c17
 	nop
