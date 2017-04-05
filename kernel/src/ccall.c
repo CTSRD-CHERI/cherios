@@ -47,7 +47,7 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 	unique ++;
 	ccaller->sync_token = unique;
 
-	capability sync_token = cheri_andperm(cheri_getdefault(), 0);
+	capability sync_token = cheri_andperm(cheri_getdefault(), CHERI_PERM_GLOBAL);
 	#ifdef _CHERI256_
 	sync_token = cheri_setbounds(sync_token, 0);
 	#endif
