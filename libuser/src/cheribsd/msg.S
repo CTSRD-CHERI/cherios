@@ -64,6 +64,8 @@
 	.data
 	.global sync_caller
 	.global sync_token
+	.size sync_caller, CAP_SIZE
+	.size sync_token, CAP_SIZE
 	.align CAP_SIZE_BITS
 sync_caller:
 	.space CAP_SIZE
