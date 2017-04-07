@@ -58,4 +58,6 @@ typedef capability context_t;
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
+#define ALLOCATE_PLT_NANO PLT_ALLOCATE(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
+
 #endif //CHERIOS_NANOKERNEL_H

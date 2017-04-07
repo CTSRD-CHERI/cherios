@@ -94,7 +94,7 @@ int msg_push(capability c3, capability c4, capability c5,
 
 	queue->header.end = safe(queue->header.end+1, qmask);
 
-	KERNEL_TRACE("msg push", "now %d items in %s's queue", msg_queue_fill(queue), dest->name);
+	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(queue), dest->name);
 	kernel_assert(!empty(queue));
 
 	sched_receives_msg(dest);

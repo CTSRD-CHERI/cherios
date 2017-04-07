@@ -120,7 +120,7 @@ include_directories(include)
 include_directories(include/sys)
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
-    -mabi=sandbox
+    -mabi=purecap
     -cheri-linker
     -integrated-as
     -msoft-float
@@ -140,10 +140,12 @@ set(C_COMPILER_FLAGS
     -mcpu=cheri
     -mllvm
     -mxmxgot
-    -O0 # TODO: make this depend on the configuration
+    -mxgot
+    -O1 # TODO: make this depend on the configuration
     -std=c11
     -DHARDWARE_${HARDWARE}
     -DCONSOLE_${CONSOLE}
+    -fpic
 )
 set(C_WARNING_FLAGS
     -Wall

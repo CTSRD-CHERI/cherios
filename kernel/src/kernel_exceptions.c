@@ -100,7 +100,7 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 	context_t own_save; // We never use this, there is currently no reason to restore the exception context
 
 	set_exception_handler(own_context);
-	cp0_status_bev_set(1);
+	cp0_status_bev_set(0);
 	kernel_interrupts_init(1);
 
 	while(1) {

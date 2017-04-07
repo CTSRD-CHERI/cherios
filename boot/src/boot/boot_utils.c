@@ -163,7 +163,7 @@ capability load_kernel(const char * file) {
 	caches_invalidate(&__kernel_load_virtaddr,
 	                  maxaddr - (size_t)(&__kernel_load_virtaddr));
 
-	return &__kernel_entry_point;
+	return prgmp;
 	err:
 	hw_reboot();
 }

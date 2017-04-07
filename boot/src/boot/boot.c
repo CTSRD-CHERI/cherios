@@ -56,7 +56,7 @@
 #define B_FENCE \
 	{m_fence, 1, NULL, 0, 0, 0, NULL},
 
-boot_elem_t boot_list[] = {
+static boot_elem_t boot_list[] = {
 	// TODO other end of the hack. The kernel assumes the first activation will be the namespace service
 	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
@@ -92,9 +92,9 @@ boot_elem_t boot_list[] = {
 	{m_fence, 0, NULL, 0, 0, 0, NULL}
 };
 
-const size_t boot_list_len = countof(boot_list);
+static const size_t boot_list_len = countof(boot_list);
 
-void print_build_date(void) {
+static void print_build_date(void) {
 	int filelen=0;
 	char * date = load("t1", &filelen);
 	if(date == NULL) {
@@ -149,32 +149,48 @@ static void install_exception_vectors(void) {
 	__asm volatile(
 	"cache %[op], 0(%[line]) \n"
 	:: [op]"i" ((0b100<<2)+0), [line]"r" (MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF));
+	__asm volatile(
+	"cache %[op], 0(%[line]) \n"
+	:: [op]"i" ((0b100<<2)+0), [line]"r" (MIPS_BEV0_CCALL_VECTOR & 0xFFFF));
+
+	//FIXME if we want boot exceptions we should install other vectors and not set this here
+	cp0_status_bev_set(0);
+
 	/* does not work with kseg0 address, hence the `& 0xFFFF` */
 	__asm volatile("sync");
 }
 
 // FIXME remove this when we seperate boot and init
-capability create_context_hack(reg_frame_t* frame, capability table, capability data) {
-	capability res;
-
+__attribute((noinline))
+void create_context_hack(reg_frame_t* frame, capability table, capability data) {
+	capability store;
 	//This actually clobbers a whole lot more, but it clobbers the same things as this function would
 	//As long as the function is not inlined this is fine.
 	__asm__ __volatile__ (
-			"clc	$c1, $zero, 0(%[table])\n"
-			"cmove	$c2, %[data]\n"
+			"cmove	$c18, %[table]\n"
+			"cmove	$c19, %[data]\n"
+			"clc	$c1, $zero, 0($c18)\n"
+			"cmove	$c2, $c19\n"
 			"cmove  $c3, %[frame]\n"
 			"li		$a0, 1\n"
+			"dla	$t0, 1f\n"
+			"cgetpccsetoffset $c17, $t0\n"
 			"ccall	$c1, $c2\n"
-			"cmove	%[res], $c3\n"
-	: [res]"=C"(res)
-	: [data]"C"(data), [table]"C"(table), [frame]"C"(frame)
-	: "$c3", "$c1", "$c2"
+			"1:clc  $c1, $zero, 64($c18)\n"
+			"cmove	$c2, $c19\n"
+			"cmove	$c4, %[store]\n"
+			"dla	$t0, 1f\n"
+			"cgetpccsetoffset $c17, $t0\n"
+			"ccall	$c1, $c2\n"
+			"1:nop\n"
+	:
+	: [data]"C"(data), [table]"C"(table), [frame]"C"(frame), [store]"C"(&store)
+	: "$c1", "$c2", "$c3", "$c4", "$c17", "$c18", "$c19", "t0", "a0"
 	);
-
-	return res;
 }
 
-extern int cherios_main(capability own_context, capability table, capability data) {
+int cherios_main(capability own_context, capability table, capability data);
+int cherios_main(capability own_context, capability table, capability data) {
 	/* Init hardware */
 	hw_init();
 
@@ -193,10 +209,11 @@ extern int cherios_main(capability own_context, capability table, capability dat
 	boot_printf("D\n");
 
 	install_exception_vectors();
-
-	capability init_func = load_kernel("kernel.elf");
+	capability entry = load_kernel("kernel.elf");
+	capability init_func = cheri_setoffset(cheri_getpcc(), cheri_getoffset(entry) + cheri_getbase(entry));
 
 	reg_frame_t k_frame;
+	bzero(&k_frame, sizeof(k_frame));
 	// FIXME remove this when we have seperated init and boot
 	// FIXME activation to do the rest
 	struct boot_hack_t hack;

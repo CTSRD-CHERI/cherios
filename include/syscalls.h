@@ -76,4 +76,6 @@ DECLARE_ENUM(ccall_selector_t, CCALL_SELECTOR_LIST)
 
 PLT(kernel_if_t, SYS_CALL_LIST)
 
+#define ALLOCATE_PLT_SYSCALLS PLT_ALLOCATE(kernel_if_t, SYS_CALL_LIST)
+
 #endif //CHERIOS_SYSCALLS_H

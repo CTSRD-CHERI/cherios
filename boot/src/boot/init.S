@@ -82,7 +82,6 @@ start:
 	cjr		$c12
 	nop
 cherios_init_jump_target:
-    li $zero, 0xbeef
 
     # Transfer control to nano kernel. The nano kernel will remove all capabilities it feels we do not need.
     dla         $t0, nano_kernel_init

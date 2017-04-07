@@ -32,6 +32,10 @@
 #include "nanokernel.h"
 #include "cp0.h"
 
+ALLOCATE_PLT_NANO
+
+#define printf kernel_printf
+
 int cherios_main(context_t boot_con, context_t own_con,
 				 nano_kernel_if_t* interface, capability def_data,
 				 struct boot_hack_t* hack) {
@@ -40,8 +44,9 @@ int cherios_main(context_t boot_con, context_t own_con,
 	init_nano_kernel_if_t(interface, def_data);
 	act_init(boot_con, own_con, hack);
 
+	KERNEL_TRACE("kernel", "Going into exception handling mode");
+
 	// We re-use this context as an exception context. Maybe we should create a proper one?
 	kernel_exception(boot_con, own_con); // Only here can we start taking exceptions, otherwise we crash horribly
-	KERNEL_TRACE("init", "init done");
-	return 0;
+	kernel_panic("exception handler should never return");
 }

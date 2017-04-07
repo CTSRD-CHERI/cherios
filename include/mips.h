@@ -32,6 +32,11 @@
 #ifndef _CHERIOS_MIPS_H_
 #define	_CHERIOS_MIPS_H_
 
+#ifdef HARDWARE_qemu
+#define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
+#define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
+#endif
+
 /*
  * Provide more convenient names for useful qualifiers from gcc/clang.
  */

@@ -43,6 +43,8 @@ capability act_self_cap   = NULL;
 queue_t * act_self_queue = NULL;
 kernel_if_t kernel_if;
 
+ALLOCATE_PLT_SYSCALLS
+
 void object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue, kernel_if_t* kernel_if_c) {
 	assert(kernel_if_c != NULL);
 	// I feel like as we use these methods on every syscall we should remove the indirection

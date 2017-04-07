@@ -160,7 +160,7 @@ static act_t * sched_picknext(void) {
 }
 
 void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
-	KERNEL_TRACE("sched", "being asked to schedule someone else. in_kernel=%d. have %d choices.",
+	KERNEL_TRACE("sched", "being asked to schedule someone else. in_kernel=%d. have %lu choices.",
 				 in_kernel,
 				 act_queue_end);
 	if(hint != NULL) {
