@@ -28,16 +28,16 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
 #include "activations.h"
 #include "klib.h"
 
-//#ifndef __LITE__
-#ifdef notyet
+#ifndef __LITE__
 
 /*
  * Prints a nice regump
  */
+
+#define printf kernel_printf
 
 #define REG_DUMP_M(_reg) {\
 	register_t reg = frame->mf_##_reg; \
@@ -49,7 +49,7 @@
 		frame->cf_##_reg);
 
 #define __REGDUMP(elem, cond, name, bits) { \
-	printf("%s"name":"KFNT"0x", cond?"":KFNT,elem); \
+	printf("%s"name":"KFNT"0x", cond?"":KFNT); \
 	int elem_lead_0 = bits - 3 - slog2(elem); \
 	for(int i=0; i<elem_lead_0; i+=4) { printf("0");} \
 	if(elem) { printf(KREG"%jx ", elem); } else { printf(" "KREG);} \
@@ -80,6 +80,13 @@ static inline size_t correct_base(size_t image_base, capability pcc) {
 
 static inline void print_frame(int num, size_t ra, char * sp) {
 	printf("%2d| [0x%016lx] (sp=%p)\n", num, ra, sp);
+}
+
+int check_cap(capability cap) {
+	size_t perm = CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP;
+	return ((cheri_getoffset(cap) >= cheri_getlen(cap)) ||
+	((cheri_getperm(cap) & perm) != perm) ||
+	(cap == NULL));
 }
 
 static inline void backtrace(size_t image_base, char* stack_pointer, capability return_address) {
@@ -114,7 +121,7 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 		int16_t stack_size = 0;
 		int16_t offset = 0;
 		for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
-			if(cheri_getoffset(instr) > cheri_getlen(instr)) {
+			if(check_cap(instr)) {
 				printf("***bad frame***\n");
 				return;
 			}
@@ -130,11 +137,13 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 
 		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
 
-		if(cheri_getoffset(ra_ptr) > cheri_getlen(ra_ptr)) {
+
+		if(check_cap(ra_ptr)) {
 			printf("***bad frame***\n");
 			return;
 		}
 
+		HW_TRACE_ON
 		return_address = *ra_ptr;
 		// Offset by 2 instructions for the cjal + nop
 		return_address = (capability)((uint32_t*)return_address-2);
@@ -200,12 +209,6 @@ void regdump(int reg_num) {
 	char * stack_pointer = (char*)frame->cf_c11 + frame->mf_sp;
 	capability return_address = frame->cf_pcc;
 	backtrace(kernel_curr_act->image_base, stack_pointer, return_address);
-}
-
-#else
-
-void regdump(int reg_num __unused) {
-	return;
 }
 
 #endif
