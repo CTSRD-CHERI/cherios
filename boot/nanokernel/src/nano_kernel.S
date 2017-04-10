@@ -84,7 +84,6 @@ nano_kernel_start:
 .global nano_kernel_init
 nano_kernel_init:
 #########################
-    li          $zero, next_context
 	# Populate exception registers: $kdc and $kcc
 	cgetpcc		$kcc                                    # kdcc will hold the code global capability
 	cgetdefault	$kdc                                    # kdc will hold the data global capability
@@ -160,7 +159,7 @@ nano_kernel_init:
 
     dli        $k0, (Perm_All & ~(Perm_Access_System_Registers))
     #candperm   $kdc, $kdc, $k0
-    #candperm   $c17,  $c17,  $k0
+    candperm   $c17,  $c17,  $k0
     cclearlo    (1 << 13)                               # Used $c13 as a tmp.
     csetdefault $kdc
     cjr         $c17

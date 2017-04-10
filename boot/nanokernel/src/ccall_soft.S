@@ -43,7 +43,13 @@
 		.global kernel_ccall_trampoline
 		.ent kernel_ccall_trampoline
 kernel_ccall_trampoline:
+# FIXME remove this when QEMU is fixed
+        dla $k0, 1f
+        csetoffset  $kr1c, $kcc, $k0
+        cjr $kr1c
+        nop
 
+        1:
 #demux ccall/return
 
         cgetcause $k0
