@@ -33,7 +33,7 @@
 .set noat
 
 # 	Trampoline loaded at hard-coded BERI load address to jump to the real start.
-.section	.boot
+.section	.boot, "xa"
 	.global beri_boot_start
 	.ent beri_boot_start
 beri_boot_start:
