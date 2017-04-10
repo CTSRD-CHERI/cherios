@@ -47,7 +47,7 @@ static inline void *align_upwards(void *p, uintptr_t align)
 }
 
 #define	POOL_SIZE 1024*1024
-static char pool[POOL_SIZE];
+static capability pool[POOL_SIZE/sizeof(capability)];
 
 static char * pool_start = NULL;
 static char * pool_end = NULL;
@@ -61,13 +61,13 @@ static void *boot_alloc_core(size_t s) {
 	}
 	void * p = pool_next;
 	p = __builtin_cheri_bounds_set(p, s);
-	pool_next = align_upwards(pool_next+s, 12);
+	pool_next = align_upwards(pool_next+s, 0x1000);
 	return p;
 }
 
 void boot_alloc_init(void) {
 	pool_start = (char *)(pool);
-	pool_end = pool + POOL_SIZE;
+	pool_end = pool_start + POOL_SIZE;
 	pool_start = __builtin_cheri_bounds_set(pool_start, POOL_SIZE);
 	pool_start = __builtin_cheri_perms_and(pool_start, 0b11111101);
 	pool_next = pool_start;

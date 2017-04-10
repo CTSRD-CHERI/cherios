@@ -143,7 +143,6 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 			return;
 		}
 
-		HW_TRACE_ON
 		return_address = *ra_ptr;
 		// Offset by 2 instructions for the cjal + nop
 		return_address = (capability)((uint32_t*)return_address-2);

@@ -111,6 +111,14 @@ void * load_module(module_t type, const char * file, int arg) {
 		assert(0);
 		return NULL;
 	}
+
+	size_t low_bits = cheri_getbase(prgmp) & (0x20 - 1);
+
+	if(low_bits != 0) {
+		boot_printf("ERROR: alignment of loaded file %s was %ld\n", file, low_bits);
+		assert(0);
+	}
+
 	size_t allocsize = cheri_getlen(prgmp);
 
 	size_t stack_size = 0x10000;
