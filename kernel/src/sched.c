@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "activations.h"
 #include "klib.h"
 #include "nanokernel.h"
@@ -177,19 +178,21 @@ void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
 		act_t* from = kernel_curr_act;
 		act_t* to = hint;
 
-		critical_section_enter();
-
-		sched_deschedule(from, into_state);
-		sched_schedule(to);
 		if(!in_kernel) {
+			critical_section_enter();
+
+			sched_deschedule(from, into_state);
+			sched_schedule(to);
 			if(from->status == status_terminated) {
+				KERNEL_TRACE("sched", "now destroying %s", from->name);
 				destroy_context(from->context, to->context); // This will never return
 			}
 			/* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
 			/* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
 			context_switch(to->context, &from->context);
 		} else {
-			critical_section_exit();
+			sched_deschedule(from, into_state);
+			sched_schedule(to);
 		}
 
 	}

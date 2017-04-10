@@ -161,28 +161,20 @@ cp0_compare_set(register_t compare)
 /*
  * Routines for managing the CP0 cause register.
  */
-static register_t
-cp0_cause_get(void)
-{
-	register_t cause;
-
-	__asm__ __volatile__ ("dmfc0 %0, $13" : "=r" (cause));
-	return (cause);
-}
 
 register_t
-cp0_cause_excode_get(void)
+cp0_cause_excode_get(register_t cause)
 {
 
-	return ((cp0_cause_get() & MIPS_CP0_CAUSE_EXCCODE) >>
+	return ((cause & MIPS_CP0_CAUSE_EXCCODE) >>
 	    MIPS_CP0_CAUSE_EXCODE_SHIFT);
 }
 
 register_t
-cp0_cause_ipending_get(void)
+cp0_cause_ipending_get(register_t cause)
 {
 
-	return ((cp0_cause_get() & MIPS_CP0_CAUSE_IP) >>
+	return ((cause & MIPS_CP0_CAUSE_IP) >>
 	    MIPS_CP0_CAUSE_IP_SHIFT);
 }
 

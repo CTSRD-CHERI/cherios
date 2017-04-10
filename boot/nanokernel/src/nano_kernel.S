@@ -183,17 +183,16 @@ context_switch:
     # Enter an exception level to turn off interrupts. We must at the least switch from restore_from.
     # However we might switch to the exception_context
 
-    dmfc0   $k0, $12
-    ori     $k0, 2                                      # set SR(EXL)
-    mtc0    $k0, $12
+    dmfc0   $t1, $12
+    ori     $t1, 2                                      # set SR(EXL)
+    mtc0    $t1, $12
 
     dli     $k0, 0
-    # FIXME check $c3/$c4 so this cant throw an exception.
 
 context_switch_local_entry:                             # void context_switch_local_entry(reg_t cause)
     # We cant use $idc fo a bit as we may enter here from an exception, so we put it in $kr1c for now
     cmove   $kr1c, $idc
-    # TODO unseal these
+    # TODO unseal these (if sealed)
     cmove   $idc, $c18
     cmove   $epcc, $c17
 
@@ -205,7 +204,7 @@ context_switch_exception_entry:                         # kr1c should contain a 
     # Now we can undo our weird juggle and use $idc again
     cmove   $idc, $kr1c
 
-    bnez    $k0, switch_exception                       # set if we used the local entry
+    bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
     clc      $kr1c, $zero, sealing_cap($idc)            # meant to be in delay
 
     cunseal  $c3, $c3, $kr1c
@@ -222,23 +221,22 @@ switch_restore:                                         # void switch_restore(co
     # Check if we had supressed any interrupts. If we did, we can pretty much treat this like the
     # Beginning of an exception and just restore the exception context
 
-    cld     $a0,   $zero, exception_cause($idc)         # load cause
-    beqz    $a0,   switch_restore_final                 # no exception
-    csd     $zero, $zero, exception_level($idc)         # critical_state.level = 0
+    cld     $k0,   $zero, exception_cause($idc)         # load cause
+    csd     $zero, $zero, exception_cause($idc)         # and set to 0
+    beqz    $k0,   switch_restore_final                 # no exception
+    csd     $zero, $zero, exception_level($idc)         # critical_state.level = 0 (should be in delay)
 
 switch_exception:                                       # void switch_exception(context_t victim, reg_t cause)
-    mtc0    $a0, $13                                    # Spoof cause
-    li      $k0, 1
     csd     $zero, $zero, exception_cause($idc)
                 # If we were doing it properly we would modify it to have the faulting instruction be from the new
                 # activation. However, for now as only the bits to check the type of
                 # interrupt we will just use this.
 
     clc     $c3, $zero, current_context($idc)           # Current context is the victim
-    cseal   $c4, $c3, $kr1c                             # Seal c3 to pass to exception handler
+    cseal   $kr2c, $c3, $kr1c                           # Seal c3 to pass to exception handler
     clc     $c3, $zero, exception_context($idc)         # load exception context
     csc     $c3, $zero, current_context($idc)           # set it as current context
-    csc     $c4, $zero, FRAME_C3_OFFSET($c3)                  # pass the sealed context to the exception handler
+    # HERE # If you want to restore the exception context with magic values, store via c3
 
     # Restore everything, we dont have a register spare for $c0 so set default while restoring
     # We use exception registers here. These are not used by the critical section check in exception.S
@@ -251,6 +249,9 @@ switch_exception:                                       # void switch_exception(
     .endm
 
 switch_restore_final:
+    dli         $a0, CHERI_FRAME_SIZE
+    cld         $a0, $a0, 0($c3)
+    bnez        $a0, nano_kernel_die                    # Check this context is still alive
 
     # c0 is not really stored in $c1, we just use it as temporary. $c3 will be overwritten so use $kr1c.
     cmove $kr1c, $c3
@@ -266,6 +267,8 @@ return:
 
 exceptional_return:
     #TODO we should drop the bit to allow access to k regs, but still be in an exception level
+    move       $a0, $k0                                 # pass the cause to the exception handler
+    cmove      $c3, $kr2c                               # pass the sealed context to the exception handler
     cjr        $epcc
 nop
 
@@ -319,15 +322,15 @@ create_context_end:
 ########################################################################
 # context_t destroy_context(context_t context, context_t restore_from);
 .global destroy_context
-destroy_context: #TODO ALL
+destroy_context:
 ########################################################################
 
     clc         $c13, $zero, sealing_cap($idc)              # Load sealing capability
     cunseal     $c3, $c3, $c13                              # unseal context we are destroying
     clc         $c14, $zero, current_context($idc)          # load current context
     ceq         $k0, $c3, $c14                              # k0 = 1 if we are deleting ourselves
-    dli          $k1, 1
-    dli          $t0, CHERI_FRAME_SIZE
+    dli         $k1, 1
+    dli         $t0, CHERI_FRAME_SIZE
     beqz        $k0, destroy_context_end
     csd         $k1, $t0, 0($c3)                            # set state to dead (in delay slot)
 
@@ -337,6 +340,7 @@ destroy_context: #TODO ALL
     ori         $k0, 2                                      # set SR(EXL)
     mtc0        $k0, $12
     j           switch_restore
+    nop
 
 destroy_context_end:
     cclearlo    (1 << 13) | (1 << 14) | (1 << 3)
@@ -385,15 +389,16 @@ critical_section_exit:
     bnez       $v0, kernel_critical_section_exit_end
     csd        $v0, $zero, exception_level($idc)            # decrement level
 
-    cld        $a0, $zero, exception_cause($idc)
-    beqz       $a0, kernel_critical_section_exit_end
+    cld        $k0, $zero, exception_cause($idc)
+    beqz       $k0, kernel_critical_section_exit_end
+    csd     $zero, $zero, exception_cause($idc)             # and set cause to 0
 
-    dmfc0      $k0, $12
-    ori        $k0, 3                                       # set SR(EXL) and SR(IE)
-    mtc0       $k0, $12
-    dli        $k0, 1
+    dmfc0      $k1, $12
+    ori        $k1, 3                                       # set SR(EXL) and SR(IE)
+    mtc0       $k1, $12
+    dli        $k1, 1
     j          context_switch_local_entry                   # calling context switch with k0 = 1 will
-                                                            # will switch to the exception context
+    nop                                                     # will switch to the exception context
 
 kernel_critical_section_exit_end:
     creturn
@@ -411,6 +416,17 @@ set_exception_handler:
     csc         $c13, $zero, exception_context($idc)
     creturn
 
+
+#############################
+# void nano_kernel_die(void)
+.global nano_kernel_die
+nano_kernel_die:
+#############################
+    li  $zero, 0xbeef
+    li  $v0,   0xbad
+    dli $k0,  ((0x1f000000 + 0x00500) | 0x9000000000000000)
+    li  $k1,  0x42
+    csb $k1, $k0, 0($kdc)
 
 
 
@@ -434,13 +450,15 @@ skip_exception:
         dmfc0   $k1, $13
         csd     $k1, $zero, exception_cause($kr1c)
         dmfc0   $k1, $12
-        daddiu  $k1, -1     # As interrupts had to be enabled #TODO learn how to program and do &~1. d'oh.
-        mtc0    $k1, $12    # Disable interrupts, we are happy to take the hit as this is rare
+        li      $k0, 1
+        not     $k0, $k0
+        and     $k1, $k1, $k0 # As interrupts had to be enabled
+        mtc0    $k1, $12      # Disable interrupts, we are happy to take the hit as this is rare
         eret
 take_exception:
 		dla	$k1, context_switch_exception_entry
 		jr	$k1
-		li  $k0, 1
+		dmfc0 $k0, $13
 kernel_exception_trampoline_end:
 		nop
 		.global kernel_exception_trampoline_end

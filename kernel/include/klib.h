@@ -82,7 +82,7 @@ void	kernel_ccall(void);
 void	kernel_creturn(void);
 
 void	kernel_interrupts_init(int enable_timer);
-void	kernel_interrupt(void);
+void	kernel_interrupt(register_t cause);
 int kernel_interrupt_register(int number, act_control_t *ctrl);
 int kernel_interrupt_enable(int number, act_control_t *ctrl);
 

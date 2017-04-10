@@ -33,6 +33,7 @@ set(LIBUSER_SRCS
     src/strlen.c
     src/subr_prf.c
     src/virtioblk.c
+    src/cp0.c
 )
 
 add_library(user STATIC ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})

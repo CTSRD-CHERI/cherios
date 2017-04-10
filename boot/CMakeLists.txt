@@ -12,7 +12,6 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}) # to find fs.img
 # )
 
 set(LIBKERNEL_SRCS
-    src/cp0.c
     src/kernel_printf.c
     src/kernel_utils.c
     src/uart.c

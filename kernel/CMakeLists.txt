@@ -2,7 +2,6 @@ include_directories(include)
 
 set(KERNEL_SRCS
     src/act.c
-    src/cp0.c
     src/gc.c
     src/init.c
     src/interrupts.c

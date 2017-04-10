@@ -73,8 +73,8 @@ static void kernel_interrupt_others(register_t pending) {
 	}
 }
 
-void kernel_interrupt(void) {
-	register_t ipending = cp0_cause_ipending_get();
+void kernel_interrupt(register_t cause) {
+	register_t ipending = cp0_cause_ipending_get(cause);
 	register_t toprocess = ipending & get_others_interrupts_mask();
 	KERNEL_TRACE("interrupt", "%lx %lx", ipending, toprocess);
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
