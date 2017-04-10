@@ -175,6 +175,10 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX filesz:%lX memsz:%lX align:%lX",
 		      seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr,
 		      seg->p_filesz, seg->p_memsz, seg->p_align);
+		if(seg->p_filesz > seg->p_memsz) {
+			ERROR("Section is larger in file than in memory");
+			return NULL;
+		}
 		if(seg->p_type == 1) {
 			size_t bound = seg->p_vaddr + seg->p_memsz;
 			allocsize = umax(allocsize, bound);
