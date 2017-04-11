@@ -37,7 +37,7 @@
 
 # struct context_t {
 #   reg_frame_t
-#   enum state{allocated, dead} #TODO currently only set allocated
+#   enum state{allocated, dead}
 #};
 
 .set CONTEXT_SIZE, CHERI_FRAME_SIZE + CAP_SIZE
