@@ -274,7 +274,6 @@ return:
     eret
 
 exceptional_return:
-    #TODO we should drop the bit to allow access to k regs, but still be in an exception level
     move       $a0, $k0                                 # pass the cause to the exception handler
     cmove      $c3, $kr2c                               # pass the sealed context to the exception handler
     cjr        $epcc
