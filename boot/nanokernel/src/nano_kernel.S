@@ -31,7 +31,7 @@
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
 .include "asm.S"
-
+#include "assembly_utils.h"
 
 # We will lay out our contexts like this
 
@@ -157,11 +157,20 @@ nano_kernel_init:
     # TODO: and the tlb and our own code/data and certain sealing types
     # TODO: and writing exception vectors
 
+    # The only registers not cleared will be
+    # Kernel regs (not accessible outside this module)
+    # pcc/c17 (will be the return address)
+    # c0 default data
+    # c1 a read only capability to nano kernel method table
+    # c2 a data capability for the nano kernel
+    # c3 the first context handle
+
     dli        $k0, (Perm_All & ~(Perm_Access_System_Registers))
-    #candperm   $kdc, $kdc, $k0
+    #candperm   $c13, $kdc, $k0
+    #csetdefault $c13
     candperm   $c17,  $c17,  $k0
-    cclearlo    (1 << 13)                               # Used $c13 as a tmp.
-    csetdefault $kdc
+    cclearlo    EncodeReg(all) & ~(EN4(c0, c1, c2, c3))
+    cclearhi    EncodeReg(all) & ~(EN4(c17, kdc, kcc, c31))
     cjr         $c17
     nop
 
