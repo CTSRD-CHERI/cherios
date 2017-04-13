@@ -65,7 +65,7 @@
  * $FreeBSD$
  */
 
-#include "boot/boot.h"
+#include "mips.h"
 
 #ifndef _UFS_UFS_DINODE_H_
 #define	_UFS_UFS_DINODE_H_

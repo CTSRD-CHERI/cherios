@@ -133,9 +133,9 @@ cherios_init_jump_target:
     cmove   $c4, $c18
     cmove   $c5, $c19
 
-	# Call cherios_main().
+	# Call bootloader_main().
 	cgetpcc		$c12
-	dla		$t0, cherios_main
+	dla		$t0, bootloader_main
 	csetoffset	$c12, $c12, $t0
 	cjalr		$c12, $c17
 	nop

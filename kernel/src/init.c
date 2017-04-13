@@ -36,17 +36,27 @@ ALLOCATE_PLT_NANO
 
 #define printf kernel_printf
 
-int cherios_main(context_t boot_con, context_t own_con,
-				 nano_kernel_if_t* interface, capability def_data,
-				 struct boot_hack_t* hack) {
+/* Use linker allocated memory to store boot-info. */
+static boot_info_t boot_info;
+
+int cherios_main(context_t own_con, nano_kernel_if_t* interface, capability def_data, boot_info_t* info) {
 	kernel_puts("Kernel Hello world\n");
 	kernel_setup_trampoline();
 	init_nano_kernel_if_t(interface, def_data);
-	act_init(boot_con, own_con, hack);
+
+    /*
+    * Copy boot_info from boot-loader memory to our own before
+    * processing it.
+    *
+    * TODO: check that the expected size matches.
+    */
+
+	memcpy(&boot_info, info, sizeof(boot_info));
+	context_t init_context = act_init(own_con, &boot_info);
 
 	KERNEL_TRACE("kernel", "Going into exception handling mode");
 
 	// We re-use this context as an exception context. Maybe we should create a proper one?
-	kernel_exception(boot_con, own_con); // Only here can we start taking exceptions, otherwise we crash horribly
+	kernel_exception(init_context, own_con); // Only here can we start taking exceptions, otherwise we crash horribly
 	kernel_panic("exception handler should never return");
 }

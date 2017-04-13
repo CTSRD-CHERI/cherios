@@ -35,6 +35,10 @@
 #include "cp0.h"
 static act_t * int_child[7];
 
+
+/* FIXME This entire thing will break when remove access from the kernel to CP0
+ * FIXME the solution will be to have the nano kernel expose a suitable interface
+
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */
 int get_others_interrupts_mask(void) {
 	register_t im;

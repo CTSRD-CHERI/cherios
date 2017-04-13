@@ -83,7 +83,7 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # CMake will try to link ctr1.o into the executable and this might not exist
 # We don't need it as we are building in a freestanding environment here anyway
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
-set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs"
+set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -v"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 enable_language(C)
@@ -126,6 +126,7 @@ set(ASMC_COMPILER_FLAGS
     -msoft-float
     -fcolor-diagnostics
     -fno-pic
+    -v
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
 set(ASM_COMPILER_FLAGS
@@ -183,6 +184,7 @@ set(C_WARNING_FLAGS
     -Wno-error=comma
     -Wno-error=conversion
     -Wno-error=covered-switch-default
+    -Wno-error=deprecated-declarations
     -Wno-error=expansion-to-defined
     -Wno-error=extra-semi
     -Wno-error=missing-prototypes
@@ -194,17 +196,7 @@ set(C_WARNING_FLAGS
     -Wno-error=unreachable-code-break
     -Wno-error=unreachable-code-return
     -Wno-error=unused-macros
-    -Wno-error=unused-variable
-
-    # These warnings are drowning the more important ones
-    -Wno-deprecated-declarations
-    -Wno-unused-macros
-    -Wno-cast-qual
-    -Wno-sign-conversion
-    -Wno-pedantic
-    -Wno-conversion
-    -Wno-comma
-    -Wunreachable-code-break
+    -Werror=mips-cheri-prototypes
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
@@ -219,67 +211,100 @@ add_compile_options(-g)
 set(CHERIOS_FILESYSTEM_DIR "${CMAKE_BINARY_DIR}/fs")
 set(CHERIOS_FILESYSTEM_DEPENDS "" CACHE INTERNAL "dependencies for filesystem")
 
-# Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
-function(add_cherios_executable _target)
-	add_cherios_executable_low(${_target} ${ARGN})
-	target_link_libraries(${_target} CheriOS::LibUser)
+function(add_to_filesystem _target)
+  set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
+  add_custom_command(TARGET ${_target} POST_BUILD
+    # make sure the directory exists
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
+    # copy the binary to the fs root directory
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
+    # remove some sections to save place (TODO: make this depend on the configuration)
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
+    )
+  # Using a CACHE INTERNAL variable ensures that changes are globally visible
+  set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
 endfunction()
 
-function(add_cherios_executable_low _target)
-    cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
-    if(NOT add_exe_LINKER_SCRIPT)
-        message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
-    elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
-        message(FATAL_ERROR "Chosen LINKER_SCRIPT ${add_exe_LINKER_SCRIPT} does not exist!")
-    endif()
-    set(_srcs ${add_exe_SOURCES})
-    list(LENGTH _srcs _src_count)
-    message("Adding executable ${_target} with ${_src_count} source files and linker script ${add_exe_LINKER_SCRIPT}")
-    if("${_src_count}" LESS 1)
-        message(FATAL_ERROR "No sources passed to add_cherios_executable()")
-    endif()
+function(set_core_ld_deps _target)
+  set_target_properties(${_target} PROPERTIES
+    LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld;;${CMAKE_SOURCE_DIR}/ldscripts/common.ld"
+    )
+endfunction()
 
-    add_executable(${_target} ${_srcs})
-    # Tell the compiler to use the specified linker script
-    target_link_libraries(${_target}
-        "-L${CMAKE_SOURCE_DIR}/ldscripts"
-        "-T${add_exe_LINKER_SCRIPT}"
+# Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
+
+function(add_cherios_executable _target)
+  add_cherios_module(${_target} ${ARGN})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_kernel _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_boot _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
+endfunction()
+
+function(add_cherios_init _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_memmgr _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_namespace _target)
+  add_cherios_module(${_target} ${ARGN})
+  set_core_ld_deps(${_target})
+  target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_module _target)
+  cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
+  if(NOT add_exe_LINKER_SCRIPT)
+    message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
+  elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
+    message(FATAL_ERROR "Chosen LINKER_SCRIPT ${add_exe_LINKER_SCRIPT} does not exist!")
+  endif()
+  set(_srcs ${add_exe_SOURCES})
+  list(LENGTH _srcs _src_count)
+  message("Adding executable ${_target} with ${_src_count} source files and linker script ${add_exe_LINKER_SCRIPT}")
+  if("${_src_count}" LESS 1)
+    message(FATAL_ERROR "No sources passed to add_cherios_executable()")
+  endif()
+
+  add_executable(${_target} ${_srcs})
+  # Tell the compiler to use the specified linker script
+  target_link_libraries(${_target}
+    "-L${CMAKE_SOURCE_DIR}/ldscripts"
+    "-T${add_exe_LINKER_SCRIPT}"
     )
-    target_link_libraries(${_target}
-        -cheri-linker
-        -nostartfiles
-        -nodefaultlibs
-    )
-    # add the linker scripts as dependencies and set the output file name
-    # TODO: don't hardcode mips.ld as an additional file dependency
-    set_target_properties(${_target} PROPERTIES
-        LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld"
-        OUTPUT_NAME "${_target}.elf"
-    )
-    # TODO: don't hardcode common.ld as an additional file dependency
-    set_target_properties(${_target} PROPERTIES
-        LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/common.ld"
-        OUTPUT_NAME "${_target}.elf"
+  target_link_libraries(${_target}
+    -cheri-linker
+    -G0
+    -mxgot
+    -nostartfiles
+    -nodefaultlibs
     )
 
-    # add it to the filesystem dir if requested
-    if(add_exe_ADD_TO_FILESYSTEM)
-        set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
-        add_custom_command(TARGET ${_target} POST_BUILD
-            # make sure the directory exists
-            COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
-            # copy the binary to the fs root directory
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
-            # remove some sections to save place (TODO: make this depend on the configuration)
-            COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
-            #COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
-        )
-        # Using a CACHE INTERNAL variable ensures that changes are globally visible
-        set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
-    endif()
-    # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
-    add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-        COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+  set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
+
+  # add it to the filesystem dir if requested
+  if(add_exe_ADD_TO_FILESYSTEM)
+    add_to_filesystem(${_target})
+  endif()
+  # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
+  add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
     )
 endfunction()
 

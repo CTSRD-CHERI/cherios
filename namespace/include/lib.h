@@ -34,4 +34,4 @@ void	ns_init(void);
 
 int	ns_register(int nb, void * act_reference);
 void *	ns_get_reference(int nb);
-
+int	ns_get_num_services(void);

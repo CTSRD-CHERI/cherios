@@ -41,22 +41,21 @@ typedef enum e_page_status {
 	page_child
 } e_page_status;
 
-typedef  struct
-{
+typedef struct {
 	e_page_status	status;
 	size_t	owner; /* activation owner */
 	size_t	len; /* number of pages in this chunk */
 	size_t	prev; /* start of previous chunk */
-}  page_t;
+} page_t;
 
 static page_t * book = NULL;
 
 /* fd and offset are currently unused and discarded in userspace */
 void *__mmap(void *addr, size_t length, int prot, int flags) {
 	int perms = CHERI_PERM_SOFT_1; /* can-free perm */
-	if(addr != NULL) {
+	if(addr != NULL)
 		panic("mmap: addr must be NULL");
-	}
+
 	if(!(flags & MAP_ANONYMOUS)) {
 		errno = EINVAL;
 		goto fail;
@@ -77,30 +76,26 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 
 	if(prot & PROT_READ) {
 		perms |= 1 << 2;
-		if(!(prot & PROT_NO_READ_CAP)) {
+		if(!(prot & PROT_NO_READ_CAP))
 			perms |= 1 << 4;
-		}
 	}
 	if(prot & PROT_WRITE) {
 		perms |= 1 << 3;
-		if(!(prot & PROT_NO_WRITE_CAP)) {
+		if(!(prot & PROT_NO_WRITE_CAP))
 			perms |= 1 << 5;
-		}
 	}
 
 	void * p = NULL;
-	#if !MMAP
+#if !MMAP
 	p = __calloc(length, 1);
-	if(p) {
-		goto ok;
-	}
-	goto fail;
-	#endif
+	if(p)	goto ok;
+	else	goto fail;
+#endif
 
 	size_t pages_wanted = length/pagesz;
-	if(pages_wanted*pagesz < length) {
+	if(pages_wanted*pagesz < length)
 		pages_wanted++;
-	}
+
 	assert(pages_wanted*pagesz >= length);
 
 	/* fixme: fix for dlmalloc so it cannot try to merge chunks of memory */
@@ -109,16 +104,16 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 	/* find some available space */
 	size_t page = 0;
 	while(page < pages_nb) {
-		if(book[page].status != page_unused) {
+		if(book[page].status != page_unused)
 			page += book[page].len;
-		} else if(book[page].len < pages_wanted) {
+		else if(book[page].len < pages_wanted)
 			page += book[page].len;
-		} else {
+		else
 			goto found;
-		}
 	}
 	goto fail;
-	found:
+
+ found:
 	/* update mapping */
 	book[page].status = page_used;
 	size_t curr_len = book[page].len;
@@ -130,12 +125,12 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 	p = cheri_setbounds(pool+page*pagesz, length);
 	goto ok;
 
-	ok:
+ ok:
 	p = cheri_andperm(p, perms);
 	//CHERI_PRINT_CAP(p);
 	return p;
 
-	fail:
+ fail:
 	printf(KRED "mmap fail %lx\n", length);
 	return MAP_FAILED;
 }
@@ -154,10 +149,10 @@ static size_t addr2chunk(void * addr, size_t length) {
 
 int __munmap(void *addr, size_t length) {
 	//CHERI_PRINT_CAP(addr);
-	#if !MMAP
-		free(addr);
-		return 0;
-	#endif
+#if !MMAP
+	free(addr);
+	return 0;
+#endif
 	if(!(cheri_getperm(addr) & CHERI_PERM_SOFT_1)) {
 		errno = EINVAL;
 		printf(KRED"BAD MUNMAP\n");

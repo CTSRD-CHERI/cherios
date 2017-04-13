@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2016 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -44,6 +45,10 @@ static inline int imin(int a, int b) {
 
 static inline size_t umax(size_t a, size_t b) {
 	return (a>b ? a : b);
+}
+
+static inline size_t umin(size_t a, size_t b) {
+	return (a<b ? a : b);
 }
 
 static inline int slog2(size_t s) {

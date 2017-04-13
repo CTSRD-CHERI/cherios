@@ -104,7 +104,6 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 	set_exception_handler(own_context);
 	cp0_status_bev_set(0);
 	kernel_interrupts_init(1);
-
 	while(1) {
 		context_switch(victim_context, &own_save);
 		// We will next to be switched to with c3 containing a victim context.
@@ -114,8 +113,14 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 		"move  %[y], $a0\n"
 		: [x]"=C"(victim_context) , [y]"=r"(cause));
 
-		kernel_assert(victim_context != own_context);
-		kernel_curr_act->context = victim_context;
+		if(victim_context != own_context) {
+			// We only do this as handles are not guaranteed to stay fresh (although they are currently)
+			kernel_curr_act->context = victim_context;
+		} else {
+			// This happens if an interrupt happened during the exception level. As soon as we exit
+			// Another exception happens and so take another.
+		}
+
 
 		static int entered = 0;
 		entered++;

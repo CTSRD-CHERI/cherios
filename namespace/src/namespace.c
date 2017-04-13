@@ -29,17 +29,27 @@
  */
 
 #include "lib.h"
+#include "sys/mman.h"
+#include "syscalls.h"
 
-typedef  struct
-{
+typedef struct {
 	void * act_reference;
 } bind_t;
 
-#define	BIND_LEN 0x80
+#define BIND_LEN 0x80
 bind_t bind[BIND_LEN];
+int count;
 
 void ns_init(void) {
+	/* We need to bootstrap the namespace refs ourselves using our
+	   ctrl cap, since the generic libuser was provided NULL
+	   caps. */
+
+	extern act_kt namespace_ref;
+	namespace_ref = syscall_act_ctrl_get_ref();
+
 	bzero(bind, sizeof(bind));
+	count = 0;
 }
 
 static int validate_idx(int nb) {
@@ -71,6 +81,17 @@ static int ns_register_core(int nb, void * act_reference) {
 
 	bind[nb].act_reference  = act_reference;
 
+	/* By convention, the first service registration is from the
+	 * mem-mgr.
+	 */
+	if (count == 0) {
+		mmap_set_act(act_reference);
+		printf("%s: #%d (mem-mgr) registered at port %d\n", __func__, count, nb);
+	} else {
+		printf("%s: #%d registered at port %d\n", __func__, count, nb);
+	}
+
+	count++;
 	return 0;
 }
 
@@ -81,4 +102,8 @@ int ns_register(int nb, void * act_reference) {
 	if((ret = validate_act_caps(act_reference)) != 0) return  ret;
 
 	return ns_register_core(nb, act_reference);
+}
+
+int ns_get_num_services(void) {
+	return count;
 }

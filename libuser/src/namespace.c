@@ -35,16 +35,26 @@
 #include "assert.h"
 #include "stdio.h"
 
-capability namespace_ref = NULL;
+act_kt namespace_ref = NULL;
 
-void namespace_init(capability ns_ref) {
+int namespace_rdy(void) {
+	return namespace_ref != NULL;
+}
+
+void namespace_init(act_kt ns_ref) {
 	namespace_ref = ns_ref;
 }
 
-int namespace_register(int nb, capability ref) {
+int namespace_register(int nb, act_kt ref) {
 	return MESSAGE_SYNC_SEND_r(namespace_ref, nb, 0, 0, ref, NULL, NULL, 0);
 }
 
-capability namespace_get_ref(int nb) {
+act_kt namespace_get_ref(int nb) {
 	return MESSAGE_SYNC_SEND_c(namespace_ref, nb, 0, 0, NULL, NULL, NULL, 1);
+}
+
+int namespace_get_num_services(void) {
+	if (namespace_ref == NULL)
+		return -1;
+	return MESSAGE_SYNC_SEND_r(namespace_ref, 0, 0, 0, NULL, NULL, NULL, 2);
 }

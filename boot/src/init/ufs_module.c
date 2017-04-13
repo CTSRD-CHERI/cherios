@@ -34,8 +34,10 @@
  * $FreeBSD$
  */
 
-#include "boot/boot.h"
+#include "init.h"
 #include "debug.h"
+#include "stdio.h"
+#include "assert.h"
 
 #ifndef DEV_BSHIFT
 #define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
@@ -61,7 +63,7 @@ int dskread(u8 *buf, u_int64_t lba, int nblk) {
 	u8 * fsp = &__fs_start;
 	for(size_t i=0; i<size; i++) {
 		// Check read is not out of bounds
-		kernel_assert(fsp + start + i < &__fs_end);
+		assert(fsp + start + i < &__fs_end);
 		buf[i] = fsp[start + i];
 	}
 	return 0;
@@ -74,34 +76,34 @@ load(const char *filepath, int *bufsize)
 	size_t size;
 	ssize_t read;
 
-	boot_printf("Loading '%s'\n", filepath);
+	printf("Loading '%s'\n", filepath);
 
 	if ((ino = lookup(filepath)) == 0) {
-		boot_printf("Failed to lookup '%s' (file not found?)\n", filepath);
+		printf("Failed to lookup '%s' (file not found?)\n", filepath);
 		return NULL;
 	}
 
 	if (fsread_size(ino, NULL, 0, &size) < 0 || size <= 0) {
-		boot_printf("Failed to read size of '%s' ino: %d\n", filepath, ino);
+		printf("Failed to read size of '%s' ino: %d\n", filepath, ino);
 		return NULL;
 	}
 
-	void * buf = boot_alloc(size);
+	void * buf = init_alloc(size);
 	if (buf == NULL) {
-		boot_printf("Failed to allocate read buffer %zu for '%s'\n",
-		    size, filepath);
+		printf("Failed to allocate read buffer %zu for '%s'\n",
+		       size, filepath);
 		return NULL;
 	}
 
 	read = fsread(ino, buf, size);
 	if ((size_t)read != size) {
-		boot_printf("Failed to read '%s' (%zd != %zu)\n", filepath, read,
-		    size);
-		boot_free(buf);
+		printf("Failed to read '%s' (%zd != %zu)\n", filepath, read,
+		       size);
+		init_free(buf);
 		return NULL;
 	}
 
-	boot_printf(KWHT"Load complete\n");
+	printf(KWHT"'%s' loaded\n", filepath);
 
 	*bufsize = (int)size;
 

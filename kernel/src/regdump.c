@@ -172,9 +172,7 @@ void regdump(int reg_num) {
 
 	REG_DUMP_M(hi); REG_DUMP_M(lo); printf("\n");
 
-	#if 0
 	REG_DUMP_M(pc); printf("\n"); /* does not seem in sync with pcc */
-	#endif
 
 	printf("\n");
 
@@ -211,4 +209,3 @@ void regdump(int reg_num) {
 }
 
 #endif
-

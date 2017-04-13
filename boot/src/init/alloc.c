@@ -28,34 +28,73 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
+#include "mips.h"
+#include "misc.h"
+#include "string.h"
+#include "stdlib.h"
+#include "sys/mman.h"
+#include "cherireg.h"
+#include "object.h"
+#include "init.h"
 
-/*
- * Various util functions
- */
+static inline void *align_upwards(void *p, uintptr_t align)
+{
+    size_t rounded;
 
-void __kernel_assert(const char *assert_function, const char *assert_file,
-			int assert_lineno, const char *assert_message) {
-	kernel_panic("assertion failure in %s at %s:%d: %s", assert_function,
-			assert_file, assert_lineno, assert_message);
+    rounded = roundup2((size_t)p, align);
+    p += (rounded - (size_t)p);
+
+    return (p);
 }
 
-void kernel_panic(const char *fmt, ...) {
-	va_list ap;
+#define POOL_SIZE (1024*1024)
+static capability pool[POOL_SIZE/sizeof(capability)];
 
-	kernel_printf(KMAJ"panic: ");
-	va_start(ap, fmt);
-	kernel_vprintf(fmt, ap);
-	va_end(ap);
-	kernel_printf(KRST"\n");
+static char * pool_start = NULL;
+static char * pool_end = NULL;
+static char * pool_next = NULL;
 
-	hw_reboot();
+static int system_alloc = 0;
+
+static void *init_alloc_core(size_t s) {
+	if(pool_next + s >= pool_end) {
+		return NULL;
+	}
+	void * p = pool_next;
+	p = __builtin_cheri_bounds_set(p, s);
+	pool_next = align_upwards(pool_next+s, 0x1000);
+	return p;
 }
 
-void hw_reboot(void) {
-	#ifdef HARDWARE_qemu
-		/* Used to quit Qemu */
-		mips_iowrite_uint8(mips_phys_to_uncached(0x1f000000 + 0x00500), 0x42);
-	#endif
-	for(;;);
+void init_alloc_init(void) {
+	pool_start = (char *)(pool);
+	pool_end = pool_start + POOL_SIZE;
+	pool_start = __builtin_cheri_bounds_set(pool_start, POOL_SIZE);
+	pool_start = __builtin_cheri_perms_and(pool_start, ~ CHERI_PERM_EXECUTE);
+	pool_next = pool_start;
+	bzero(pool, POOL_SIZE);
+	system_alloc = 0;
+}
+
+void init_alloc_enable_system(void * c_memmgt) {
+	mmap_set_act(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, c_memmgt));
+	system_alloc = 1;
+}
+
+void *init_alloc(size_t s) {
+	if(system_alloc == 1) {
+		void * p = mmap(NULL, s, PROT_RW, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+		if(p == MAP_FAILED) {
+			return NULL;
+		}
+		return p;
+	}
+	return init_alloc_core(s);
+}
+
+void init_free(void * p __unused) {
+	if(system_alloc == 1) {
+		/* fixme: use munmap */
+	}
+	/* init alloc has no free */
 }

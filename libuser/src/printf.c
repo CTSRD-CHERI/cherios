@@ -39,20 +39,7 @@
 #define BUF_SIZE	0x100
 
 static void buf_puts(char * str) {
-	#if 1
     syscall_puts(str);
-	#else
-	/* CCall version */
-	static void * uart_ref = NULL;
-	static void * uart_id  = NULL;
-	if(uart_ref == NULL) {
-		uart_ref = namespace_get_ref(1);
-		uart_id  = namespace_get_id(1);
-	}
-	assert(uart_ref != NULL);
-	assert(uart_id != NULL);
-	ccall_c_n(uart_ref, uart_id, 1, str);
-	#endif
 }
 
 void buf_putc(char chr) {
@@ -72,7 +59,7 @@ void buf_putc(char chr) {
  * driver.
  */
 static void
-uart_putchar(int c, __attribute__((unused)) void *arg)
+uart_putchar(int c, void *arg __unused)
 {
 	buf_putc(c);
 }

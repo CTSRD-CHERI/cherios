@@ -29,71 +29,14 @@
  */
 
 #include "mips.h"
-#include "misc.h"
-#include "string.h"
-#include "stdlib.h"
-#include "sys/mman.h"
-#include "object.h"
-#include "boot/boot.h"
+#include "plat.h"
 
-static inline void *align_upwards(void *p, uintptr_t align)
-{
-    size_t rounded;
+void hw_reboot(void) {
 
-    rounded = roundup2((size_t)p, align);
-    p += (rounded - (size_t)p);
+#ifdef HARDWARE_qemu
+	/* Used to quit Qemu */
+	mips_iowrite_uint8(mips_phys_to_uncached(0x1f000000 + 0x00500), 0x42);
+#endif
 
-    return (p);
-}
-
-#define	POOL_SIZE 1024*1024
-static capability pool[POOL_SIZE/sizeof(capability)];
-
-static char * pool_start = NULL;
-static char * pool_end = NULL;
-static char * pool_next = NULL;
-
-static int system_alloc = 0;
-
-static void *boot_alloc_core(size_t s) {
-	if(pool_next + s >= pool_end) {
-		return NULL;
-	}
-	void * p = pool_next;
-	p = __builtin_cheri_bounds_set(p, s);
-	pool_next = align_upwards(pool_next+s, 0x1000);
-	return p;
-}
-
-void boot_alloc_init(void) {
-	pool_start = (char *)(pool);
-	pool_end = pool_start + POOL_SIZE;
-	pool_start = __builtin_cheri_bounds_set(pool_start, POOL_SIZE);
-	pool_start = __builtin_cheri_perms_and(pool_start, 0b11111101);
-	pool_next = pool_start;
-	bzero(pool, POOL_SIZE);
-	system_alloc = 0;
-}
-
-void boot_alloc_enable_system(act_control_kt c_memmgt) {
-	mmap_set_act(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, c_memmgt));
-	system_alloc = 1;
-}
-
-void *boot_alloc(size_t s) {
-	if(system_alloc == 1) {
-		void * p = mmap(NULL, s, PROT_RW, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-		if(p == MAP_FAILED) {
-			return NULL;
-		}
-		return p;
-	}
-	return boot_alloc_core(s);
-}
-
-void boot_free(void * p __unused) {
-	if(system_alloc == 1) {
-		/* fixme: use munmap */
-	}
-	/* Boot alloc has no free */
+	for(;;);
 }

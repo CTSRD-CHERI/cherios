@@ -46,7 +46,7 @@
         ITEM(message_reply, int, (capability c3, capability sync_token, register_t v0, register_t v1), __VA_ARGS__)          \
         ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \
         ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
-        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, register_t a0), __VA_ARGS__)  \
+        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue), __VA_ARGS__)  \
         ITEM(syscall_act_ctrl_get_ref, act_kt, (void), __VA_ARGS__)                                                          \
         ITEM(syscall_act_ctrl_get_status, status_e, (void), __VA_ARGS__)                                                     \
         ITEM(syscall_act_revoke, int, (void), __VA_ARGS__)                                                                   \

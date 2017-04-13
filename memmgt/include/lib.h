@@ -43,7 +43,7 @@
 #include "stdio.h"
 #include "string.h"
 
-void register_ns(void * ns_ref, void * ns_id);
+void register_ns(void * ns_ref);
 
 #define MMAP 1
 

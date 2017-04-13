@@ -28,33 +28,11 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
-#include "cheric.h"
-#include "math.h"
-#include "string.h"
+#ifndef __ELF_H
+#define __ELF_H
 
-#if 0
-#define TRACE(s, ...) trace_elf_loader(KYLW"elf_loader: " s KRST"\n", __VA_ARGS__)
-static void trace_elf_loader(const char *fmt, ...) {
-	va_list ap;
-	va_start(ap, fmt);
-	boot_vprintf(fmt, ap);
-	va_end(ap);
-}
-#else
-#define TRACE(...)
-#endif
-
-#define ERROR(s) error_elf_loader(KRED"elf_loader: " s KRST"\n")
-#define ERRORM(s, ...) error_elf_loader(KRED"elf_loader: " s KRST"\n", __VA_ARGS__)
-static void error_elf_loader(const char *fmt, ...) {
-	va_list ap;
-	va_start(ap, fmt);
-	boot_printf(KRED"elf_loader: ");
-	boot_vprintf(fmt, ap);
-	boot_printf(KRST"\n");
-	va_end(ap);
-}
+#include "mips.h"
+#include "stdarg.h"
 
 typedef uint16_t Elf64_Half;	// Unsigned half int
 typedef uint64_t Elf64_Off;	// Unsigned offset
@@ -64,8 +42,7 @@ typedef int32_t  Elf64_Sword;	// Signed int
 typedef uint64_t Elf64_Xword;	// Unsigned int
 typedef int64_t  Elf64_Sxword;	// Signed int
 
-typedef  struct
-{
+typedef struct {
 	unsigned char	e_ident[16];	/*  ELF  identification  */
 	Elf64_Half	e_type;		/*  Object  file  type  */
 	Elf64_Half	e_machine;	/*  Machine  type  */
@@ -96,8 +73,7 @@ enum Elf_Ident {
 	EI_NIDENT	= 16 /* Size of e_ident[] */
 };
 
-typedef  struct
-{
+typedef struct {
 	Elf64_Word	sh_name;	/*  Section  name  */
 	Elf64_Word	sh_type;	/*  Section  type  */
 	Elf64_Xword	sh_flags;	/*  Section  attributes  */
@@ -110,8 +86,7 @@ typedef  struct
 	Elf64_Xword	sh_entsize;	/*  Size  of  entries,  if  section  has  table  */
 }  Elf64_Shdr;
 
-typedef  struct
-{
+typedef struct {
 	Elf64_Word	p_type;		/*  Type  of  segment  */
 	Elf64_Word	p_flags;	/*  Segment  attributes  */
 	Elf64_Off	p_offset;	/*  Offset  in  file  */
@@ -122,139 +97,19 @@ typedef  struct
 	Elf64_Xword	p_align;	/*  Alignment  of  segment  */
 }  Elf64_Phdr;
 
-static int elf_check_supported(Elf64_Ehdr *hdr) {
-	if (hdr->e_ident[0] != 0x7f ||
-	    hdr->e_ident[1] != 'E' ||
-	    hdr->e_ident[2] != 'L' ||
-	    hdr->e_ident[3] != 'F') {
-		ERROR("Bad magic number");
-		return 0;
-	}
-	if(hdr->e_ident[EI_CLASS] != 2) {
-		ERROR("Bad EI_CLASS");
-		return 0;
-	}
-	if(hdr->e_ident[EI_DATA] != 2) {
-		ERROR("Bad EI_DATA");
-		return 0;
-	}
-	if(hdr->e_ident[EI_VERSION] != 1) {
-		ERROR("Bad EI_VERSION");
-		return 0;
-	}
-	if(hdr->e_ident[EI_OSABI] != 9) {
-		ERRORM("Bad EI_OSABI: %X", hdr->e_ident[EI_OSABI]);
-		return 0;
-	}
-	if(hdr->e_ident[EI_ABIVERSION] != 0) {
-		ERRORM("Bad EI_ABIVERSION: %X", hdr->e_ident[EI_ABIVERSION]);
-		return 0;
-	}
-	if(hdr->e_type != 2) {
-		ERRORM("Bad e_type: %X", hdr->e_type);
-		return 0;
-	}
-	if(hdr->e_machine != 8) {
-		ERRORM("Bad e_machine: %X", hdr->e_machine);
-		return 0;
-	}
-	if(hdr->e_version != 1) {
-		ERROR("Bad e_version");
-		return 0;
-	}
-#ifdef notyet
-	if(hdr->e_flags != 0x30000007) {
-		ERRORM("Bad e_flags: %X", hdr->e_flags);
-		return 0;
-	}
+/* Calling environment for loader */
+typedef struct {
+	void *(*alloc)(size_t size);
+	void (*free)(void *addr);
+	int (*printf)(const char *fmt, ...);
+	int (*vprintf)(const char *fmt, va_list ap);
+	void *(*memcpy)(void *dest, const void *src, size_t n);
+} Elf_Env;
+
+/* given pointer p to ELF image, returns a pointer to the loaded
+   image.  if provided, it also sets the min and max addresses touched
+   by the loader, and the entry point.
+ */
+void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry);
+
 #endif
-	return 1;
-}
-
-#if 0
-static inline Elf64_Shdr *elf_sheader(Elf64_Ehdr *hdr) {
-	return (Elf64_Shdr *)((char *)hdr + hdr->e_shoff);
-}
-#endif
-
-static inline Elf64_Phdr *elf_pheader(Elf64_Ehdr *hdr) {
-	return (Elf64_Phdr *)((char *)hdr + hdr->e_phoff);
-}
-
-#if 0
-static inline Elf64_Shdr *elf_section(Elf64_Ehdr *hdr, int idx) {
-	kernel_assert(idx < hdr->e_shnum);
-	return &elf_sheader(hdr)[idx];
-}
-#endif
-
-static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
-	kernel_assert(idx < hdr->e_phnum);
-	return &elf_pheader(hdr)[idx];
-}
-
-/* not secure */
-/* direct_map: Load the elf in physical memory (used for the kernel) */
-void * elf_loader(const char * file, int direct_map, size_t * maxaddr) {
-	int filelen=0;
-	char * addr = load(file, &filelen);
-	if(!addr) {
-		ERROR("Could not read file");
-		return NULL;
-	}
-	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
-	if(!elf_check_supported(hdr)) {
-		ERROR("ELF File cannot be loaded");
-		boot_free(addr);
-		return NULL;
-	}
-	Elf64_Addr e_entry = hdr->e_entry;
-	TRACE("e_entry:%lX e_phnum:%d e_shnum:%d", hdr->e_entry, hdr->e_phnum, hdr->e_shnum);
-	size_t allocsize = 0;
-	for(int i=0; i<hdr->e_phnum; i++) {
-		Elf64_Phdr *seg = elf_segment(hdr, i);
-		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX paddr:%lX filesz:%lX memsz:%lX align:%lX",
-			seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr, seg->p_paddr,
-			seg->p_filesz, seg->p_memsz, seg->p_align);
-		if(seg->p_filesz > seg->p_memsz) {
-			ERROR("Section is larger in file than in memory");
-			boot_free(addr);
-			return NULL;
-		}
-		if(seg->p_type == 1) {
-			allocsize = umax(allocsize, seg->p_vaddr + seg->p_memsz);
-		} else if(seg->p_type == 0x6474E551) {
-			/* GNU Stack */
-		} else {
-			ERROR("Unknown section");
-			return NULL;
-		}
-	}
-	char *prgmp = NULL;
-	if(direct_map) {
-		prgmp = cheri_getdefault();
-	} else {
-		prgmp = boot_alloc(allocsize); /* aligned to 4k */
-	}
-	if(!prgmp) {
-		ERROR("malloc failed");
-		return NULL;
-	}
-	for(int i=0; i<hdr->e_phnum; i++) {
-		Elf64_Phdr *seg = elf_segment(hdr, i);
-		if(seg->p_type == 1) {
-			memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
-		}
-	}
-	boot_free(addr);
-
-	if(maxaddr) {
-		*maxaddr = allocsize;
-	}
-
-	if(!direct_map) {
-		caches_invalidate(prgmp, allocsize);
-	}
-
-	return prgmp + e_entry;
-}

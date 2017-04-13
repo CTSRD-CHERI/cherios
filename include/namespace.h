@@ -32,11 +32,15 @@
 #ifndef CHERIOS_NAMESPACE_H
 #define CHERIOS_NAMESPACE_H
 
-void	namespace_init(capability ns_ref);
-int	namespace_register(int nb, capability ref);
-capability	namespace_get_ref(int nb);
+#include "types.h"
 
-extern void * namespace_ref;
+int     namespace_rdy(void);
+void	namespace_init(act_kt ns_ref);
+int	namespace_register(int nb, act_kt ref);
+act_kt	namespace_get_ref(int nb);
+int	namespace_get_num_services(void);
+
+extern act_kt namespace_ref;
 
 // TODO this is not a good way to handle names, we probably want string ids, or a string to integer id
 static const int namespace_num_kernel = 0;

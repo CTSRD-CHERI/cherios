@@ -43,10 +43,11 @@
  * purpose.
  */
 
-#include "boot/ufs/dinode.h"
-#include "boot/ufs/dir.h"
-#include "boot/ufs/fs.h"
+#include "init/ufs/dinode.h"
+#include "init/ufs/dir.h"
+#include "init/ufs/fs.h"
 #include "string.h"
+#include "stdio.h"
 
 #ifndef DEV_BSHIFT
 #define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
@@ -125,8 +126,11 @@ fsfind(const char *name, ufs_ino_t * ino)
 			s += d->d_reclen;
 		}
 	}
-	if (n != -1 && ls)
-		printf("\n");
+	if (n != -1 && ls) {
+		/* instead of printf("\n"), to avoid compiler builtin
+		   introducing dependence on putchar() */
+		printf("%s", "\n");
+	}
 	return 0;
 }
 

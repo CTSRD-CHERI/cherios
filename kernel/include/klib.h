@@ -34,6 +34,7 @@
 #define	_CHERIOS_KLIB_H_
 
 #include "kernel.h"
+#include "boot_info.h"
 #include "mips.h"
 #include "activations.h"
 #include "cdefs.h"
@@ -77,7 +78,7 @@ static const uint64_t act_sync_ref_type = 0x42003;
 /*
  * Kernel library routines.
  */
-void	kernel_skip_instr(act_t * act);
+
 void	kernel_ccall(void);
 void	kernel_creturn(void);
 
@@ -115,17 +116,11 @@ int msg_push(capability c3, capability c4, capability c5,
 void	msg_queue_init(act_t* act, queue_t * queue);
 int	msg_queue_empty(act_t* act);
 
-struct boot_hack_t {
-	kernel_if_t* kernel_if_c;
-	act_control_kt self_ctrl;
-	queue_t* queue;
-};
-
-void	act_init(context_t boot_context, context_t own_context, struct boot_hack_t* hack);
+context_t	act_init(context_t own_context, boot_info_t *bi);
 void	act_wait(act_t* act, act_t* next_hint);
-act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 					 status_e create_in_status, act_control_t *parent, size_t base);
-act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
 								   status_e create_in_status, act_control_t *parent);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);

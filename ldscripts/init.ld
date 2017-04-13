@@ -31,35 +31,28 @@
 INCLUDE "common.ld"
 
 __size_memory		= 0x1000000;	/* Start simple: 16M above load address */
-__size_boot_stack	= 0x10000;	/* Start simple: 64K */
+__size_init_stack	= 0x10000;	/* Start simple: 64K */
 
 CAP_ALIGN = 0x20;
 PAGE_ALIGN = 0x1000;
 
 OUTPUT_FORMAT("elf64-tradbigmips");
 OUTPUT_ARCH(mips)
-
-PHDRS
-{
-	header PT_PHDR PHDRS ;
-	boot PT_LOAD FILEHDR PHDRS AT (0xffffffff80100000) FLAGS(0x7) ;
-	text PT_LOAD ;
-}
-
-ENTRY(beri_boot_start)
+ENTRY(start)
 SECTIONS
 {
-	. += __beri_load_virtaddr;
+	. += __init_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
-	.boot ALIGN(CAP_ALIGN): {
-		*(.boot)
-	} :boot = 0x0
-
-	. = __boot_load_virtaddr;
+	.init : {
+		KEEP (*(.init))
+	} = 0
 	.text ALIGN(CAP_ALIGN): {
 		*(.text)
-	} :text
+	}
+	.fini ALIGN(CAP_ALIGN): {
+		KEEP (*(.fini))
+	} = 0
 
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
@@ -81,6 +74,23 @@ SECTIONS
 		KEEP (*(SORT(.dtors.*)))
 		KEEP (*/crtendC.o(.dtors))
 	}
+	.preinit_array ALIGN(CAP_ALIGN) : {
+		PROVIDE_HIDDEN (__preinit_array_start = .);
+		KEEP (*(.preinit_array))
+		PROVIDE_HIDDEN (__preinit_array_end = .);
+	}
+	.init_array ALIGN(CAP_ALIGN) : {
+		PROVIDE_HIDDEN (__init_array_start = .);
+		KEEP (*(SORT(.init_array.*)))
+		KEEP (*(.init_array))
+		PROVIDE_HIDDEN (__init_array_end = .);
+	}
+	.fini_array ALIGN(CAP_ALIGN) : {
+		PROVIDE_HIDDEN (__fini_array_start = .);
+		KEEP (*(.fini_array))
+		KEEP (*(SORT(.fini_array.*)))
+		PROVIDE_HIDDEN (__fini_array_end = .);
+	}
 	.data ALIGN(CAP_ALIGN): {
 		*(.data)
 	}
@@ -101,10 +111,10 @@ SECTIONS
 	 * we just define symbols, and don't move '.'.
 	 */
 	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_heap = ALIGN((__boot_load_virtaddr + __size_memory) - __size_boot_stack, PAGE_ALIGN);
+	__stop_heap = ALIGN((__init_load_virtaddr + __size_memory) - __size_init_stack, PAGE_ALIGN);
 	__size_heap = __stop_heap - __start_heap;
 
-	__start_boot_stack	= __stop_heap;
-	__stop_boot_stack	= __start_boot_stack + __size_boot_stack;
-	__rest_of_memory	= __stop_boot_stack;
+	__start_init_stack	= __stop_heap;
+	__stop_init_stack	= __start_init_stack + __size_init_stack;
+	__rest_of_memory	= __stop_init_stack;
 }

@@ -59,12 +59,26 @@
 	.global start_common
 	.ent start_common
 start_common:
+
+#########################################################################################################################
+# Some "documentation" for the interface between the kernel and activation start                                        #
+# These fields are setup by the caller of act_register                                                                  #
+#                                                                                                                       #
+# a0    : user GP argument (goes to main)                                                                               #
+# c3    : user Cap argument (goes to main)                                                                              #
+# c22   : runtime Cap argument (called self_cap or act_cap. Really an extra argument for special cases. goes to init)   #
+#                                                                                                                       #
+# These fields are setup by act_register itself. Although the queue is an argument to the function                      #
+#                                                                                                                       #
+# c21   : self control reference                                                                                        #
+# c23   : namespace reference (may be null for init and namespace)                                                      #
+# c24   : kernel interface table                                                                                        #
+# c25   : queue                                                                                                         #
+#########################################################################################################################
+
 	# Save arguments
 	move		$s0, $a0
-	move		$s1, $a1
-	cmove		$c17, $c3 # return address set to null
-	cmove		$c18, $c4 # set to null
-	cmove		$c19, $c5 # self_ctrl
+    cmove       $c20, $c3
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -92,7 +106,7 @@ start_common:
 	nop
 
 	# Call object init.
-	cmove		$c3, $c19 #self_ctrl
+	cmove		$c3, $c21 #self_ctrl
 	cmove		$c4, $c22 #self_cap
 	cmove		$c5, $c23 #ns_ref
 	cmove		$c6, $c24 #kernel_if
@@ -106,9 +120,7 @@ start_common:
 
 	# Restore arguments
 	move		$a0, $s0
-	move		$a1, $s1
-	cmove		$c3, $c17
-	cmove		$c4, $c18
+	cmove		$c3, $c20
 
 	# Call main().
 	cgetpcc		$c12

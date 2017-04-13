@@ -49,7 +49,7 @@ aid_t				kernel_next_act;
 act_t * 			kernel_curr_act;
 
 // TODO: Put these somewhere sensible;
-static queue_default_t boot_queue, kernel_queue;
+static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
 static act_t* ns_ref = NULL;
 
@@ -65,7 +65,17 @@ static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
 }
 
-void act_init(context_t boot_context, context_t own_context, struct boot_hack_t* hack) {
+static struct init_info		init_info;
+
+void * make_init_info(boot_info_t *bi) {
+	init_info.init_start_addr = bi->init_start_addr;
+	init_info.init_mem_size   = bi->init_mem_size;
+	init_info.init_stack      = bi->init_stack;
+	init_info.free_mem        = bi->free_mem;
+	return &init_info;
+}
+
+context_t act_init(context_t own_context, boot_info_t *bi) {
 	KERNEL_TRACE("init", "activation init");
 
 
@@ -75,33 +85,31 @@ void act_init(context_t boot_context, context_t own_context, struct boot_hack_t*
 
 	kernel_next_act = 0;
 
-	// This is a dummy. We have already created these contexts
+	// This is a dummy. Our first context has already been created
 	reg_frame_t frame;
 	bzero(&frame, sizeof(struct reg_frame));
 
-	// Register these first two contexts
-	act_register(&frame, &kernel_queue.queue, "kernel", 0, status_terminated, NULL, 0);
-	bzero(&frame, sizeof(struct reg_frame));
-	act_register(&frame, &boot_queue.queue, "boot", 0, status_alive, NULL, 0);
-
+	// Register the kernel (exception) activation
 	act_t * kernel_act = &kernel_acts[0];
-	act_t * boot_act = &kernel_acts[namespace_num_boot];
-
-	/* The contexts already exist and we set them here */
+	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, 0);
+	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
-	boot_act->context = boot_context;
 
-	/* While boot is still a user program, we need some way to pass these values. It was created too early for them to
-	 * exist */
-	hack->kernel_if_c = get_if();
-	hack->queue = boot_act->msg_queue;
-	hack->self_ctrl = (act_control_kt)act_create_sealed_ctrl_ref(boot_act);
+	// Create and register the init activation
+	act_t * init_act = &kernel_acts[namespace_num_boot];
+	act_register(&bi->init_frame, &init_queue.queue, "init", status_alive, NULL, 0);
+
+	/* provide config info to init.  c3 is the conventional register */
+    bi->init_frame.cf_c3 = make_init_info(bi);
+	init_act->context = create_context(&bi->init_frame, 0);
 
 	/* The boot activation should be the current activation */
-	sched_schedule(boot_act);
+	sched_schedule(init_act);
+
+	return init_act->context;
 }
 
-act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 							status_e create_in_status, act_control_t *parent, size_t base) {
 	(void)parent;
 	KERNEL_TRACE("act", "Registering activation %s", name);
@@ -136,17 +144,25 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, regis
 	/* set status */
 	act->status = create_in_status;
 
-	/* set register frame */
-	/* Setup frame to have its own ctrl and a0 */
-	//FIXME this convention needs work, it was copied from what was expected by init.S in libuser.
-	//FIXME we might as well have every reference needed, and not then have the user get them from the ctrl.
-	//FIXME I also feel that getting the namespace should be a syscall?
+/*Some "documentation" for the interface between the kernel and activation start                                        *
+* These fields are setup by the caller of act_register                                                                  *
+*                                                                                                                       *
+* a0    : user GP argument (goes to main)                                                                               *
+* c3    : user Cap argument (goes to main)                                                                              *
+* c22   : runtime Cap argument (called self_cap or act_cap. Really an extra argument for special cases. goes to init)   *
+*                                                                                                                       *
+* These fields are setup by act_register itself. Although the queue is an argument to the function                      *
+*                                                                                                                       *
+* c21   : self control reference                                                 										*
+* c23   : namespace reference (may be null for init and namespace)                                                      *
+* c24   : kernel interface table                                                                                        *
+* c25   : queue                                                                                                        */
+
 	/* set namespace */
+	frame->cf_c21 	= (capability)act_create_sealed_ctrl_ref(act);
 	frame->cf_c23	= (capability)ns_ref;
 	frame->cf_c24	= (capability)get_if();
 	frame->cf_c25	= (capability)queue;
-	frame->mf_a0 = a0;
-	frame->cf_c5 = (capability)act_create_sealed_ctrl_ref(act);
 
 	/* set queue */
 	msg_queue_init(act, queue);
@@ -165,9 +181,9 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, regis
 	return act;
 }
 
-act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name, register_t a0,
+act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
 							status_e create_in_status, act_control_t *parent) {
-	act_t* act = act_register(frame, queue, name, a0, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc));
+	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc));
 	act->context = create_context(frame, 0);
 	return act_create_sealed_ctrl_ref(act);
 }

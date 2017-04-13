@@ -1,6 +1,5 @@
 /*-
- * Copyright (c) 2016 Hongyan Xia
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,40 +28,14 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
-#include "statcounters.h"
+#ifndef _PLAT_H_
+#define	_PLAT_H_
 
-#ifdef HARDWARE_fpga
-	#define USE_STATCOUNTERS
-#endif
+#include "cdefs.h"
+#include "mips.h"
 
-#ifdef USE_STATCOUNTERS
-static statcounters_bank_t counter_start_bank;
-static statcounters_bank_t counter_end_bank;
-static statcounters_bank_t counter_diff_bank;
+void	hw_reboot(void) __dead2;
 
-static statcounters_bank_t * counter_start = &counter_start_bank;
-static statcounters_bank_t * counter_end   = &counter_end_bank;
-static statcounters_bank_t * counter_diff  = &counter_diff_bank;
-#endif
+void	caches_invalidate(void * addr, size_t size);
 
-void stats_init(void) {
-	#ifdef USE_STATCOUNTERS
-	/* Reset the statcounters */
-	reset_statcounters();
-	zero_statcounters(counter_start);
-	zero_statcounters(counter_end);
-	zero_statcounters(counter_diff);
-
-	/* Start sample */
-	sample_statcounters(counter_start);
-	#endif
-}
-
-void stats_display(void) {
-	#ifdef USE_STATCOUNTERS
-	sample_statcounters(counter_end);
-	diff_statcounters(counter_end, counter_start, counter_diff);
-	dump_statcounters(counter_diff, NULL, NULL);
-	#endif
-}
+#endif /* _PLAT_H_ */

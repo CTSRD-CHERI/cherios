@@ -1,23 +1,27 @@
-include_directories(include)
+set(LIBCRT_SRCS
+    ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
+    ${CMAKE_SOURCE_DIR}/libcrt/memcpy.S
+    ${CMAKE_SOURCE_DIR}/libcrt/memset.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strlen.c
+    ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
+    ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
+    ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
+    ${CMAKE_SOURCE_DIR}/libcrt/cp0.c
+)
 
 set(LIBUSER_ASM_SRCS
     src/init.S
-    src/memcpy_c.S
-    src/memcpy.S
     src/msg.S
     src/ccall.S
 )
 
 set(LIBUSER_SRCS
-    src/crtbeginC.c
-    src/crtendC.c
     src/assert.c
     src/ctype.c
     src/dlmalloc.c
     src/errno.c
     src/libuser.c
     src/malloc.c
-    src/memset.c
     src/mmap.c
     src/msg.c
     src/msg_default.c
@@ -30,12 +34,9 @@ set(LIBUSER_SRCS
     src/stdio.c
     src/stdlib.c
     src/strcmp.c
-    src/strlen.c
-    src/subr_prf.c
     src/virtioblk.c
-    src/cp0.c
 )
 
-add_library(user STATIC ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
+add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
 set_target_properties(user PROPERTIES COMPILE_FLAGS -mxgot)
 add_library(CheriOS::LibUser ALIAS user)

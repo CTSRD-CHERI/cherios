@@ -57,9 +57,9 @@ void kernel_syscall_wait(void) {
 	sched_block_until_msg(kernel_curr_act, NULL);
 }
 
-act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue, register_t a0);
-act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue, register_t a0) {
-	return act_register_create(frame, queue, name, a0, status_alive, NULL);
+act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue);
+act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue) {
+	return act_register_create(frame, queue, name, status_alive, NULL);
 }
 
 act_t * kernel_act_ctrl_get_ref(void);

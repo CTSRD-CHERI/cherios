@@ -127,7 +127,7 @@ copy_caps:
 	csc     $c5, $a1, -CAP_SIZE($c3)
 
 	dsub    $v1, $a0, $a2        # Subtract the number of bytes copied from the
-	                             # number to copy.  This should give the number
+	                             # number to copy.  This should give the number
 	                             # of unaligned bytes that we still need to copy
 	beqzl   $v1, memcpy_return # If we have an aligned copy (which we probably
 	                             # do) then return

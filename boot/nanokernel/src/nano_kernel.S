@@ -398,7 +398,7 @@ critical_section_exit:
 
     cld        $k0, $zero, exception_cause($idc)
     beqz       $k0, kernel_critical_section_exit_end
-    csd     $zero, $zero, exception_cause($idc)             # and set cause to 0
+    csd        $zero, $zero, exception_cause($idc)             # and set cause to 0
 
     dmfc0      $k1, $12
     ori        $k1, 3                                       # set SR(EXL) and SR(IE)

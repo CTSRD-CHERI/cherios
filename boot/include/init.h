@@ -1,5 +1,7 @@
 /*-
+ * Copyright (c) 2016 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,61 +30,58 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "malloc_heap.h"
+#ifndef _INIT_H_
+#define _INIT_H_
 
-extern void msg_entry;
-void (*msg_methods[]) = {__mmap, __munmap};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
+#include "mips.h"
+#include "cdefs.h"
+#include "stdio.h"
+#include "boot/boot_info.h"
+#include "types.h"
 
-size_t pagesz;			/* page size */
+typedef enum module_type {
+	m_memmgt,
+	m_namespace,
+	m_uart,
+	m_fs,
+	m_core,
+	m_user,
+	m_fence
+} module_t;
 
-void register_ns(void * ns_ref) {
-	namespace_init(ns_ref);
-	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
-	if(ret!=0) {
-		printf(KRED"memmgt: Register failed %d\n", ret);
-	}
-}
+typedef struct init_elem_s {
+	module_t     type;
+	int          cond;
+	const char * name;
+	register_t   arg;
+	int          daemon;
+	int          status;
+	act_control_kt ctrl;
+} init_elem_t;
 
-int main(int argc __unused, char **argv) {
-	/* We are passed the reference to free memory as our first
-	 * capability argument, which is argv.  For now, we don't yet
-	 * use this for the heap below.
-	 */
-	void * free_mem = argv;
-	//CHERI_PRINT_CAP(free_mem);
-	assert(free_mem != NULL);
+extern char	__start_heap;
+extern char	__stop_heap;
 
-	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
-	if(ret!=0) {
-		printf(KRED"memmgt: Register failed %d\n", ret);
-	}
+/*
+ * Memory routines
+ */
+void	init_alloc_init(void);
+void	init_alloc_enable_system(void * ctrl);
+void *	init_alloc(size_t s);
+void	init_free(void * p);
 
-	/* Get capability to heap */
-	void * heap = act_get_cap();
-	//CHERI_PRINT_CAP(heap);
-	assert(heap != NULL);
+void	glue_memmgt(void * memmgt_ctrl, void* ns_ctrl);
 
-	/*
-	 * setup memory and
-	 * align break pointer so all data will be page aligned.
-	 */
-	pagesz = CHERIOS_PAGESIZE;
-#if MMAP
-	minit(heap);
-#else
-	init_pagebucket();
-	__init_heap(heap);
+int	acts_alive(init_elem_t * init_list, size_t  init_list_len);
+
+void *	load_module(module_t type, const char * file, register_t arg, capability carg);
+int	num_registered_modules(void);
+
+void	stats_init(void);
+void	stats_display(void);
+
+void *	load(const char * filename, int * len);
+
+int init_main(void);
+
 #endif
-
-	/* init release mecanism */
-	release_init();
-
-	syscall_puts("memmgt: Going into daemon mode\n");
-
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-	return 0;
-}

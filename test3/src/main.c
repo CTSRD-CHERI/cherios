@@ -82,7 +82,7 @@ void ft(void) {
 	}
 }
 
-int main(int argc, __attribute__((unused)) char *argv[])
+int main(int argc, char *argv[] __unused)
 {
 	n = argc;
 	//printf("Test3_%d Hello world\n", n);
@@ -99,7 +99,7 @@ int main(int argc, __attribute__((unused)) char *argv[])
 		printf("Test3_%d: register failed\n", n);
 		return -1;
 	}
-	
+
 	if(first == n) {
 		__asm("li $0, 0xbeef");
 		printf("Test3_%d First!\n", n);

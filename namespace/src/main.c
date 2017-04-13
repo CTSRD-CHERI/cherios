@@ -31,7 +31,7 @@
 #include "lib.h"
 
 extern void msg_entry;
-void (*msg_methods[]) = {ns_register, ns_get_reference};
+void (*msg_methods[]) = {ns_register, ns_get_reference, ns_get_num_services};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);

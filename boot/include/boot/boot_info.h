@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,61 +28,38 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "malloc_heap.h"
+#ifndef _BOOT_INFO_H_
+#define _BOOT_INFO_H_
 
-extern void msg_entry;
-void (*msg_methods[]) = {__mmap, __munmap};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
+#include "cheric.h"
 
-size_t pagesz;			/* page size */
+/*
+ * Information populated by boot-loader, and given to the kernel via a
+ * pointer in cherios main.
+ */
+typedef struct boot_info {
+	/* FIXME: contiguous memory ranges should be passed as caps. */
 
-void register_ns(void * ns_ref) {
-	namespace_init(ns_ref);
-	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
-	if(ret!=0) {
-		printf(KRED"memmgt: Register failed %d\n", ret);
-	}
-}
+	void		*kernel_start_addr;	/* Lowest kernel memory address */
+	uint64_t	kernel_mem_size;	/* Size of contiguous memory for loaded kernel */
 
-int main(int argc __unused, char **argv) {
-	/* We are passed the reference to free memory as our first
-	 * capability argument, which is argv.  For now, we don't yet
-	 * use this for the heap below.
-	 */
-	void * free_mem = argv;
-	//CHERI_PRINT_CAP(free_mem);
-	assert(free_mem != NULL);
+	void		*init_start_addr;	/* Lowest init memory address */
+	uint64_t	init_mem_size;		/* Size of contiguous memory for loaded init */
+	void		*init_stack;		/* Stack region for init */
 
-	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
-	if(ret!=0) {
-		printf(KRED"memmgt: Register failed %d\n", ret);
-	}
+	reg_frame_t	init_frame;		/* Initial frame for initial activation */
 
-	/* Get capability to heap */
-	void * heap = act_get_cap();
-	//CHERI_PRINT_CAP(heap);
-	assert(heap != NULL);
+	void		*free_mem;		/* Free memory (which will include the bootloader) */
+} boot_info_t;
 
-	/*
-	 * setup memory and
-	 * align break pointer so all data will be page aligned.
-	 */
-	pagesz = CHERIOS_PAGESIZE;
-#if MMAP
-	minit(heap);
-#else
-	init_pagebucket();
-	__init_heap(heap);
-#endif
+/* Information copied from the boot_info by the kernel, and given to
+ * the init activation.
+ */
+typedef struct init_info {
+	void		*init_start_addr;	/* Lowest init memory address */
+	uint64_t	init_mem_size;		/* Size of contiguous memory for loaded init */
+	void		*init_stack;		/* Stack region for init */
+	void		*free_mem;		/* Free memory (which will include the bootloader) */
+} init_info_t;
 
-	/* init release mecanism */
-	release_init();
-
-	syscall_puts("memmgt: Going into daemon mode\n");
-
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-	return 0;
-}
+#endif /* _BOOT_INFO_H_ */

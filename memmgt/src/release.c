@@ -30,12 +30,11 @@
 
 #include "lib.h"
 
-typedef  struct
-{
+typedef struct {
 	int	used;
 	void *	p;
 	int	r;
-}  rel_t;
+} rel_t;
 
 #define RELEASE_PENDING_SIZE 0x10
 static rel_t release_pending[RELEASE_PENDING_SIZE];
@@ -90,8 +89,7 @@ void release(void * p) {
 }
 
 void release_init(void) {
-	for(size_t i=0; i<RELEASE_PENDING_SIZE; i++) {
+	for(size_t i=0; i<RELEASE_PENDING_SIZE; i++)
 		release_pending[i].used = 0;
-	}
 }
 

@@ -43,13 +43,12 @@
 	.global start
 	.ent start
 start:
-    cmove       $c18, $c4   # boot_context
     cmove       $c19, $c3   # own_context
-    cmove       $c20, $c5   # interface
-    cmove       $c21, $c6   # interface data
-    cmove       $c22, $c7   # hack
+    cmove       $c20, $c4   # interface
+    cmove       $c21, $c5   # interface data
+    cmove       $c22, $c6   # boot_info
 
-	# Set up a boot-time stack using memory allocated by the linker;
+	# Set up an exception stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
 	dla		$t0, __start_exception_stack
 	dla		$t1, __size_exception_stack
@@ -83,12 +82,11 @@ start:
 	cjalr		$c12, $c17
 	nop
 
-	dli		$a0, 0
-    cmove       $c3, $c18
-    cmove       $c4, $c19
-    cmove       $c5, $c20
-    cmove       $c6, $c21
-    cmove       $c7, $c22
+	dli		    $a0, 0
+    cmove       $c3, $c19
+    cmove       $c4, $c20
+    cmove       $c5, $c21
+    cmove       $c6, $c22
 
 	# Call cherios_main() this should never return as the kernel will set itself up as the exception context.
 	cgetpcc		$c12

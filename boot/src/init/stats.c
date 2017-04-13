@@ -1,4 +1,5 @@
 /*-
+ * Copyright (c) 2016 Hongyan Xia
  * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
@@ -28,46 +29,40 @@
  * SUCH DAMAGE.
  */
 
-#include "boot/boot.h"
-#include "assert.h"
+#include "mips.h"
+#include "statcounters.h"
 
-static int line_size = 0;
+#ifdef HARDWARE_fpga
+	#define USE_STATCOUNTERS
+#endif
 
-static void cache_init(void) {
-	register_t config1;
-	__asm__ __volatile__ ("dmfc0 %0, $16, 1" : "=r" (config1));
-	register_t il = (config1 >> 19) & 0b111;
-	register_t dl = (config1 >> 10) & 0b111;
-	assert(il == dl);
-	assert((il>0) && (il<7));
-	line_size = 1 << (il + 1);
+#ifdef USE_STATCOUNTERS
+static statcounters_bank_t counter_start_bank;
+static statcounters_bank_t counter_end_bank;
+static statcounters_bank_t counter_diff_bank;
+
+static statcounters_bank_t * counter_start = &counter_start_bank;
+static statcounters_bank_t * counter_end   = &counter_end_bank;
+static statcounters_bank_t * counter_diff  = &counter_diff_bank;
+#endif
+
+void stats_init(void) {
+	#ifdef USE_STATCOUNTERS
+	/* Reset the statcounters */
+	reset_statcounters();
+	zero_statcounters(counter_start);
+	zero_statcounters(counter_end);
+	zero_statcounters(counter_diff);
+
+	/* Start sample */
+	sample_statcounters(counter_start);
+	#endif
 }
 
-
-static void cache_inv_low(size_t line) {
-	__asm __volatile__(
-		"cache %[op], 0(%[line]) \n"
-		:: [op]"i" ((0b100 << 2) + 0), [line]"r" (line));
-	__asm __volatile__(
-		"cache %[op], 0(%[line]) \n"
-		:: [op]"i" ((0b100 << 2) + 1), [line]"r" (line));
-}
-
-static void cache_invalidate(size_t addr, size_t size) {
-	size_t line_mask = ~(line_size-1);
-	size_t end  = addr + size + line_size;
-	size_t line = addr & line_mask;
-	while (line < end) {
-		cache_inv_low(line);
-		line += line_size;
-	}
-	__asm volatile("sync");
-}
-
-void caches_invalidate(void * addr, size_t size) {
-	if(!line_size) {
-		cache_init();
-	}
-	cache_invalidate((size_t)addr, size);
-	cache_invalidate((size_t)addr, size);
+void stats_display(void) {
+	#ifdef USE_STATCOUNTERS
+	sample_statcounters(counter_end);
+	diff_statcounters(counter_end, counter_start, counter_diff);
+	dump_statcounters(counter_diff, NULL, NULL);
+	#endif
 }

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,37 +28,55 @@
  * SUCH DAMAGE.
  */
 
+#include "mips.h"
+#ifdef CHERIOS_BOOT
+
 #include "boot/boot.h"
-#include "stdio.h"
-#include "uart.h"
+#define assert(e) boot_assert(e)
 
-/*
- * Provide a kernel-compatible version of printf, which invokes the UART
- * driver.
- */
-static void
-uart_putchar(int c, __attribute__((unused)) void *arg)
-{
+#else  /* CHERIOS_BOOT */
 
-	uart_putc((char)c);
+#include "assert.h"
+
+#endif /* CHERIOS_BOOT */
+
+static int line_size = 0;
+
+static void cache_init(void) {
+	register_t config1;
+	__asm__ __volatile__ ("dmfc0 %0, $16, 1" : "=r" (config1));
+	register_t il = (config1 >> 19) & 0b111;
+	register_t dl = (config1 >> 10) & 0b111;
+	assert(il == dl);
+	assert((il>0) && (il<7));
+	line_size = 1 << (il + 1);
 }
 
-int
-kernel_vprintf(const char *fmt, va_list ap)
-{
 
-	return (kvprintf(fmt, uart_putchar, NULL, 10, ap));
+static void cache_inv_low(size_t line) {
+	__asm __volatile__(
+		"cache %[op], 0(%[line]) \n"
+		:: [op]"i" ((0b100 << 2) + 0), [line]"r" (line));
+	__asm __volatile__(
+		"cache %[op], 0(%[line]) \n"
+		:: [op]"i" ((0b100 << 2) + 1), [line]"r" (line));
 }
 
-int
-kernel_printf(const char *fmt, ...)
-{
-	va_list ap;
-	int retval;
+static void cache_invalidate(size_t addr, size_t size) {
+	size_t line_mask = ~(line_size-1);
+	size_t end  = addr + size + line_size;
+	size_t line = addr & line_mask;
+	while (line < end) {
+		cache_inv_low(line);
+		line += line_size;
+	}
+	__asm volatile("sync");
+}
 
-	va_start(ap, fmt);
-	retval = kernel_vprintf(fmt, ap);
-	va_end(ap);
-
-	return (retval);
+void caches_invalidate(void * addr, size_t size) {
+	if(!line_size) {
+		cache_init();
+	}
+	cache_invalidate((size_t)addr, size);
+	cache_invalidate((size_t)addr, size);
 }
