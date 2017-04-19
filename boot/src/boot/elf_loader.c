@@ -123,7 +123,10 @@ typedef  struct
 }  Elf64_Phdr;
 
 int elf_check_supported(Elf64_Ehdr *hdr) {
-	if(memcmp(hdr->e_ident, "\x7F""ELF", 4)) {
+	if (hdr->e_ident[0] != 0x7f ||
+	    hdr->e_ident[1] != 'E' ||
+	    hdr->e_ident[2] != 'L' ||
+	    hdr->e_ident[3] != 'F') {
 		ERROR("Bad magic number");
 		return 0;
 	}
@@ -159,10 +162,12 @@ int elf_check_supported(Elf64_Ehdr *hdr) {
 		ERROR("Bad e_version");
 		return 0;
 	}
+#ifdef notyet
 	if(hdr->e_flags != 0x30000007) {
 		ERRORM("Bad e_flags: %X", hdr->e_flags);
 		return 0;
 	}
+#endif
 	return 1;
 }
 

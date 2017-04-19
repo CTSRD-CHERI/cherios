@@ -44,18 +44,21 @@ static void cache_init(void) {
 }
 
 
-static void cache_inv_low(int op, size_t line) {
+static void cache_inv_low(size_t line) {
 	__asm __volatile__(
 		"cache %[op], 0(%[line]) \n"
-		:: [op]"i" (op), [line]"r" (line));
+		:: [op]"i" ((0b100 << 2) + 0), [line]"r" (line));
+	__asm __volatile__(
+		"cache %[op], 0(%[line]) \n"
+		:: [op]"i" ((0b100 << 2) + 1), [line]"r" (line));
 }
 
-static void cache_invalidate(int op, size_t addr, size_t size) {
+static void cache_invalidate(size_t addr, size_t size) {
 	size_t line_mask = ~(line_size-1);
 	size_t end  = addr + size + line_size;
 	size_t line = addr & line_mask;
 	while (line < end) {
-		cache_inv_low(op, line);
+		cache_inv_low(line);
 		line += line_size;
 	}
 	__asm volatile("sync");
@@ -65,6 +68,6 @@ void caches_invalidate(void * addr, size_t size) {
 	if(!line_size) {
 		cache_init();
 	}
-	cache_invalidate((0b100 << 2) +0, (size_t)addr, size);
-	cache_invalidate((0b100 << 2) +1, (size_t)addr, size);
+	cache_invalidate((size_t)addr, size);
+	cache_invalidate((size_t)addr, size);
 }

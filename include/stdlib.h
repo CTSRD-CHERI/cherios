@@ -31,11 +31,13 @@
 #ifndef __STDLIB_H__
 #define	__STDLIB_H__
 
+#include "cdefs.h"
+
 void *	malloc(size_t n);
 void *	calloc(size_t n, size_t s);
 void 	free(void * p);
 
-void 	abort(void);
-void	exit(int status);
+void 	abort(void) __dead2;
+void	exit(int status) __dead2;
 
 #endif /* !__STDLIB_H__ */

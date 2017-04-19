@@ -33,6 +33,7 @@
 #include "klib.h"
 
 /* todo: sleep cpu */
+static void sched_nothing_to_run(void) __dead2;
 static void sched_nothing_to_run(void) {
 	KERNEL_ERROR("No activation to schedule");
 	kernel_freeze();

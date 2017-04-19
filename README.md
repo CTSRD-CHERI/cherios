@@ -17,7 +17,14 @@ You need a Cheri SDK ([LLVM] and [Clang]) to build CheriOS.
 256-bit Cheri SDK works out of the box.
 128-bit Cheri SDK is not officially supported yet (it works with minor tweaks).
 
-The following snipset will build CheriOS for a 256-bit SDK targetting [cheri-qemu] (defaults).
+The easiest way to get a CheriOS to work is by using [cheribuild]:
+```sh
+$ cheribuild.py --include-dependencies run-cherios
+```
+will build the SDK and CheriOS and then launch CheriOS in QEMU.
+By default this will checkout and all the projects `$HOME/cheri` but this can be changed with `--source-root` or by using a JSON config file (`echo '{ "source-root": "/foo/bar" }' > ~/.config/cheribuild.json`). For more details see [the cheribuild README](https://github.com/CTSRD-CHERI/cheribuild/blob/master/README.md).
+
+If you have all the dependencies, the following snippet will build CheriOS for a 256-bit SDK targetting [cheri-qemu] (defaults).
 ```sh
 $ git clone https://github.com/CTSRD-CHERI/cherios.git cherios
 $ cd cherios
@@ -65,5 +72,6 @@ CheriOS code is organized as follow:
    [cheri-qemu]: <https://github.com/CTSRD-CHERI/qemu>
    [LLVM]: <http://github.com/CTSRD-CHERI/llvm>
    [Clang]: <https://github.com/CTSRD-CHERI/clang>
+   [cheribuild]: <https://github.com/CTSRD-CHERI/cheribuild>
 
 

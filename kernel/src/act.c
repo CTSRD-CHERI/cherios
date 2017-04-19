@@ -76,7 +76,7 @@ void act_init(void) {
 void kernel_skip_instr(act_t* act) {
 	act->saved_registers.mf_pc += 4; /* assumes no branch delay slot */
 	void * pcc = (void *) act->saved_registers.cf_pcc;
-	pcc = __builtin_memcap_offset_increment(pcc, 4);
+	pcc = __builtin_cheri_offset_increment(pcc, 4);
 	act->saved_registers.cf_pcc = pcc;
 }
 

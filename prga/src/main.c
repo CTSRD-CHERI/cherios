@@ -171,7 +171,7 @@ void client(void)
 	}
 }
 
-int main(int argc, __attribute__((unused)) char *argv[]) {
+int main(int argc, char *argv[] __unused) {
 	printf("User Hello world [%d]\n", argc);
 
 	/* Use the UART module to print an Hello World */

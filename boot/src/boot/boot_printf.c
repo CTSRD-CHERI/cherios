@@ -32,7 +32,9 @@
 #include "stdio.h"
 #include "uart.h"
 
-static int syscall_print = 0;
+#define	BUF_SIZE	0x100
+
+int syscall_print = 0;
 
 void boot_printf_syscall_enable(void) {
 	syscall_print = 1;
@@ -50,13 +52,12 @@ static void buf_puts(const char * str) {
 	}
 }
 
-static void buf_putc(int c, __attribute__((unused)) void *arg) {
+static void buf_putc(int c, void *arg __unused) {
 	char chr = (char)c;
 	static size_t offset;
-	const size_t buf_size = 0x100;
-	static char buf[buf_size+1];
+	static char buf[BUF_SIZE + 1];
 	buf[offset++] = chr;
-	if((chr == '\n') || (offset == buf_size)) {
+	if((chr == '\n') || (offset == BUF_SIZE)) {
 		buf[offset] = '\0';
 		buf_puts(buf);
 		offset = 0;

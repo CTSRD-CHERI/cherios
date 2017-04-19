@@ -89,12 +89,13 @@ static void syscall_act_seal_identifier(void) {
 static void syscall_puts() {
 	capability msg = kernel_exception_framep_ptr->cf_c3;
 	#ifndef __LITE__
-	printf(KGRN"%s" KREG KRST, msg);
+	kernel_printf(KGRN"%s" KREG KRST, msg);
 	#else
 	kernel_puts(msg);
 	#endif
 }
 
+static void syscall_panic(void) __dead2;
 static void syscall_panic(void) { //fixme: temporary
 	regdump(-1);
 	kernel_freeze();
@@ -170,7 +171,7 @@ void kernel_exception_syscall(void)
 			syscall_gc();
 			break;
 		default:
-			KERNEL_ERROR("unknown syscall '%d'", sysn);
+			KERNEL_ERROR("unknown syscall '%ld'", sysn);
 			kernel_freeze();
 	}
 

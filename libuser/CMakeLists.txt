@@ -1,6 +1,7 @@
 set(LIBUSER_ASM_SRCS
     src/init.S
     src/memcpy_c.S
+    src/memcpy.S
     src/msg.S
 )
 
