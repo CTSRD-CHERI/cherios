@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-char toupper(char c) {
+int toupper(int c) {
 	if(c>='a' && c<='z') {
 		c += 'A'-'a';
 	}
@@ -45,7 +45,7 @@ char * strtoupper(char * s) {
 	return s;
 }
 
-char tolower(char c) {
+int tolower(int c) {
     if(c>='A' && c<='Z') {
         c -= 'A'-'a';
     }
