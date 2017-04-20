@@ -43,7 +43,7 @@
 /* We only create activations for now, no delete */
 struct reg_frame *		kernel_exception_framep_ptr;
 act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
-aid_t				kernel_next_act;
+aid_t				kernel_next_act = 0;
 act_t * 			kernel_curr_act;
 static capability            act_default_id = NULL;
 
