@@ -169,6 +169,9 @@ inline ret_t ccall_SYNC_CALL(capability act_ref, capability act_id, int method_n
 	CCALL_BOTTOM(SYNC_CALL)
 	return ret;
 }
+ret_t ccall_SYNC_CALL(capability act_ref, capability act_id, int method_nb,
+					  register_t rarg1, register_t rarg2, register_t rarg3,
+					  const_capability carg1, const_capability carg2, const_capability carg3);
 
 
 void ccall_c_n(capability act_ref, capability act_id

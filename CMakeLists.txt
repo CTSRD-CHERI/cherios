@@ -140,10 +140,12 @@ set(C_COMPILER_FLAGS
     -mcpu=cheri
     -mllvm
     -mxmxgot
+    -mxgot
     -O0 # TODO: make this depend on the configuration
     -std=c11
     -DHARDWARE_${HARDWARE}
     -DCONSOLE_${CONSOLE}
+    -fpic
 )
 set(C_WARNING_FLAGS
     -Wall

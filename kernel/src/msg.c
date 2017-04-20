@@ -79,7 +79,7 @@ int msg_push(act_t * dest, act_t * src, capability identifier, capability sync_t
 	return 0;
 }
 
-void msg_pop(act_t * act) {
+void __attribute__((noreturn)) msg_pop(act_t * act) {
 
 	kernel_panic("Kernel should not pop");
 

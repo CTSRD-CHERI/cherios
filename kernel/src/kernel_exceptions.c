@@ -73,7 +73,7 @@ static void kernel_exception_data(register_t excode) {
 	kernel_freeze();
 }
 
-static void kernel_exception_trap() {
+static void __attribute__((noreturn)) kernel_exception_trap() {
 	exception_printf(KRED"trap in %s"KRST"\n"
 					 , kernel_curr_act->name);
 	regdump(-1);

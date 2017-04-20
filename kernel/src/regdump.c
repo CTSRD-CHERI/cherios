@@ -30,6 +30,7 @@
 
 #include <activations.h>
 #include "klib.h"
+#include "stdio.h"
 
 //#ifndef __LITE__
 #ifdef notyet

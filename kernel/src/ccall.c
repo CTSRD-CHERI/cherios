@@ -31,6 +31,7 @@
 
 #include <activations.h>
 #include "klib.h"
+#include "stdio.h"
 #include "syscalls.h"
 #include "cp0.h"
 
@@ -122,13 +123,13 @@ static void kernel_ccall_core(ccall_selector_t ccall_selector) {
 void kernel_ccall(void) {
 	KERNEL_TRACE(__func__, "in");
 
-	ccall_selector_t ccall_selector = (ccall_selector_t)
+	register_t ccall_instr =
 	#ifdef HARDWARE_fpga
 	        cp0_badinstr_get();
 	#else
 	        *((uint32_t *)kernel_exception_framep_ptr->cf_pcc);
 	#endif
-	ccall_selector &= 0x7FF;
+	ccall_selector_t ccall_selector = (ccall_selector_t)(ccall_instr & 0x7FF);
 
 	KERNEL_TRACE(__func__, "Selector = %s", enum_ccall_selector_t_tostring(ccall_selector));
 	/* Ack ccall instruction */
