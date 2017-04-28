@@ -90,8 +90,8 @@
 
 
 # This is the physical memory we will scan in order to support revocation
-# TODO use the proper physical window: 0x9000 0000 0000 0000
-.set PHY_MEM_START, 0xffffffff80000000
+# TODO use the proper physical window:
+.set PHY_MEM_START, 0x9000000000000000
 #.set PHY_MEM_SIZE,  (1 << 35)
 .set PHY_MEM_SIZE, (512 * 1024 * 1024)
 .set PHY_MEM_END,   PHY_MEM_START + PHY_MEM_START
