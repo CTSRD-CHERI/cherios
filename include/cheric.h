@@ -97,6 +97,8 @@ typedef __capability const void *  const_capability;
 #define	cheri_cchecktype(c, t)	__builtin_mips_cheri_check_type(		\
 				    __DECONST(capability, (c)), (t))
 
+#define cheri_getcursour(x) (cheri_getbase(x) + cheri_getoffset(x))
+
 #define	cheri_getdefault()	__builtin_mips_cheri_get_global_data_cap()
 #define	cheri_getidc()		__builtin_mips_cheri_get_invoke_data_cap()
 #define	cheri_getkr0c()		__builtin_mips_cheri_get_kernel_cap1()

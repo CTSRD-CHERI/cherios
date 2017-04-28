@@ -37,16 +37,11 @@
 #include "stdio.h"
 #include "boot_info.h"
 
-extern void kernel_exception_trampoline;
-extern void kernel_exception_trampoline_end;
-extern void kernel_ccall_trampoline;
-extern void kernel_ccall_trampoline_end;
-
-extern void	__boot_load_virtaddr;
-extern void	__kernel_load_virtaddr;
-extern void	__kernel_entry_point;
-extern void	__init_load_virtaddr;
-extern void	__init_entry_point;
+extern char	__boot_load_virtaddr;
+extern char	__kernel_load_virtaddr;
+extern char	__kernel_entry_point;
+extern char	__init_load_virtaddr;
+extern char	__init_entry_point;
 
 #define BOOT_PRINT_PTR(ptr)						\
 	boot_printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n",		\
@@ -78,7 +73,8 @@ int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 
 void		init_elf_loader(void);
-capability		load_kernel(void);
+size_t		    load_kernel(void);
+capability 		load_nano(void);
 boot_info_t*	load_init(void);
 
 void	hw_init(void);

@@ -83,12 +83,6 @@ start:
 	nop
 cherios_init_jump_target:
 
-    # Transfer control to nano kernel. The nano kernel will remove all capabilities it feels we do not need.
-    dla         $t0, nano_kernel_init
-    cgetpccsetoffset    $c12, $t0
-    cjalr       $c12, $c17
-    nop
-
     # Nano kernel init will give us a pointer to its plt, and a default data capability
     cmove       $c18, $c1
     cmove       $c19, $c2
@@ -124,7 +118,7 @@ cherios_init_jump_target:
 	cgetpcc		$c12
 	dla		$t0, crt_call_constructors
 	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
+ 	cjalr		$c12, $c17
 	nop
 
 	# We pass the nano kernel if / data cap and handle for the first context

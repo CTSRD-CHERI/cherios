@@ -1,5 +1,5 @@
 #-
-# Copyright (c) 2016 Hadrien Barral
+# Copyright (c) 2017 Lawrence Esswood
 # All rights reserved.
 #
 # This software was developed by SRI International and the University of
@@ -28,23 +28,11 @@
 # SUCH DAMAGE.
 #
 
-.set noreorder
-.set nobopt
-.set noat
-
-	.section init
-	.global start
-	.ent start
-start:
-    # We will not have a stack set up because bootstrapping is hard.
-    # Rather than have the kernel do it, its going to be done here
-    dla         $t0, __start_init_stack
-    cgetdefault $c12
-    dla         $t1, __size_init_stack
-    csetoffset  $c12, $c12, $t0
-    move        $sp, $t1
-    csetbounds  $c12, $c12, $t1
-
-    # Dont use j, linkers suck.
-	dla         $t0, start_common
-	jr          $t0
+.global __nano_elf_start
+.global __nano_elf_end
+__nano_elf_start:
+.incbin "nano.elf"
+__nano_elf_end:
+nop
+.size __nano_elf_start, __nano_elf_end - __nano_elf_start
+.size __nano_elf_end, 1

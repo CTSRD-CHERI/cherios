@@ -54,11 +54,33 @@
 
 #endif
 
+#define NANO_SIZE 64 * 1024 * 1024
+#define K_ALLOC_ALIGN (0x10000)
+
+static char* phy_mem;
 
 static void *kernel_alloc_mem(size_t _size) {
-	/* The kernel is direct-mapped. */
-	(void) _size;
-	return cheri_getdefault();
+	/* We will allocate the first few objects in low physical memory. THe first thing we load is the nano kernel
+	 * and this will be direct mapped.*/
+    static int alloc_direct = 1;
+    capability alloc;
+
+    if(alloc_direct) {
+        if(_size > NANO_SIZE + MIPS_KSEG0) {
+            boot_printf(KRED"nano kernel too large\n"KRST);
+            hw_reboot();
+        }
+        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, (unsigned long)NANO_SIZE);
+        phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + NANO_SIZE);
+        alloc = cheri_getdefault();
+        alloc_direct = 0;
+    } else {
+        alloc = phy_mem;
+        size_t align_off = (K_ALLOC_ALIGN - (_size & (K_ALLOC_ALIGN-1)) & (K_ALLOC_ALIGN-1));
+        phy_mem += _size + align_off;
+    }
+
+	return alloc;
 }
 
 static void kernel_free_mem(void *addr) {
@@ -81,7 +103,32 @@ void init_elf_loader() {
   env.memcpy  = boot_memcpy;
 }
 
-capability load_kernel() {
+capability load_nano() {
+	extern u8 __nano_elf_start, __nano_elf_end;
+	size_t minaddr, maxaddr, entry;
+	char *prgmp = elf_loader_mem(&env, &__nano_elf_start,
+								 &minaddr, &maxaddr, &entry);
+    if(!prgmp) {
+        boot_printf(KRED"Could not load nano kernel file"KRST"\n");
+        goto err;
+    }
+
+
+	__asm__ ("sync");
+
+	bi.nano_begin = 0;
+	bi.nano_end = NANO_SIZE;
+
+    boot_printf(KRED"Loaded nano kernel: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
+                minaddr, maxaddr, entry);
+
+    return prgmp + entry;
+
+    err:
+    hw_reboot();
+}
+
+size_t load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	size_t minaddr, maxaddr, entry;
 	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
@@ -98,57 +145,15 @@ capability load_kernel() {
 		goto err;
 	}
 
-	if(&__kernel_entry_point != prgmp + entry) {
-		boot_printf(KRED"Bad kernel entry point:"KRST"\n");
-		TRACE_PRINT_CAP(prgmp);
-		boot_printf("Expected kernel entry point:\n");
-		TRACE_PRINT_CAP(&__kernel_entry_point);
-		goto err;
-	}
-
-	caches_invalidate(&__kernel_load_virtaddr,
-	                  maxaddr - (size_t)(&__kernel_load_virtaddr));
+    bi.kernel_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
+    bi.kernel_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
 
 	boot_printf(KRED"Loaded kernel: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
 		    minaddr, maxaddr, entry);
-	TRACE_PRINT_CAP(prgmp);
-	TRACE_PRINT_CAP(&__kernel_load_virtaddr);
 
-	bzero(&bi, sizeof(bi));
-	bi.kernel_start_addr = &__kernel_load_virtaddr;
-	bi.kernel_mem_size = maxaddr - (size_t)(&__kernel_load_virtaddr);
-
-	return &__kernel_entry_point;
+	return entry;
 err:
 	hw_reboot();
-}
-
-#define	INIT_STACK_SIZE	0x10000
-#define	PAGE_ALIGN	0x1000
-
-static void *make_aligned_data_cap(const char *start, size_t len) {
-	size_t desired_ofs = (cheri_getbase(start) + cheri_getoffset(start) + PAGE_ALIGN);
-	desired_ofs &= ~ PAGE_ALIGN;
-
-	char *cap = (char *)cheri_getdefault();
-	cap += desired_ofs - cheri_getbase(cap);
-
-	cap = cheri_setbounds(cap, len);
-	cap = cheri_andperm(cap, ~ CHERI_PERM_EXECUTE);
-	return cap;
-}
-
-static void *make_free_mem_cap(const char *start) {
-	char *cap  = (char *)cheri_getdefault();
-	size_t len = cheri_getlen(cap);
-	size_t ofs = cheri_getbase(start) + cheri_getoffset(start) - cheri_getbase(cap);
-
-	cap += ofs;
-	len -= ofs;
-
-	cap = cheri_setbounds(cap, len);
-	cap = cheri_andperm(cap, ~ CHERI_PERM_EXECUTE);
-	return cap;
 }
 
 boot_info_t *load_init() {
@@ -170,44 +175,11 @@ boot_info_t *load_init() {
 		goto err;
 	}
 
-	caches_invalidate(&__init_load_virtaddr,
-	                  maxaddr - (size_t)(&__init_load_virtaddr));
-
 	boot_printf(KRED"Loaded init: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
 		    minaddr, maxaddr, entry);
-	TRACE_PRINT_CAP(prgmp);
-	TRACE_PRINT_CAP(&__init_load_virtaddr);
 
-	/* set up a stack region just after the loaded executable */
-	void * stack = make_aligned_data_cap(prgmp + maxaddr, INIT_STACK_SIZE);
-
-	bi.init_start_addr = &__init_elf_start;
-	bi.init_mem_size   = maxaddr - minaddr;
-	bi.init_stack      = stack;
-	/* free memory starts beyond this stack */
-	bi.free_mem = make_free_mem_cap((char *)stack + INIT_STACK_SIZE);
-
-	TRACE_PRINT_CAP(stack);
-	TRACE_PRINT_CAP(bi.free_mem);
-
-	/* set up pcc */
-	void *pcc = cheri_getpcc();
-	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)),
-			      cheri_getlen(prgmp));
-	pcc = cheri_setoffset(pcc, entry);
-	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-				  | CHERI_PERM_LOAD_CAP));
-
-	/* populate frame */
-	bzero(&bi.init_frame, sizeof(bi.init_frame));
-	bi.init_frame.cf_pcc = pcc;
-	TRACE_PRINT_CAP(pcc);
-	bi.init_frame.mf_pc  = cheri_getoffset(pcc) + cheri_getbase(pcc);
-	bi.init_frame.cf_c11 = stack;
-	bi.init_frame.mf_sp  = cheri_getlen(stack);
-	bi.init_frame.cf_c12 = pcc;
-	bi.init_frame.cf_c0  = cheri_setoffset(prgmp, 0);
-
+    bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
+    bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
 	return &bi;
 err:
 	hw_reboot();

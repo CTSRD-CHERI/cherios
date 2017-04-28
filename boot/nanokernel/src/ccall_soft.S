@@ -31,6 +31,8 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 .include "asm.S"
 
+.section .trampoline_ccall, "ax"
+
 #define __ASSEMBLY__ 1
 #include "exception_cause.h"
 
@@ -68,7 +70,7 @@ ccall_soft:
         cunseal $epcc, $c1, $kr1c
         cunseal $idc, $c2, $kr1c
 
-        j end
+        b end
         nop
 
 creturn_soft:
@@ -82,7 +84,7 @@ untrusting:
 
         cunseal $epcc, $c17, $kr1c
         cunseal $idc, $c18, $kr1c
-        j end
+        b end
         nop
 
 
@@ -103,4 +105,3 @@ kernel_ccall_trampoline_end:
 		.global kernel_ccall_trampoline_end
 		.end kernel_ccall_trampoline
 		.size kernel_ccall_trampoline, kernel_ccall_trampoline_end - kernel_ccall_trampoline
-		.size kernel_ccall_trampoline_end, 1

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Robert N. M. Watson
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,22 +28,45 @@
  * SUCH DAMAGE.
  */
 
-__cached_base = 0xffffffff80000000;
 
-/*
- * Configure cached (BEV=0) exception vectors at the following addresses.
- */
+INCLUDE "common.ld"
+INCLUDE "mips.ld"
 
-__exception_vector_size = 0x80;
+OUTPUT_FORMAT("elf64-tradbigmips");
+OUTPUT_ARCH(mips)
+ENTRY(nano_kernel_init)
+SECTIONS
+{
+    . = __cached_exception_vector_tlbrefill;
 
-__cached_exception_vector_base = __cached_base;
-__cached_exception_vector_tlbrefill =
-    __cached_exception_vector_base + 0x000;
-__cached_exception_vector_xtlbrefill =
-    __cached_exception_vector_base + 0x080;
-__cached_exception_vector_cacheerr =
-    __cached_exception_vector_base + 0x100;
-__cached_exception_vector_other =
-    __cached_exception_vector_base + 0x180;
-__cached_exception_vector_ccall =
-    __cached_exception_vector_base + 0x280;
+	.text ALIGN(CAP_ALIGN) : AT(__cached_exception_vector_tlbrefill) {
+        KEEP(*(.trampoline_tlb))
+        . = __cached_exception_vector_other;
+        KEEP (*(.trampoline_exc))
+        . = __cached_exception_vector_ccall;
+        KEEP (*(.trampoline_ccall))
+
+	    . = __nano_load_virtaddr;
+	    KEEP (*(.init))
+	    KEEP(*(.text))
+	} :text = 0
+
+	.data ALIGN(CAP_ALIGN): { *(.data) } : data
+
+    /DISCARD/ :
+    {
+       *(.MIPS.options)
+       *(.MIPS.abiflags)
+       *(.pdr)
+       *(.comment)
+       *(.bss)
+       *(.got)
+    }
+}
+
+PHDRS
+{
+	header PT_PHDR PHDRS ;
+	text PT_LOAD AT (__cached_exception_vector_tlbrefill);
+	data PT_LOAD;
+}

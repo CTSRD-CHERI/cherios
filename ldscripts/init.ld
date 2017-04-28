@@ -33,9 +33,6 @@ INCLUDE "common.ld"
 __size_memory		= 0x1000000;	/* Start simple: 16M above load address */
 __size_init_stack	= 0x10000;	/* Start simple: 64K */
 
-CAP_ALIGN = 0x20;
-PAGE_ALIGN = 0x1000;
-
 OUTPUT_FORMAT("elf64-tradbigmips");
 OUTPUT_ARCH(mips)
 ENTRY(start)
@@ -54,6 +51,7 @@ SECTIONS
 		KEEP (*(.fini))
 	} = 0
 
+    ASSERT((__init_entry_point == start), "We assume this entry point in the kernel")
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
 	 * content, it would be much preferable to map into the code segment

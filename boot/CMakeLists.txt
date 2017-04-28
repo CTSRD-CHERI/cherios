@@ -29,11 +29,13 @@ set(BOOT_ASM_SRCS
     src/boot/boot_init.S
     src/boot/kernel_elf.S
     src/boot/init_elf.S
+        src/boot/nano_elf.S
 )
 
 #src/boot/init_elf.S
 
 set(NANO_ASM_SRCS
+    ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
     nanokernel/src/nano_kernel.S
     nanokernel/src/ccall_soft.S
 )
@@ -76,6 +78,10 @@ set_source_files_properties(src/boot/init_elf.S PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/init.elf"
 )
 
+set_source_files_properties(src/boot/nano_elf.S PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/nano.elf"
+)
+
 add_cherios_init(init LINKER_SCRIPT init.ld SOURCES
     ${LIBCRT_SRCS}
     ${COMMON_SRCS}
@@ -88,11 +94,15 @@ add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
     ${LIBCRT_SRCS}
     ${COMMON_SRCS}
     ${BOOT_SRCS}
+)
+
+add_cherios_nano(nano LINKER_SCRIPT nano.ld SOURCES
     ${NANO_ASM_SRCS}
 )
 
 add_dependencies(cherios init)
 add_dependencies(cherios kernel)
+add_dependencies(cherios nano)
 
 set_target_properties(cherios PROPERTIES COMPILE_FLAGS -DCHERIOS_BOOT)
 
@@ -119,3 +129,5 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.elf DEPENDS kernel 
 add_custom_target(kernel_elf DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/kernel.elf)
 
 add_custom_target(init_elf DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/init.elf)
+
+add_custom_target(nano_elf DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/nano.elf)

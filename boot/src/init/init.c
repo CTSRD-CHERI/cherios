@@ -134,10 +134,9 @@ static void print_init_info(init_info_t * init_info) {
 	CHERI_PRINT_CAP(init_info);
 
 	if (init_info) {
-		CHERI_PRINT_CAP(init_info->init_start_addr);
-		printf("%s: init_mem_size   = %lx\n", __func__, init_info->init_mem_size);
-		CHERI_PRINT_CAP(init_info->init_stack);
 		CHERI_PRINT_CAP(init_info->free_mem);
+		CHERI_PRINT_CAP(init_info->nano_if);
+		CHERI_PRINT_CAP(init_info->nano_default_cap);
 	}
 }
 

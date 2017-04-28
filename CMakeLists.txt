@@ -83,7 +83,7 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # CMake will try to link ctr1.o into the executable and this might not exist
 # We don't need it as we are building in a freestanding environment here anyway
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
-set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -v"
+set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -v -fuse-ld=lld -static"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 enable_language(C)
@@ -196,6 +196,7 @@ set(C_WARNING_FLAGS
     -Wno-error=unreachable-code-break
     -Wno-error=unreachable-code-return
     -Wno-error=unused-macros
+    -Wno-deprecated-declarations
     -Werror=mips-cheri-prototypes
 )
 set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
@@ -204,9 +205,6 @@ set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_COMPILER_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 
-# TODO: only add -g when CMAKE_BUILD_TYPE == Debug
-# for now we always want it
-add_compile_options(-g)
 
 set(CHERIOS_FILESYSTEM_DIR "${CMAKE_BINARY_DIR}/fs")
 set(CHERIOS_FILESYSTEM_DEPENDS "" CACHE INTERNAL "dependencies for filesystem")
@@ -243,6 +241,11 @@ function(add_cherios_kernel _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
   target_link_libraries(${_target} CheriOS::LibUser)
+endfunction()
+
+function(add_cherios_nano _target)
+ add_cherios_module(${_target} ${ARGN})
+ set_core_ld_deps(${_target})
 endfunction()
 
 function(add_cherios_boot _target)
@@ -286,7 +289,7 @@ function(add_cherios_module _target)
   # Tell the compiler to use the specified linker script
   target_link_libraries(${_target}
     "-L${CMAKE_SOURCE_DIR}/ldscripts"
-    "-T${add_exe_LINKER_SCRIPT}"
+    "-T${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}" # Search not working on my system
     )
   target_link_libraries(${_target}
     -cheri-linker

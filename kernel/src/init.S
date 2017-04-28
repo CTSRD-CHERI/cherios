@@ -43,10 +43,11 @@
 	.global start
 	.ent start
 start:
-    cmove       $c19, $c3   # own_context
-    cmove       $c20, $c4   # interface
-    cmove       $c21, $c5   # interface data
-    cmove       $c22, $c6   # boot_info
+    cmove       $c19, $c1   # if
+    cmove       $c20, $c2   # data
+    cmove       $c21, $c3   # context
+    cmove       $c22, $c4   # res
+    move        $s0,  $a0
 
 	# Set up an exception stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
@@ -82,7 +83,7 @@ start:
 	cjalr		$c12, $c17
 	nop
 
-	dli		    $a0, 0
+	move		$a0, $s0
     cmove       $c3, $c19
     cmove       $c4, $c20
     cmove       $c5, $c21

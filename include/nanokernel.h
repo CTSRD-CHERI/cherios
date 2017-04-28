@@ -35,11 +35,13 @@
 #include "cheriplt.h"
 
 typedef capability context_t;
+typedef capability res_t;
+#define RES_SPLIT_OVERHEAD sizeof(capability)
 
 #define NANO_KERNEL_IF_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
 /* Creates a context from a intial reg_frame and returns a handle */\
-    ITEM(create_context, context_t, (reg_frame_t* initial_state, int pass), __VA_ARGS__)  \
+    ITEM(create_context, context_t, (reg_frame_t* initial_state), __VA_ARGS__)  \
 /* Deletes a context, restore_from is ONLY used if a context is destroying itself */\
     ITEM(destroy_context, context_t, (context_t context, context_t restore_from), __VA_ARGS__) \
 /* Switch to a handle, and store a handle for the suspended context to the location pointed to by store_to */\
@@ -54,7 +56,25 @@ typedef capability context_t;
  * TODO case we might want to restore that context straight away */ \
     ITEM(set_exception_handler, void, (context_t context), __VA_ARGS__) \
 /* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
-    ITEM(unlock_context, reg_frame_t*, (context_t context), __VA_ARGS__)
+    ITEM(unlock_context, reg_frame_t*, (context_t context), __VA_ARGS__) \
+/* A replacement for tlbwi. Takes arguments that are normally implicit with the instruction */\
+    ITEM(tlb_write, int, (register_t EntryHi, register_t EntryLo0, register_t EntryLo1, register_t index), __VA_ARGS__)\
+/* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
+    ITEM(rescap_take, capability, (res_t res), __VA_ARGS__)\
+/* Returns a SEALED version of rescap_take, but does not change state. Then get fields using normal ops */\
+    ITEM(rescap_info, capability, (res_t res), __VA_ARGS__)\
+/* Tells the collector to start collecting this reservation. collecting fails if already collecting */\
+    ITEM(rescap_collect, res_t, (res_t res), __VA_ARGS__)\
+/* Splits an open reservation. The reservation will have size `size'.\
+ * The remaining space will be returned as a new reservation. */\
+    ITEM(rescap_split, res_t, (capability res, size_t size), __VA_ARGS__)\
+/* Merges two taken reservations. Cannot merge with collecting. If an open and taken are merged the result is taken*/\
+    ITEM(rescap_merge, res_t, (res_t res1, res_t res2), __VA_ARGS__)\
+/* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
+    ITEM(rescap_parent, res_t, (res_t res), __VA_ARGS__)
+
+
+
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 

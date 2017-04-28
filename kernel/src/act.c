@@ -65,19 +65,8 @@ static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
 }
 
-static struct init_info		init_info;
-
-void * make_init_info(boot_info_t *bi) {
-	init_info.init_start_addr = bi->init_start_addr;
-	init_info.init_mem_size   = bi->init_mem_size;
-	init_info.init_stack      = bi->init_stack;
-	init_info.free_mem        = bi->free_mem;
-	return &init_info;
-}
-
-context_t act_init(context_t own_context, boot_info_t *bi) {
+context_t act_init(context_t own_context, init_info_t* info, size_t init_base) {
 	KERNEL_TRACE("init", "activation init");
-
 
 	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
 	internel_if.message_reply = kernel_seal(act_send_return_get_trampoline(), act_sync_ref_type);
@@ -96,12 +85,23 @@ context_t act_init(context_t own_context, boot_info_t *bi) {
 	kernel_act->context = own_context;
 
 	// Create and register the init activation
-	act_t * init_act = &kernel_acts[namespace_num_boot];
-	act_register(&bi->init_frame, &init_queue.queue, "init", status_alive, NULL, 0);
+
+	/* Not a dummy here. We will subset our own c0/pcc for init. init is loaded directly after the kernel */
+	bzero(&frame, sizeof(struct reg_frame));
+	size_t length = cheri_getlen(cheri_getdefault()) - init_base;
+
+    frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
+    capability pcc =  cheri_setbounds(cheri_setoffset(cheri_getpcc(), init_base), length);
+
+    extern size_t __init_entry_point;
+    KERNEL_TRACE("act", "assuming init has virtual entry point %lx", __init_entry_point);
+	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, __init_entry_point);
 
 	/* provide config info to init.  c3 is the conventional register */
-    bi->init_frame.cf_c3 = make_init_info(bi);
-	init_act->context = create_context(&bi->init_frame, 0);
+	frame.cf_c3 = info;
+
+	act_t * init_act = &kernel_acts[namespace_num_boot];
+	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL);
 
 	/* The boot activation should be the current activation */
 	sched_schedule(init_act);
@@ -184,7 +184,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
 							status_e create_in_status, act_control_t *parent) {
 	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc));
-	act->context = create_context(frame, 0);
+	act->context = create_context(frame);
 	return act_create_sealed_ctrl_ref(act);
 }
 

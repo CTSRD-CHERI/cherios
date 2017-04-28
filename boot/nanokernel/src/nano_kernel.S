@@ -37,7 +37,7 @@
 
 # struct context_t {
 #   reg_frame_t
-#   enum state{allocated, dead}
+#   enum state{allocated, dead} (size of a cap)
 #};
 
 .set CONTEXT_SIZE, CHERI_FRAME_SIZE + CAP_SIZE
@@ -47,6 +47,55 @@
 #FIXME we need to choose appropriate types and remove their accessibility from the rest of the system
 .set CONTEXT_TYPE,       0x5555         # The type of contexts
 .set NANO_KERNEL_TYPE,   0x6666         # The type of sealed local data
+.set RES_TYPE,           0x7777         # The type that means 'is allowed to
+.set RES_VIEW_TYPE,      0x7778         # The type that means 'is allowed to
+# We will lay out PHYSICAL TLB state like this. The PFN is just the index in the table:
+# struct phy_ent {
+#    register_t VPN2        This is the VPN field. Once set cannot be changed, unless we revoke the VPN.
+#
+#};
+
+# Out virtual state is harder. We will ask the user to allocate this for us, using our allowance mechanism
+# struct virt_ent {
+    #PFN1
+    #PFN2
+    #enum state{un-used, allocated, stale}
+#};
+
+
+
+.set VPN_MASK, ((1 << 64) - 1) ^ ((1 << 13) - 1)
+.set PFN_MASK, ((1 << 55) - 1) ^ ((1 << 6) - 1)
+
+#define cp0_index     $0
+#define cp0_entryhi   $10
+#define cp0_entrylo0  $2
+#define cp0_entrylo1  $3
+#define cp0_pagemask  $5
+#define cp0_random    $1
+#define cp0_wired     $6
+#define cp0_context   $4
+
+.set N_PHY_PAGES_ENTRIES, 1024 * 1024
+.set PHY_PAGE_ENTRY_SIZE, REG_SIZE
+
+#struct res_t {
+#    enum state{open, taken, merged, collecting}
+#    size_t length
+#    size_t pid
+#    padding to size of one cap
+#    union{cap for region, user data}
+#
+#}
+
+
+# This is the physical memory we will scan in order to support revocation
+# TODO use the proper physical window: 0x9000 0000 0000 0000
+.set PHY_MEM_START, 0xffffffff80000000
+#.set PHY_MEM_SIZE,  (1 << 35)
+.set PHY_MEM_SIZE, (512 * 1024 * 1024)
+.set PHY_MEM_END,   PHY_MEM_START + PHY_MEM_START
+.set NANO_SIZE, 64 * 1024 * 1024
 
 ####################################################################################################################
 # The (very incorrectly named) global data for the nano kernel. idc will hold a capability that covers the range
@@ -55,14 +104,17 @@
 
 START_LOCALS CAP_SIZE_BITS
 
-local_cap_var global_cap
-local_cap_var sealing_cap
+# Stuff to do with context switch #
 local_cap_var current_context
 local_cap_var exception_context
 local_cap_var next_context
 local_reg_var exception_level
 local_reg_var exception_cause
 
+# Stuff to do with virtual space management
+local_reg_var collection_state
+
+# Method table for nano kernel
 local_cap_var create_context_cap
 local_cap_var destroy_context_cap
 local_cap_var context_switch_cap
@@ -70,22 +122,33 @@ local_cap_var critical_section_enter_cap
 local_cap_var critical_section_exit_cap
 local_cap_var set_exception_handler_cap
 local_cap_var unlock_context_cap
+local_cap_var tlb_write_cap
+local_cap_var rescap_take_cap
+local_cap_var rescap_info_cap
+local_cap_var rescap_collect_cap
+local_cap_var rescap_split_cap
+local_cap_var rescap_merge_cap
+local_cap_var rescap_parent_cap
 .set cap_table_end, local_ctr
 
 local_var context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
+#local_var page_table, N_PHY_PAGES_ENTRIES * PHY_PAGE_ENTRY_SIZE, REG_SIZE_BITS
 END_LOCALS
 
 .text
+.section .init
 
 nano_kernel_start:
 
-#########################
+#################################################################
+# RT := {c1 = if, c2 = data, c3 = context, c4 = reservation}
+# RT nano_kernel_init(register_t unmanaged_space, register_t return_addr, register_t arg0)
 .global nano_kernel_init
 nano_kernel_init:
-#########################
+################################################################
 	# Populate exception registers: $kdc and $kcc
-	cgetpcc		$kcc                                    # kdcc will hold the code global capability
+	cgetpccsetoffset $kcc, $zero                 # kdcc will hold the code global capability
 	cgetdefault	$kdc                                    # kdc will hold the data global capability
 
     dla         $k0, locals_start
@@ -111,7 +174,6 @@ nano_kernel_init:
 
     dli         $k1, CONTEXT_TYPE
     csetoffset  $kr2c, $kdc, $k1
-    csc         $kr2c, $zero, sealing_cap($kr1c)         # Create and store sealing cap for contexts
 
     cseal       $c3, $c3, $kr2c                          # Seal the first context
 
@@ -130,9 +192,11 @@ nano_kernel_init:
     dla         $k0,   \name
     csetoffset  $c13, $kcc, $k0
     cseal       $c13, $c13, $kr2c
-    csc         $c13, $zero, \name\()_cap($kr1c)
+    csc         $c13, $k1, 0($kr1c)
+    daddiu      $k1, CAP_SIZE
 .endm
 
+    dli         $k1, create_context_cap
     # Store a sealed capability for each nanokernel function in a table
     init_table create_context
     init_table destroy_context
@@ -141,6 +205,13 @@ nano_kernel_init:
     init_table critical_section_exit
     init_table set_exception_handler
     init_table unlock_context
+    init_table tlb_write
+    init_table rescap_take
+    init_table rescap_info
+    init_table rescap_collect
+    init_table rescap_split
+    init_table rescap_merge
+    init_table rescap_parent
 
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
@@ -153,9 +224,48 @@ nano_kernel_init:
 
     cseal       $c2, $kr1c, $kr2c                        # Pass a sealed capability to our locals
 
+    # a0 is the start of nano kernel secured memory. a1 is an address we should return to.
+    dli         $k0, (Perm_All & ~(Perm_Access_System_Registers))
+
+    #check a0 < PHY_MEM_SIZE - NANO_SIZE. TODO: We also need a little extra space in the check here
+    dli         $t0, (PHY_MEM_SIZE - NANO_SIZE)
+    slt         $t0, $a0, $t0
+    beq         $t0, $zero, nano_kernel_die
+
+    # c0 will be a global data capability to the unsecured memory
+    # c17 will be a global code capability to the unsecured memory, with the index passed
+    dli         $t0, PHY_MEM_START + NANO_SIZE          # t0 = start of mem available to system
+    dli         $t3, (PHY_MEM_SIZE - CAP_SIZE - NANO_SIZE)
+    dsubu       $t3, $t3, $a0                           # t3 = length of reserved mem (minus metadata)
+    daddu       $t2, $a0, $t0                           # t2 = start of reserved mem
+
+    csetoffset  $c13, $kdc, $t0
+    csetbounds  $c13, $c13, $a0
+    candperm    $c13, $c13, $k0
+    csetdefault $c13                                    # c13 is the beginning of unmanaged mem
+
+    csetoffset  $c17, $kcc, $t0
+    csetbounds  $c17, $c17, $a0
+    csetoffset  $c17, $c17, $a1
+    candperm    $c17, $c17, $k0
+
+    # TODO we should actually collect the initial reservation in case the boot loader made a mistake
+
+    csetoffset  $c13, $kdc, $t2
+    candperm    $c13, $c13, $k0
+    csd         $zero, $zero, 0($c13)                   # set state to open
+    csd         $zero, $zero, (2 * REG_SIZE)($c13)      # set parent to 0
+    dli         $k1, RES_TYPE
+    csetoffset  $c14, $kdc, $k1
+    cseal       $c4, $c13, $c14                         # seal reservation
+    dli         $k1, CAP_SIZE
+    cincoffset  $c13, $c13, $k1
+
+    csetbounds  $c13, $c13, $t3
+    csc         $c13, $zero, 0($c13)                    # store cap to rest of reversed mem for use later
+
     # Now remove capabilities to the nano kernel. We should deny access to kernel regs
-    # TODO: and the tlb and our own code/data and certain sealing types
-    # TODO: and writing exception vectors
+    # TODO: and the tlb and certain sealing types
 
     # The only registers not cleared will be
     # Kernel regs (not accessible outside this module)
@@ -164,15 +274,11 @@ nano_kernel_init:
     # c1 a read only capability to nano kernel method table
     # c2 a data capability for the nano kernel
     # c3 the first context handle
-
-    dli        $k0, (Perm_All & ~(Perm_Access_System_Registers))
-    #candperm   $c13, $kdc, $k0
-    #csetdefault $c13
-    candperm   $c17,  $c17,  $k0
-    cclearlo    EncodeReg(all) & ~(EN4(c0, c1, c2, c3))
+    # c4 a reservation handle for proected memory
+    cclearlo    EncodeReg(all) & ~(EN5(c0, c1, c2, c3, c4))
     cclearhi    EncodeReg(all) & ~(EN4(c17, kdc, kcc, c31))
     cjr         $c17
-    nop
+    move        $a0, $a3
 
 
 
@@ -181,6 +287,7 @@ nano_kernel_init:
 # idc/kdc will provide us a capability to our locals in everything below #
 ##########################################################################
 
+.text
 
 #####################################################################
 # void context_switch(context_t restore_from, context_t*  store_to);
@@ -212,8 +319,9 @@ context_switch_exception_entry:                         # kr1c should contain a 
     # Now we can undo our weird juggle and use $idc again
     cmove   $idc, $kr1c
 
+    dli      $k1, CONTEXT_TYPE
     bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
-    clc      $kr1c, $zero, sealing_cap($idc)            # meant to be in delay
+    csetoffset  $kr1c, $kdc, $k1                        # meant to be in delay
 
     cunseal  $c3, $c3, $kr1c
 
@@ -282,14 +390,14 @@ nop
 
 
 ########################################################
-# context_t create_context(reg_frame_t* initial_state, int pass_ref);
+# context_t create_context(reg_frame_t* initial_state);
 .global create_context
 create_context:
 ########################################################
 
-    clc         $c13, $zero, sealing_cap($idc)              # Load sealing capability
+    dli         $t0, CONTEXT_TYPE
+    csetoffset  $c13, $kdc, $t0                             # Load sealing capability
     cmove       $c4,  $c3
-    move        $t3,  $a0                                   # TODO remove this when possible
     dli         $t0,  CONTEXT_SIZE                          # TODO atomic increment
     clc         $c3,  $zero, next_context($idc)
     cincoffset  $c14, $c3, $t0
@@ -310,17 +418,11 @@ create_context:
 
     cmove       $c17,  $c15                                 # Restore return address
 
-    cseal       $c4, $c3, $c13                              # Return sealed cap
-
-    beqz        $t3, create_context_end
-    nop
-    csc         $c4, $zero, FRAME_C3_OFFSET($c3)            # TODO remove this when possible
+    cseal       $c3, $c3, $c13                              # Return sealed cap
 
 
 create_context_end:
-    cmove       $c3, $c4
-    cclearlo    (1 << 4) | (1 << 5) | (1<< 12) | (1 << 13) | (1 << 14) | (1<<15)
-                                                            # We used c4,c12,c13,c14,c15. c3 is return.
+    cclearlo    EN6(c4,c5,c12,c13,c14,c15)                  # c3 is a return value
     creturn
 
 
@@ -332,20 +434,21 @@ create_context_end:
 destroy_context:
 ########################################################################
 
-    clc         $c13, $zero, sealing_cap($idc)              # Load sealing capability
+    dli         $t0, CONTEXT_TYPE
+    csetoffset  $c13, $kdc, $t0                             # Load sealing capability
     cunseal     $c3, $c3, $c13                              # unseal context we are destroying
     clc         $c14, $zero, current_context($idc)          # load current context
-    ceq         $k0, $c3, $c14                              # k0 = 1 if we are deleting ourselves
-    dli         $k1, 1
+    ceq         $t1, $c3, $c14                              # t1 = 1 if we are deleting ourselves
+    dli         $t2, 1
     dli         $t0, CHERI_FRAME_SIZE
-    beqz        $k0, destroy_context_end
-    csd         $k1, $t0, 0($c3)                            # set state to dead (in delay slot)
+    beqz        $t1, destroy_context_end
+    csd         $t2, $t0, 0($c3)                            # set state to dead (in delay slot)
 
     # If we are here we are destroying ourselves, thus we should restore restore_from
     cunseal     $c3, $c4, $c13
-    dmfc0       $k0, $12
-    ori         $k0, 2                                      # set SR(EXL)
-    mtc0        $k0, $12
+    dmfc0       $t1, $12
+    ori         $t1, 2                                      # set SR(EXL)
+    mtc0        $t1, $12
     j           switch_restore
     nop
 
@@ -362,8 +465,8 @@ destroy_context_end:
 .global unlock_context
 unlock_context:
 ######################################################################################################
-
-    clc         $c4, $zero, sealing_cap($idc)
+    dli         $t0, CONTEXT_TYPE
+    csetoffset  $c4, $kdc, $t0
     cunseal     $c3, $c3, $c4
     creturn
 
@@ -396,16 +499,15 @@ critical_section_exit:
     bnez       $v0, kernel_critical_section_exit_end
     csd        $v0, $zero, exception_level($idc)            # decrement level
 
-    cld        $k0, $zero, exception_cause($idc)
-    beqz       $k0, kernel_critical_section_exit_end
+    cld        $t0, $zero, exception_cause($idc)
+    beqz       $t0, kernel_critical_section_exit_end
     csd        $zero, $zero, exception_cause($idc)             # and set cause to 0
 
-    dmfc0      $k1, $12
-    ori        $k1, 3                                       # set SR(EXL) and SR(IE)
-    mtc0       $k1, $12
-    dli        $k1, 1
-    j          context_switch_local_entry                   # calling context switch with k0 = 1 will
-    nop                                                     # will switch to the exception context
+    dmfc0      $t1, $12
+    ori        $t1, 3                                       # set SR(EXL) and SR(IE)
+    mtc0       $t1, $12
+    j          context_switch_local_entry                   # calling context switch with k0 = cause will
+    move       $k0, $t0                                     # will switch to the exception context
 
 kernel_critical_section_exit_end:
     creturn
@@ -418,7 +520,8 @@ kernel_critical_section_exit_end:
 .global set_exception_handler
 set_exception_handler:
 #################################################
-    clc         $c13, $zero, sealing_cap($idc)
+    dli         $t0, CONTEXT_TYPE
+    csetoffset  $c13, $kdc, $t0
     cunseal     $c13, $c3, $c13
     csc         $c13, $zero, exception_context($idc)
     creturn
@@ -436,18 +539,306 @@ nano_kernel_die:
     csb $k1, $k0, 0($kdc)
 
 
+#################################################################################################
+# int tlb_write(register_t EntryHi, register_t EntryLo0, register_t EntryLo1, register_t index))
+.global tlb_write #TODO this is very WIP
+tlb_write:
+#################################################################################################
+
+#TODO check this does not break our invarient
+
+    mtc0 $a0, cp0_entryhi
+    mtc0 $a1, cp0_entrylo0
+    mtc0 $a2, cp0_entrylo1
+
+    daddiu  $t0, $a3, 1
+    bnez    $t0, indexed
+    nop
+
+random:
+    ehb
+    tlbwr
+    j end
+    nop
+
+indexed:
+    mtc0 $a3, cp0_index
+    ehb
+    tlbwi
+
+end:
+    creturn
+
+
+####################################
+# capability rescap_take(res_t res)
+.global rescap_take
+rescap_take:
+####################################
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+    cld         $t0, $zero, 0($c3)          # get state
+    csetbounds  $c4, $c4, $zero             # clear our sealing cap
+    bnez        $t0, take_er                # error if not open
+    dli         $t0, 1
+
+    cgetlen     $t1, $c3
+    csd         $t0, $zero, 0($c3)          # set to taken
+    csd         $t1, $zero, REG_SIZE($c3)   # set length (needed for merge)
+    clc         $c3, $zero, CAP_SIZE($c3)   # load return capability from struct
+    creturn
+take_er:
+    csetbounds  $c3, $c3, $zero
+    creturn
+
+
+####################################
+# capability rescap_info(res_t res)
+.global rescap_info
+rescap_info:
+####################################
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+    cld         $t0, $zero, 0($c3)          # get state
+    clc         $c3, $zero, CAP_SIZE($c3)   # load return capability from struct
+    dli         $t1, RES_VIEW_TYPE
+    csetoffset  $c4, $kdc, $t1              # create sealing cap
+    cseal       $c3, $c3, $c4
+    bnez        $t0, info_er                # error if not open
+    csetbounds  $c4, $c4, $zero             # clear our sealing cap
+
+    creturn
+info_er:
+    csetbounds  $c3, $c3, $zero
+    creturn
+
+##################################
+# res_t rescap_collect(res_t res);
+.global rescap_collect
+rescap_collect:
+##################################
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+
+    cld         $t0, $zero, 0($c3)
+    dli         $t1, 1
+    bne         $t0, $t1, collect_er        # check this reservation is taken
+
+    cld         $t0, $zero, collection_state($idc)
+    bnez        $t0, collect_er             # check we are not already collecting
+    dli         $t2, 3
+
+    # We are now collecting. No errors from now on.
+
+    csd         $t1, $zero, collection_state($idc) # Set collection state to 1
+    csd         $t2, $zero, 0($c3)                 # Mark reservation as collecting
+
+    cgetbase    $t0, $c3
+    cgetoffset  $t1, $c3
+    dli         $a0, PHY_MEM_START          #a0 is the start of memory
+    dli         $a1, PHY_MEM_END            #a1 the end
+    addu        $a2, $t0, $t1               #a2 is the base of our collection
+    cld         $t1, $zero, REG_SIZE($c3)
+    daddiu      $a4, $t1, CAP_SIZE          #a4 is the size of collection
+    addu        $a3, $a2, $a4               #a3 is the end of our collection (not inclusive)
+
+    csetoffset  $c3, $kdc, $a2
+    csetbounds  $c3, $c3, $a4
+
+    # csetcollection $c3 # TODO hypothetical new instruction
+
+
+    # FIXME we might trample our own caps with the instruction I plan to add. Will have to be careful.
+    # FIXME the only one that matters is c6, if we get rescheduled at the position indicated bad things can happen
+
+    subu        $a1, $a1, $a0
+    beqz        $a1, collect_loop_end
+    csetoffset  $c5, $kdc, $a0
+    dli         $t0, CAP_SIZE
+
+collect_loop_start:  # We will now collect every capability with a2 <= base < a3.
+
+    clc         $c6, $zero, 0($c5)          # FIXME <- may get detagged by context switch!
+    cbtu        $c6, collect_loop_footer
+    cgetbase    $t1, $c6
+    sltu        $t2, $t1, $a2
+    bnez        $t2, collect_loop_footer
+    sltu        $t2, $t1, $a3
+    beqz        $t2, collect_loop_footer
+                                            # FIXME: although an adversary would be unable to use this race,
+                                            # FIXME: we may accidentally overwrite a normal programs data if they reuse
+                                            # FIXME: memory in the span of time from when we start collection of this
+                                            # FIXME: location to writing back (i.e. it may contain a valid cap later)
+    ccleartag   $c6, $c6
+    csc         $c6, $zero, 0($c5)
+
+collect_loop_footer:
+    subu        $a1, $a1, $t0
+    bnez        $a1, collect_loop_start
+    cincoffset  $c5, $c5, $t0
+
+collect_loop_end:
+
+    # Make a new reservation here now
+    dli         $t0, CAP_SIZE
+    csetoffset  $c3, $kdc, $a2
+    csetbounds  $c3, $c3,  $a4
+    sub         $a4, $a4, $t0               #some space for metadata
+
+    # cclearderivesfrom $c3 # TODO hypothetical new instruction
+    dli         $t1, (Perm_All & ~(Perm_Access_System_Registers))
+    candperm    $c3, $c3, $t1
+
+    cincoffset  $c5, $c3, $t0
+    csd         $zero, $zero, 0($c3)        # set state to open
+    csetbounds  $c5, $c4, $a4
+    cseal       $c3, $c3, $c4               # seal new reservation
+    csc         $c5, $zero, 0($c5)          # store the result capability for later
+
+    cclearlo    EN3(c4, c5, c6)
+    creturn
+
+collect_er:
+    cclearlo    EN4(c3, c4, c5, c6)
+    creturn
+
+
+###################################################
+# res_t  rescap_split(capability res, size_t size)
+.global rescap_split
+rescap_split:
+###################################################
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+    cld         $t0, $zero, 0($c3)          # get state
+    cld         $t2, $zero, (2 * REG_SIZE)($c3)  # get depth of old res
+    clc         $c3, $zero, CAP_SIZE($c3)   # load return capability from res
+    bnez        $t0, split_er               # reservation must be open
+    cld         $t0, $zero, (2 * REG_SIZE)($c3) # get pid
+
+
+    cgetlen     $t1, $c3                    # t1 = original space
+    csetoffset  $c5, $c3, $a0               # c5 = start of the new reservation
+    csetbounds  $c3, $c3, $a0               # c3 = size for the old reservation
+    dli         $t0, CAP_SIZE
+    csc         $c3, $zero, 0($c3)          # store new sized cap for old reservation
+    cseal       $c3, $c5, $c4               # this is old reservation but resized
+    csd         $zero, $zero, 0($c5)        # set state of new reservation to open
+    csd         $t2, $zero, (2 * REG_SIZE)($c5) # set depth for new res
+    cincoffset  $c5, $c5, $t0               # new size is reduced by size of one cap to store metadata in band
+
+    dsubu         $t1, $t1, $t0             # take away space wasted for meta data
+    dsubu         $a0, $t1, $a0             # and size for lower address reservation
+    csetbounds  $c5, $c5, $a0               # set bounds appropriately
+    csc         $c5, $zero, 0($c5)          # store capability in reservation
+
+    cclearlo    EN2(c4, c5)                 # 4 and 5 used as tmps. 3 returns the new reservation
+    creturn
+
+split_er:
+    cclearlo    EN3(c3, c4, c5)
+    creturn
+
+
+#############################################
+# res_t rescap_merge(res_t res1, res_t res2)
+.global rescap_merge
+rescap_merge:
+#############################################
+    ceq         $t0, $c3, $c4
+    bnez        $t0, merge_er               # naughty people may try trip us up merging a reservation with itself
+    dli         $t0, RES_TYPE
+    csetoffset  $c5, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c5
+    cunseal     $c4, $c4, $c5               # unseal both arguments
+    dli         $t0, 1
+
+    cld         $t1, $zero, 0($c3)
+    bne         $t0, $t1, merge_er          # check first is taken
+
+    cld         $t1, $zero, 0($c4)
+    bne         $t0, $t1, merge_er          # check second is taken
+
+    cld         $t0, $zero, (2 * REG_SIZE)($c3) # get depth of first
+    cld         $t1, $zero, (2 * REG_SIZE)($c4) # get depth of second
+    bne         $t0, $t1, merge_er          # must have same depth
+
+    cld         $t0, $zero, REG_SIZE($c3)   # get first length
+    cld         $t1, $zero, REG_SIZE($c4)   # get second length
+    daddiu      $t0, CAP_SIZE
+    cincoffset  $c6, $c3, $t0               # c6 should point to the next reservation
+    cne         $t2, $c6, $c4               # if not equal then we are not merging adjacent blocks
+    bnez        $t2, merge_er
+
+    addu        $t0, $t0, $t1               # this is the total new length
+    li          $t1, 2
+    csd         $t0, $zero, REG_SIZE($c3)   # store back in the field of the lower address reservation a new length.
+    csd         $t1, $zero, 0($c4)          # set higher address reservation to merged
+    cseal       $c3, $c3, $c5               # although the caller can just use the first argument, its nice to return it
+    cclearlo    EN3(c4, c5, c6)
+    creturn
+
+merge_er:
+    cclearlo    EN4(c3, c4, c5, c6)
+    creturn
+
+#################################
+# res_t rescap_parent(res_t res)
+.global rescap_parent
+rescap_parent:
+#################################
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+    cld         $t0, $zero, 0($c3)          # get state
+    bnez        $t0, parent_er              # reservation must be open
+
+    cgetbase    $t0, $c3
+    cgetoffset  $t1, $c3
+    dli         $a0, CAPS_SIZE
+    daddu       $t0, $t0, $t1               # the cursor of the parent is the depth of the child
+
+    clc         $c5, $zero, CAP_SIZE($c3)   # get capability that ranges over open space
+    cgetlen     $t1, $c5                    # get length for parent
+    dli         $t2, 1
+    csd         $t1, $zero, REG_SIZE($c3)   # set length field for parent
+    csd         $t2, $zero, 0($c3)          # set state field for parent
+    csd         $zero, $zero, 0($c5)        # set state for child
+    csd         $t0, $zero, (2*REG_SIZE)($c5) # set depth for child
+    cseal       $c3, $c5, $c4               # seal child for return
+    dsubu       $t1, $t1, $a0               # steal some space from child
+    cincoffset  $c5, $c5, $a0               # capability for space for new reservation
+    csetbounds  $c5, $c5, $t1
+    csc         $c5, $zero, 0($c5)          # store for future use
+
+    cclearlo    EN2(c4, c5)                 # 4 and 5 used as tmps. 3 returns the new reservation
+    creturn
+parent_er:
+
+    cclearlo    EN3(c3, c4, c5)
+    creturn
+
+nano_kernel_end:
+.size nano_kernel, nano_kernel_end - nano_kernel_start
+
+.section .trampoline_exc, "ax"
 
 ###########################################################################################################
 # Relocatable exception vector; checks we are not in a soft disable and then jumps to the context switcher
 # normal program memory.  This runs with KCC installed in PCC.
-###########################################################################################################
-
 		.global kernel_exception_trampoline
 		.ent kernel_exception_trampoline
 kernel_exception_trampoline:
+###########################################################################################################
+
 # cancel if we are in critical section.
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
+# TODO if an exception happens between nano begin and nano end we should just die.
         dla $k1, locals_start
         csetoffset $kr1c, $kdc, $k1
         cld $k1, $zero, exception_level($kr1c)
@@ -471,7 +862,19 @@ kernel_exception_trampoline_end:
 		.global kernel_exception_trampoline_end
 		.end kernel_exception_trampoline
 		.size kernel_exception_trampoline, kernel_exception_trampoline_end - kernel_exception_trampoline
-		.size kernel_exception_trampoline_end, 1 # 0 triggers capsizefix warning
 
-nano_kernel_end:
-.size nano_kernel, nano_kernel_end - nano_kernel_start
+.section .trampoline_tlb, "ax"
+
+################################################################################################
+# Relocatable TLB filler; will try to do a fast replacement using xcontext
+# o.w. will resume a handler context for a slow path
+    .global tlb_trampoline
+    .ent tlb_trampoline
+tlb_trampoline: # TODO
+################################################################################################
+    nop
+
+tlb_trampoline_end:
+    .global tlb_trampoline_end
+    .end tlb_trampoline
+    .size tlb_trampoline, tlb_trampoline_end - tlb_trampoline

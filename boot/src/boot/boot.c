@@ -32,46 +32,12 @@
 #include "sys/types.h"
 #include "boot/boot.h"
 #include "cp0.h"
-#include "misc.h"
-#include "object.h"
-#include "string.h"
 #include "plat.h"
 
-//FIXME we should make sure only the nano kernel can modify the exception vectors
-static void install_exception_vectors(void) {
-	/* Copy exception trampoline to exception vector */
-	char * all_mem = cheri_getdefault() ;
-	void *mips_bev0_exception_vector_ptr =
-			(void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
-	memcpy(mips_bev0_exception_vector_ptr, &kernel_exception_trampoline,
-		   (char *)&kernel_exception_trampoline_end - (char *)&kernel_exception_trampoline);
+typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, register_t arg0);
 
-	void *mips_bev0_ccall_vector_ptr =
-			(void *)(all_mem + MIPS_BEV0_CCALL_VECTOR);
-	memcpy(mips_bev0_ccall_vector_ptr, &kernel_ccall_trampoline,
-		   (char *)&kernel_ccall_trampoline_end - (char *)&kernel_ccall_trampoline);
-
-	/* Invalidate I-cache */
-	__asm volatile("sync");
-
-	__asm volatile(
-	"cache %[op], 0(%[line]) \n"
-	:: [op]"i" ((0b100<<2)+0), [line]"r" (MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF));
-	__asm volatile(
-	"cache %[op], 0(%[line]) \n"
-	:: [op]"i" ((0b100<<2)+0), [line]"r" (MIPS_BEV0_CCALL_VECTOR & 0xFFFF));
-
-	//FIXME if we want boot exceptions we should install other vectors and not set this here
-	cp0_status_bev_set(0);
-
-	/* does not work with kseg0 address, hence the `& 0xFFFF` */
-	__asm volatile("sync");
-}
-
-typedef void init_t(capability context, capability table, capability data, boot_info_t* bi);
-
-void bootloader_main(capability own_context, capability table, capability data);
-void bootloader_main(capability own_context, capability table, capability data) {
+void bootloader_main(void);
+void bootloader_main(void) {
 
 	/* Init hardware */
 	hw_init();
@@ -79,15 +45,30 @@ void bootloader_main(capability own_context, capability table, capability data) 
 	/* Initialize elf-loader environment */
 	init_elf_loader();
 
-	boot_printf("Boot: loading kernel ...\n");
-	capability entry = load_kernel();
-	init_t* init_func = (init_t*)cheri_setoffset(cheri_getpcc(), cheri_getoffset(entry) + cheri_getbase(entry));
+    /* Load the nano kernel. Doing this will install exception vectors */
+    boot_printf("Boot: loading nano kernel ...\n");
+	nano_init_t * nano_init = (nano_init_t *)load_nano(); //We have to rederive this as an executable cap
+    nano_init = (nano_init_t*)cheri_setoffset(cheri_getpcc(),cheri_getoffset(nano_init));
 
-	boot_printf("Boot: loading init ...\n");
-	boot_info_t *bi = load_init();
+    boot_printf("Boot: loading kernel ...\n");
+    size_t entry = load_kernel();
 
-	install_exception_vectors();
+    boot_printf("Boot: loading init ...\n");
+    boot_info_t *bi = load_init();
 
-	/* Jumps to the kernel init. This will completely destroy boot and so we can never return here */
-	init_func(own_context, table, data, bi);
+    size_t invalid_length = bi->init_end;
+    capability phy_start = cheri_setbounds(cheri_setoffset(cheri_getdefault(), MIPS_KSEG0), invalid_length);
+    boot_printf("Invalidating %p length %lx:\n", phy_start, invalid_length);
+    caches_invalidate(phy_start, invalid_length);
+
+
+    register_t mem_size = bi->init_end - bi->nano_end;
+
+    /* Jumps to the nano kernel init. This will completely destroy boot and so we can never return here.
+     * All registers will be cleared apart from a specified few. mem_size of memory will be left unmanaged and the
+     * rest will be returned as a reservation. The third argument is an extra argument to the kernel */
+
+    boot_printf("Jumping to nano kernel...\n");
+    BOOT_PRINT_CAP(nano_init);
+    nano_init(mem_size, entry, bi->init_begin - bi->kernel_begin);
 }

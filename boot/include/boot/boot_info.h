@@ -32,34 +32,34 @@
 #define _BOOT_INFO_H_
 
 #include "cheric.h"
-
+#include "nanokernel.h"
 /*
  * Information populated by boot-loader, and given to the kernel via a
  * pointer in cherios main.
  */
 typedef struct boot_info {
-	/* FIXME: contiguous memory ranges should be passed as caps. */
-
-	void		*kernel_start_addr;	/* Lowest kernel memory address */
-	uint64_t	kernel_mem_size;	/* Size of contiguous memory for loaded kernel */
-
-	void		*init_start_addr;	/* Lowest init memory address */
-	uint64_t	init_mem_size;		/* Size of contiguous memory for loaded init */
-	void		*init_stack;		/* Stack region for init */
-
-	reg_frame_t	init_frame;		/* Initial frame for initial activation */
-
-	void		*free_mem;		/* Free memory (which will include the bootloader) */
+	/* These are all physical addresses */
+	size_t 		nano_begin;
+	size_t 		nano_end;
+	size_t		kernel_begin;
+	size_t 		kernel_end;
+	size_t 		init_begin;
+	size_t 		init_end;
 } boot_info_t;
+
+typedef struct memmgt_init_t {
+	res_t reservation;
+	nano_kernel_if_t* nano_if;
+	capability nano_default_cap;
+} memmgt_init_t;
 
 /* Information copied from the boot_info by the kernel, and given to
  * the init activation.
  */
 typedef struct init_info {
-	void		*init_start_addr;	/* Lowest init memory address */
-	uint64_t	init_mem_size;		/* Size of contiguous memory for loaded init */
-	void		*init_stack;		/* Stack region for init */
-	void		*free_mem;		/* Free memory (which will include the bootloader) */
+	res_t 		free_mem;			/* a reservation for free memory */
+	nano_kernel_if_t* nano_if;		/* the nano kernels interface */
+	capability nano_default_cap;	/* default capability for the nano kernel */
 } init_info_t;
 
 #endif /* _BOOT_INFO_H_ */

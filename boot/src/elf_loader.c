@@ -30,6 +30,7 @@
 
 #ifdef CHERIOS_BOOT
 
+#include <elf.h>
 #include "boot/boot.h"
 
 #define assert(e) boot_assert(e)
@@ -178,13 +179,13 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 			ERROR("Section is larger in file than in memory");
 			return NULL;
 		}
-		if(seg->p_type == 1) {
+		if(seg->p_type == PT_LOAD) {
 			size_t bound = seg->p_vaddr + seg->p_memsz;
 			allocsize = umax(allocsize, bound);
 			lowaddr = umin(lowaddr, seg->p_vaddr);
 			TRACE("lowaddr:%lx allocsize:%lx bound:%lx", lowaddr, allocsize, bound);
-		} else if(seg->p_type == 0x6474E551) {
-			/* GNU Stack */
+		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO) {
+            /* Ignore these headers */
 		} else {
 			ERROR("Unknown section");
 			return NULL;
@@ -203,11 +204,11 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
 		if(seg->p_type == 1) {
-			env->memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
 			TRACE("memcpy: [%lx %lx] <-- [%lx %lx] (%lx bytes)",
 				  seg->p_vaddr, seg->p_vaddr + seg->p_filesz,
 				  seg->p_offset, seg->p_offset + seg->p_filesz,
 				  seg->p_filesz);
+			env->memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
 		}
 	}
 	env->free(addr);

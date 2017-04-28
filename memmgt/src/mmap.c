@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -30,6 +31,7 @@
 
 #include "lib.h"
 #include "sys/mman.h"
+#include "types.h"
 
 char * pool = NULL;
 static size_t pages_nb = 0;
@@ -43,9 +45,10 @@ typedef enum e_page_status {
 
 typedef struct {
 	e_page_status	status;
-	size_t	owner; /* activation owner */
+	act_kt 	owner; /* activation owner */
 	size_t	len; /* number of pages in this chunk */
 	size_t	prev; /* start of previous chunk */
+	size_t 	next;
 } page_t;
 
 static page_t * book = NULL;
@@ -86,11 +89,6 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 	}
 
 	void * p = NULL;
-#if !MMAP
-	p = __calloc(length, 1);
-	if(p)	goto ok;
-	else	goto fail;
-#endif
 
 	size_t pages_wanted = length/pagesz;
 	if(pages_wanted*pagesz < length)
@@ -148,11 +146,6 @@ static size_t addr2chunk(void * addr, size_t length) {
 }
 
 int __munmap(void *addr, size_t length) {
-	//CHERI_PRINT_CAP(addr);
-#if !MMAP
-	free(addr);
-	return 0;
-#endif
 	if(!(cheri_getperm(addr) & CHERI_PERM_SOFT_1)) {
 		errno = EINVAL;
 		printf(KRED"BAD MUNMAP\n");
@@ -175,21 +168,25 @@ void mfree(void *addr) {
 	book[page].status = page_unused;
 }
 
-void minit(char *heap) {
-	assert((size_t)heap == roundup2((size_t)heap, pagesz));
-	assert(cheri_getoffset(heap) == 0);
+void minit(res_t reservation) {
 
-	size_t length = cheri_getlen(heap);
+	/* TODO: Version 1 we will just unlock the entire reservation at once */
+	char* all_mem = (char*)rescap_take(reservation);
 
-	pages_nb = length / (pagesz + sizeof(page_t));
+
+	size_t page_align = pagesz - 1;
+	size_t length = cheri_getlen(all_mem);
+
+    /* We may be able to use slightly less of length due to alignment */
+	pages_nb = (page_align) / (pagesz + sizeof(page_t));
 	assert(pages_nb > 0);
 	size_t pool_len = pages_nb*pagesz;
-	pool = cheri_setbounds(heap, pool_len);
+	pool = cheri_setbounds(all_mem, pool_len);
 
 	size_t book_len = pages_nb*sizeof(page_t);
-	//printf("Heaplen:%jx Poollen: %jx, Booklen: %jx\n", length, pool_len, book_len);
+
 	assert(book_len + pool_len <= length);
-	book = cheri_setbounds(heap + pool_len, book_len);
+	book = cheri_setbounds(all_mem + pool_len, book_len);
 
 	book[0].status = page_unused;
 	book[0].len = pages_nb;

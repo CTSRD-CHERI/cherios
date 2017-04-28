@@ -116,18 +116,18 @@ int kernel_syscall_gc(capability p, capability pool) {
 	return try_gc(p , pool);
 }
 
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_sleep);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_wait);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_register);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_ref);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_status);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_revoke);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_terminate);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_puts);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_panic);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_register);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_enable);
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_gc);
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_sleep)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_wait)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_register)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_ref)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_status)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_revoke)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_terminate)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_puts)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_panic)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_register)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_enable)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_gc)
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
 

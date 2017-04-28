@@ -39,6 +39,8 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 
 size_t pagesz;			/* page size */
 
+ALLOCATE_PLT_NANO
+
 void register_ns(void * ns_ref) {
 	namespace_init(ns_ref);
 	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
@@ -47,36 +49,24 @@ void register_ns(void * ns_ref) {
 	}
 }
 
-int main(int argc __unused, char **argv) {
-	/* We are passed the reference to free memory as our first
-	 * capability argument, which is argv.  For now, we don't yet
-	 * use this for the heap below.
-	 */
-	void * free_mem = argv;
-	//CHERI_PRINT_CAP(free_mem);
-	assert(free_mem != NULL);
+int main(memmgt_init_t* mem_init) {
+	/* So we can call nano kernel functions. This would normally be done by the linker */
+	init_nano_kernel_if_t(mem_init->nano_if, mem_init->nano_default_cap);
 
 	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
 	if(ret!=0) {
 		printf(KRED"memmgt: Register failed %d\n", ret);
 	}
 
-	/* Get capability to heap */
-	void * heap = act_get_cap();
-	//CHERI_PRINT_CAP(heap);
-	assert(heap != NULL);
+	assert(mem_init->reservation != NULL);
 
 	/*
 	 * setup memory and
 	 * align break pointer so all data will be page aligned.
 	 */
 	pagesz = CHERIOS_PAGESIZE;
-#if MMAP
-	minit(heap);
-#else
-	init_pagebucket();
-	__init_heap(heap);
-#endif
+
+	minit(mem_init->nano_if);
 
 	/* init release mecanism */
 	release_init();
