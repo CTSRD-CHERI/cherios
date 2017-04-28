@@ -35,6 +35,8 @@
 #ifndef _CHERIOS_UART_H_
 #define	_CHERIOS_UART_H_
 
+#include "cheric.h"
+
 /*
  * Interfaces between device-independent UART layer and the device-dependent
  * UART layer.
@@ -54,5 +56,12 @@ char		uart_getc(void);
 int		uart_poll_putc(void);
 int		uart_poll_getc(void);
 void		uart_puts(const char *str);
+
+/* We can't just assume we have a global capability. Tell the uart interface which capability to use */
+
+void        set_uart_cap(capability cap);
+
+extern size_t uart_base_phy_addr;
+extern size_t uart_base_size;
 
 #endif /* _CHERIOS_UART_H_ */

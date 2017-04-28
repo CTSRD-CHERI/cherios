@@ -104,7 +104,6 @@ typedef uint64_t	u_int64_t;
  */
 #define MIPS_KSEG1 0xffffffffA0000000
 #define MIPS_KSEG0 0xffffffff80000000
-#define MIPS_PHY   0x9000000000000000
 #define MIPS_VRT   0
 
 #define	MIPS_BEV0_EXCEPTION_VECTOR	(MIPS_KSEG0 + 0x180)

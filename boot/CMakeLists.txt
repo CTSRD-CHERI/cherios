@@ -1,4 +1,5 @@
 include_directories(include)
+include_directories(${CMAKE_SOURCE_DIR}/uart/include)
 
 set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
@@ -19,7 +20,7 @@ set(COMMON_SRCS
 
 set(BOOT_SRCS
     src/boot/boot.c
-    src/boot/uart.c
+    ${CMAKE_SOURCE_DIR}/uart/src/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
 )
@@ -29,10 +30,8 @@ set(BOOT_ASM_SRCS
     src/boot/boot_init.S
     src/boot/kernel_elf.S
     src/boot/init_elf.S
-        src/boot/nano_elf.S
+    src/boot/nano_elf.S
 )
-
-#src/boot/init_elf.S
 
 set(NANO_ASM_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
@@ -55,9 +54,9 @@ set(INIT_ASM_SRCS
 )
 
 if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND BOOT_SRCS src/boot/uart_malta.c)
+    list(APPEND BOOT_SRCS ${CMAKE_SOURCE_DIR}/uart/src/uart_malta.c)
 elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND BOOT_SRCS src/boot/uart_altera.c)
+    list(APPEND BOOT_SRCS ${CMAKE_SOURCE_DIR}/uart/src/uart_altera.c)
 else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()

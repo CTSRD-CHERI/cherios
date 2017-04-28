@@ -33,6 +33,7 @@
 #include "boot/boot.h"
 #include "cp0.h"
 #include "plat.h"
+#include "uart.h"
 
 typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, register_t arg0);
 

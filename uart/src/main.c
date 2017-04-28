@@ -31,7 +31,7 @@
 #include "lib.h"
 #include "uart.h"
 
-void * uart_cap = NULL;
+
 
 static void user_putc(char c) {
 	printf(KGRN KBLD"%c"KRST, c);
@@ -52,9 +52,10 @@ int main(void)
 	syscall_puts("UART: Hello world\n");
 
 	/* Get capability to use uart */
-	uart_cap = act_get_cap();
+	capability uart_cap = act_get_cap();
 	assert(VCAP(uart_cap, 0, VCAP_RW));
 
+	set_uart_cap(uart_cap);
 	/* Register ourself to the kernel as being the UART module */
 	int ret = namespace_register(namespace_num_uart, act_self_ref);
 	if(ret!=0) {

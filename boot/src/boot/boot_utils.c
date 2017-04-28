@@ -186,6 +186,10 @@ err:
 }
 
 void hw_init(void) {
+    capability ucap = cheri_getdefault();
+    ucap = cheri_setoffset(ucap, MIPS_XKPHYS_UNCACHED_BASE + uart_base_phy_addr);
+    ucap = cheri_setbounds(ucap, uart_base_size);
+    set_uart_cap(ucap);
 	uart_init();
 	cp0_hwrena_set(cp0_hwrena_get() | (1<<2));
 }
