@@ -32,19 +32,22 @@
 .set nobopt
 .set noat
 
-	.section init
+	.section init, "ax"
 	.global start
 	.ent start
 start:
     # We will not have a stack set up because bootstrapping is hard.
     # Rather than have the kernel do it, its going to be done here
     dla         $t0, __start_init_stack
-    cgetdefault $c12
+    cgetdefault $c11
     dla         $t1, __size_init_stack
-    csetoffset  $c12, $c12, $t0
+    csetoffset  $c11, $c11, $t0
     move        $sp, $t1
-    csetbounds  $c12, $c12, $t1
+    csetbounds  $c11, $c11, $t1
 
     # Dont use j, linkers suck.
 	dla         $t0, start_common
 	jr          $t0
+    nop
+
+    .size start, 1

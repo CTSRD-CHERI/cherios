@@ -35,7 +35,7 @@
 #include "plat.h"
 #include "uart.h"
 
-typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, register_t arg0);
+typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, register_t arg0, register_t arg1);
 
 void bootloader_main(void);
 void bootloader_main(void) {
@@ -50,6 +50,10 @@ void bootloader_main(void) {
     boot_printf("Boot: loading nano kernel ...\n");
 	nano_init_t * nano_init = (nano_init_t *)load_nano(); //We have to rederive this as an executable cap
     nano_init = (nano_init_t*)cheri_setoffset(cheri_getpcc(),cheri_getoffset(nano_init));
+
+    /* TODO: we could have some boot exception vectors if we want exception  handling in boot. */
+    /* These should be in ROM as a part of the boot image (i.e. make a couple more dedicated sections */
+    cp0_status_bev_set(0);
 
     boot_printf("Boot: loading kernel ...\n");
     size_t entry = load_kernel();
@@ -71,5 +75,5 @@ void bootloader_main(void) {
 
     boot_printf("Jumping to nano kernel...\n");
     BOOT_PRINT_CAP(nano_init);
-    nano_init(mem_size, entry, bi->init_begin - bi->kernel_begin);
+    nano_init(mem_size, entry, bi->init_begin - bi->kernel_begin, bi->init_entry);
 }

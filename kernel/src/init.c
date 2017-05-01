@@ -31,6 +31,7 @@
 #include "klib.h"
 #include "nanokernel.h"
 #include "cp0.h"
+#include "uart.h"
 
 ALLOCATE_PLT_NANO
 
@@ -38,23 +39,47 @@ ALLOCATE_PLT_NANO
 
 /* Use linker allocated memory to store boot-info. */
 static init_info_t init_info;
+sealing_cap def_seal_cap;
 
 int cherios_main(nano_kernel_if_t* interface,
 				 capability def_data,
 				 context_t own_context,
-				 res_t reservation,
-				 size_t init_base) {
-	HW_TRACE_ON
+                 sealing_cap sealer,
+				 size_t init_base,
+                 size_t init_entry) {
+	/* This MUST be called before trying to use the nano kernel, which we will need to do in order
+	 * to get access to the phy mem we need */
+
+	init_nano_kernel_if_t(interface, def_data);
+    set_sealing_cap(sealer);
+
+	/* Get the capability for the uart. We should save this somewhere sensible */
+	#define PAGE_SIZE 0x1000
+    size_t uart_page = uart_base_phy_addr / PAGE_SIZE;
+	size_t uart_offset = uart_base_phy_addr & (PAGE_SIZE - 1);
+	capability cap_for_uart = get_phy_page(uart_page);
+	cap_for_uart = cheri_setoffset(cap_for_uart, uart_offset);
+	cap_for_uart = cheri_setbounds(cap_for_uart, uart_base_size);
+
+	set_uart_cap(cap_for_uart);
+
 	kernel_puts("Kernel Hello world\n");
 
+    CHERI_PRINT_CAP(interface);
+    CHERI_PRINT_CAP(def_data);
+    CHERI_PRINT_CAP(own_context);
+    //CHERI_PRINT_CAP(reservation);
+    CHERI_PRINT_CAP(sealer);
+    kernel_printf("init_base: %lx. entry: %lx\n", init_base, init_entry);
+
 	kernel_setup_trampoline();
-	init_nano_kernel_if_t(interface, def_data);
 
 	init_info.nano_if = interface;
 	init_info.nano_default_cap = def_data;
-	init_info.free_mem = reservation;
+	init_info.free_mem = NULL;
+    init_info.uart_cap = cap_for_uart;
 
-	context_t init_context = act_init(own_context, &init_info, init_base);
+	context_t init_context = act_init(own_context, &init_info, init_base, init_entry);
 
 	KERNEL_TRACE("kernel", "Going into exception handling mode");
 

@@ -54,8 +54,10 @@
 
 #endif
 
-#define NANO_SIZE 64 * 1024 * 1024
 #define K_ALLOC_ALIGN (0x10000)
+
+extern char __nano_size;
+extern char __boot_load_physaddr;
 
 static char* phy_mem;
 
@@ -63,15 +65,18 @@ static void *kernel_alloc_mem(size_t _size) {
 	/* We will allocate the first few objects in low physical memory. THe first thing we load is the nano kernel
 	 * and this will be direct mapped.*/
     static int alloc_direct = 1;
+    size_t nano_size = (size_t)&(__nano_size);
+    size_t boot_load_physaddr = (size_t)&(__boot_load_physaddr);
+
     capability alloc;
 
     if(alloc_direct) {
-        if(_size > NANO_SIZE + MIPS_KSEG0) {
+        if(_size > nano_size + MIPS_KSEG0) {
             boot_printf(KRED"nano kernel too large\n"KRST);
             hw_reboot();
         }
-        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, (unsigned long)NANO_SIZE);
-        phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + NANO_SIZE);
+        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, nano_size);
+        phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + nano_size);
         alloc = cheri_getdefault();
         alloc_direct = 0;
     } else {
@@ -79,6 +84,13 @@ static void *kernel_alloc_mem(size_t _size) {
         size_t align_off = (K_ALLOC_ALIGN - (_size & (K_ALLOC_ALIGN-1)) & (K_ALLOC_ALIGN-1));
         phy_mem += _size + align_off;
     }
+
+    size_t largest = cheri_getoffset(phy_mem) - MIPS_KSEG0;
+    if(largest > boot_load_physaddr) {
+		boot_printf(KRED"boot loader overwriting itself. Ooops. Allocated up to address %lx, beri_load at %lx\n"KRST,
+        largest, boot_load_physaddr);
+		hw_reboot();
+	}
 
 	return alloc;
 }
@@ -117,9 +129,9 @@ capability load_nano() {
 	__asm__ ("sync");
 
 	bi.nano_begin = 0;
-	bi.nano_end = NANO_SIZE;
+	bi.nano_end = (size_t)&(__nano_size);
 
-    boot_printf(KRED"Loaded nano kernel: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
+    boot_printf("Loaded nano kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
                 minaddr, maxaddr, entry);
 
     return prgmp + entry;
@@ -148,7 +160,7 @@ size_t load_kernel() {
     bi.kernel_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
     bi.kernel_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
 
-	boot_printf(KRED"Loaded kernel: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
+	boot_printf("Loaded kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
 		    minaddr, maxaddr, entry);
 
 	return entry;
@@ -175,11 +187,13 @@ boot_info_t *load_init() {
 		goto err;
 	}
 
-	boot_printf(KRED"Loaded init: minaddr=%lx maxaddr=%lx entry=%lx "KRST"\n",
+	boot_printf("Loaded init: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
 		    minaddr, maxaddr, entry);
 
     bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
     bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
+    bi.init_entry = entry;
+
 	return &bi;
 err:
 	hw_reboot();

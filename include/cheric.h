@@ -52,7 +52,7 @@
  */
 typedef __capability void * capability;
 typedef __capability const void *  const_capability;
-
+typedef capability sealing_cap;
 /*
  * Programmer-friendly macros for CHERI-aware C code -- requires use of
  * CHERI-aware Clang/LLVM, and full CP2 context switching, so not yet usable

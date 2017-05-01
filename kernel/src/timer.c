@@ -39,7 +39,7 @@ void kernel_timer_init(void) {
 	/*
 	 * Start timer.
 	 */
-	KERNEL_TRACE("init", "starting timer");
+	KERNEL_TRACE("timer", "starting timer");
 	kernel_last_timer = cp0_count_get();
 	kernel_last_timer += TIMER_INTERVAL;
 	cp0_compare_set(kernel_last_timer);

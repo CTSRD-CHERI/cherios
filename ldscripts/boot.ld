@@ -39,24 +39,26 @@ OUTPUT_ARCH(mips)
 PHDRS
 {
 	header PT_PHDR PHDRS ;
-	boot PT_LOAD FILEHDR PHDRS AT (0xffffffff80100000) FLAGS(0x7) ;
-	text PT_LOAD ;
+	boot PT_LOAD;
+	text PT_LOAD;
+	data PT_LOAD;
 }
 
 ENTRY(beri_boot_start)
 SECTIONS
 {
-	. += __beri_load_virtaddr;
+	. = __boot_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
 	.boot ALIGN(CAP_ALIGN): {
 		*(.boot)
 	} :boot = 0x0
 
-	. = __boot_load_virtaddr;
+
 	.text ALIGN(CAP_ALIGN): {
 		*(.text)
 	} :text
+
 
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
@@ -65,30 +67,30 @@ SECTIONS
 	 */
 	.MIPS.options ALIGN(PAGE_ALIGN): {
 		*(.MIPS.options)
-	}
+	} : data
 	.ctors ALIGN(CAP_ALIGN) : {
 		KEEP (*/crtbeginC.o(.ctors))
 		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
 		KEEP (*(SORT(.ctors.*)))
 		KEEP (*/crtendC.o(.ctors))
-	}
+	} : data
 	.dtors ALIGN(CAP_ALIGN) : {
 		KEEP (*/crtbeginC.o(.dtors))
 		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
 		KEEP (*(SORT(.dtors.*)))
 		KEEP (*/crtendC.o(.dtors))
-	}
+	} : data
 	.data ALIGN(CAP_ALIGN): {
 		*(.data)
-	}
+	} : data
 	_gp = ALIGN(CAP_ALIGN) + 0x7fc0;
 	.got : {
 		*(.got.plt)
 		*(.got)
-	}
+	} : data
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)
-	}
+	} : data
 
 	__start_bss = ADDR(.bss);
 	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);

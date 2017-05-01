@@ -38,13 +38,23 @@
  * Various util functions
  */
 
+extern sealing_cap def_seal_cap;
+
+static inline void set_sealing_cap(sealing_cap cap) {
+	def_seal_cap = cap;
+}
+
+static inline sealing_cap sealing_cap_for(size_t type) {
+	return cheri_setoffset(def_seal_cap, type - cheri_getbase(def_seal_cap));
+}
+
 static inline capability kernel_seal(const_capability p, uint64_t otype) {
-	capability seal = cheri_setoffset(cheri_getdefault(), otype);
+	sealing_cap seal = sealing_cap_for(otype);
 	return cheri_seal(p, seal);
 }
 
 static inline capability kernel_unseal(capability p, uint64_t otype) {
-	capability seal = cheri_setoffset(cheri_getdefault(), otype);
+	sealing_cap seal = sealing_cap_for(otype);
 	return cheri_unseal(p, seal);
 }
 

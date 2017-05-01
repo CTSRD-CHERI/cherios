@@ -65,7 +65,7 @@ static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
 }
 
-context_t act_init(context_t own_context, init_info_t* info, size_t init_base) {
+context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry) {
 	KERNEL_TRACE("init", "activation init");
 
 	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
@@ -80,11 +80,12 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base) {
 
 	// Register the kernel (exception) activation
 	act_t * kernel_act = &kernel_acts[0];
-	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, 0);
+	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(cheri_getpcc()));
 	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
 
 	// Create and register the init activation
+	KERNEL_TRACE("act", "Retroactively creating init activation");
 
 	/* Not a dummy here. We will subset our own c0/pcc for init. init is loaded directly after the kernel */
 	bzero(&frame, sizeof(struct reg_frame));
@@ -93,9 +94,8 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base) {
     frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
     capability pcc =  cheri_setbounds(cheri_setoffset(cheri_getpcc(), init_base), length);
 
-    extern size_t __init_entry_point;
-    KERNEL_TRACE("act", "assuming init has virtual entry point %lx", __init_entry_point);
-	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, __init_entry_point);
+    KERNEL_TRACE("act", "assuming init has virtual entry point %lx", init_entry);
+	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
 
 	/* provide config info to init.  c3 is the conventional register */
 	frame.cf_c3 = info;

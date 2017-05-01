@@ -105,6 +105,7 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 	cp0_status_bev_set(0);
 	kernel_interrupts_init(1);
 	while(1) {
+		KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
 		context_switch(victim_context, &own_save);
 		// We will next to be switched to with c3 containing a victim context.
 		// We could make this a call, it would be neater, i.e. get_last_victim
@@ -158,7 +159,6 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 			case MIPS_CP0_EXCODE_C2E:
 				kernel_exception_capability(cause);
 				break;
-
 			case MIPS_CP0_EXCODE_TLBL:
 			case MIPS_CP0_EXCODE_TLBS:
 			case MIPS_CP0_EXCODE_ADEL:

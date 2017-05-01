@@ -45,6 +45,8 @@ typedef struct boot_info {
 	size_t 		kernel_end;
 	size_t 		init_begin;
 	size_t 		init_end;
+
+	size_t		init_entry;
 } boot_info_t;
 
 typedef struct memmgt_init_t {
@@ -60,6 +62,7 @@ typedef struct init_info {
 	res_t 		free_mem;			/* a reservation for free memory */
 	nano_kernel_if_t* nano_if;		/* the nano kernels interface */
 	capability nano_default_cap;	/* default capability for the nano kernel */
+	capability uart_cap;
 } init_info_t;
 
 #endif /* _BOOT_INFO_H_ */

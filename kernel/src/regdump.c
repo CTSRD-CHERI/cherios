@@ -154,8 +154,10 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 void regdump(int reg_num) {
 	int creg = 0;
 	printf("Regdump:\n");
+	CHERI_PRINT_CAP(kernel_curr_act->context);
+	HW_TRACE_ON
 	reg_frame_t* frame = unlock_context(kernel_curr_act->context);
-
+	CHERI_PRINT_CAP(frame);
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
 
 	REG_DUMP_M(a0); REG_DUMP_M(a1); REG_DUMP_M(a2); REG_DUMP_M(a3); printf("\n");

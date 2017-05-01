@@ -50,7 +50,7 @@ int get_others_interrupts_mask(void) {
 }
 
 void kernel_interrupts_init(int enable_timer) {
-	KERNEL_TRACE("init", "enabling interrupts");
+	KERNEL_TRACE("interrupts", "enabling interrupts");
 	kernel_assert(cp0_status_ie_get() == 0);
 	cp0_status_ie_enable();
 

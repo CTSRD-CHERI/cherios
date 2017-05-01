@@ -51,7 +51,6 @@ SECTIONS
 		KEEP (*(.fini))
 	} = 0
 
-    ASSERT((__init_entry_point == start), "We assume this entry point in the kernel")
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
 	 * content, it would be much preferable to map into the code segment
@@ -105,14 +104,18 @@ SECTIONS
 	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
 
 	/*
-	 * No need to include anything after the following in the binary --
-	 * we just define symbols, and don't move '.'.
+	 * We DO need to include these in so much as they need program headers (even if file size is zero.
+	 * Otherwise the elf loader will not allocate enough memory and we will get an exception
+	 * This only worked before because we ran with a global C0 / never used this stack
 	 */
-	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_heap = ALIGN((__init_load_virtaddr + __size_memory) - __size_init_stack, PAGE_ALIGN);
-	__size_heap = __stop_heap - __start_heap;
 
-	__start_init_stack	= __stop_heap;
-	__stop_init_stack	= __start_init_stack + __size_init_stack;
-	__rest_of_memory	= __stop_init_stack;
+	 .heapandstack ALIGN(CAP_ALIGN): {
+	    __start_heap = .;
+	    . += (__size_memory - __size_init_stack);
+	    __stop_heap = .;
+	    __size_heap = __stop_heap - __start_heap;
+	    __start_init_stack	= __stop_heap;
+	    . += __size_init_stack;
+	    __stop_init_stack = .;
+	 } : bss
 }

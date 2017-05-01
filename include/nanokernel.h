@@ -71,8 +71,9 @@ typedef capability res_t;
 /* Merges two taken reservations. Cannot merge with collecting. If an open and taken are merged the result is taken*/\
     ITEM(rescap_merge, res_t, (res_t res1, res_t res2), __VA_ARGS__)\
 /* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
-    ITEM(rescap_parent, res_t, (res_t res), __VA_ARGS__)
-
+    ITEM(rescap_parent, res_t, (res_t res), __VA_ARGS__)\
+/* Get a physical page. Can only be done if the page is not nano owned, or mapped to from a virtual address*/\
+    ITEM(get_phy_page, capability, (register_t page_n), __VA_ARGS__)
 
 
 

@@ -49,11 +49,6 @@
 .set NANO_KERNEL_TYPE,   0x6666         # The type of sealed local data
 .set RES_TYPE,           0x7777         # The type that means 'is allowed to
 .set RES_VIEW_TYPE,      0x7778         # The type that means 'is allowed to
-# We will lay out PHYSICAL TLB state like this. The PFN is just the index in the table:
-# struct phy_ent {
-#    register_t VPN2        This is the VPN field. Once set cannot be changed, unless we revoke the VPN.
-#
-#};
 
 # Out virtual state is harder. We will ask the user to allocate this for us, using our allowance mechanism
 # struct virt_ent {
@@ -76,8 +71,6 @@
 #define cp0_wired     $6
 #define cp0_context   $4
 
-.set N_PHY_PAGES_ENTRIES, 1024 * 1024
-.set PHY_PAGE_ENTRY_SIZE, REG_SIZE
 
 #struct res_t {
 #    enum state{open, taken, merged, collecting}
@@ -92,10 +85,34 @@
 # This is the physical memory we will scan in order to support revocation
 # TODO use the proper physical window:
 .set PHY_MEM_START, 0x9000000000000000
-#.set PHY_MEM_SIZE,  (1 << 35)
-.set PHY_MEM_SIZE, (512 * 1024 * 1024)
+.set PHY_MEM_SIZE,  (1 << 32)
 .set PHY_MEM_END,   PHY_MEM_START + PHY_MEM_START
-.set NANO_SIZE, 64 * 1024 * 1024
+#.set NANO_SIZE, __nano_size
+.set NANO_SIZE, 0x4000000
+.set PHY_PAGE_SIZE_BITS, 12
+.set PHY_PAGE_SIZE, (1 << PHY_PAGE_SIZE_BITS)
+.set N_PHY_PAGES_ENTRIES, PHY_MEM_SIZE / PHY_PAGE_SIZE
+.set PHY_PAGE_ENTRY_SIZE, 2 * REG_SIZE
+.set PHY_PAGE_ENTRY_SIZE_BITS, REG_SIZE_BITS + 1
+
+
+# We will lay out PHYSICAL state like this. The PFN is just the index in the table:
+# struct phy_ent {
+#    register_t state {un-used, nano_owned, system_owned, mapped}
+#    register_t VPN2        This is the VPN field. Once set cannot be changed, unless we revoke the VPN.
+#
+#};
+
+.set PHY_UNUSED, 0
+.set PHY_NANO, 1
+.set PHY_SYSTEM, 2
+.set PHY_MAPPED, 3
+
+
+# The general idea is this: Physical pages are un-used and their state can be set (once) by the system
+# Some will be set to nano_owned for private use (constant set at init time).
+# Some will system_owned, we hand out PHYSICAL capabilities
+# Some will be mapped, and we will remember the mapping. When the VPN is proveably not in use, we can go back to un-used
 
 ####################################################################################################################
 # The (very incorrectly named) global data for the nano kernel. idc will hold a capability that covers the range
@@ -129,21 +146,25 @@ local_cap_var rescap_collect_cap
 local_cap_var rescap_split_cap
 local_cap_var rescap_merge_cap
 local_cap_var rescap_parent_cap
+local_cap_var get_phy_page_cap
 .set cap_table_end, local_ctr
 
 local_var context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
-#local_var page_table, N_PHY_PAGES_ENTRIES * PHY_PAGE_ENTRY_SIZE, REG_SIZE_BITS
+local_var page_table, N_PHY_PAGES_ENTRIES * PHY_PAGE_ENTRY_SIZE, REG_SIZE_BITS
 END_LOCALS
 
 .text
 .section .init
 
+
+.set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal))
+.set DEF_SEALING_PERMS, Perm_Seal
+
 nano_kernel_start:
 
 #################################################################
-# RT := {c1 = if, c2 = data, c3 = context, c4 = reservation}
-# RT nano_kernel_init(register_t unmanaged_space, register_t return_addr, register_t arg0)
+# nano_kernel_init(register_t unmanaged_space, register_t return_addr, register_t arg0)
 .global nano_kernel_init
 nano_kernel_init:
 ################################################################
@@ -212,6 +233,7 @@ nano_kernel_init:
     init_table rescap_split
     init_table rescap_merge
     init_table rescap_parent
+    init_table get_phy_page
 
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
@@ -225,19 +247,20 @@ nano_kernel_init:
     cseal       $c2, $kr1c, $kr2c                        # Pass a sealed capability to our locals
 
     # a0 is the start of nano kernel secured memory. a1 is an address we should return to.
-    dli         $k0, (Perm_All & ~(Perm_Access_System_Registers))
+    dli         $k0, DEF_DATA_PERMS
 
-    #check a0 < PHY_MEM_SIZE - NANO_SIZE. TODO: We also need a little extra space in the check here
+    #check a0 < PHY_MEM_SIZE - NANO_SIZE.
     dli         $t0, (PHY_MEM_SIZE - NANO_SIZE)
     slt         $t0, $a0, $t0
     beq         $t0, $zero, nano_kernel_die
+    nop
+
+    # TODO we need to set NANO_SIZE of physical pages to nano owned. Then a0 pages to system owned. The rest are free
 
     # c0 will be a global data capability to the unsecured memory
     # c17 will be a global code capability to the unsecured memory, with the index passed
-    dli         $t0, PHY_MEM_START + NANO_SIZE          # t0 = start of mem available to system
-    dli         $t3, (PHY_MEM_SIZE - CAP_SIZE - NANO_SIZE)
-    dsubu       $t3, $t3, $a0                           # t3 = length of reserved mem (minus metadata)
-    daddu       $t2, $a0, $t0                           # t2 = start of reserved mem
+    dli         $t0, (PHY_MEM_START + NANO_SIZE)          # t0 = start of mem available to system
+    daddu       $t2, $a0, $t0                             # t2 = start of free physical mem
 
     csetoffset  $c13, $kdc, $t0
     csetbounds  $c13, $c13, $a0
@@ -249,6 +272,38 @@ nano_kernel_init:
     csetoffset  $c17, $c17, $a1
     candperm    $c17, $c17, $k0
 
+    # TODO: not include our reserved types
+    dli         $t0, DEF_SEALING_PERMS
+    candperm    $c4, $kdc, $t0
+    # Now remove capabilities to the nano kernel. We should deny access to kernel regs
+    # TODO: and the tlb
+
+    # The only registers not cleared will be
+    # Kernel regs (not accessible outside this module)
+    # pcc/c17 (will be the return address)
+    # c0 default data
+    # c1 a read only capability to nano kernel method table
+    # c2 a data capability for the nano kernel
+    # c3 the first context handle
+    # c4 is a capability is a sealing capability for the type space
+    # a0 is to allow boot to pass an argument to the kernel. Don't want capabilities or they would have to be checked.
+    cclearlo    EncodeReg(all) & ~(EN6(c0, c1, c2, c3, c4, c5))
+    cclearhi    EncodeReg(all) & ~(EN4(c17, kdc, kcc, c31))
+    move        $a1, $a3
+    cjr         $c17
+    move        $a0, $a2
+
+
+
+##########################################################################
+# idc/kdc will provide us a capability to our locals in everything below #
+##########################################################################
+
+.text
+
+.global make_first_reservation     # FIXME this is handing out reserved caps to PHYSICAL space. It should be virtual.
+make_first_reservation: #FIXME dumbly copied out of init. It has been seperated as it can only be created when virtual
+                        #FIXME is supported
     # TODO we should actually collect the initial reservation in case the boot loader made a mistake
 
     csetoffset  $c13, $kdc, $t2
@@ -263,31 +318,7 @@ nano_kernel_init:
 
     csetbounds  $c13, $c13, $t3
     csc         $c13, $zero, 0($c13)                    # store cap to rest of reversed mem for use later
-
-    # Now remove capabilities to the nano kernel. We should deny access to kernel regs
-    # TODO: and the tlb and certain sealing types
-
-    # The only registers not cleared will be
-    # Kernel regs (not accessible outside this module)
-    # pcc/c17 (will be the return address)
-    # c0 default data
-    # c1 a read only capability to nano kernel method table
-    # c2 a data capability for the nano kernel
-    # c3 the first context handle
-    # c4 a reservation handle for proected memory
-    cclearlo    EncodeReg(all) & ~(EN5(c0, c1, c2, c3, c4))
-    cclearhi    EncodeReg(all) & ~(EN4(c17, kdc, kcc, c31))
-    cjr         $c17
-    move        $a0, $a3
-
-
-
-
-##########################################################################
-# idc/kdc will provide us a capability to our locals in everything below #
-##########################################################################
-
-.text
+    creturn
 
 #####################################################################
 # void context_switch(context_t restore_from, context_t*  store_to);
@@ -385,8 +416,37 @@ exceptional_return:
     move       $a0, $k0                                 # pass the cause to the exception handler
     cmove      $c3, $kr2c                               # pass the sealed context to the exception handler
     cjr        $epcc
-nop
+    nop
 
+#############################################
+# capability get_phy_page(register_t page_n)
+.global get_phy_page
+get_phy_page:
+#############################################
+
+
+    dli         $t0, N_PHY_PAGES_ENTRIES
+    slt         $t0, $a0, $t0
+    beq         $t0, $zero, get_phy_page_end            # $a0 >= $t0
+    sll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
+    dli         $t1, page_table
+    daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
+    cld         $t1, $t0, 0($idc)                       # $t1 = state
+    bnez        $t1, get_phy_page_end                   # state must be un-used
+    dli         $t1, PHY_SYSTEM
+    csd         $t1, $t0, 0($idc)                       # set to system owned
+
+    dli         $t1, PHY_MEM_START
+    sll         $t2, $a0, PHY_PAGE_SIZE_BITS
+    dli         $t0, PHY_PAGE_SIZE
+    daddu       $t1, $t1, $t2                           # t1 is the offset required for our cap
+    csetoffset  $c3, $kdc, $t1
+    csetbounds  $c3, $c3, $t0                           # bounds should be one page
+    dli         $t0, DEF_DATA_PERMS   #t0 is the permission mask
+    candperm    $c3, $c3, $t0
+
+get_phy_page_end:
+    creturn
 
 
 ########################################################
@@ -689,7 +749,7 @@ collect_loop_end:
     sub         $a4, $a4, $t0               #some space for metadata
 
     # cclearderivesfrom $c3 # TODO hypothetical new instruction
-    dli         $t1, (Perm_All & ~(Perm_Access_System_Registers))
+    dli         $t1, DEF_DATA_PERMS
     candperm    $c3, $c3, $t1
 
     cincoffset  $c5, $c3, $t0
