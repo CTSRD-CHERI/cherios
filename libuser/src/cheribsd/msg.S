@@ -172,9 +172,6 @@ end:
 	nop
 
 make_return:
-	# Cause User-defined Permission violation to signal CReturn to CheriOS
-	li      $t1, -1
-	ccheckperm      $c2, $t1
 	creturn
 	b msg_entry_loop
     nop
