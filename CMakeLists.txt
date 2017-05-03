@@ -286,7 +286,7 @@ function(add_cherios_module _target)
   # Tell the compiler to use the specified linker script
   target_link_libraries(${_target}
     "-L${CMAKE_SOURCE_DIR}/ldscripts"
-    "-T${add_exe_LINKER_SCRIPT}"
+    "-Wl,-T,${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}"
     )
   target_link_libraries(${_target}
     -cheri-linker
@@ -294,6 +294,7 @@ function(add_cherios_module _target)
     -mxgot
     -nostartfiles
     -nodefaultlibs
+    -fuse-ld=bfd
     )
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
