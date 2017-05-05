@@ -34,14 +34,14 @@
 /* Helper functions to make assembly trampolines for ccallable functions. Exposes a _get_trampoline for a function */
 
 extern capability kernel_ccall_trampoline_c0;
-void kernel_setup_trampoline();
+void kernel_setup_trampoline(void);
 
 #define DECLARE_TRAMPOLINE(F) capability F ## _get_trampoline(void)
 
 
 #define DEFINE_TRAMPOLINE_EXTRA(F, EXTRA_B, EXTRA_A)            \
-extern void F ## _trampoline();                                 \
-capability F ## _get_trampoline() {                             \
+extern void F ## _trampoline(void);                                 \
+capability F ## _get_trampoline(void) {                             \
     return (capability)(&(F ## _trampoline));                   \
 }                                                               \
 __asm__ (                                                       \

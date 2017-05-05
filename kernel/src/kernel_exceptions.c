@@ -45,7 +45,7 @@ register_t badinstr_glob = 0;
 
 DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
 
-static void kernel_exception_capability(void) {
+static void __attribute__((noreturn)) kernel_exception_capability(void) {
 	cap_exception_t exception = parse_cause(cheri_getcause());
 
 	KERNEL_TRACE("exception", "kernel_capability %s", enum_cap_cause_exception_t_tostring(exception.cause));

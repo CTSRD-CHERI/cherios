@@ -70,7 +70,7 @@ static void kernel_interrupt_others(register_t pending) {
 			struct reg_frame * frame = &kernel_acts[0].saved_registers;
 			frame->mf_v0 = -3;
 			frame->mf_a0 = i;
-			KERNEL_TRACE("interrupt","delivering interrupt %d to activation %s", i, int_child[i]->name);
+			KERNEL_TRACE("interrupt","delivering interrupt %zu to activation %s", i, int_child[i]->name);
 			// FIXME we probabably want a seperate interrupt source from the kernel
 			if(msg_push_deprecated(int_child[i], &kernel_acts[0], NULL, NULL)) {
 				kernel_panic("queue full (int)");

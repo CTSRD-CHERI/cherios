@@ -53,9 +53,9 @@ typedef struct critical_state {
 extern critical_state_t critical_state;
 
 
-void kernel_critical_section_enter();
-void kernel_critical_section_exit();
-void handle_delayed_interrupt();
+void kernel_critical_section_enter(void);
+void kernel_critical_section_exit(void);
+void handle_delayed_interrupt(void);
 
 /* THese offsets are used by context_switch.S and exception.S */
 _Static_assert(offsetof(critical_state_t, delayed_cause) == CRIT_STATE_CAUSE_OFFSET, "offset assumed by assembly");

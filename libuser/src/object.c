@@ -73,7 +73,7 @@ int act_ctrl_terminate(capability ctrl) {
 }
 
 capability act_seal_id(capability id) {
-	assert(0 && "TODO");
+	assert(0 && "TODO" && id);
 	return NULL;
 }
 
