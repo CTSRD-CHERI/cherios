@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
+#include "activations.h"
 #include "klib.h"
 #include "stdio.h"
 

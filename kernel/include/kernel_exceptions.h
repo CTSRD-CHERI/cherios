@@ -69,6 +69,8 @@
 
 DECLARE_ENUM(cap_cause_exception_t, CAP_CAUSE_LIST)
 
+#ifndef __ASSEMBLY__
+
 typedef struct cap_exception_t {
     cap_cause_exception_t cause;
     int reg_num;
@@ -83,5 +85,7 @@ static inline cap_exception_t parse_cause(register_t packed_cause) {
 #else
 	#define exception_printf(...)
 #endif
+
+#endif // __ASSEMBLY__
 
 #endif //CHERIOS_KERNEL_EXCEPTIONS_H

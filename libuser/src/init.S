@@ -78,7 +78,7 @@ start_common:
 	cmove		$c3, $c19 #self_ctrl
 	cmove		$c4, $c22 #self_cap
 	cmove		$c5, $c23 #ns_ref
-	cmove		$c6, $c24 #ns_id
+	cmove		$c6, $c24 #kernel_if
 	cmove       $c7, $c25 #queue
 
 	cgetpcc		$c12

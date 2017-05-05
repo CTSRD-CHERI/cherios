@@ -29,13 +29,12 @@
  * SUCH DAMAGE.
  */
 
-#include <all.h>
-#include <queue.h>
 #include "mips.h"
 #include "cheric.h"
 #include "queue.h"
 #include "object.h"
 #include "syscalls.h"
+#include "ccall.h"
 
 long	msg_enable = 0;
 
@@ -46,16 +45,4 @@ void pop_msg(msg_t * msg) {
     }
     *msg = act_self_queue->msg[act_self_queue->header.start];
     act_self_queue->header.start = (act_self_queue->header.start + 1) % act_self_queue->header.len;
-}
-
-void creturn(capability psync_token, capability psync_caller, ret_t ret) {
-    __asm__ (
-        "cmove      $c1, %[psync_token]  \n"
-        "cmove      $c2, %[psync_caller] \n"
-        "move       $v0, %[rret]         \n"
-        "cmove       $c3, %[cret]         \n"
-        "creturn                         \n"
-    :
-    : [psync_token]"C" (psync_token), [psync_caller]"C" (psync_caller), [rret]"r" (ret.rret), [cret]"C" (ret.cret)
-    : "$c1", "$c2", "v0");
 }

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,46 +28,22 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "uart.h"
 
-void * uart_cap = NULL;
+#ifndef CHERIOS_CCALL_H
+#define CHERIOS_CCALL_H
 
-static void user_putc(char c) {
-	printf(KGRN KBLD"%c"KRST, c);
-}
+#include "cheric.h"
+#include "object.h"
+#include "syscalls.h"
 
-static void user_puts(const void * s) {
-	printf(KGRN KBLD"%s"KRST, s);
-}
+struct cheri_object {
+    capability code;
+    capability data;
+};
 
-extern void msg_entry;
-void (*msg_methods[]) = {user_putc, user_puts};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
 
-int main(void)
-{
-	syscall_puts("UART Hello world\n");
+struct cheri_object default_obj;
 
-	/* Get capability to use uart */
-	uart_cap = act_get_cap();
-	assert(VCAP(uart_cap, 0, VCAP_RW));
+#define CONTEXT(C, D) (struct cheri_object){.code = C, .data = D}
 
-	/* Register ourself to the kernel as being the UART module */
-	int ret = namespace_register(namespace_num_uart, act_self_ref);
-	if(ret!=0) {
-		syscall_puts("UART: register failed\n");
-		return -1;
-	}
-
-	#if 0
-	uart_init(); /* done during boot process */
-	#endif
-
-	syscall_puts("UART: setup OK\n");
-
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-	return 0;
-}
+#endif //CHERIOS_CCALL_H

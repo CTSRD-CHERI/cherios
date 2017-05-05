@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,46 +28,27 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "uart.h"
+#include "critical.h"
+#include "kutils.h"
 
-void * uart_cap = NULL;
+critical_state_t critical_state;
 
-static void user_putc(char c) {
-	printf(KGRN KBLD"%c"KRST, c);
+void kernel_critical_section_enter() {
+    critical_state.critical_level++;
 }
 
-static void user_puts(const void * s) {
-	printf(KGRN KBLD"%s"KRST, s);
+void kernel_critical_section_exit() {
+    critical_state.critical_level--;
+    if(critical_state.critical_level == 0) {
+            handle_delayed_interrupt();
+    }
 }
 
-extern void msg_entry;
-void (*msg_methods[]) = {user_putc, user_puts};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
-
-int main(void)
-{
-	syscall_puts("UART Hello world\n");
-
-	/* Get capability to use uart */
-	uart_cap = act_get_cap();
-	assert(VCAP(uart_cap, 0, VCAP_RW));
-
-	/* Register ourself to the kernel as being the UART module */
-	int ret = namespace_register(namespace_num_uart, act_self_ref);
-	if(ret!=0) {
-		syscall_puts("UART: register failed\n");
-		return -1;
-	}
-
-	#if 0
-	uart_init(); /* done during boot process */
-	#endif
-
-	syscall_puts("UART: setup OK\n");
-
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-	return 0;
+void handle_delayed_interrupt() {
+    kernel_assert(critical_state.critical_level == 0);
+    if(critical_state.delayed_cause != 0) {
+        //FIXME write some code here.
+        kernel_panic("got exception in critical section");
+        critical_state.delayed_cause = 0;
+    }
 }

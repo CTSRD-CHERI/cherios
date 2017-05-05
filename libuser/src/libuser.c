@@ -29,12 +29,27 @@
  * SUCH DAMAGE.
  */
 
+#include <sys/types.h>
+#include "sys/types.h"
 #include "cheric.h"
 #include "object.h"
 #include "namespace.h"
 #include "queue.h"
+#include "assert.h"
+#include "string.h"
 
-void libuser_init(capability self_ctrl, capability self_cap, capability ns_ref, capability ns_id, queue_t * queue) {
+void libuser_init(capability self_ctrl,
+				  capability self_cap,
+				  capability ns_ref,
+				  kernel_if_t* kernel_if_c,
+				  queue_t * queue) {
+	assert(kernel_if_c != NULL);
+	// I feel like as we use these methods on every syscall we should remove the indirection
+	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
+
+	assert(cheri_gettype(kernel_if.message_send) == 0x42002);
+	assert(cheri_gettype(kernel_if.message_reply) == 0x42003);
+
 	object_init(self_ctrl, self_cap, queue);
-	namespace_init(ns_ref, ns_id);
+	namespace_init(ns_ref);
 }

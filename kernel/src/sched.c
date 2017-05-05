@@ -29,8 +29,9 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
+#include "activations.h"
 #include "klib.h"
+#include "critical.h"
 
 /* todo: sleep cpu */
 static void sched_nothing_to_run(void) __dead2;
@@ -82,10 +83,12 @@ void sched_delete(act_t * act) {
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
 		delete_act_from_queue(act);
 	}
-	if(act->sched_status == sched_running) {
-		sched_reschedule(NULL);
-	}
 	act->status = status_terminated;
+	if(act->sched_status == sched_running) {
+		sched_reschedule(NULL, sched_terminated, 1);
+	} else {
+		act->sched_status = sched_terminated;
+	}
 }
 
 void sched_receives_msg(act_t * act) {
@@ -103,23 +106,23 @@ void sched_recieve_ret(act_t * act) {
 	act->sched_status = sched_runnable;
 }
 
-void sched_block(act_t *act, sched_status_e status, act_t* next_hint) {
+void sched_block(act_t *act, sched_status_e status, act_t* next_hint, int in_kernel) {
 	KERNEL_TRACE("sched", "blocking %s", act->name);
 	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
 		delete_act_from_queue(act);
 	}
+
 	if(act->sched_status == sched_running) {
-		sched_reschedule(next_hint);
+		sched_reschedule(next_hint, status, in_kernel);
 	}
-	act->sched_status = status;
 }
 
-static void sched_deschedule(act_t * act) {
+static void sched_deschedule(act_t * act, sched_status_e into_state) {
 	kernel_assert(act->sched_status == sched_running);
 	KERNEL_TRACE("sched", "Reschedule from activation '%s'", act->name);
-	act->sched_status = sched_runnable;
+	act->sched_status = into_state;
 }
 
 void sched_schedule(act_t * act) {
@@ -143,9 +146,12 @@ static act_t * sched_picknext(void) {
 	return next;
 }
 
-void sched_reschedule(act_t * hint) {
+void swap_state(reg_frame_t* from, reg_frame_t* to);
 
-	KERNEL_TRACE("sched", "being asked to schedule someone else. have %d choices.", act_queue_end);
+void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
+	KERNEL_TRACE("sched", "being asked to schedule someone else. in_kernel=%d. have %d choices.",
+				 in_kernel,
+				 act_queue_end);
 	if(hint != NULL) {
 		KERNEL_TRACE("sched", "hint is %s", hint->name);
 	}
@@ -156,11 +162,23 @@ void sched_reschedule(act_t * hint) {
 
 	if(!hint) {
 		sched_nothing_to_run();
-	}
+	} else if(hint != kernel_curr_act) {
+		act_t* from = kernel_curr_act;
+		act_t* to = hint;
 
-	if(hint != kernel_curr_act) {
-		sched_deschedule(kernel_curr_act);
-		sched_schedule(hint);
+		kernel_critical_section_enter();
+		sched_deschedule(from, into_state);
+		sched_schedule(to);
+		if(!in_kernel) {
+			/* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
+			/* swap state will exit the critical section and will seem like a no-op from the users perspective */
+
+			swap_state(&from->saved_registers, &to->saved_registers);
+
+		} else {
+			kernel_critical_section_exit();
+		}
+
 	}
 
 }

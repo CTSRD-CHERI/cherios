@@ -36,21 +36,15 @@
 #include "stdio.h"
 
 capability namespace_ref = NULL;
-capability namespace_id  = NULL;
 
-void namespace_init(capability ns_ref, capability ns_id) {
+void namespace_init(capability ns_ref) {
 	namespace_ref = ns_ref;
-	namespace_id  = ns_id;
 }
 
-int namespace_register(int nb, capability ref, capability id) {
-	return ccall_rcc_r(namespace_ref, namespace_id, 0, nb, ref, id);
+int namespace_register(int nb, capability ref) {
+	return MESSAGE_SYNC_SEND_r(namespace_ref, nb, 0, 0, ref, NULL, NULL, 0);
 }
 
 capability namespace_get_ref(int nb) {
-	return ccall_r_c(namespace_ref, namespace_id, 1, nb);
-}
-
-capability namespace_get_id(int nb) {
-	return ccall_r_c(namespace_ref, namespace_id, 2, nb);
+	return MESSAGE_SYNC_SEND_c(namespace_ref, nb, 0, 0, NULL, NULL, NULL, 1);
 }

@@ -32,7 +32,28 @@
 #ifndef _CHERIOS_QUEUE_H_
 #define	_CHERIOS_QUEUE_H_
 
+
+#define MAX_MSG_B 4
+#define MAX_MSG (1 << MAX_MSG_B)
+
+#define MSG_NB_T_SIZE 8
+#define HEADER_START_OFFSET 0
+#define HEADER_END_OFFSET MSG_NB_T_SIZE
+#define HEADER_LEN_OFFSET (MSG_NB_T_SIZE * 2)
+#define MSGS_START_OFFSET 32
+
+#ifndef __ASSEMBLY__
+
 #include "mips.h"
 #include "export/queue.h"
+#include "stddef.h"
+
+_Static_assert(sizeof(msg_nb_t) == MSG_NB_T_SIZE, "size used by msg.S");
+_Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, start)) == HEADER_START_OFFSET, "offset used by msg.S");
+_Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, end)) == HEADER_END_OFFSET, "offset used by msg.S");
+_Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, len)) == HEADER_LEN_OFFSET, "offset used by msg.S");
+_Static_assert((offsetof(queue_t, msg) == MSGS_START_OFFSET), "offset used by msg.S");
+
+#endif // __ASSEMBLY__
 
 #endif

@@ -34,6 +34,9 @@
 #include "mips.h"
 #include "cheric.h"
 #include "queue.h"
+#include "ccall.h"
+#include "msg.h"
+#include "types.h"
 
 extern capability act_self_ctrl;
 extern capability act_self_ref;
@@ -58,49 +61,15 @@ void	object_init(capability self_ctrl, capability self_cap, queue_t * queue);
 
 void	ctor_null(void);
 void	dtor_null(void);
-void *	get_idc(void);
-void	set_idc(void *cookie);
 
 void * get_idc_from_ref(capability act_ref, capability act_id);
 
 extern capability sync_token;
 extern capability sync_caller;
+extern kernel_if_t kernel_if;
 
 extern long msg_enable;
 
-typedef struct
-{
-	capability cret;
-	register_t rret;
-}  ret_t;
-
-#define CCALL(selector, ...) ccall_##selector(__VA_ARGS__)
-register_t ccall_SEND(capability act_ref, capability act_id, int method_nb,
-					  register_t rarg1, register_t rarg2, register_t rarg3,
-					  const_capability carg1, const_capability carg2, const_capability carg3);
-register_t ccall_SEND_SWITCH(capability act_ref, capability act_id, int method_nb,
-							 register_t rarg1, register_t rarg2, register_t rarg3,
-							 const_capability carg1, const_capability carg2, const_capability carg3);
-
-void	ccall_c_n(capability act_ref, capability act_id, int method_nb, const_capability carg);
-capability ccall_n_c(capability act_ref, capability act_id, int method_nb);
-capability	ccall_r_c(capability act_ref, capability act_id, int method_nb, int rarg);
-capability	ccall_c_c(capability act_ref, capability act_id, int method_nb, const_capability carg);
-capability	ccall_rr_c(capability act_ref, capability act_id, int method_nb, int rarg, int rarg2);
-register_t ccall_n_r(capability act_ref, capability act_id, int method_nb);
-register_t ccall_r_r(capability act_ref, capability act_id, int method_nb, int rarg);
-register_t ccall_c_r(capability act_ref, capability act_id, int method_nb, capability carg);
-register_t ccall_rr_r(capability act_ref, capability act_id, int method_nb, int rarg, int rarg2);
-register_t ccall_rc_r(capability act_ref, capability act_id, int method_nb, int rarg, const_capability carg);
-void	ccall_cc_n(capability act_ref, capability act_id, int method_nb, capability carg1, capability carg2);
-void	ccall_rc_n(capability act_ref, capability act_id, int method_nb, int rarg, capability carg);
-register_t ccall_rcc_r(capability act_ref, capability act_id, int method_nb, register_t rarg1, capability carg1, capability carg2);
-capability	ccall_rrrc_c(capability act_ref, capability act_id, int method_nb,
-                    register_t, register_t, register_t, capability carg);
-register_t ccall_rrcc_r(capability act_ref, capability act_id, int method_nb,
-                    register_t rarg1, register_t rarg2, capability carg1, capability carg2);
-
 void pop_msg(msg_t * msg);
-void creturn(capability psync_token, capability psync_caller, ret_t ret);
 
 #endif

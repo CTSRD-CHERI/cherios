@@ -32,9 +32,15 @@
 #ifndef __ACTIVATIONS_H
 #define __ACTIVATIONS_H
 
+#define ACT_NAME_MAX_LEN (0x10)
+#define USER_KERNEL_STACK_SIZE 4096
+
+#ifndef __ASSEMBLY__
+
 #include "cheric.h"
 #include "queue.h"
 #include "types.h"
+#include "stddef.h"
 
 typedef u32 aid_t;
 
@@ -44,9 +50,12 @@ typedef u32 aid_t;
  */
 typedef	uint64_t sync_t;
 
-#define ACT_NAME_MAX_LEN (0x10)
 typedef struct
 {
+	/* Stack for the kernel when acting on users behalf */
+	/* Warning: The offset of this is assumed by assembly */
+	capability user_kernel_stack[USER_KERNEL_STACK_SIZE / sizeof(capability)];
+
 	/* Activation related */
 	status_e status;		/* Activation status flags */
 
@@ -62,20 +71,29 @@ typedef struct
 	reg_frame_t saved_registers;	/* Space to put saved registers for restore */
 
 	/* CCall related */
-	sync_t sync_token;		/* Helper for the synchronous CCall mecanism */
+	struct sync_state {
+		ret_t* sync_ret;
+		sync_t sync_token;		/* Helper for the synchronous CCall mecanism */
+		int sync_condition;
+	} sync_state;
 
-	void * act_default_id;		/* Default object identifier */
-	#ifndef __LITE__
+#ifndef __LITE__
 	char name[ACT_NAME_MAX_LEN];	/* Activation name (for debuging) */
-    #endif
+#endif
 
 } act_t;
+
+/* Assumed by assembly */
+_Static_assert(offsetof(act_t, user_kernel_stack) == 0, "Kernel ccall trampolines assume the stack is the first member");
+
 
 /* Control references are just references with a different type */
 typedef act_t act_control_t;
 
 /* This pointer is used by the exception handler to save restore state */
 extern reg_frame_t *	kernel_exception_framep_ptr;
+
+//FIXME scrap these, the kernel should not allocate memory.
 /* global array of all activations */
 extern act_t		kernel_acts[];
 /* The index of the next activation to put in the above array. NOT to do with scheduling.*/
@@ -83,5 +101,7 @@ extern aid_t 		kernel_next_act;
 
 /* The currently scheduled activation */
 extern act_t* 		kernel_curr_act;
+
+#endif // __ASSEMBLY__
 
 #endif

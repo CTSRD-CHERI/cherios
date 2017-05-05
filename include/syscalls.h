@@ -33,6 +33,8 @@
 
 #include "string_enums.h"
 
+#ifndef __ASSEMBLY__
+
 #define SYSCALL(NUM) __asm__ __volatile__ ("li $v0, %[num] \n" "syscall \n":: [num]"I" (NUM): "v0")
 
 #define SYSCALL_a0_base(NUM, _a0, EXTRA, OUTS) \
@@ -63,16 +65,16 @@ __asm__ __volatile__ (                       \
 #define SYSCALL_c3_retr(NUM, _c3, _ret) SYSCALL_c3_base(NUM, _c3, "move %[ret], $v0\n", [ret] "=r" (_ret))
 #define SYSCALL_c3_retc(NUM, _c3, _ret) SYSCALL_c3_base(NUM, _c3, "cmove %[ret], $c3\n", [ret] "=C" (_ret))
 
+#endif // __ASSEMBLY__
+
 #define SYS_CALL_LIST(ITEM)           \
         ITEM(SLEEP,13)                \
         ITEM(WAIT,14)                 \
         ITEM(ACT_REGISTER,20)         \
         ITEM(ACT_CTRL_GET_REF,21)     \
-        ITEM(ACT_CTRL_GET_ID,22)      \
         ITEM(ACT_CTRL_GET_STATUS,23)  \
         ITEM(ACT_REVOKE,25)           \
         ITEM(ACT_TERMINATE,26)        \
-        ITEM(ACT_SEAL_IDENTIFIER,29)  \
         ITEM(PUTS,34)                 \
         ITEM(PANIC,42)                \
         ITEM(INTERRUPT_REGISTER,50)   \

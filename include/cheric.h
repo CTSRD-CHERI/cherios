@@ -49,48 +49,54 @@
 #endif
 
 /*
+ * Canonical C-language representation of a capability.
+ */
+typedef __capability void * capability;
+typedef __capability const void * const_capability;
+
+/*
  * Programmer-friendly macros for CHERI-aware C code -- requires use of
  * CHERI-aware Clang/LLVM, and full CP2 context switching, so not yet usable
  * in the kernel.
  */
 #define	cheri_getlen(x)		__builtin_mips_cheri_get_cap_length(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 #define	cheri_getbase(x)	__builtin_mips_cheri_get_cap_base(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 #define	cheri_getoffset(x)	__builtin_mips_cheri_cap_offset_get(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 #define	cheri_getperm(x)	__builtin_mips_cheri_get_cap_perms(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 #define	cheri_getsealed(x)	__builtin_mips_cheri_get_cap_sealed(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 #define	cheri_gettag(x)		__builtin_mips_cheri_get_cap_tag(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 #define	cheri_gettype(x)	__builtin_mips_cheri_get_cap_type(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 
 #define	cheri_andperm(x, y)	__builtin_mips_cheri_and_cap_perms(		\
-				    __DECONST(__capability void *, (x)), (y))
+				    __DECONST(capability, (x)), (y))
 #define	cheri_cleartag(x)	__builtin_mips_cheri_clear_cap_tag(		\
-				    __DECONST(__capability void *, (x)))
+				    __DECONST(capability, (x)))
 #define	cheri_incoffset(x, y)	__builtin_mips_cheri_cap_offset_increment(	\
-				    __DECONST(__capability void *, (x)), (y))
+				    __DECONST(capability, (x)), (y))
 #define	cheri_setoffset(x, y)	__builtin_mips_cheri_cap_offset_set(		\
-				    __DECONST(__capability void *, (x)), (y))
+				    __DECONST(capability, (x)), (y))
 
 #define	cheri_seal(x, y)	__builtin_mips_cheri_seal_cap(		 \
-				    __DECONST(__capability void *, (x)), \
-				    __DECONST(__capability void *, (y)))
+				    __DECONST(capability, (x)), \
+				    __DECONST(capability, (y)))
 #define	cheri_unseal(x, y)	__builtin_mips_cheri_unseal_cap(		 \
-				    __DECONST(__capability void *, (x)), \
-				    __DECONST(__capability void *, (y)))
+				    __DECONST(capability, (x)), \
+				    __DECONST(capability, (y)))
 
 #define	cheri_getcause()	__builtin_mips_cheri_get_cause()
 #define	cheri_setcause(x)	__builtin_mips_cheri_set_cause(x)
 
 #define	cheri_ccheckperm(c, p)	__builtin_mips_cheri_check_perms(		\
-				    __DECONST(__capability void *, (c)), (p))
+				    __DECONST(capability, (c)), (p))
 #define	cheri_cchecktype(c, t)	__builtin_mips_cheri_check_type(		\
-				    __DECONST(__capability void *, (c)), (t))
+				    __DECONST(capability, (c)), (t))
 
 #define	cheri_getdefault()	__builtin_mips_cheri_get_global_data_cap()
 #define	cheri_getidc()		__builtin_mips_cheri_get_invoke_data_cap()
@@ -105,7 +111,7 @@
 #define	cheri_local(c)		cheri_andperm((c), ~CHERI_PERM_GLOBAL)
 
 #define	cheri_setbounds(x, y)	__builtin_cheri_bounds_set(		\
-				    __DECONST(__capability void *, (x)), (y))
+				    __DECONST(capability, (x)), (y))
 
 /* Names for permission bits */
 #define CHERI_PERM_GLOBAL		(1 <<  0)
@@ -135,13 +141,13 @@
  * appears not currently to be the case, so manually derive using
  * cheri_getpcc() for now.
  */
-static __inline __capability void *
+static __inline capability
 cheri_codeptr(const void *ptr, size_t len)
 {
 #ifdef NOTYET
 	__capability void (*c)(void) = ptr;
 #else
-	__capability void *c = cheri_setoffset(cheri_getpcc(),
+	capability c = cheri_setoffset(cheri_getpcc(),
 	    (register_t)ptr);
 #endif
 
@@ -149,7 +155,7 @@ cheri_codeptr(const void *ptr, size_t len)
 	return (cheri_setbounds(c, len));
 }
 
-static __inline __capability void *
+static __inline capability
 cheri_codeptrperm(const void *ptr, size_t len, register_t perm)
 {
 
@@ -157,22 +163,22 @@ cheri_codeptrperm(const void *ptr, size_t len, register_t perm)
 	    perm | CHERI_PERM_GLOBAL));
 }
 
-static __inline __capability void *
+static __inline capability
 cheri_ptr(const void *ptr, size_t len)
 {
 
 	/* Assume CFromPtr without base set, availability of CSetBounds. */
-	return (cheri_setbounds((const __capability void *)ptr, len));
+	return (cheri_setbounds((const_capability)ptr, len));
 }
 
-static __inline __capability void *
+static __inline capability
 cheri_ptrperm(const void *ptr, size_t len, register_t perm)
 {
 
 	return (cheri_andperm(cheri_ptr(ptr, len), perm | CHERI_PERM_GLOBAL));
 }
 
-static __inline __capability void *
+static __inline capability
 cheri_ptrpermoff(const void *ptr, size_t len, register_t perm, off_t off)
 {
 
@@ -188,10 +194,10 @@ cheri_ptrpermoff(const void *ptr, size_t len, register_t perm, off_t off)
  * The caller may wish to assert various properties about the returned
  * capability, including that CHERI_PERM_SEAL is set.
  */
-static __inline __capability void *
-cheri_maketype(__capability void *root_type, register_t type)
+static __inline capability
+cheri_maketype(capability root_type, register_t type)
 {
-	__capability void *c;
+	capability c;
 
 	c = root_type;
 	c = cheri_setoffset(c, type);	/* Set type as desired. */
@@ -200,7 +206,7 @@ cheri_maketype(__capability void *root_type, register_t type)
 	return (c);
 }
 
-static __inline __capability void *
+static __inline capability
 cheri_zerocap(void)
 {
 	return (__capability void *)0;
@@ -219,6 +225,20 @@ cheri_zerocap(void)
 	else								\
 		__asm __volatile ("cmove $c" #x ", %0" : : "C" (cap));  \
 } while (0)
+
+static __inline__ capability get_idc(void) {
+	capability object;
+	__asm__ (
+	"cmove %[object], $idc \n"
+	: [object]"=C" (object));
+	return object;
+}
+
+static __inline__  void set_idc(capability idc) {
+	__asm__ (
+	"cmove $idc, %[cookie] \n"
+	:: [cookie]"C" (idc));
+}
 
 #define CHERI_PRINT_PTR(ptr)						\
 	printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n", __func__,	\

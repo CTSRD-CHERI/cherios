@@ -42,6 +42,7 @@
 #include "sched.h"
 #include "string.h"
 #include "kutils.h"
+#include "ccall_trampoline.h"
 #include "export/klib.h"
 
 #ifdef __TRACE__
@@ -92,8 +93,15 @@ void	kernel_freeze(void) __dead2;
 
 int	try_gc(void * p, void * pool);
 
-int	msg_push(act_t * dest, act_t * src, capability, capability);
-void	msg_pop(act_t* act);
+DECLARE_TRAMPOLINE(act_send_message);
+DECLARE_TRAMPOLINE(act_send_return);
+
+int msg_push(capability c3, capability c4, capability c5,
+			 register_t a0, register_t a1, register_t a2,
+			 register_t v0,
+			 act_t * dest, act_t * src, capability sync_token);
+int	msg_push_deprecated(act_t *dest, act_t *src, capability, capability);
+void	msg_pop_depracated(act_t *act);
 void	msg_queue_init(act_t* act, queue_t * queue);
 int	msg_queue_empty(act_t* act);
 

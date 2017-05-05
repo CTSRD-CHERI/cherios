@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include "sys/types.h"
 #include "boot/boot.h"
 #include "cp0.h"
 #include "misc.h"
@@ -36,7 +37,7 @@
 #include "string.h"
 #include "syscalls.h"
 
-#define B_FS 1
+#define B_FS 0
 #define B_SO 1
 #define B_ZL 1
 #define B_T1 0
@@ -144,10 +145,22 @@ int cherios_main(void) {
 	boot_printf("D\n");
 	load_kernel("kernel.elf");
 	install_exception_vector();
+	boot_printf("D.2\n");
+
+	kernel_if_t* kernel_if_c;
 	__asm__ __volatile__ (
 		"li    $v0, 0        \n"
 		"syscall             \n"
-		::: "v0");
+		"cmove %[msg_send_cap], $c3\n"
+		:[msg_send_cap]"=C"(kernel_if_c)
+		:
+		: "v0", "$c3");
+
+	kernel_assert(kernel_if_c != NULL);
+	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
+	kernel_assert(cheri_gettype(kernel_if.message_send) == 0x42002);
+	kernel_assert(cheri_gettype(kernel_if.message_reply) == 0x42003);
+
 	/* Interrupts are ON from here */
 	boot_printf("E\n");
 

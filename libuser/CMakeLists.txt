@@ -3,6 +3,7 @@ set(LIBUSER_ASM_SRCS
     src/memcpy_c.S
     src/memcpy.S
     src/msg.S
+    src/ccall.S
 )
 
 set(LIBUSER_SRCS

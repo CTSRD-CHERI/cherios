@@ -28,6 +28,10 @@
  * SUCH DAMAGE.
  */
 
+#ifndef _TYPES_H_
+#define _TYPES_H_
+
+#include "cheric.h"
 /*
  * Possible status for an activation
  */
@@ -49,3 +53,18 @@ typedef enum sched_status_e
     sched_sync_block,
     sched_terminated
 } sched_status_e;
+
+typedef struct
+{
+    capability c3;
+    register_t v0;
+    register_t v1;
+}  ret_t;
+
+typedef struct
+{
+    capability message_send;
+    capability message_reply;
+} kernel_if_t;
+
+#endif

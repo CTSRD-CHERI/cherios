@@ -52,7 +52,7 @@ int main(void)
 	socket_init();
 
 	/* Register ourself to the kernel as being the Sockets module */
-	int ret = namespace_register(namespace_num_sockets, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_sockets, act_self_ref);
 	if(ret!=0) {
 		printf("Sockets: register failed\n");
 		return -1;

@@ -29,6 +29,10 @@
 # SUCH DAMAGE.
 #
 
+#define __ASSEMBLY__ 1
+#include "queue.h"
+#include "syscalls.h"
+
 .set noreorder
 .set nobopt
 .set noat
@@ -47,17 +51,10 @@
 .endif
 .endif
 
-.set WAIT_NO,               14
-.set MSG_NB_T_SIZE,         8
-.set HEADER_START_OFFSET,   0
-.set HEADER_END_OFFSET,     MSG_NB_T_SIZE
-.set HEADER_LEN_OFFSET,     MSG_NB_T_SIZE * 2
-
-# TODO this should be calculated properly, depends on alignment of cap and msg_nb_t
-# TODO this will work for MSG_NB_T_SIZE = 8, and either CHERI-128 or CHERI-256
-.set MSGS_START_OFFSET,     32
-
 #define queue               $c18
+#define message_reply       $c19
+#define msg_entry_loop_cap  $c20
+#define def_cap             $c21
 
 # These are used by the runtime to know who to respond to
 # FIXME should be local, anybody who wants to use creturn should do so to a creturn method
@@ -76,18 +73,22 @@ sync_token:
 	.global msg_entry
 	.ent msg_entry
 msg_entry:
-    cgetdefault	$c17
+    cgetdefault	def_cap
     dla         $t0, act_self_queue
-    clc         queue, $t0, 0($c17)
+    clc         queue, $t0, 0(def_cap)
+    dla         $t0, kernel_if
+    clc         message_reply, $t0, CAP_SIZE(def_cap)
+    cgetpcc     msg_entry_loop_cap
+
 msg_entry_loop:
 
 # Check for items in queue
-    cld     $t0, $zero, HEADER_START_OFFSET(queue)        # $t0 = start
+    cld     $t0, $zero, HEADER_START_OFFSET (queue)       # $t0 = start
     cld     $t1, $zero, HEADER_END_OFFSET(queue)          # $t1 = end
     bne    $t0, $t1, pop                                  # $t0 != $t1
 
 # TODO in a multicore world we may wish to spin a few times before resorting to WAIT
-    li      $v0, WAIT_NO                                 #
+    li      $v0, WAIT                                     #
     syscall                                               # SYSCALL(WAIT)
 
 pop:
@@ -105,6 +106,7 @@ pop:
     cld     $a2, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 16)(queue)
     cld     $v0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 24)(queue)
     move	$v1, $v0
+
 
     cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        #
     addi    $t0, $t0, 1                                 #
@@ -128,31 +130,30 @@ control:
 	dla		$t1, ctrl_methods_nb
 	sub		$v1, $0, $v1
 call:
-	cld		$t1, $t1, 0($c17)
+	cld		$t1, $t1, 0(def_cap)
 	sub		$t1, $t1, $v1
 	blez		$t1, overflow
 	nop
 
 	#Save sync_token
 	dla		$t1, sync_token
-	csc		$c1, $t1, 0($c17)
+	csc		$c1, $t1, 0(def_cap)
     #Save caller
     dla     $t1, sync_caller
-    csc     $c2, $t1, 0($c17)
+    csc     $c2, $t1, 0(def_cap)
 
 	dsll	$v1, $v1, CAP_SIZE_BITS
 	dadd	$t0, $t0, $v1
-	clc		$c12, $t0, 0($c17)
+	clc		$c12, $t0, 0(def_cap)
 	cjalr		$c12, $c17
 	nop
 
 	#Restore sync_token
-	cgetdefault	$c17
 	dla		$t1, sync_token
-	clc		$c1, $t1, 0($c17)
+	clc		$c4, $t1, 0(def_cap)
 	#Restore caller activation reference
 	dla     $t1, sync_caller
-	clc     $c2, $t1, 0($c17)
+	clc     $c2, $t1, 0(def_cap)
 
 	b		end
 	nop
@@ -165,14 +166,25 @@ overflow:
 	nop
 
 end:
+
 #FIXME this instruction cannot jump backwards due to a QEMU bug
-	cbts    $c1, make_return
+	cbts    $c4, make_return
 	nop
     b msg_entry_loop
 	nop
 
 make_return:
-	creturn
+    # c3 is both a return register and an arugment register so needs no work.
+    # v0 and v1 need to be arguments.
+    # c4 has the token from above.
+    # c1 needs the return cap, we kept it in a saved register
+    # c2 needs the message reply cap, this is already installed.
+    # c17 needs a good return address. We took the address of the loop symbol which is as good as any
+    move  $a0, $v0
+    move  $a1, $v1
+    cmove $c1, message_reply
+    cmove $c17, msg_entry_loop_cap
+	ccall $c1, $c2
 	b msg_entry_loop
     nop
 

@@ -33,7 +33,6 @@
 typedef  struct
 {
 	void * act_reference;
-	void * act_default_id;
 } bind_t;
 
 #define	BIND_LEN 0x80
@@ -44,20 +43,15 @@ void ns_init(void) {
 }
 
 static int validate_idx(int nb) {
-	if(nb <  0       ) { return 0; }
-	if(nb >= BIND_LEN) { return 0; }
-	return 1;
+	if(nb <  0       ) { return -1; }
+	if(nb >= BIND_LEN) { return -1; }
+	return 0;
 }
 
-static int validate_act_caps(void * act_reference, void * act_default_id) {
-	if(cheri_gettag(act_reference) == 0) { return 0; }
-	if(cheri_gettag(act_default_id) == 0) { return 0; }
-	if(cheri_getsealed(act_reference) == 0) { return 0; }
-	if(cheri_getsealed(act_default_id) == 0) { return 0; }
-	if(cheri_gettype(act_reference) !=
-	   cheri_gettype(act_default_id)) { return 0; }
-	/* todo: check otype range and permissions */
-	return 1;
+static int validate_act_caps(void * act_reference) {
+	if(cheri_gettag(act_reference) == 0) { return -2; }
+	if(cheri_getsealed(act_reference) == 0) { return -3; }
+	return 0;
 }
 
 /* Get reference for service 'n' */
@@ -69,33 +63,24 @@ void * ns_get_reference(int nb) {
 	return bind[nb].act_reference;
 }
 
-/* Get default identifier for service 'n' */
-void * ns_get_identifier(int nb) {
-	if(!validate_idx(nb)) {
-		return NULL;
-	}
-	/* If service not in use, will already return NULL */
-	return bind[nb].act_default_id;
-}
-
-
 /* Register a module a service 'nb' */
-static int ns_register_core(int nb, void * act_reference, void * act_default_id) {
+static int ns_register_core(int nb, void * act_reference) {
 	if(bind[nb].act_reference != NULL) {
 		printf("%s: port already in use\n", __func__);
-		return -1;
+		return -4;
 	}
 
 	bind[nb].act_reference  = act_reference;
-	bind[nb].act_default_id = act_default_id;
 
 	return 0;
 }
 
-int ns_register(int nb, void * act_reference, void * act_default_id) {
-	printf("Regiter id %d", nb);
-	if(!validate_idx(nb) || !validate_act_caps(act_reference, act_default_id)) {
-		return -1;
-	}
-	return ns_register_core(nb, act_reference, act_default_id);
+int ns_register(int nb, void * act_reference) {
+	printf("Register id %d", nb);
+
+	int ret = validate_idx(nb);
+	if(ret != 0) return ret;
+	if((ret = validate_act_caps(act_reference)) != 0) return  ret;
+
+	return ns_register_core(nb, act_reference);
 }

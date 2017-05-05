@@ -34,12 +34,12 @@
 #define	_CHERIOS_SCHED_H_
 
 void    sched_schedule(act_t * act);
-void	sched_reschedule(act_t * hint);
+void    sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel);
 
 void	sched_create(act_t * act);
 void	sched_delete(act_t * act);
 
-void	sched_block(act_t *act, sched_status_e status, act_t* next_hint);
+void	sched_block(act_t *act, sched_status_e status, act_t* next_hint, int in_kernel);
 void	sched_receives_msg(act_t * act);
 void    sched_recieve_ret(act_t * act);
 

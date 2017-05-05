@@ -29,12 +29,14 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
+#include "sys/types.h"
 #include "activations.h"
 #include "klib.h"
 #include "stdio.h"
 #include "queue.h"
 #include "namespace.h"
+#include "msg.h"
+#include "ccall_trampoline.h"
 
 /*
  * Routines to handle activations
@@ -42,35 +44,59 @@
 
 /* We only create activations for now, no delete */
 struct reg_frame *		kernel_exception_framep_ptr;
+/* This save frame was used to save boots context during bootload. We move it ASAP and use kernel_exception_framep_ptr */
+extern struct reg_frame kernel_init_save_frame;
+
 act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
 aid_t				kernel_next_act = 0;
+
+/* Really belongs to the sched, we will eventually seperate out the activation manager */
 act_t * 			kernel_curr_act;
-static capability            act_default_id = NULL;
 
 // TODO: Put these somewhere sensible;
-queue_default_t boot_queue, kernel_queue;
+static queue_default_t boot_queue, kernel_queue;
+static kernel_if_t internel_if;
+static act_t* ns_ref = NULL;
+
+kernel_if_t* get_if() {
+	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
+}
 
 void act_init(void) {
 	KERNEL_TRACE("init", "activation init");
-
-	/* initialize the default identifier to a known value */
-	act_default_id = cheri_setbounds(cheri_getdefault(), 0);
-	CHERI_PRINT_CAP(act_default_id);
 	/*
 	 * create kernel activation
 	 * used to have a 'free' reg frame.
-	 * canot be scheduled: aid 0 is invalid
+	 * aid no longer exists, we simply don't add it to sched by having a creation state of terminated
 	 */
-	kernel_next_act = 0;
-	struct reg_frame dummy_frame;
-	bzero(&dummy_frame, sizeof(struct reg_frame));
-	act_register(&dummy_frame, &kernel_queue.queue, "kernel", 0, status_terminated);
 
-	/* create the boot activation (activation that called us) */
+	//TODO does not belong here
+	/* The message enqueue code capability */
+	kernel_setup_trampoline();
+
+	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
+	internel_if.message_reply = kernel_seal(act_send_return_get_trampoline(), act_sync_ref_type);
+
+	CHERI_PRINT_CAP(internel_if.message_send);
+
+	kernel_next_act = 0;
+
+	act_t * kernel_act = &kernel_acts[0];
+
+	/* We are currently inside the kernel act and it is never restored. So we can just zero its saved context */
+	bzero(&kernel_act->saved_registers, sizeof(struct reg_frame));
+	act_register(&kernel_act->saved_registers, &kernel_queue.queue, "kernel", 0, status_terminated);
+
+	/* create the boot activation. This is NOT the activation that called this function.*/
 	act_t* boot_act = &kernel_acts[namespace_num_boot];
 
-	act_register(&boot_act->saved_registers, &boot_queue.queue, "boot", 0, status_alive);
+	act_register(&kernel_init_save_frame, &boot_queue.queue, "boot", 0, status_alive);
 
+	/* As boot was created before the kernel, it does not have the enqueue cap. we can give it this by setting the
+	 * return capability to picked up after the bootstrap exception returns*/
+	boot_act->saved_registers.cf_c3 = (capability)get_if();
+
+	//boot_act->image_base = 0xffffffff80000000 + 0x100000;
 	sched_schedule(boot_act);
 }
 
@@ -82,15 +108,12 @@ void kernel_skip_instr(act_t* act) {
 }
 
 static act_t * act_create_sealed_ref(act_t * act) {
-	return kernel_seal(kernel_cap_make_rx(act), act_ref_type);
+	return kernel_seal(act, act_ref_type);
 }
 
 static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return kernel_seal(act, act_ctrl_ref_type);
 }
-
-static act_t* ns_ref = NULL;
-static capability ns_id  = NULL;
 
 act_control_t * act_register(const reg_frame_t * frame,
 							 queue_t * queue, const char * name,
@@ -105,13 +128,13 @@ act_control_t * act_register(const reg_frame_t * frame,
 
 	act_t * act = kernel_acts + kernel_next_act;
 
+	// FIXME this should be pcc base, but I have to check.
 	act->image_base = cheri_getbase(frame->cf_c0);
 
 	//TODO bit of a hack. the kernel needs to know what namespace service to use
 	if(kernel_next_act == namespace_num_namespace) {
 		KERNEL_TRACE("act", "found namespace");
 		ns_ref = act_create_sealed_ref(act);
-		ns_id = kernel_seal(act_default_id, act_id_type);
 	}
 
 	#ifndef __LITE__
@@ -139,7 +162,7 @@ act_control_t * act_register(const reg_frame_t * frame,
 	//FIXME I also feel that getting the namespace should be a syscall?
 	/* set namespace */
 	act->saved_registers.cf_c23	= ns_ref;
-	act->saved_registers.cf_c24	= ns_id;
+	act->saved_registers.cf_c24	= (capability)get_if();
 	act->saved_registers.cf_c25	= queue;
 
 	act->saved_registers.mf_a0 = a0;
@@ -147,12 +170,9 @@ act_control_t * act_register(const reg_frame_t * frame,
 	/* set queue */
 	msg_queue_init(act, queue);
 
-	/* set default identifier */
-	act->act_default_id = kernel_seal(act_default_id, act_id_type);
-
-
 	/* set expected sequence to not expecting */
-	act->sync_token = 0;
+	act->sync_state.sync_token = 0;
+	act->sync_state.sync_condition = 0;
 
 	/* set scheduling status */
 	sched_create(act);
@@ -190,10 +210,6 @@ act_t * act_get_sealed_ref_from_ctrl(act_control_t * ctrl) {
 	return act_create_sealed_ref(ctrl);
 }
 
-capability act_get_id(act_control_t * ctrl) {
-	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
-	return ctrl->act_default_id;
-}
 
 int act_get_status(act_control_t * ctrl) {
 	ctrl = (act_control_t *) kernel_unseal(ctrl, act_ctrl_ref_type);
@@ -203,13 +219,8 @@ int act_get_status(act_control_t * ctrl) {
 
 void act_wait(act_t* act, act_t* next_hint) {
 	if(msg_queue_empty(act)) {
-		sched_block(act, sched_waiting, next_hint);
+		sched_block(act, sched_waiting, next_hint, 1);
 	} else {
 		return;
 	}
-}
-
-/* FIXME have to think about these as well */
-capability act_seal_identifier(capability identifier) {
-	return kernel_seal(cheri_andperm(identifier, 0b111100011111101), act_id_type);
 }

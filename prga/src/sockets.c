@@ -31,24 +31,23 @@
 #include "lib.h"
 
 extern void * s_cb;
-extern void * s_cs;
 
 int socket(void) {
-	return ccall_n_r(s_cb, s_cs, 0);
+	return MESSAGE_SYNC_SEND_r(s_cb, 0, 0 ,0, NULL, NULL, NULL, 0);
 }
 
 int bind(int socket, int port) {
-	return ccall_rr_r(s_cb, s_cs, 1, socket, port);
+	return MESSAGE_SYNC_SEND_r(s_cb, socket, port ,0, NULL, NULL, NULL, 1);
 }
 
 int connect(int socket, int port) {
-	return ccall_rr_r(s_cb, s_cs, 2, socket, port);
+	return MESSAGE_SYNC_SEND_r(s_cb, socket, port ,0, NULL, NULL, NULL, 2);
 }
 
 void * recfrom(int socket) {
-	return ccall_r_c(s_cb, s_cs, 3, socket);
+	return MESSAGE_SYNC_SEND_c(s_cb, socket, 0 ,0, NULL, NULL, NULL, 3);
 }
 
 int sendto(int socket, void * msg) {
-	return ccall_rc_r(s_cb, s_cs, 4, socket, msg);
+	return MESSAGE_SYNC_SEND_r(s_cb, socket, 0 ,0, msg, NULL, NULL, 4);
 }
