@@ -117,7 +117,7 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_F
   # now build the file system
   # note: if you get "No space left on device" error, increase the -b percentage
   COMMAND ls -l "${CHERIOS_FILESYSTEM_DIR}/t1"
-  COMMAND ${MAKEFS_PROGRAM} -M 1k -b 5% -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
+  COMMAND ${MAKEFS_PROGRAM} -b 30% -f 30% -M 1k -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 add_custom_target(filesystem DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fs.img)

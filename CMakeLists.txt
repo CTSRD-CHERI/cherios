@@ -289,7 +289,7 @@ function(add_cherios_module _target)
   # Tell the compiler to use the specified linker script
   target_link_libraries(${_target}
     "-L${CMAKE_SOURCE_DIR}/ldscripts"
-    "-T${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}" # Search not working on my system
+    "-Wl,-T,${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}"
     )
   target_link_libraries(${_target}
     -cheri-linker
