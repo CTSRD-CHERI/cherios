@@ -40,7 +40,7 @@
 
 #define B_FS 1
 #define B_SO 0
-#define B_ZL 0
+#define B_ZL 1
 #define B_T1 0
 #define B_T2 0
 #define B_T3 0
@@ -254,5 +254,6 @@ int main(init_info_t * init_info) {
 
 	printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
 	stats_display();
-	hw_reboot();
+
+    syscall_shutdown(REBOOT);
 }

@@ -28,10 +28,14 @@
  * SUCH DAMAGE.
  */
 
+#include <syscalls.h>
 #include "sys/types.h"
 #include "klib.h"
 #include "syscalls.h"
 
+
+//FIXME we can get rid of if c2 is always the object reference which then contains an unsealing cap
+//FIXME see how the nano kernel does it
 
 /*
  * These functions abstract the syscall register convention
@@ -72,6 +76,12 @@ status_e kernel_act_ctrl_get_status(void);
 status_e kernel_act_ctrl_get_status(void) {
 	act_control_t * ctrl = (act_control_t *)get_idc();
 	return act_get_status(ctrl);
+}
+
+sched_status_e kernel_act_ctrl_get_sched_status(void);
+sched_status_e kernel_act_ctrl_get_sched_status(void) {
+	act_control_t * ctrl = (act_control_t *)get_idc();
+	return ctrl->sched_status;
 }
 
 int kernel_act_revoke(void);
@@ -116,11 +126,26 @@ int kernel_syscall_gc(capability p, capability pool) {
 	return try_gc(p , pool);
 }
 
+void kernel_syscall_shutdown(shutdown_t mode);
+void kernel_syscall_shutdown(shutdown_t mode) {
+    // Mode if we want restart/shotdown etc
+    switch(mode) {
+        case REBOOT:
+            hw_reboot();
+        case SHUTDOWN:
+            // FIXME
+            kernel_printf("This shold shutdown. Not reboot");
+            hw_reboot();
+    }
+
+}
+
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_sleep)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_wait)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_register)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_ref)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_status)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_sched_status)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_revoke)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_terminate)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_puts)
@@ -128,6 +153,7 @@ DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_panic)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_register)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_enable)
 DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_gc)
+DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_shutdown)
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
 
@@ -136,6 +162,7 @@ void setup_syscall_interface(kernel_if_t* kernel_if) {
 	kernel_if->syscall_act_register = kernel_seal(kernel_act_register_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_act_ctrl_get_ref = kernel_seal(kernel_act_ctrl_get_ref_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_act_ctrl_get_status = kernel_seal(kernel_act_ctrl_get_status_get_trampoline(), act_ctrl_ref_type);
+	kernel_if->syscall_act_ctrl_get_sched_status = kernel_seal(kernel_act_ctrl_get_sched_status_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_act_revoke = kernel_seal(kernel_act_revoke_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_act_terminate = kernel_seal(kernel_act_terminate_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_puts = kernel_seal(kernel_syscall_puts_get_trampoline(), act_ctrl_ref_type);
@@ -143,4 +170,5 @@ void setup_syscall_interface(kernel_if_t* kernel_if) {
 	kernel_if->syscall_interrupt_register = kernel_seal(kernel_syscall_interrupt_register_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_interrupt_enable = kernel_seal(kernel_syscall_interrupt_enable_get_trampoline(), act_ctrl_ref_type);
 	kernel_if->syscall_gc = kernel_seal(kernel_syscall_gc_get_trampoline(), act_ctrl_ref_type);
+    kernel_if->syscall_shutdown = kernel_seal(kernel_syscall_shutdown_get_trampoline(), act_ctrl_ref_type);
 }

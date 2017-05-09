@@ -416,8 +416,9 @@ switch_restore_final:
     restore_reg_frame_gen crestore_setc0, grestore, $kr1c, $t0, $c1, $epcc
 
 return:
+    cgetoffset $k1, $epcc
     beqz       $k0, normal_return
-    nop
+    dmtc0      $k1, $14
 
 exceptional_return:
     move       $a0, $k0                                 # pass the cause to the exception handler
@@ -427,9 +428,12 @@ exceptional_return:
     not        $k1, $k1
     and        $k0, $k0, $k1
     mtc0       $k0, $12
+    eret
+
 normal_return:
-    cgetoffset $k0, $epcc
-    dmtc0      $k0, $14
+    dmfc0      $k0, $12                                 # enable interupts again
+    ori        $k0, $k0, 1
+    mtc0       $k0, $12
     eret
 
 

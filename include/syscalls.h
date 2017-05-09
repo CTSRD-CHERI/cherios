@@ -49,6 +49,7 @@
         ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue), __VA_ARGS__)  \
         ITEM(syscall_act_ctrl_get_ref, act_kt, (void), __VA_ARGS__)                                                          \
         ITEM(syscall_act_ctrl_get_status, status_e, (void), __VA_ARGS__)                                                     \
+        ITEM(syscall_act_ctrl_get_sched_status, sched_status_e, (void), __VA_ARGS__)                                         \
         ITEM(syscall_act_revoke, int, (void), __VA_ARGS__)                                                                   \
         ITEM(syscall_act_terminate, int, (void), __VA_ARGS__)                                                                \
         ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)                                                             \
@@ -56,6 +57,8 @@
         ITEM(syscall_interrupt_register, int, (int number), __VA_ARGS__)                                                     \
         ITEM(syscall_interrupt_enable, int, (int number), __VA_ARGS__)                                                       \
         ITEM(syscall_gc,int, (capability p, capability pool), __VA_ARGS__)                                                   \
+        ITEM(syscall_shutdown, void, (shutdown_t), __VA_ARGS__)                                                                     \
+
 
 #define CCALL_SELECTOR_LIST(ITEM)   \
         ITEM(SEND,1)                \
@@ -64,6 +67,11 @@
 
 DECLARE_ENUM(ccall_selector_t, CCALL_SELECTOR_LIST)
 
+#define SHUTDOWN_TYPES_LIST(ITEM)   \
+        ITEM(SHUTDOWN, 0)           \
+        ITEM(REBOOT, 1)
+
+DECLARE_ENUM(shutdown_t, SHUTDOWN_TYPES_LIST)
 #ifndef __ASSEMBLY__
 
 #include "types.h"

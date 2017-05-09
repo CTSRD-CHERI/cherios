@@ -31,6 +31,8 @@
 #include "mips.h"
 #include "plat.h"
 
+/* WARN: You can only do this with a global C0. Only true for boot */
+
 void hw_reboot(void) {
 
 #ifdef HARDWARE_qemu
