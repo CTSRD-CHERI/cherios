@@ -75,7 +75,7 @@ void	glue_memmgt(void * memmgt_ctrl, void* ns_ctrl);
 
 int	acts_alive(init_elem_t * init_list, size_t  init_list_len);
 
-void *	load_module(module_t type, const char * file, register_t arg, capability carg);
+void *	load_module(module_t type, const char * file, register_t arg, capability carg, init_info_t* info);
 int	num_registered_modules(void);
 
 void	stats_init(void);

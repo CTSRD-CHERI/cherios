@@ -82,9 +82,20 @@
 #}
 
 
+# Top bits of virtual address decide which range we are using
+.set PHY_MEM_START_TOP,             0x90
+.set PHY_MEM_START_UNCACHED_TOP,    0x98
+.set VIRT_MEM_START_TOP,            0x00
+.set VIRT_SUPER_TOP,                0x40
+.set VIRT_KERN_TOP,                 0xC0
+
+# leaving 56 bits free
+.set TOP_ADDR_SHIFT,                56
+
 # This is the physical memory we will scan in order to support revocation
-# TODO use the proper physical window:
-.set PHY_MEM_START, 0x9000000000000000
+.set PHY_MEM_START,          PHY_MEM_START_TOP << TOP_ADDR_SHIFT
+.set PHY_MEM_START_UNCACHED, PHY_MEM_START_UNCACHED_TOP << TOP_ADDR_SHIFT
+
 .set PHY_MEM_SIZE,  (1 << 32)
 .set PHY_MEM_END,   PHY_MEM_START + PHY_MEM_START
 #.set NANO_SIZE, __nano_size
@@ -422,11 +433,11 @@ normal_return:
     eret
 
 
-#############################################
-# capability get_phy_page(register_t page_n)
+###############################################################
+# capability get_phy_page(register_t page_n, register_t cached)
 .global get_phy_page
 get_phy_page:
-#############################################
+###############################################################
 
 
     dli         $t0, N_PHY_PAGES_ENTRIES
@@ -440,7 +451,11 @@ get_phy_page:
     dli         $t1, PHY_SYSTEM
     csd         $t1, $t0, 0($idc)                       # set to system owned
 
-    dli         $t1, PHY_MEM_START
+    bnez        $a1, 1f                                 # 0: uncached. ow: cached
+    dli         $t1, PHY_MEM_START_TOP
+    dli         $t1, PHY_MEM_START_UNCACHED_TOP
+    1: dsll      $t1, $t1, TOP_ADDR_SHIFT
+
     sll         $t2, $a0, PHY_PAGE_SIZE_BITS
     dli         $t0, PHY_PAGE_SIZE
     daddu       $t1, $t1, $t2                           # t1 is the offset required for our cap

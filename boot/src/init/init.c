@@ -140,6 +140,36 @@ static void print_init_info(init_info_t * init_info) {
 	}
 }
 
+memmgt_init_t memmgt_init;
+
+/* Return the capability needed by the activation */
+static void * get_act_cap(module_t type, init_info_t* info) {
+    switch(type) {
+        case m_uart:
+            return info->uart_cap;
+        case m_memmgt:
+
+            memmgt_init.nano_default_cap = info->nano_default_cap;
+            memmgt_init.nano_if = info->nano_if;
+            memmgt_init.reservation = info->free_mem;
+            size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
+            void * heap = &__start_heap;
+            heap = cheri_setbounds(heap, heaplen);
+            /* FIXME still won't have execute, which will break */
+            memmgt_init.basic_heap = cheri_andperm(heap, 0b1111101 | CHERI_PERM_SOFT_1);
+            return &memmgt_init;
+
+        case m_fs:{}
+            return info->fs_cap;
+        case m_namespace:
+        case m_core:
+        case m_user:
+        case m_fence:
+        default:
+            return NULL;
+    }
+}
+
 static void load_modules(init_info_t * init_info) {
 	static void * c_memmgt = NULL;
 	int core_ready = 0;
@@ -177,8 +207,8 @@ static void load_modules(init_info_t * init_info) {
 			core_ready = 1;
 		}
 
-		void *carg = (be->type == m_memmgt) ? init_info->free_mem : NULL;
-		be->ctrl = load_module(be->type, be->name, be->arg, carg);
+		void *carg = get_act_cap(be->type, init_info);
+		be->ctrl = load_module(be->type, be->name, be->arg, carg, init_info);
 
 		if(be->type == m_namespace) {
 			namespace_init(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, be->ctrl));

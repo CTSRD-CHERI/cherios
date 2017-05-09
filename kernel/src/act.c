@@ -149,7 +149,6 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 *                                                                                                                       *
 * a0    : user GP argument (goes to main)                                                                               *
 * c3    : user Cap argument (goes to main)                                                                              *
-* c22   : runtime Cap argument (called self_cap or act_cap. Really an extra argument for special cases. goes to init)   *
 *                                                                                                                       *
 * These fields are setup by act_register itself. Although the queue is an argument to the function                      *
 *                                                                                                                       *

@@ -75,7 +75,7 @@ typedef capability res_t;
 /* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
     ITEM(rescap_parent, res_t, (res_t res), __VA_ARGS__)\
 /* Get a physical page. Can only be done if the page is not nano owned, or mapped to from a virtual address*/\
-    ITEM(get_phy_page, capability, (register_t page_n), __VA_ARGS__)
+    ITEM(get_phy_page, capability, (register_t page_n, register_t cached), __VA_ARGS__)
 
 
 
@@ -84,10 +84,10 @@ PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 #define ALLOCATE_PLT_NANO PLT_ALLOCATE(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 /* Current not able to request multiple pages. Only really for getting access to magic regs w/o virtual memory */
-static inline capability get_phy_cap(size_t address, size_t size) {
+static inline capability get_phy_cap(size_t address, size_t size, register_t cached) {
     size_t phy_page = address / PAGE_SIZE;
     size_t phy_offset = address & (PAGE_SIZE - 1);
-    capability cap_for_phy = get_phy_page(phy_page);
+    capability cap_for_phy = get_phy_page(phy_page, cached);
     cap_for_phy = cheri_setoffset(cap_for_phy, phy_offset);
     cap_for_phy = cheri_setbounds(cap_for_phy, size);
     return cap_for_phy;

@@ -30,11 +30,11 @@
 
 #include "lib.h"
 
-int main(void) {
+int main(capability fs_cap) {
 	printf("Fatfs: Hello world\n");
 
 	/* Init virtio-blk session */
-	virtio_blk_session(act_get_cap());
+	virtio_blk_session(fs_cap);
 
 	FRESULT res;
 

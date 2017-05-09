@@ -66,7 +66,6 @@ start_common:
 #                                                                                                                       #
 # a0    : user GP argument (goes to main)                                                                               #
 # c3    : user Cap argument (goes to main)                                                                              #
-# c22   : runtime Cap argument (called self_cap or act_cap. Really an extra argument for special cases. goes to init)   #
 #                                                                                                                       #
 # These fields are setup by act_register itself. Although the queue is an argument to the function                      #
 #                                                                                                                       #
@@ -107,10 +106,9 @@ start_common:
 
 	# Call object init.
 	cmove		$c3, $c21 #self_ctrl
-	cmove		$c4, $c22 #self_cap
-	cmove		$c5, $c23 #ns_ref
-	cmove		$c6, $c24 #kernel_if
-	cmove       $c7, $c25 #queue
+	cmove		$c4, $c23 #ns_ref
+	cmove		$c5, $c24 #kernel_if
+	cmove       $c6, $c25 #queue
 
 	cgetpcc		$c12
 	dla		$t0, libuser_init

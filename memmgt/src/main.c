@@ -30,6 +30,7 @@
 
 #include "lib.h"
 #include "malloc_heap.h"
+#include "../../boot/include/boot/boot_info.h"
 
 extern void msg_entry;
 void (*msg_methods[]) = {__mmap, __munmap};
@@ -58,7 +59,7 @@ int main(memmgt_init_t* mem_init) {
 		printf(KRED"memmgt: Register failed %d\n", ret);
 	}
 
-	assert(mem_init->reservation != NULL);
+	assert(mem_init->basic_heap != NULL);
 
 	/*
 	 * setup memory and
@@ -66,7 +67,9 @@ int main(memmgt_init_t* mem_init) {
 	 */
 	pagesz = CHERIOS_PAGESIZE;
 
-	minit(mem_init->nano_if);
+	/* TODO: Version 1 will just use a heap */
+	/* TODO: when reservations work, we can use those */
+	minit(mem_init->basic_heap);
 
 	/* init release mecanism */
 	release_init();

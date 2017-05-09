@@ -38,10 +38,9 @@
 #include "syscalls.h"
 
 void libuser_init(act_control_kt self_ctrl,
-				  capability self_cap,
 				  act_kt ns_ref,
 				  kernel_if_t* kernel_if_c,
 				  queue_t * queue) {
-	object_init(self_ctrl, self_cap, queue, kernel_if_c);
+	object_init(self_ctrl, queue, kernel_if_c);
 	namespace_init(ns_ref);
 }

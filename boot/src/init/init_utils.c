@@ -48,8 +48,7 @@
 * These fields are setup by the caller of act_register                                                                  *
 *                                                                                                                       *
 * a0    : user GP argument (goes to main)                                                                               *
-* c3    : user Cap argument (goes to main)                                                                              *
-* c22   : runtime Cap argument (called self_cap or act_cap. Really an extra argument for special cases. goes to init)   *
+* c3    : user Cap argument (goes to main)                                                                              * *
 *                                                                                                                       *
 * These fields are setup by act_register itself. Although the queue is an argument to the function                      *
 *                                                                                                                       *
@@ -60,7 +59,7 @@
 
 
 static void * init_act_create(const char * name, void * c0, void * pcc, void * stack, queue_t * queue,
-							  void * act_cap, register_t a0, capability c3) {
+							  register_t a0, capability c3) {
 	reg_frame_t frame;
 	memset(&frame, 0, sizeof(reg_frame_t));
 
@@ -78,51 +77,10 @@ static void * init_act_create(const char * name, void * c0, void * pcc, void * s
 	/* set c0 */
 	frame.cf_c0	= c0;
 
-	/* set self cap */
-	frame.cf_c22	= act_cap;
-
 	frame.mf_a0 = a0;
 	frame.cf_c3 = c3;
 
 	return syscall_act_register(&frame, name, queue);
-}
-
-/* Return the capability needed by the activation */
-static void * get_act_cap(module_t type) {
-	void * cap = NULL;
-	switch(type) {
-		case m_uart:{}
-#ifdef CONSOLE_malta
-#define	UART_BASE	0x180003f8
-#define	UART_SIZE	0x40
-#elif defined(CONSOLE_altera)
-		#define	UART_BASE	0x7f000000
-				#define	UART_SIZE	0x08
-			#else
-			#error UART type not found
-#endif
-			cap = cheri_getdefault();
-			cap = cheri_setoffset(cap,
-								  mips_phys_to_uncached(UART_BASE));
-			cap = cheri_setbounds(cap, UART_SIZE);
-			break;
-		case m_memmgt:{}
-			size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
-			void * heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
-			heap = cheri_setbounds(heap, heaplen);
-			cap = cheri_andperm(heap, 0b1111101 | CHERI_PERM_SOFT_1);
-			break;
-		case m_fs:{}
-			void * mmio_cap = cheri_setoffset(cheri_getdefault(), mips_phys_to_uncached(0x1e400000));
-			cap = cheri_setbounds(mmio_cap, 0x200);
-			break;
-		case m_namespace:
-		case m_core:
-		case m_user:
-		case m_fence:
-		default:{}
-	}
-	return cap;
 }
 
 static void * ns_ref = NULL;
@@ -142,7 +100,7 @@ static void *init_memcpy(void *dest, const void *src, size_t n) {
 	return memcpy(dest, src, n);
 }
 
-void * load_module(module_t type, const char * file, register_t arg, capability carg) {
+void * load_module(module_t type, const char * file, register_t arg, capability carg, init_info_t* info) {
 
     size_t entry;
     Elf_Env env = {
@@ -188,8 +146,11 @@ void * load_module(module_t type, const char * file, register_t arg, capability 
 	pcc = cheri_setoffset(prgmp.code, entry);
 	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
                               | CHERI_PERM_LOAD_CAP));
+
+    assert((cheri_getperm(pcc) & CHERI_PERM_EXECUTE) != 0);
+
 	void * ctrl = init_act_create(file, cheri_setoffset(prgmp.data, 0),
-	pcc, stack, queue, get_act_cap(type), arg, carg);
+	pcc, stack, queue, arg, carg);
 	if(ctrl == NULL) {
 		return NULL;
 	}

@@ -172,17 +172,13 @@ void mfree(void *addr) {
 	book[page].status = page_unused;
 }
 
-void minit(res_t reservation) {
-
-	/* TODO: Version 1 we will just unlock the entire reservation at once */
-	char* all_mem = (char*)rescap_take(reservation);
+void minit(capability all_mem) {
 
 
 	size_t page_align = pagesz - 1;
 	size_t length = cheri_getlen(all_mem);
 
-    /* We may be able to use slightly less of length due to alignment */
-	pages_nb = (page_align) / (pagesz + sizeof(page_t));
+	pages_nb = (length) / (pagesz + sizeof(page_t));
 	assert(pages_nb > 0);
 	size_t pool_len = pages_nb*pagesz;
 	pool = cheri_setbounds(all_mem, pool_len);

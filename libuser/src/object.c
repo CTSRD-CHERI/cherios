@@ -39,13 +39,12 @@
 
 act_control_kt act_self_ctrl = NULL;
 act_kt act_self_ref  = NULL;
-capability act_self_cap   = NULL;
 queue_t * act_self_queue = NULL;
 kernel_if_t kernel_if;
 
 ALLOCATE_PLT_SYSCALLS
 
-void object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue, kernel_if_t* kernel_if_c) {
+void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c) {
 	assert(kernel_if_c != NULL);
 	// I feel like as we use these methods on every syscall we should remove the indirection
 	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
@@ -62,11 +61,6 @@ void object_init(act_control_kt self_ctrl, capability self_cap, queue_t * queue,
 	message_reply_default_obj.data = NULL;
 
 	act_self_queue = queue;
-	act_self_cap = self_cap;
-}
-
-capability act_get_cap(void) {
-	return act_self_cap;
 }
 
 void ctor_null(void) {

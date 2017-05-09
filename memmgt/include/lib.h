@@ -51,16 +51,10 @@ void	release_init(void);
 
 void *	__mmap(void *addr, size_t length, int prot, int flags);
 int	__munmap(void *addr, size_t length);
-void	minit(res_t reservation);
+void	minit(capability all_mem);
 void	mfree(void *addr);
 
 extern	size_t pagesz;
 extern	char * pool;
-
-typedef struct memmgt_init_t {
-    res_t reservation;
-    nano_kernel_if_t* nano_if;
-    capability nano_default_cap;
-} memmgt_init_t;
 
 #endif /* !_LIB_H_ */
