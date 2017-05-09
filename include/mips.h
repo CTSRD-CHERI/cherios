@@ -253,8 +253,8 @@ typedef uint64_t	u_int64_t;
 /*
  * MIPS address space layout.
  */
-#define	MIPS_XKPHYS_UNCACHED_BASE	0x9000000000000000
-#define	MIPS_XKPHYS_CACHED_NC_BASE	0x9800000000000000
+#define	MIPS_XKPHYS_UNCACHED_BASE	0x9800000000000000
+#define	MIPS_XKPHYS_CACHED_NC_BASE	0x9000000000000000
 
 static inline vaddr_t
 mips_phys_to_cached(paddr_t phys)
