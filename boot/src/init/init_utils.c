@@ -128,12 +128,12 @@ static void * get_act_cap(module_t type) {
 static void * ns_ref = NULL;
 static void * ns_id  = NULL;
 
-static void * elf_loader(Elf_Env *env, const char * file, size_t * entry) {
+static cap_pair elf_loader(Elf_Env *env, const char * file, size_t * entry) {
 	int filelen=0;
-	char * addr = load(file, &filelen);
+	capability addr = load(file, &filelen);
 	if(!addr) {
 		printf("Could not read file %s", file);
-		return NULL;
+		return NULL_PAIR;
 	}
 	return elf_loader_mem(env, addr, NULL, NULL, entry);
 }
@@ -153,26 +153,26 @@ void * load_module(module_t type, const char * file, register_t arg, capability 
             .memcpy  = init_memcpy,
     };
 
-	char *prgmp = elf_loader(&env, file, &entry);
+	cap_pair prgmp = elf_loader(&env, file, &entry);
 
-	if(!prgmp) {
+	if(!prgmp.data) {
 		assert(0);
 		return NULL;
 	}
 
-	size_t low_bits = cheri_getbase(prgmp) & (0x20 - 1);
+	size_t low_bits = cheri_getbase(prgmp.data) & (0x20 - 1);
 
 	if(low_bits != 0) {
 		printf("ERROR: alignment of loaded file %s was %ld\n", file, low_bits);
 		assert(0);
 	}
 
-	size_t allocsize = cheri_getlen(prgmp);
+	size_t allocsize = cheri_getlen(prgmp.data);
 
 	size_t stack_size = 0x10000;
 	size_t stack_align = 0x40;
 	size_t queue_size = ((sizeof(queue_default_t) + stack_align - 1) / stack_align) * stack_align;
-	void * stack = init_alloc(stack_size);
+	void * stack = init_alloc(stack_size).data;
 	if(!stack) {
 		assert(0);
 		return NULL;
@@ -185,11 +185,10 @@ void * load_module(module_t type, const char * file, register_t arg, capability 
 	stack = cheri_setbounds(stack, stack_size - queue_size);
 
 	void * pcc = cheri_getpcc();
-	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)) , allocsize);
-	pcc = cheri_setoffset(pcc, entry);
+	pcc = cheri_setoffset(prgmp.code, entry);
 	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
                               | CHERI_PERM_LOAD_CAP));
-	void * ctrl = init_act_create(file, cheri_setoffset(prgmp, 0),
+	void * ctrl = init_act_create(file, cheri_setoffset(prgmp.data, 0),
 	pcc, stack, queue, get_act_cap(type), arg, carg);
 	if(ctrl == NULL) {
 		return NULL;

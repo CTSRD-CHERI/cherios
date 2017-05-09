@@ -88,7 +88,7 @@ load(const char *filepath, int *bufsize)
 		return NULL;
 	}
 
-	void * buf = init_alloc(size);
+	void * buf = init_alloc(size).data;
 	if (buf == NULL) {
 		printf("Failed to allocate read buffer %zu for '%s'\n",
 		       size, filepath);

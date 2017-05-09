@@ -33,6 +33,7 @@
 
 #include "mips.h"
 #include "stdarg.h"
+#include "mman.h"
 
 typedef uint16_t Elf64_Half;	// Unsigned half int
 typedef uint64_t Elf64_Off;	// Unsigned offset
@@ -99,7 +100,7 @@ typedef struct {
 
 /* Calling environment for loader */
 typedef struct {
-	void *(*alloc)(size_t size);
+	cap_pair (*alloc)(size_t size);
 	void (*free)(void *addr);
 	int (*printf)(const char *fmt, ...);
 	int (*vprintf)(const char *fmt, va_list ap);
@@ -110,7 +111,7 @@ typedef struct {
    image.  if provided, it also sets the min and max addresses touched
    by the loader, and the entry point.
  */
-void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry);
+cap_pair elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry);
 
 #define PT_NULL 	0
 #define PT_LOAD 	1

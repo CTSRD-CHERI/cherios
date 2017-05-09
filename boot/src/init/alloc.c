@@ -36,6 +36,7 @@
 #include "cherireg.h"
 #include "object.h"
 #include "init.h"
+#include "utils.h"
 
 static inline void *align_upwards(void *p, uintptr_t align)
 {
@@ -56,14 +57,16 @@ static char * pool_next = NULL;
 
 static int system_alloc = 0;
 
-static void *init_alloc_core(size_t s) {
+
+static cap_pair init_alloc_core(size_t s) {
 	if(pool_next + s >= pool_end) {
-		return NULL;
+		return (cap_pair){.code = NULL, .data = NULL};
 	}
 	void * p = pool_next;
 	p = __builtin_cheri_bounds_set(p, s);
 	pool_next = align_upwards(pool_next+s, 0x1000);
-	return p;
+
+	return (cap_pair){.code = rederive_perms(p, cheri_getpcc()), .data = p};
 }
 
 void init_alloc_init(void) {
@@ -81,11 +84,14 @@ void init_alloc_enable_system(void * c_memmgt) {
 	system_alloc = 1;
 }
 
-void *init_alloc(size_t s) {
+cap_pair init_alloc(size_t s) {
 	if(system_alloc == 1) {
-		void * p = mmap(NULL, s, PROT_RW, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-		if(p == MAP_FAILED) {
-			return NULL;
+		capability wex_cap = mmap(NULL, s, PROT_RW, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        capability code =  cheri_andperm(wex_cap, ~(CHERI_PERM_STORE | CHERI_PERM_STORE_CAP));
+        capability data =  cheri_andperm(wex_cap, ~(CHERI_PERM_EXECUTE));
+        cap_pair p = (cap_pair){.code = code, .data = data};
+		if(p.data == MAP_FAILED) {
+			return (cap_pair){.code = NULL, .data = NULL};
 		}
 		return p;
 	}

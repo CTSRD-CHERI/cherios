@@ -69,23 +69,27 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 	}
 
 	if(flags & MAP_PRIVATE) {
-		perms |= 1 << 6;
+		perms |= CHERI_PERM_STORE_LOCAL_CAP;
 	} else if(flags & MAP_SHARED) {
-		perms |= 1 << 0;
+		perms |= CHERI_PERM_GLOBAL;
 	} else {
 		errno = EINVAL;
 		goto fail;
 	}
 
 	if(prot & PROT_READ) {
-		perms |= 1 << 2;
+		perms |= CHERI_PERM_LOAD;
 		if(!(prot & PROT_NO_READ_CAP))
-			perms |= 1 << 4;
+			perms |= CHERI_PERM_LOAD_CAP;
 	}
 	if(prot & PROT_WRITE) {
-		perms |= 1 << 3;
+		perms |= CHERI_PERM_STORE;
 		if(!(prot & PROT_NO_WRITE_CAP))
-			perms |= 1 << 5;
+			perms |= CHERI_PERM_STORE_CAP;
+	}
+
+	if(prot & PROT_EXECUTE) {
+		perms |= CHERI_PERM_EXECUTE;
 	}
 
 	void * p = NULL;

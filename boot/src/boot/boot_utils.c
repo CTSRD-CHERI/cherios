@@ -39,6 +39,7 @@
 #include "string.h"
 #include "uart.h"
 #include "elf.h"
+#include "utils.h"
 
 #define TRACE_BOOT_LOADER	0
 
@@ -61,7 +62,7 @@ extern char __boot_load_physaddr;
 
 static char* phy_mem;
 
-static void *kernel_alloc_mem(size_t _size) {
+static cap_pair kernel_alloc_mem(size_t _size) {
 	/* We will allocate the first few objects in low physical memory. THe first thing we load is the nano kernel
 	 * and this will be direct mapped.*/
     static int alloc_direct = 1;
@@ -92,7 +93,7 @@ static void *kernel_alloc_mem(size_t _size) {
 		hw_reboot();
 	}
 
-	return alloc;
+	return (cap_pair){.code = rederive_perms(alloc, cheri_getpcc()), .data = alloc};
 }
 
 static void kernel_free_mem(void *addr) {
@@ -119,7 +120,7 @@ capability load_nano() {
 	extern u8 __nano_elf_start, __nano_elf_end;
 	size_t minaddr, maxaddr, entry;
 	char *prgmp = elf_loader_mem(&env, &__nano_elf_start,
-								 &minaddr, &maxaddr, &entry);
+								 &minaddr, &maxaddr, &entry).data;
     if(!prgmp) {
         boot_printf(KRED"Could not load nano kernel file"KRST"\n");
         goto err;
@@ -144,7 +145,7 @@ size_t load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	size_t minaddr, maxaddr, entry;
 	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
-				     &minaddr, &maxaddr, &entry);
+				     &minaddr, &maxaddr, &entry).data;
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
@@ -174,7 +175,7 @@ boot_info_t *load_init() {
 
 	// FIXME: init is direct mapped for now
 	char *prgmp = elf_loader_mem(&env, &__init_elf_start,
-				     &minaddr, &maxaddr, &entry);
+				     &minaddr, &maxaddr, &entry).data;
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load init file"KRST"\n");

@@ -157,13 +157,13 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 
 /* not secure */
 
-void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry) {
+cap_pair elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry) {
 	char *addr = (char *)p;
 	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
 	if(!elf_check_supported(env, hdr)) {
 		ERROR("ELF File cannot be loaded");
-		return NULL;
+		return NULL_PAIR;
 	}
 
 	Elf64_Addr e_entry = hdr->e_entry;
@@ -177,7 +177,7 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 			  seg->p_filesz, seg->p_memsz, seg->p_align);
 		if(seg->p_filesz > seg->p_memsz) {
 			ERROR("Section is larger in file than in memory");
-			return NULL;
+			return NULL_PAIR;
 		}
 		if(seg->p_type == PT_LOAD) {
 			size_t bound = seg->p_vaddr + seg->p_memsz;
@@ -188,14 +188,15 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
             /* Ignore these headers */
 		} else {
 			ERROR("Unknown section");
-			return NULL;
+			return NULL_PAIR;
 		}
 	}
 
-	char *prgmp = env->alloc(allocsize);
+	cap_pair pair = env->alloc(allocsize);
+	char *prgmp = pair.data;
 	if(!prgmp) {
 		ERROR("alloc failed");
-		return NULL;
+		return NULL_PAIR;
 	}
 
 	TRACE("Allocated %lx bytes of target memory", allocsize);
@@ -217,5 +218,5 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 	if(maxaddr)	*maxaddr = allocsize;
 	if(entry)	*entry   = e_entry;
 
-	return prgmp;
+	return pair;
 }
