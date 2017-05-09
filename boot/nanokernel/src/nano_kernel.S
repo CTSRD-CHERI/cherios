@@ -405,18 +405,22 @@ switch_restore_final:
     restore_reg_frame_gen crestore_setc0, grestore, $kr1c, $t0, $c1, $epcc
 
 return:
-    bnez       $k0, exceptional_return
+    beqz       $k0, normal_return
     nop
-
-    cgetoffset $k0, $epcc
-    dmtc0      $k0, $14
-    eret
 
 exceptional_return:
     move       $a0, $k0                                 # pass the cause to the exception handler
     cmove      $c3, $kr2c                               # pass the sealed context to the exception handler
-    cjr        $epcc
-    nop
+    dmfc0      $k0, $12                                 # disable interrupts otherwise the exception handlel
+    dli        $k1, 1                                   # will may immediately have one
+    not        $k1, $k1
+    and        $k0, $k0, $k1
+    mtc0       $k0, $12
+normal_return:
+    cgetoffset $k0, $epcc
+    dmtc0      $k0, $14
+    eret
+
 
 #############################################
 # capability get_phy_page(register_t page_n)

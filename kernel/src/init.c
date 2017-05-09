@@ -54,13 +54,7 @@ int cherios_main(nano_kernel_if_t* interface,
     set_sealing_cap(sealer);
 
 	/* Get the capability for the uart. We should save this somewhere sensible */
-	#define PAGE_SIZE 0x1000
-    size_t uart_page = uart_base_phy_addr / PAGE_SIZE;
-	size_t uart_offset = uart_base_phy_addr & (PAGE_SIZE - 1);
-	capability cap_for_uart = get_phy_page(uart_page);
-	cap_for_uart = cheri_setoffset(cap_for_uart, uart_offset);
-	cap_for_uart = cheri_setbounds(cap_for_uart, uart_base_size);
-
+	capability  cap_for_uart = get_phy_cap(uart_base_phy_addr, uart_base_size);
 	set_uart_cap(cap_for_uart);
 
 	kernel_puts("Kernel Hello world\n");
