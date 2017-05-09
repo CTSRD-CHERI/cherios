@@ -138,12 +138,6 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 			kernel_freeze();
 		}
 
-		/*
-         * Check assumption that kernel is running at EXL=1.  The kernel is
-         * non-preemptive and will fail horribly if this isn't true.
-         */
-		kernel_assert(cp0_status_exl_get() != 0);
-
 
 		switch (excode) {
 			case MIPS_CP0_EXCODE_INT:

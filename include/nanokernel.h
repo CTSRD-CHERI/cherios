@@ -38,6 +38,8 @@ typedef capability context_t;
 typedef capability res_t;
 #define RES_SPLIT_OVERHEAD sizeof(capability)
 
+#define PAGE_SIZE 0x1000
+
 #define NANO_KERNEL_IF_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
 /* Creates a context from a intial reg_frame and returns a handle */\
@@ -80,5 +82,15 @@ typedef capability res_t;
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 #define ALLOCATE_PLT_NANO PLT_ALLOCATE(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
+
+/* Current not able to request multiple pages. Only really for getting access to magic regs w/o virtual memory */
+static inline capability get_phy_cap(size_t address, size_t size) {
+    size_t phy_page = address / PAGE_SIZE;
+    size_t phy_offset = address & (PAGE_SIZE - 1);
+    capability cap_for_phy = get_phy_page(phy_page);
+    cap_for_phy = cheri_setoffset(cap_for_phy, phy_offset);
+    cap_for_phy = cheri_setbounds(cap_for_phy, size);
+    return cap_for_phy;
+}
 
 #endif //CHERIOS_NANOKERNEL_H
