@@ -31,6 +31,8 @@
 #ifndef CHERIOS_UTILS_H
 #define CHERIOS_UTILS_H
 
+#include "cheric.h"
+
 static capability rederive_perms(capability source, capability auth) {
     size_t source_base = cheri_getbase(source);
     size_t source_size = cheri_getlen(source);

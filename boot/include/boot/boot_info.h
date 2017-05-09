@@ -56,6 +56,7 @@ typedef struct memmgt_init_t {
 	capability nano_default_cap;
     // The basic heap is just a chunk of static memory
     capability basic_heap;
+    capability basic_heap_ex;
 } memmgt_init_t;
 
 #define FS_PHY_BASE 0x1e400000

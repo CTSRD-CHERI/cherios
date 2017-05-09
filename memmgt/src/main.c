@@ -60,7 +60,7 @@ int main(memmgt_init_t* mem_init) {
 	}
 
 	assert(mem_init->basic_heap != NULL);
-
+	assert(mem_init->basic_heap_ex != NULL);
 	/*
 	 * setup memory and
 	 * align break pointer so all data will be page aligned.
@@ -69,7 +69,7 @@ int main(memmgt_init_t* mem_init) {
 
 	/* TODO: Version 1 will just use a heap */
 	/* TODO: when reservations work, we can use those */
-	minit(mem_init->basic_heap);
+	minit(mem_init->basic_heap, mem_init->basic_heap_ex);
 
 	/* init release mecanism */
 	release_init();

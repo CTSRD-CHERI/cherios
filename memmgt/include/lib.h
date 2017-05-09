@@ -43,15 +43,16 @@
 #include "stdio.h"
 #include "string.h"
 #include "nanokernel.h"
+#include "mman.h"
 
 void register_ns(void * ns_ref);
 
 void	release(void * p) __attribute__((cheri_ccallee));
 void	release_init(void);
 
-void *	__mmap(void *addr, size_t length, int prot, int flags);
+int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result);
 int	__munmap(void *addr, size_t length);
-void	minit(capability all_mem);
+void	minit(capability all_mem, capability ex_cap);
 void	mfree(void *addr);
 
 extern	size_t pagesz;

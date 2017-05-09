@@ -86,13 +86,8 @@ void init_alloc_enable_system(void * c_memmgt) {
 
 cap_pair init_alloc(size_t s) {
 	if(system_alloc == 1) {
-		capability wex_cap = mmap(NULL, s, PROT_RW, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        capability code =  cheri_andperm(wex_cap, ~(CHERI_PERM_STORE | CHERI_PERM_STORE_CAP));
-        capability data =  cheri_andperm(wex_cap, ~(CHERI_PERM_EXECUTE));
-        cap_pair p = (cap_pair){.code = code, .data = data};
-		if(p.data == MAP_FAILED) {
-			return (cap_pair){.code = NULL, .data = NULL};
-		}
+		cap_pair p;
+		int result = mmap_new(NULL, s, PROT_RW | PROT_EXECUTE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0, &p);
 		return p;
 	}
 	return init_alloc_core(s);

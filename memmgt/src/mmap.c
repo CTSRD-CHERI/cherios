@@ -32,7 +32,9 @@
 #include "lib.h"
 #include "sys/mman.h"
 #include "types.h"
+#include "utils.h"
 
+capability pool_ex = NULL;
 char * pool = NULL;
 static size_t pages_nb = 0;
 
@@ -54,8 +56,11 @@ typedef struct {
 static page_t * book = NULL;
 
 /* fd and offset are currently unused and discarded in userspace */
-void *__mmap(void *addr, size_t length, int prot, int flags) {
+int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 	int perms = CHERI_PERM_SOFT_1; /* can-free perm */
+    result->data = NULL;
+    result->code = NULL;
+
 	if(addr != NULL)
 		panic("mmap: addr must be NULL");
 
@@ -89,6 +94,7 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 	}
 
 	if(prot & PROT_EXECUTE) {
+        // Our system won't actually support W^X, we will lose one depending on where we derive from
 		perms |= CHERI_PERM_EXECUTE;
 	}
 
@@ -129,12 +135,17 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 
  ok:
 	p = cheri_andperm(p, perms);
-	//CHERI_PRINT_CAP(p);
-	return p;
+    result->data = p;
+
+    if(prot & PROT_EXECUTE) {
+        result->code = rederive_perms(p, pool_ex);
+    }
+
+	return 0;
 
  fail:
 	printf(KRED "mmap fail %lx\n", length);
-	return MAP_FAILED;
+	return MAP_FAILED_INT;
 }
 
 static size_t addr2page(void * addr) {
@@ -172,8 +183,8 @@ void mfree(void *addr) {
 	book[page].status = page_unused;
 }
 
-void minit(capability all_mem) {
-
+void minit(capability all_mem, capability ex_cap) {
+	pool_ex = ex_cap;
 
 	size_t page_align = pagesz - 1;
 	size_t length = cheri_getlen(all_mem);

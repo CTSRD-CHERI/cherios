@@ -36,10 +36,11 @@
 #include "object.h"
 #include "stdio.h"
 #include "namespace.h"
+#include "utils.h"
 
 #define B_FS 1
 #define B_SO 0
-#define B_ZL 1
+#define B_ZL 0
 #define B_T1 0
 #define B_T2 0
 #define B_T3 0
@@ -157,6 +158,7 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             heap = cheri_setbounds(heap, heaplen);
             /* FIXME still won't have execute, which will break */
             memmgt_init.basic_heap = cheri_andperm(heap, 0b1111101 | CHERI_PERM_SOFT_1);
+            memmgt_init.basic_heap_ex = rederive_perms(memmgt_init.basic_heap, cheri_getpcc());
             return &memmgt_init;
 
         case m_fs:{}
@@ -244,8 +246,10 @@ int main(init_info_t * init_info) {
 	/* Load modules */
 	load_modules(init_info);
 
+    printf("All modules loaded! waiting for finish...\n");
+
 	while(acts_alive(init_list, init_list_len)) {
-		ssleep(0);
+        nssleep(10);
 	}
 
 	printf(KBLD"Only daemons are alive. System shutown."KRST"\n");

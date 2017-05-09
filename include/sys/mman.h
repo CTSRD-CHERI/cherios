@@ -43,6 +43,7 @@ typedef struct cap_pair {
 #define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
 
 void *  mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
+int mmap_new(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset, cap_pair* result);
 int	munmap(void *addr, size_t length);
 
 void	mmap_set_act(act_kt ref);
@@ -72,7 +73,7 @@ enum mmap_return
   ENOMEM = 1
 };
 
-#define MAP_FAILED ((void *) -1)
-
-
+#define MAP_FAILED_OLD ((void *) -1)
+#define MAP_FAILED_INT -1
+#define MAP_SUCCESS_INT 0
 #endif // SYS_MMAN_H

@@ -37,16 +37,34 @@
 
 static act_kt memmgt_ref = NULL;
 
-static void *_mmap(void *addr, size_t length, int prot, int flags) {
+static int _mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 	if(memmgt_ref == NULL) {
 		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
 		assert(memmgt_ref != NULL);
 	}
-	return MESSAGE_SYNC_SEND_c(memmgt_ref, length, prot, flags, addr, NULL, NULL, 0);
+	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, prot, flags, addr, result, NULL, 0);
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
-	return _mmap(addr, length, prot, flags);
+	cap_pair pair;
+
+	if((prot & PROT_EXECUTE) && (prot & PROT_WRITE)) {
+		assert(0 && "The old interface cannot return a single capability with both execute and write privs");
+	}
+
+	int res = _mmap(addr, length, prot, flags, &pair);
+
+	if(res == MAP_SUCCESS_INT) {
+		if((prot & PROT_EXECUTE) == 0) {
+			return pair.data;
+		} else {
+			return pair.code;
+		}
+	} else return NULL;
+}
+
+int mmap_new(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset, cap_pair* result) {
+	return _mmap(addr, length, prot, flags, result);
 }
 
 int munmap(void *addr, size_t length) {
