@@ -23,6 +23,10 @@ set(KERNEL_ASM_SRCS
     src/context_switch.S
 )
 file(GLOB KERNEL_CHERIBSD_SRCS "src/cheribsd/*.c")
+set(KERNEL_CHERIBSD_ASM_SRCS
+    src/ccall_trampoline.S
+    src/context_switch.S
+)
 file(GLOB KERNEL_BAREMETAL_SRCS "src/baremetal/*.c")
 
 if("${CONSOLE}" STREQUAL "malta")
@@ -39,5 +43,5 @@ add_cherios_executable(kernel ADD_TO_FILESYSTEM LINKER_SCRIPT kernel.ld SOURCES
     ${KERNEL_ASM_SRCS}
 )
 #set_target_properties(kernel PROPERTIES COMPILE_FLAGS "-mllvm -cheri-no-global-bounds")
-add_executable(kernel.o ${KERNEL_SRCS} ${KERNEL_CHERIBSD_SRCS})
+add_executable(kernel.o ${KERNEL_SRCS} ${KERNEL_CHERIBSD_SRCS} ${KERNEL_CHERIBSD_ASM_SRCS})
 set_target_properties(kernel.o PROPERTIES LINK_FLAGS "-r")
