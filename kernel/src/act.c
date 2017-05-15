@@ -44,8 +44,6 @@
 
 /* We only create activations for now, no delete */
 struct reg_frame *		kernel_exception_framep_ptr;
-/* This save frame was used to save boots context during bootload. We move it ASAP and use kernel_exception_framep_ptr */
-extern struct reg_frame kernel_init_save_frame;
 
 act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
 aid_t				kernel_next_act = 0;
@@ -90,7 +88,8 @@ void act_init(void) {
 	/* create the boot activation. This is NOT the activation that called this function.*/
 	act_t* boot_act = &kernel_acts[namespace_num_boot];
 
-	act_register(&kernel_init_save_frame, &boot_queue.queue, "boot", 0, status_alive);
+	struct reg_frame dummy;
+	act_register(&dummy, &boot_queue.queue, "boot", 0, status_alive);
 
 	/* As boot was created before the kernel, it does not have the enqueue cap. we can give it this by setting the
 	 * return capability to picked up after the bootstrap exception returns*/
