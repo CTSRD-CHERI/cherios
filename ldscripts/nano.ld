@@ -51,7 +51,7 @@ SECTIONS
 	    KEEP(*(.text))
 	} :text = 0
 
-	.data ALIGN(CAP_ALIGN): { *(.data) } : data
+	.data ALIGN(CAP_ALIGN): { *(.data) } : data = 0
 
     /DISCARD/ :
     {

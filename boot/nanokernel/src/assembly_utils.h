@@ -31,6 +31,17 @@
 #ifndef CHERIOS_ASSEMBLY_UTILS_H
 #define CHERIOS_ASSEMBLY_UTILS_H
 
+// some co-processor regs
+#define cp0_index     $0
+#define cp0_entryhi   $10
+#define cp0_entrylo0  $2
+#define cp0_entrylo1  $3
+#define cp0_pagemask  $5
+#define cp0_random    $1
+#define cp0_wired     $6
+#define cp0_context   $4
+#define cp0_badvaddr  $8
+
 // To make cclearhi and cclearlo easier to read
 
 #define Reg_Encode_all (1 << 16) - 1

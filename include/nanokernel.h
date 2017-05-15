@@ -38,7 +38,10 @@ typedef capability context_t;
 typedef capability res_t;
 #define RES_SPLIT_OVERHEAD sizeof(capability)
 
+
 #define PAGE_SIZE 0x1000
+typedef capability ptable_t;
+
 
 #define NANO_KERNEL_IF_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
@@ -75,9 +78,11 @@ typedef capability res_t;
 /* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
     ITEM(rescap_parent, res_t, (res_t res), __VA_ARGS__)\
 /* Get a physical page. Can only be done if the page is not nano owned, or mapped to from a virtual address*/\
-    ITEM(get_phy_page, capability, (register_t page_n, register_t cached), __VA_ARGS__)
-
-
+    ITEM(get_phy_page, capability, (register_t page_n, register_t cached), __VA_ARGS__)\
+/* Allocate a physical page to be page table. */\
+    ITEM(create_table, ptable_t, (register_t page_n, ptable_t parent, register_t index),  __VA_ARGS__)\
+/* Map an entry in a leaf page table to a physical page. The adjacent physical page will also be mapped */\
+    ITEM(create_mapping, void, (register_t page_n, ptable_t table, register_t index),  __VA_ARGS__)
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
