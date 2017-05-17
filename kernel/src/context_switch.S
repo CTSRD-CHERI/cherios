@@ -43,7 +43,6 @@
 swap_state:
 
     #c3 = from_frame, c4 = to_frame
-    # An exception here will trash $k0 and $k1. However we are safe to use $kr1c and $kr2c
 
     # Save state
     cgetdefault $c13
@@ -57,32 +56,35 @@ swap_state:
 .global context_critical_start
 context_critical_start:
 
-        cgetdefault $kr1c
+        cgetdefault $c26
         dla $t0, critical_state
-        csetoffset $kr1c, $kr1c, $t0 # Critical state.
+        csetoffset $c26, $c26, $t0 # Critical state.
         # Exit from's critical. We assume that we are at level one, or else this is an error.
-        csd $zero, $zero, CRIT_STATE_LEVEL_OFFSET($kr1c)
+        csd $zero, $zero, CRIT_STATE_LEVEL_OFFSET($c26)
 
         # Restore everything, we don't have a register spare for $c0 so set default while restoring
         # We use exception registers here. These are not used by the critical section check in exception.S
 
-        cmove $kr1c, $c4             # Our frame, and later pcc
+        cmove $c26, $c4             # Our frame, and later pcc
 
-        .macro crestore_setc0 greg, offset, frame
-            crestore \greg, \offset, \frame
+        .macro crestore_setc0_keepframe greg, offset, frame
+            .ifnc \greg, \frame
+                crestore \greg, \offset, \frame
+            .endif
             .if \offset == 0
                 csetdefault \greg
             .endif
         .endm
 
-        # Afterwards $kr1c will have pcc, and we will have lost the frame.
+        # Restore capability registers, but preserve c26 (the frame ptr)
         # c0 is not really stored in $c1, we just use it as temporary
+        restore_reg_frame_gen crestore_setc0_keepframe, grestore, $c26, $t0, $c1, $c26
 
-        restore_reg_frame_gen crestore_setc0, grestore, $kr1c, $t0, $c1, $kr1c
-
+        # Frame is still in c26, load pcc value instead
+        crestore	$c26, 27, $c26
 
         # finally set pcc, and drop our final level of privilege (the kernel capabilities)
-        cjr         $kr1c
+        cjr		$c26
         nop
 
 .global context_critical_end
