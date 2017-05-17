@@ -156,7 +156,7 @@ call:
 
 	#Restore sync_token
 	dla		$t1, sync_token
-	clc		$c4, $t1, 0(def_cap)
+	clc		$c1, $t1, 0(def_cap)
 	#Restore caller activation reference
 	dla     $t1, sync_caller
 	clc     $c2, $t1, 0(def_cap)
@@ -174,7 +174,7 @@ overflow:
 end:
 
 #FIXME this instruction cannot jump backwards due to a QEMU bug
-	cbts    $c4, make_return
+	cbts    $c1, make_return
 	nop
     b msg_entry_loop
 	nop
@@ -188,6 +188,7 @@ make_return:
     # c17 needs a good return address. We took the address of the loop symbol which is as good as any
     move  $a0, $v0
     move  $a1, $v1
+    cmove $c4, $c1
     cmove $c1, message_reply
     cmove $c17, msg_entry_loop_cap
 	ccall $c1, $c2
