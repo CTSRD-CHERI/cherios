@@ -33,7 +33,7 @@
 #define __ACTIVATIONS_H
 
 #define ACT_NAME_MAX_LEN (0x10)
-#define USER_KERNEL_STACK_SIZE 4096
+#define USER_KERNEL_STACK_SIZE 4096 * 4
 
 #ifndef __ASSEMBLY__
 

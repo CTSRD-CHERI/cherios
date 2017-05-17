@@ -51,10 +51,10 @@
 .endif
 .endif
 
-#define queue               $c18
 #define message_reply       $c19
 #define msg_entry_loop_cap  $c20
 #define def_cap             $c21
+#define queue               $c22
 
 # These are used by the runtime to know who to respond to
 # FIXME should be local, anybody who wants to use creturn should do so to a creturn method
