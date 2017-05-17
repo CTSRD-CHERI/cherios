@@ -64,6 +64,7 @@ act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 #ifndef _CHERIOS_KLIB_H_
 #undef act_t
 #undef act_control_t
+#undef status_e
 #endif
 
 #endif /* _EXPORT_CHERIOS_KLIB_H_ */
