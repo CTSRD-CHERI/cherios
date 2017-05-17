@@ -59,7 +59,8 @@ __asm__ (                                                       \
         "nop\n"                                                 \
         EXTRA_A                                                 \
         "dla            $t0, kernel_ccall_stack_unswap\n"       \
-        "jr				$t0"                                    \
+        "jr				$t0\n"                                  \
+        "nop\n"                                    				\
 );
 
 #define DEFINE_TRAMPOLINE(F) DEFINE_TRAMPOLINE_EXTRA(F,,)
