@@ -170,8 +170,6 @@ local_cap_var context_switch_cap
 local_cap_var critical_section_enter_cap
 local_cap_var critical_section_exit_cap
 local_cap_var set_exception_handler_cap
-local_cap_var unlock_context_cap
-local_cap_var tlb_write_cap
 local_cap_var rescap_take_cap
 local_cap_var rescap_info_cap
 local_cap_var rescap_collect_cap
@@ -185,6 +183,7 @@ local_cap_var get_top_level_table_cap
 local_cap_var make_first_reservation_cap
 local_cap_var get_book_cap
 local_cap_var split_phy_page_range_cap
+local_cap_var obtain_super_powers_cap
 .set cap_table_end, local_ctr
 
 local_var top_virt_page, PAGE_TABLE_SIZE, PAGE_TABLE_ENT_BITS
@@ -306,8 +305,6 @@ nano_kernel_init:
     init_table critical_section_enter
     init_table critical_section_exit
     init_table set_exception_handler
-    init_table unlock_context
-    init_table tlb_write
     init_table rescap_take
     init_table rescap_info
     init_table rescap_collect
@@ -321,6 +318,8 @@ nano_kernel_init:
     init_table make_first_reservation
     init_table get_book
     init_table split_phy_page_range
+    init_table obtain_super_powers
+
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
     dli          $k1, cap_table_end - create_context_cap
@@ -384,6 +383,19 @@ nano_kernel_init:
 ##########################################################################
 
 .text
+#######################################
+# capability obtain_super_powers(void)
+.global obtain_super_powers
+obtain_super_powers:
+#######################################
+    cgetbase    $t0, $c17
+    cgetlen     $t1, $c17
+    csetoffset  $c13, $kcc, $t0
+    cgetoffset  $t2, $c17
+    csetbounds  $c17, $c13, $t1
+    cmove       $c3, $kdc
+    csetoffset  $c17, $c17, $t2
+    creturn
 
 ###################################
 # page_t* get_book(void)
@@ -700,22 +712,6 @@ destroy_context_end:
 
 
 
-
-
-######################################################################################################
-# reg_frame_t* unlock_context(context_t context); # Dont care about leaking here, its for debug only
-.global unlock_context
-unlock_context:
-######################################################################################################
-    dli         $t0, CONTEXT_TYPE
-    csetoffset  $c4, $kdc, $t0
-    cunseal     $c3, $c3, $c4
-    creturn
-
-
-
-
-
 #################################
 # void critical_section_enter();
 .global critical_section_enter
@@ -779,37 +775,6 @@ nano_kernel_die:
     dli $k0,  ((0x1f000000 + 0x00500) | 0x9000000000000000)
     li  $k1,  0x42
     csb $k1, $k0, 0($kdc)
-
-
-#################################################################################################
-# int tlb_write(register_t EntryHi, register_t EntryLo0, register_t EntryLo1, register_t index))
-.global tlb_write #TODO this is very WIP
-tlb_write:
-#################################################################################################
-
-#TODO check this does not break our invarient
-
-    mtc0 $a0, cp0_entryhi
-    mtc0 $a1, cp0_entrylo0
-    mtc0 $a2, cp0_entrylo1
-
-    daddiu  $t0, $a3, 1
-    bnez    $t0, indexed
-    nop
-
-random:
-    ehb
-    tlbwr
-    j end
-    nop
-
-indexed:
-    mtc0 $a3, cp0_index
-    ehb
-    tlbwi
-
-end:
-    creturn
 
 
 ####################################
@@ -1220,7 +1185,6 @@ kernel_exception_trampoline_end:
     .ent tlb_trampoline
 tlb_trampoline: # TODO
 ################################################################################################
-    TRACE_ON
 
     dmfc0       $k0, cp0_badvaddr
     dla         $k1, top_virt_page_label                            # k1 = phy poiter to L0

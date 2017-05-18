@@ -151,13 +151,49 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 	print_frame(i++, correct_base(image_base, return_address), stack_pointer);
 }
 
+static inline void dump_tlb() {
+
+#define CR_EHI      "10"
+#define CR_ELO0     "2"
+#define CR_ELO1     "3"
+#define CR_PAGEMask "5"
+#define CR_Index    "0"
+
+
+    register_t hi, lo1, lo2, pm;
+
+    for(int i = 0; i < 32; i++) {
+        __asm__ __volatile__(
+            "mtc0  %[ndx], $"CR_Index"\n"
+            "tlbr  \n"
+            "dmfc0  %[HI], $"CR_EHI"\n"
+            "dmfc0  %[LO1], $"CR_ELO0"\n"
+            "dmfc0  %[LO2], $"CR_ELO1"\n"
+            "dmfc0  %[PM], $"CR_PAGEMask"\n"
+        : [HI]"=r"(hi), [LO1]"=r"(lo1), [LO2]"=r"(lo2), [PM]"=r"(pm)
+        : [ndx]"r"(i)
+        :
+        );
+
+        printf("PageMask: %16lx. EntryHi: %16lx. EntryLo1: %16lx. EntryLo2: %16lx\n", pm, hi, lo1 ,lo2);
+    }
+
+}
+
 void regdump(int reg_num) {
+    // Note, dumping will not be possible when we enforce things properly
+    // For now we use the obtain super powers to make it possible.
+    capability all_powerfull = obtain_super_powers(); // Super magic wow!
+    set_sealing_cap(all_powerfull);
+
 	int creg = 0;
 	printf("Regdump:\n");
 	CHERI_PRINT_CAP(kernel_curr_act->context);
-
-	reg_frame_t* frame = unlock_context(kernel_curr_act->context);
+	reg_frame_t* frame = kernel_unseal_any(kernel_curr_act->context);
 	CHERI_PRINT_CAP(frame);
+
+    dump_tlb();
+
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
 
 	REG_DUMP_M(a0); REG_DUMP_M(a1); REG_DUMP_M(a2); REG_DUMP_M(a3); printf("\n");

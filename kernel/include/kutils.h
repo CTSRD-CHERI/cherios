@@ -58,4 +58,8 @@ static inline capability kernel_unseal(capability p, uint64_t otype) {
 	return cheri_unseal(p, seal);
 }
 
+static inline capability kernel_unseal_any(capability p) {
+	return kernel_unseal(p, cheri_gettype(p));
+}
+
 #endif

@@ -84,11 +84,6 @@ _Static_assert(sizeof(page_t) == 4 * sizeof(register_t), "Assumed by nano kernel
  * TODO specific asyn interrupt, some activation (which might have a high priority) might be waiting on that. In this
  * TODO case we might want to restore that context straight away */ \
     ITEM(set_exception_handler, void, (context_t context), __VA_ARGS__) \
-/* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
-    ITEM(unlock_context, reg_frame_t*, (context_t context), __VA_ARGS__) \
-/* A replacement for tlbwi. Takes arguments that are normally implicit with the instruction */\
-/* FIXME: We now do page walking in the nano kernel. Remove this. */\
-    ITEM(tlb_write, int, (register_t EntryHi, register_t EntryLo0, register_t EntryLo1, register_t index), __VA_ARGS__)\
 /* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
     ITEM(rescap_take, capability, (res_t res), __VA_ARGS__)\
 /* Returns a SEALED version of rescap_take, but does not change state. Then get fields using normal ops */\
@@ -115,7 +110,10 @@ _Static_assert(sizeof(page_t) == 4 * sizeof(register_t), "Assumed by nano kernel
 /* Get a read only capability to the nano kernels book */\
     ITEM(get_book, page_t*, (void), __VA_ARGS__) \
 /* Thw page must have a non zero length. Will make its length new length */\
-    ITEM(split_phy_page_range, void, (register_t pagen, register_t new_len), __VA_ARGS__)
+    ITEM(split_phy_page_range, void, (register_t pagen, register_t new_len), __VA_ARGS__)\
+/* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
+/* For debugging. Returns a global cap and gives your pcc all the permission bits it can */\
+    ITEM(obtain_super_powers, capability, (void), __VA_ARGS__)
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 

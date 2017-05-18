@@ -73,7 +73,6 @@ start:
 1:
     move    $t0, $t1
     dmtc0   $t0, $0
-    daddiu  $t0, 77
     dmtc0   $t0, $10        # cretae a VPN 0, and a ASID of 77+i so it doesn't match anything else
     tlbwi
     bnez    $t1, 1b
