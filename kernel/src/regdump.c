@@ -162,6 +162,14 @@ static inline void dump_tlb() {
 
     register_t hi, lo1, lo2, pm;
 
+    printf("TLB status:\n\n");
+
+    printf("|------------------------------------------------------------------------------|\n");
+    printf("|        |        EntryHi      |         EntryLO0      |         EntryLO1      |\n");
+    printf("|PageMask|---------------------|-----------------------|-----------------------|\n");
+    printf("|        |      VPN     | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
+    printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
+    printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
     for(int i = 0; i < 32; i++) {
         __asm__ __volatile__(
             "mtc0  %[ndx], $"CR_Index"\n"
@@ -175,9 +183,27 @@ static inline void dump_tlb() {
         :
         );
 
-        printf("PageMask: %16lx. EntryHi: %16lx. EntryLo1: %16lx. EntryLo2: %16lx\n", pm, hi, lo1 ,lo2);
+        register_t vpn = hi >> 13;
+        register_t asid = hi & ((1 << 13) - 1);
+
+        register_t pfn0 = lo1 >> 6;
+        register_t c0 = (lo1 >> 3) & 0b111;
+        register_t d0 = (lo1 >> 2) & 1;
+        register_t v0 = (lo1 >> 1) & 1;
+        register_t g0 = (lo1) & 1;
+
+        register_t pfn1 = lo2 >> 6;
+        register_t c1 = (lo2 >> 3) & 0b111;
+        register_t d1 = (lo2 >> 2) & 1;
+        register_t v1 = (lo2 >> 1) & 1;
+        register_t g1 = (lo2) & 1;
+        printf("|%8lx|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|\n",
+               pm, vpn, asid, pfn0, c0, d0, v0, g0,
+            pfn1, c1, d1, v1, g1);
+        //printf("PageMask: %16lx. EntryHi: %16lx. EntryLo1: %16lx. EntryLo2: %16lx\n", pm, hi, lo1 ,lo2);
     }
 
+    printf("\n\n");
 }
 
 void regdump(int reg_num) {
