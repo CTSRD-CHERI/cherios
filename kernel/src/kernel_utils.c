@@ -80,7 +80,7 @@ void kernel_panic(const char *s) {
 void hw_reboot(void) {
 	#ifdef HARDWARE_qemu
 		/* Used to quit Qemu */
-		capability reboot_cap = get_phy_cap(0x1f000000 + 0x00500, CHERICAP_SIZE, 0);
+		capability reboot_cap = get_phy_cap(get_book(), 0x1f000000 + 0x00500, CHERICAP_SIZE, 0);
 		__asm__ __volatile__ ("csb %0, $zero, 0($1)"
 		:
 		: "r" (0x42), "C"(reboot_cap)

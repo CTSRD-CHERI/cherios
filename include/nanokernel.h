@@ -39,8 +39,32 @@ typedef capability res_t;
 #define RES_SPLIT_OVERHEAD sizeof(capability)
 
 
-#define PAGE_SIZE 0x1000
+#define PAGE_SIZE (0x1000)
+#define PAGE_TABLE_ENTS (PAGE_SIZE / 8)
 typedef capability ptable_t;
+
+#define PHY_MEM_SIZE (1L << 32)
+#define TOTAL_PHY_PAGES (PHY_MEM_SIZE/PAGE_SIZE)
+#define BOOK_END ((size_t)(TOTAL_PHY_PAGES))
+
+typedef enum e_page_status {
+    page_unused,
+    page_nano_owned,
+    page_system_owned,
+    page_mapped,
+} e_page_status;
+
+//TODO make this dynamic
+
+typedef struct {
+    e_page_status	status;
+    size_t	len; /* number of pages in this chunk */
+    size_t	prev; /* start of previous chunk */
+    size_t  spare; /* Will probably use this to store a VPN or user data */
+} page_t;
+
+/* This is how big the structure is in the nano kernel */
+_Static_assert(sizeof(page_t) == 4 * sizeof(register_t), "Assumed by nano kernel");
 
 
 #define NANO_KERNEL_IF_LIST(ITEM, ...)                                          \
@@ -63,6 +87,7 @@ typedef capability ptable_t;
 /* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
     ITEM(unlock_context, reg_frame_t*, (context_t context), __VA_ARGS__) \
 /* A replacement for tlbwi. Takes arguments that are normally implicit with the instruction */\
+/* FIXME: We now do page walking in the nano kernel. Remove this. */\
     ITEM(tlb_write, int, (register_t EntryHi, register_t EntryLo0, register_t EntryLo1, register_t index), __VA_ARGS__)\
 /* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
     ITEM(rescap_take, capability, (res_t res), __VA_ARGS__)\
@@ -82,16 +107,35 @@ typedef capability ptable_t;
 /* Allocate a physical page to be page table. */\
     ITEM(create_table, ptable_t, (register_t page_n, ptable_t parent, register_t index),  __VA_ARGS__)\
 /* Map an entry in a leaf page table to a physical page. The adjacent physical page will also be mapped */\
-    ITEM(create_mapping, void, (register_t page_n, ptable_t table, register_t index),  __VA_ARGS__)
+    ITEM(create_mapping, void, (register_t page_n, ptable_t table, register_t index),  __VA_ARGS__) \
+/* Get a handle for the top level page table*/\
+    ITEM(get_top_level_table, ptable_t, (void), __VA_ARGS__) \
+/* Create the reservation for all of virtual memory */\
+    ITEM(make_first_reservation, res_t, (void), __VA_ARGS__) \
+/* Get a read only capability to the nano kernels book */\
+    ITEM(get_book, page_t*, (void), __VA_ARGS__) \
+/* Thw page must have a non zero length. Will make its length new length */\
+    ITEM(split_phy_page_range, void, (register_t pagen, register_t new_len), __VA_ARGS__)
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 #define ALLOCATE_PLT_NANO PLT_ALLOCATE(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 /* Current not able to request multiple pages. Only really for getting access to magic regs w/o virtual memory */
-static inline capability get_phy_cap(size_t address, size_t size, register_t cached) {
+/* Try to ask memgt instead of using this */
+static inline capability get_phy_cap(page_t* book, size_t address, size_t size, register_t cached) {
     size_t phy_page = address / PAGE_SIZE;
     size_t phy_offset = address & (PAGE_SIZE - 1);
+
+    if(book[phy_page].len == 0) {
+        size_t search_index = 0;
+        while(book[search_index].len + search_index < phy_page) {
+            search_index = search_index + book[search_index].len;
+        }
+        split_phy_page_range(search_index, phy_page - search_index);
+    }
+
+    split_phy_page_range(phy_page, 1);
     capability cap_for_phy = get_phy_page(phy_page, cached);
     cap_for_phy = cheri_setoffset(cap_for_phy, phy_offset);
     cap_for_phy = cheri_setbounds(cap_for_phy, size);

@@ -37,9 +37,9 @@ OUTPUT_ARCH(mips)
 ENTRY(nano_kernel_init)
 SECTIONS
 {
-    . = __cached_exception_vector_tlbrefill;
+    . = __cached_exception_vector_xtlbrefill;
 
-	.text ALIGN(CAP_ALIGN) : AT(__cached_exception_vector_tlbrefill) {
+	.text ALIGN(CAP_ALIGN) : AT(__cached_exception_vector_xtlbrefill) {
         KEEP(*(.trampoline_tlb))
         . = __cached_exception_vector_other;
         KEEP (*(.trampoline_exc))
@@ -67,6 +67,6 @@ SECTIONS
 PHDRS
 {
 	header PT_PHDR PHDRS ;
-	text PT_LOAD AT (__cached_exception_vector_tlbrefill);
+	text PT_LOAD AT (__cached_exception_vector_xtlbrefill);
 	data PT_LOAD;
 }

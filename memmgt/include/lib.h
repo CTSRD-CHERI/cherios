@@ -52,10 +52,7 @@ void	release_init(void);
 
 int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result);
 int	__munmap(void *addr, size_t length);
-void	minit(capability all_mem, capability ex_cap);
+void	minit(void);
 void	mfree(void *addr);
-
-extern	size_t pagesz;
-extern	char * pool;
 
 #endif /* !_LIB_H_ */

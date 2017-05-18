@@ -54,7 +54,30 @@ start:
 	li		$t1, 0x4
 	nor		$t1, $t1, $t1
 	and		$t0, $t0, $t1
-	mtc0		$t0, $12
+
+    # Set KSU = 0
+    li      $t1, (0b11 << 3)
+    not     $t1, $t1
+    and      $t0, $t0, $t1
+
+    # Set UX, SX, and KSX
+    li      $t1, (0b111 << 5)
+    or      $t0, $t0, $t1
+
+    mtc0		$t0, $12
+
+    .set N_TLB_ENTS, 32
+    # Setup the TLB so it won't break on first miss
+    dli     $t1, N_TLB_ENTS
+
+1:
+    move    $t0, $t1
+    dmtc0   $t0, $0
+    daddiu  $t0, 77
+    dmtc0   $t0, $10        # cretae a VPN 0, and a ASID of 77+i so it doesn't match anything else
+    tlbwi
+    bnez    $t1, 1b
+    daddiu  $t1, -1
 
 	# Wait for capability coprocessor to be enabled for real
 	nop; nop; nop; nop; nop; nop; nop; nop;

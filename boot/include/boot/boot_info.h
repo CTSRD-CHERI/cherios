@@ -51,12 +51,8 @@ typedef struct boot_info {
 
 typedef struct memmgt_init_t {
     // Reservation is for use when we want better security
-	res_t reservation;
 	nano_kernel_if_t* nano_if;
 	capability nano_default_cap;
-    // The basic heap is just a chunk of static memory
-    capability basic_heap;
-    capability basic_heap_ex;
 } memmgt_init_t;
 
 #define FS_PHY_BASE 0x1e400000
@@ -65,12 +61,12 @@ typedef struct memmgt_init_t {
  * the init activation.
  */
 typedef struct init_info {
-	res_t 		free_mem;			/* a reservation for free memory */
 	nano_kernel_if_t* nano_if;		/* the nano kernels interface */
 	capability nano_default_cap;	/* default capability for the nano kernel */
+    size_t kernel_size;             /* The physical space occupied by the kernel/init activations */
 
 	capability uart_cap;
-	capability fs_cap;
+    size_t uart_page;
 } init_info_t;
 
 #endif /* _BOOT_INFO_H_ */

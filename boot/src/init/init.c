@@ -135,11 +135,12 @@ static void print_init_info(init_info_t * init_info) {
 	CHERI_PRINT_CAP(init_info);
 
 	if (init_info) {
-		CHERI_PRINT_CAP(init_info->free_mem);
 		CHERI_PRINT_CAP(init_info->nano_if);
 		CHERI_PRINT_CAP(init_info->nano_default_cap);
 	}
 }
+
+extern char __nano_size;
 
 memmgt_init_t memmgt_init;
 
@@ -152,17 +153,11 @@ static void * get_act_cap(module_t type, init_info_t* info) {
 
             memmgt_init.nano_default_cap = info->nano_default_cap;
             memmgt_init.nano_if = info->nano_if;
-            memmgt_init.reservation = info->free_mem;
-            size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
-            void * heap = &__start_heap;
-            heap = cheri_setbounds(heap, heaplen);
-            /* FIXME still won't have execute, which will break */
-            memmgt_init.basic_heap = cheri_andperm(heap, 0b1111101 | CHERI_PERM_SOFT_1);
-            memmgt_init.basic_heap_ex = rederive_perms(memmgt_init.basic_heap, cheri_getpcc());
             return &memmgt_init;
 
         case m_fs:{}
-            return info->fs_cap;
+        //TODO get this from memmgt.
+            //return get_phy_cap(FS_PHY_BASE, FS_PHY_SIZE, 0);
         case m_namespace:
         case m_core:
         case m_user:

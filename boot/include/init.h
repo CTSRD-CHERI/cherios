@@ -60,9 +60,6 @@ typedef struct init_elem_s {
 	act_control_kt ctrl;
 } init_elem_t;
 
-extern char	__start_heap;
-extern char	__stop_heap;
-
 /*
  * Memory routines
  */

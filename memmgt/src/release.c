@@ -62,7 +62,7 @@ static void rel_push(void * p) {
 }
 
 static int try_gc(void * p) {
-	return syscall_gc(p, (capability)pool);
+	return -1;
 }
 
 static void try_gc_rel(void) {

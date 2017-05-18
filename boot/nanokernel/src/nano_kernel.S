@@ -67,10 +67,10 @@
 
 #struct res_t {
 #    enum state{open, taken, merged, collecting}
-#    size_t length
-#    size_t pid
+#    size_t length <- length of reservation (not including meta data). Not set when open.
+#    size_t pid <- an id for the parent node. Checked for merging
 #    padding to size of one cap
-#    union{cap for region, user data}
+#    union{cap for region, user data} <- store a cheeky cap here when open for ease. Part of user data o/w
 #
 #}
 
@@ -85,25 +85,34 @@
 # leaving 56 bits free
 .set TOP_ADDR_SHIFT,                56
 
+.set VIRT_MEM_START,                0x2000
+.set VIRT_MEM_END,                  PHY_MEM_START_TOP << TOP_ADDR_SHIFT # virt mem ends where phy begins
+.set VIRT_MEM_SIZE,                 VIRT_MEM_END - VIRT_MEM_START
+
 # This is the physical memory we will scan in order to support revocation
 .set PHY_MEM_START,          PHY_MEM_START_TOP << TOP_ADDR_SHIFT
 .set PHY_MEM_START_UNCACHED, PHY_MEM_START_UNCACHED_TOP << TOP_ADDR_SHIFT
 
 .set PHY_MEM_SIZE,  (1 << 32)
 .set PHY_MEM_END,   PHY_MEM_START + PHY_MEM_START
+
 #.set NANO_SIZE, __nano_size
-.set NANO_SIZE, 0x4000000
+.set NANO_SIZE, 0x5000000
 .set PHY_PAGE_SIZE_BITS, 12
 .set PHY_PAGE_SIZE, (1 << PHY_PAGE_SIZE_BITS)
+
+
 .set N_PHY_PAGES_ENTRIES, PHY_MEM_SIZE / PHY_PAGE_SIZE
-.set PHY_PAGE_ENTRY_SIZE, 2 * REG_SIZE
-.set PHY_PAGE_ENTRY_SIZE_BITS, REG_SIZE_BITS + 1
+.set PHY_PAGE_ENTRY_SIZE, 4 * REG_SIZE
+.set PHY_PAGE_ENTRY_SIZE_BITS, REG_SIZE_BITS + 2
 
 
 # We will lay out PHYSICAL state like this. The PFN is just the index in the table:
 # struct phy_ent {
-#    register_t state {un-used, nano_owned, system_owned, mapped}
-#    register_t VPN2        This is the VPN field. Once set cannot be changed, unless we revoke the VPN.
+#    register_t state           {un-used, nano_owned, system_owned, mapped}
+#    register_t len             number of pages in this chunk
+#    register_t prev            index to prev
+#    register_t next            index to next
 #
 #};
 
@@ -138,6 +147,9 @@
 # locals_start to locals_end.
 ####################################################################################################################
 
+# The small locals can be accessed from idc with a constant. The others need dli. The address you get is relative
+# to idc. If you want a global address to use name_label.
+
 START_LOCALS CAP_SIZE_BITS
 
 # Stuff to do with context switch #
@@ -148,6 +160,7 @@ local_reg_var exception_level
 local_reg_var exception_cause
 
 # Stuff to do with virtual space management
+local_reg_var made_first_res
 local_reg_var collection_state
 
 # Method table for nano kernel
@@ -166,13 +179,19 @@ local_cap_var rescap_split_cap
 local_cap_var rescap_merge_cap
 local_cap_var rescap_parent_cap
 local_cap_var get_phy_page_cap
+local_cap_var create_table_cap
+local_cap_var create_mapping_cap
+local_cap_var get_top_level_table_cap
+local_cap_var make_first_reservation_cap
+local_cap_var get_book_cap
+local_cap_var split_phy_page_range_cap
 .set cap_table_end, local_ctr
+
+local_var top_virt_page, PAGE_TABLE_SIZE, PAGE_TABLE_ENT_BITS
 
 local_var context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
-local_var phy_page_table, N_PHY_PAGES_ENTRIES * PHY_PAGE_ENTRY_SIZE, REG_SIZE_BITS
-
-local_var top_virt_page, PAGE_TABLE_SIZE, PAGE_TABLE_ENT_BITS
+local_var phy_page_table, (N_PHY_PAGES_ENTRIES + 1) * PHY_PAGE_ENTRY_SIZE, PHY_PAGE_ENTRY_SIZE_BITS
 
 END_LOCALS
 
@@ -198,6 +217,8 @@ nano_kernel_init:
     dli         $k1, locals_size
     csetoffset  $kr1c, $kdc, $k0
     csetbounds  $kr1c, $kr1c, $k1                       # kr1c will hold a capability to our locals
+
+    csd         $zero, $zero, made_first_res($kr1c)
 
     dli         $k0, context_table
     dli         $k1, (N_CONTEXTS * CONTEXT_SIZE)
@@ -226,7 +247,45 @@ nano_kernel_init:
     csd         $zero, $zero, exception_level($kr1c)     # Set exception level to 0
     csd         $zero, $zero, exception_cause($kr1c)     # Set exception cause to 0
 
-    # NOTE: context_table does not need initialising. This is done as we allocate new contexts.
+    # First NANO_SIZE of physical pages to nano owned. Then a0/page_size pages to system owned. The rest are free
+    # TODO check that a0 is rounded to a page
+
+    dli         $t0, phy_page_table                     # t0 is start of book
+    dli         $t1, (NANO_SIZE / PHY_PAGE_SIZE)        # t1 is number of pages for the nano
+    dli         $t2, PHY_NANO
+    dsrl        $t3, $a0, PHY_PAGE_SIZE_BITS           # t3 is number of pages for system
+
+    csw         $t2, $t0, 0($kr1c)                      # book[0].state = nano owned
+    csd         $t1, $t0, REG_SIZE($kr1c)               # book[0].len = nano pages
+
+    dsll        $t2, $t1, PHY_PAGE_ENTRY_SIZE_BITS
+    daddu       $t0, $t0, $t2                           # t0 is the start of the systems pages
+    dli         $t2, PHY_SYSTEM
+
+
+    csw         $t2, $t0, 0($kr1c)                      # book[nano].state = system owned
+    csd         $t3, $t0, (REG_SIZE)($kr1c)              # book[nano].len = system
+    csd         $zero, $t0, (REG_SIZE * 2)($kr1c)       # book[nano].prev = 0
+
+    dsll        $t2, $t3, PHY_PAGE_ENTRY_SIZE_BITS
+    daddu       $t0, $t0, $t2                           # t0 is the start of the free pages
+    dli         $t2, (N_PHY_PAGES_ENTRIES - (NANO_SIZE / PHY_PAGE_SIZE))
+    dsubu       $t2, $t2, $t3
+
+    csd         $t2, $t0, (REG_SIZE)($kr1c)             # book[nano + system].len = all - nano - system
+    csd         $t1, $t0, (REG_SIZE*2)($kr1c)           # book[nano + system].prev = nano
+
+    # We have a cheeky extra terminal page of size 1 that doesn't really exist
+    dli         $t0, phy_page_table + (N_PHY_PAGES_ENTRIES * PHY_PAGE_ENTRY_SIZE)
+    dli         $t1, PHY_NANO
+    daddiu      $t3, $t3, (NANO_SIZE / PHY_PAGE_SIZE)
+    dli         $t2, 1
+
+    csw         $t1, $t0, 0($kr1c)                      # book[end].status = nano owned
+    csd         $t2, $t0, (REG_SIZE)($kr1c)             # book[end].len = 1
+    csd         $t3, $t0, (REG_SIZE*2)($kr1c)           # book[end].prev = nano+system
+
+    # Setup physical
 
     dli         $k0, NANO_KERNEL_TYPE
     csetoffset  $kr2c, $kdc, $k0                         # kr2c holds the sealing capability for our plt.got
@@ -256,7 +315,12 @@ nano_kernel_init:
     init_table rescap_merge
     init_table rescap_parent
     init_table get_phy_page
-
+    init_table create_table
+    init_table create_mapping
+    init_table get_top_level_table
+    init_table make_first_reservation
+    init_table get_book
+    init_table split_phy_page_range
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
     dli          $k1, cap_table_end - create_context_cap
@@ -276,8 +340,6 @@ nano_kernel_init:
     slt         $t0, $a0, $t0
     beq         $t0, $zero, nano_kernel_die
     nop
-
-    # TODO we need to set NANO_SIZE of physical pages to nano owned. Then a0 pages to system owned. The rest are free
 
     # c0 will be a global data capability to the unsecured memory
     # c17 will be a global code capability to the unsecured memory, with the index passed
@@ -323,23 +385,106 @@ nano_kernel_init:
 
 .text
 
-.global make_first_reservation     # FIXME this is handing out reserved caps to PHYSICAL space. It should be virtual.
-make_first_reservation: #FIXME dumbly copied out of init. It has been seperated as it can only be created when virtual
-                        #FIXME is supported
+###################################
+# page_t* get_book(void)
+.global get_book
+get_book:
+###################################
+    dli        $t0, phy_page_table
+    dli        $t1, (N_PHY_PAGES_ENTRIES) * PHY_PAGE_ENTRY_SIZE
+    csetoffset $c3, $idc, $t0
+    dli        $t2, Perm_Load
+    csetbounds $c3, $c3, $t1
+    candperm   $c3, $c3, $t2
+    creturn
+
+#################################################################
+# void split_phy_page_range(register_t pagen, register_t new_len)
+.global split_phy_page_range
+split_phy_page_range:
+#################################################################
+    beqz        $a1, split_phy_end
+    dli         $t0, N_PHY_PAGES_ENTRIES                # check index in range
+    slt         $t0, $a0, $t0
+    beq         $t0, $zero, split_phy_end               # $a0 >= $t0
+    dli         $t0, phy_page_table                     # $t0 = start of book
+    dsll         $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
+    daddu       $t0, $t0, $t1                           # $t0 = book + pagen
+
+    cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
+    slt         $t3, $a1, $t2
+    beq         $t3, $zero, split_phy_end               # $a1 >= $t2
+    dsubu       $t3, $t2, $a1                           # $t3 is length of next block
+
+    csd         $a1, $t0, (REG_SIZE)($idc)              # book[pagen].len = new_len
+
+    dsll         $t1, $a1, PHY_PAGE_ENTRY_SIZE_BITS
+    clw         $t2, $t0, 0($idc)                       # $t2 sate of old block
+    daddu       $t0, $t0, $t1                           # t0 = book + pagen + new_len
+
+    csw         $t2, $t0, 0($idc)                       # book[new].state = book[pagen].state
+    csd         $t3, $t0, (REG_SIZE)($idc)              # book[new].len = book[pagen].len - new_len
+    csd         $a0, $t0, (REG_SIZE*2)($idc)            # book[new].prev = pagen
+
+    dsll         $t3, $t3, PHY_PAGE_ENTRY_SIZE_BITS
+    daddu       $t0, $t0, $t3                           # $t0 = book + pagen + oldlen
+    daddu       $t1, $a0, $a1
+
+    csd         $t1, $t0, (2*REG_SIZE)($idc)            # book[next].prev = pagen + new_len
+
+split_phy_end:
+    creturn
+
+
+###################################
+# ptable get_top_level_table(void)
+.global get_top_level_table
+get_top_level_table:
+###################################
+    dli         $t0, top_virt_page
+    dli         $t1, PAGE_TABLE_SIZE
+    cincoffset  $c3, $idc, $t0
+    dli         $t0, VTABLE_TYPE_L0
+    csetbounds  $c3, $c3, $t1
+    csetoffset  $c4, $kdc, $t0
+    cseal       $c3, $c3, $c4
+
+    clearlo     EN1(c4)
+    creturn
+
+#####################################
+# res_t make_first_reservation(void)
+.global make_first_reservation
+make_first_reservation:
+#####################################
     # TODO we should actually collect the initial reservation in case the boot loader made a mistake
+    # TODO more atomicity
+    cld         $t2, $zero, made_first_res($idc)
+    bnez        $t2, make_first_er
+    dli         $t2, 1
+    csd         $t2, $zero, made_first_res($idc)  # can only be done once
 
-    csetoffset  $c13, $kdc, $t2
-    candperm    $c13, $c13, $k0
-    csd         $zero, $zero, 0($c13)                   # set state to open
-    csd         $zero, $zero, (2 * REG_SIZE)($c13)      # set parent to 0
-    dli         $k1, RES_TYPE
-    csetoffset  $c14, $kdc, $k1
-    cseal       $c4, $c13, $c14                         # seal reservation
-    dli         $k1, CAP_SIZE
-    cincoffset  $c13, $c13, $k1
+    dli         $t2, VIRT_MEM_START
+    dli         $t1, VIRT_MEM_SIZE
+    csetoffset  $c3, $kdc, $t2
+    dli         $t0, DEF_DATA_PERMS
+    csetbounds  $c3, $c3, $t1
+    candperm    $c3, $c3, $t0                     # c3 is a cap to all of virtual mem
 
-    csetbounds  $c13, $c13, $t3
-    csc         $c13, $zero, 0($c13)                    # store cap to rest of reversed mem for use later
+    dli         $t0, CAP_SIZE                     # amount of space we lost to meta data
+    dsubu       $t2, $t1, $t0                     # remaining length
+    dli         $t1, RES_TYPE                     # sealing type
+
+    csetoffset  $c4, $kdc, $t1
+    csd         $zero, $zero, 0($c3)              # set state to open
+    csd         $zero, $zero, (REG_SIZE*2)($c3)   # set parent to none
+    cincoffset  $c5, $c3, $t0                     # cap for user range
+    cseal       $c3, $c3, $c4                     # handle
+    csetbounds  $c5, $c5, $t2                     # correct bounds to account for user data
+    csc         $c5, $zero, 0($c5)
+
+make_first_er:
+    cclearlo    EN2(c4, c5)
     creturn
 
 #####################################################################
@@ -458,20 +603,23 @@ get_phy_page:
     dli         $t0, N_PHY_PAGES_ENTRIES
     slt         $t0, $a0, $t0
     beq         $t0, $zero, get_phy_page_end            # $a0 >= $t0
-    sll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
+    dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
-    cld         $t1, $t0, 0($idc)                       # $t1 = state
+    cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
+    daddiu      $t1, $t1, -1
+    bnez        $t1, get_phy_page_end                   # $t1 must be 1
+    clw         $t1, $t0, 0($idc)                       # $t1 = state
     bnez        $t1, get_phy_page_end                   # state must be un-used
     dli         $t1, PHY_SYSTEM
-    csd         $t1, $t0, 0($idc)                       # set to system owned
+    csw         $t1, $t0, 0($idc)                       # set to system owned
 
     bnez        $a1, 1f                                 # 0: uncached. ow: cached
     dli         $t1, PHY_MEM_START_TOP
     dli         $t1, PHY_MEM_START_UNCACHED_TOP
     1: dsll      $t1, $t1, TOP_ADDR_SHIFT
 
-    sll         $t2, $a0, PHY_PAGE_SIZE_BITS
+    dsll         $t2, $a0, PHY_PAGE_SIZE_BITS
     dli         $t0, PHY_PAGE_SIZE
     daddu       $t1, $t1, $t2                           # t1 is the offset required for our cap
     csetoffset  $c3, $kdc, $t1
@@ -920,16 +1068,16 @@ nano_kernel_end:
 .size nano_kernel, nano_kernel_end - nano_kernel_start
 
 ########################################################################
-# ptable create_ptable(register_t page, ptable parent, register_t index)
-.global create_ptable
-create_ptable:
+# ptable create_table(register_t page, ptable parent, register_t index)
+.global create_table
+create_table:
 ########################################################################
 
     cgettype    $t0, $c3
-    dli         $t2, $VTABLE_TYPE_L0
+    dli         $t2, VTABLE_TYPE_L0
     beq         $t0, $t2, good_level
     daddiu      $t2, 1
-    bne        $t0, $t2, create_ptable_er
+    bne         $t0, $t2, create_ptable_er
     daddiu      $t2, 1
 
 good_level: #t2 now contains the type we will seal the next level with
@@ -944,25 +1092,31 @@ good_level: #t2 now contains the type we will seal the next level with
     slt         $t0, $a0, $t0
     beq         $t0, $zero, create_ptable_er            # $a0 >= $t0
 
-    sll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
+    dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
 
-    cld         $t1, $t0, 0($idc)                       # $t1 = state
+    cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
+    daddiu      $t1, $t1, -1
+    bnez        $t1, create_ptable_er                   # $t1 must be 1
+
+    clw         $t1, $t0, 0($idc)                       # $t1 = state
     bnez        $t1, create_ptable_er                   # state must be un-used
 
     dli         $t1, PHY_NANO
-    csd         $t1, $t0, 0($idc)                       # set to nano owned
+    csw         $t1, $t0, 0($idc)                       # set to nano owned
 
     # TODO: zero the page
-    sll         $t0, $a0, PHY_PAGE_SIZE_BITS
+    dsll        $t0, $a0, PHY_PAGE_SIZE_BITS
     dli         $t1, PHY_MEM_START
-    dadd        $t0, $t0, $t1                           # t0 is the address of the new page
-    sll         $t1, $a1, PAGE_TABLE_ENT_BITS           # t1 is index in the parent page to write to
+    daddu       $t0, $t0, $t1                          # t0 is the address of the new page
+    dsll        $t1, $a1, PAGE_TABLE_ENT_BITS          # t1 is index in the parent page to write to
 
     # TODO: check not already mapped
     csd         $t0, $t1, 0($c3)
+    dli         $t1, PHY_PAGE_SIZE
     csetoffset  $c3, $kdc, $t0
+    csetbounds  $c3, $c3, $t1
     csetoffset  $c4, $kdc, $t2
     cseal       $c3, $c3, $c4
 
@@ -989,32 +1143,32 @@ create_mapping:
     csetoffset  $c4, $kdc, $t0                          # unsealing cap for an L2 table
     cunseal     $c3, $c3, $c4
 
-    dli         $t0, PAGE_TABLE_ENT_PER_TABLE - 1       # check index in rang (will use 2 entries so the -1 )
+    dli         $t0, PAGE_TABLE_ENT_PER_TABLE           # check index in range
     slt         $t0, $a1, $t0
     beq         $t0, $zero, create_mapping_er           # $a1 >= $t0
 
-    sll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
+    dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
 
-    cld         $t1, $t0, 0($idc)                       # $t1 is the state of this phy page
-    bnez        $t1, create_mapping_er                  # must be un-used
-    cld         $t1, $t0, PHY_PAGE_ENTRY_SIZE($idc)     # we will just map the adjacent phy page for PFN1
+    cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
+    daddiu      $t1, $t1, -2
+    bnez        $t1, create_mapping_er                  # $t1 must be 2
+
+    clw         $t1, $t0, 0($idc)                       # $t1 is the state of this phy page
     bnez        $t1, create_mapping_er                  # must be un-used
 
     dli         $t1, PHY_MAPPED
-    csd         $t1, $t0, 0($idc)                       # set page to be mapped
-    csd         $t1, $t0, PHY_PAGE_ENTRY_SIZE($idc)     # set page to be mapped
+    csw         $t1, $t0, 0($idc)                       # set page to be mapped
 
     # TODO add perms
     # TODO add autharising cap
     # TODO add the checked top bits
     # TODO check virt un-used
-    sll         $t0, $a1, PAGE_TABLE_ENT_BITS
-    sll         $t1, $a0, pfn_shift
-    ori        $t1, $t1, pfn_flags
-    csd         $a0, $t0, 0($c3)                        # store phy page number
-
+    dsll         $t0, $a1, PAGE_TABLE_ENT_BITS
+    dsll         $t1, $a0, pfn_shift
+    ori         $t1, $t1, pfn_flags
+    csd         $t1, $t0, 0($c3)                        # store EntryLo
 create_mapping_er:
     cclearlo    EN2(c3,c4)
     creturn
@@ -1066,29 +1220,30 @@ kernel_exception_trampoline_end:
     .ent tlb_trampoline
 tlb_trampoline: # TODO
 ################################################################################################
+    TRACE_ON
 
     dmfc0       $k0, cp0_badvaddr
     dla         $k1, top_virt_page_label                            # k1 = phy poiter to L0
 
-    dsll         $k0, $k0, CHECKED_BITS                                              # clear top bits
-    dsrl         $k0, $k0, (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS)    # clear lower bits
-    dsll         $k0, $k0, PAGE_TABLE_ENT_BITS                                       # scale
+    dsll        $k0, $k0, CHECKED_BITS                                              # clear top bits
+    dsrl        $k0, $k0, (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS)    # clear lower bits
+    dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                       # scale
     daddu       $k1, $k1, $k0
 
     dmfc0       $k0, cp0_badvaddr
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L1
 
-    dsll         $k0, $k0, CHECKED_BITS + L0_BITS                                   # clear top bits
-    dsrl         $k0, $k0, (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS)   # clear lower bits
-    dsll         $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
+    dsll        $k0, $k0, CHECKED_BITS + L0_BITS                                   # clear top bits
+    dsrl        $k0, $k0, (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS)   # clear lower bits
+    dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
     daddu       $k1, $k1, $k0
 
     dmfc0       $k0, cp0_badvaddr
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L2
 
-    dsll         $k0, $k0, CHECKED_BITS + L1_BITS + L0_BITS                         # clear top bits
-    dsrl         $k0, $k0, (CHECKED_BITS + L1_BITS + L0_BITS + UNTRANSLATED_BITS)   # clear lower bits
-    dsll         $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
+    dsll        $k0, $k0, CHECKED_BITS + L1_BITS + L0_BITS                         # clear top bits
+    dsrl        $k0, $k0, (CHECKED_BITS + L1_BITS + L0_BITS + UNTRANSLATED_BITS)   # clear lower bits
+    dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
     daddu       $k1, $k1, $k0
 
     cld         $k1, $k1, 0($kdc)                                   # k1 = pfn entry

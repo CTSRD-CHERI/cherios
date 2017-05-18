@@ -33,7 +33,8 @@ INCLUDE "mips.ld"
 CAP_ALIGN = 0x20;
 PAGE_ALIGN = 0x1000;
 
-__nano_size            =    0x4000000;
+/* Careful changing nano size, its hardcoded in the nano kernel still (as NANO_SIZE) */
+__nano_size            =    0x5000000;
 __nano_load_physaddr   =    0x0001000;
 __boot_load_physaddr   =    0x8000000;
 

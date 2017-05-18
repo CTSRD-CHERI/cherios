@@ -110,11 +110,7 @@ SECTIONS
 	 */
 
 	 .heapandstack ALIGN(CAP_ALIGN): {
-	    __start_heap = .;
-	    . += (__size_memory - __size_init_stack);
-	    __stop_heap = .;
-	    __size_heap = __stop_heap - __start_heap;
-	    __start_init_stack	= __stop_heap;
+	    __start_init_stack	= .;
 	    . += __size_init_stack;
 	    __stop_init_stack = .;
 	 } : bss

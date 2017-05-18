@@ -73,7 +73,7 @@ static cap_pair kernel_alloc_mem(size_t _size) {
 
     if(alloc_direct) {
         if(_size > nano_size + MIPS_KSEG0) {
-            boot_printf(KRED"nano kernel too large\n"KRST);
+            boot_printf(KRED"nano kernel too large. %lx vs %lx\n"KRST, _size  - MIPS_KSEG0, nano_size);
             hw_reboot();
         }
         boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, nano_size);

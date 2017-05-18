@@ -63,8 +63,10 @@ void bootloader_main(void) {
 
     size_t invalid_length = bi->init_end;
     capability phy_start = cheri_setbounds(cheri_setoffset(cheri_getdefault(), MIPS_KSEG0), invalid_length);
-    boot_printf("Invalidating %p length %lx:\n", phy_start, invalid_length);
-    caches_invalidate(phy_start, invalid_length);
+
+    /* Do we actually need this? */
+    //boot_printf("Invalidating %p length %lx:\n", phy_start, invalid_length);
+    //caches_invalidate(phy_start, invalid_length);
 
 
     register_t mem_size = bi->init_end - bi->nano_end;

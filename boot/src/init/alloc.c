@@ -48,7 +48,7 @@ static inline void *align_upwards(void *p, uintptr_t align)
     return (p);
 }
 
-#define POOL_SIZE (1024*1024)
+#define POOL_SIZE (1024*1024*32)
 static capability pool[POOL_SIZE/sizeof(capability)];
 
 static char * pool_start = NULL;

@@ -54,7 +54,7 @@ int cherios_main(nano_kernel_if_t* interface,
     set_sealing_cap(sealer);
 
 	/* Get the capability for the uart. We should save this somewhere sensible */
-	capability  cap_for_uart = get_phy_cap(uart_base_phy_addr, uart_base_size, 0);
+	capability  cap_for_uart = get_phy_cap(get_book(), uart_base_phy_addr, uart_base_size, 0);
 	set_uart_cap(cap_for_uart);
 
 	kernel_puts("Kernel Hello world\n");
@@ -70,9 +70,10 @@ int cherios_main(nano_kernel_if_t* interface,
 
 	init_info.nano_if = interface;
 	init_info.nano_default_cap = def_data;
-	init_info.free_mem = NULL;
+	init_info.kernel_size = cheri_getlen(cheri_getdefault());
+	kernel_assert((init_info.kernel_size & (PAGE_SIZE-1)) == 0);
     init_info.uart_cap = cap_for_uart;
-    init_info.fs_cap = get_phy_cap(FS_PHY_BASE, FS_PHY_SIZE, 0);
+	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
 
 	context_t init_context = act_init(own_context, &init_info, init_base, init_entry);
 

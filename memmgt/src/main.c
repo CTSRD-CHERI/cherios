@@ -38,8 +38,6 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-size_t pagesz;			/* page size */
-
 ALLOCATE_PLT_NANO
 
 void register_ns(void * ns_ref) {
@@ -59,17 +57,7 @@ int main(memmgt_init_t* mem_init) {
 		printf(KRED"memmgt: Register failed %d\n", ret);
 	}
 
-	assert(mem_init->basic_heap != NULL);
-	assert(mem_init->basic_heap_ex != NULL);
-	/*
-	 * setup memory and
-	 * align break pointer so all data will be page aligned.
-	 */
-	pagesz = CHERIOS_PAGESIZE;
-
-	/* TODO: Version 1 will just use a heap */
-	/* TODO: when reservations work, we can use those */
-	minit(mem_init->basic_heap, mem_init->basic_heap_ex);
+	minit();
 
 	/* init release mecanism */
 	release_init();
