@@ -102,7 +102,7 @@ li  $zero, 0xdead
 
 .macro local_var name, size, align
     local_align \align
-    \name\()_label : .space \size
+    \name\()_label :
     .set \name, local_ctr
     .space \size
     .set local_ctr, local_ctr + \size
