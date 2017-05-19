@@ -42,31 +42,17 @@
 #include "stdarg.h"
 #include "stdio.h"
 #include "string.h"
+#include "nanokernel.h"
+#include "mman.h"
 
-void register_ns(void * ns_ref, void * ns_id);
-
-#define MMAP 1
-
-#if !MMAP
-#define malloc __malloc
-#define calloc __calloc
-#define realloc __realloc
-
-void *	malloc(size_t nbytes) __attribute__((cheri_ccallee));
-void *	calloc(size_t num, size_t size) __attribute__((cheri_ccallee));
-void *	realloc(void *cp, size_t nbytes) __attribute__((cheri_ccallee));
-void	free(void *cp);
-#endif
+void register_ns(void * ns_ref);
 
 void	release(void * p) __attribute__((cheri_ccallee));
 void	release_init(void);
 
-void *	__mmap(void *addr, size_t length, int prot, int flags);
+int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result);
 int	__munmap(void *addr, size_t length);
-void	minit(char *heap);
+void	minit(void);
 void	mfree(void *addr);
-
-extern	size_t pagesz;
-extern	char * pool;
 
 #endif /* !_LIB_H_ */

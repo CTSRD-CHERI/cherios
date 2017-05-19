@@ -29,6 +29,7 @@
  */
 
 #include "lib.h"
+#include "syscalls.h"
 
 static void hello(void) {
 }
@@ -46,17 +47,14 @@ int main(void)
 	syscall_puts("Test1A Hello world\n");
 
 	/* get ref to Test1B */
-	void * t_ref = namespace_get_ref(12);
+	act_kt t_ref = namespace_get_ref(12);
 	assert(t_ref != NULL);
-	void * t_id  = namespace_get_id(12);
-	assert(t_id != NULL);
-	t_id = ccall_c_c(t_ref, t_id, 0, buf);
-	assert(t_id != NULL);
-	
+
+	capability t_id = MESSAGE_SYNC_SEND_c(t_ref, 0,0,0, buf, NULL, NULL, 0);
+
 	buf[0] = 0;
 	for(int i=0; i<0x1000 *0x1000; i++) {
-		while(!ccall_1(t_ref, t_id, 1,
-		      0, 0, 0, buf, NULL, NULL)) {
+		while(MESSAGE_SEND_MODE_r(t_ref, 0, 0, 0, t_id, buf, NULL, SEND, 1) != 0) {
 			ssleep(0);      
 		}
 	}

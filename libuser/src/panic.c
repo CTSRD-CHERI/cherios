@@ -30,13 +30,7 @@
 
 #include "mips.h"
 #include "stdio.h"
-
-static void syscall_panic(void) {
-	__asm__ __volatile__ (
-		"li    $v0, 42 \n"
-		"syscall       \n"
-		:::"v0");
-}
+#include "syscalls.h"
 
 __attribute__((noreturn))
 void panic(const char *str) {

@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,9 +29,15 @@
  * SUCH DAMAGE.
  */
 
+#include "sys/types.h"
 #include "klib.h"
+#include "activations.h"
+#include "queue.h"
+#include "syscalls.h"
+#include "ccall_trampoline.h"
+#include "stddef.h"
 
-static queue_t msg_queues[MAX_ACTIVATIONS];
+DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
 /*
  * Routines to handle the message queue
@@ -42,77 +49,222 @@ static inline msg_nb_t safe(msg_nb_t n, msg_nb_t qmask) {
 
 static int full(queue_t * queue, msg_nb_t qmask) {
 	kernel_assert(qmask > 0);
-	return safe(queue->end+1, qmask) == queue->start;
+	return safe(queue->header.end+1, qmask) == queue->header.start;
 }
 
 static inline int empty(queue_t * queue) {
-	return queue->start == queue->end;
+	return queue->header.start == queue->header.end;
 }
 
-int msg_push(int dest, int src, void * identifier, void * sync_token) {
-	queue_t * queue = msg_queues + dest;
-	msg_nb_t  qmask  = kernel_acts[dest].queue_mask;
+static msg_nb_t msg_queue_fill(queue_t* queue) {
+	return (queue->header.end - queue->header.start + queue->header.len) % queue->header.len;
+}
+
+int msg_push(capability c3, capability c4, capability c5,
+			 register_t a0, register_t a1, register_t a2,
+			 register_t v0,
+			 act_t * dest, act_t * src, capability sync_token) {
+
+	//FIXME this is still really racey, this critical section function stops interrupts, but will not work on multicore
+
+	critical_section_enter();
+
+	queue_t * queue = dest->msg_queue;
+	msg_nb_t  qmask  = dest->queue_mask;
 	kernel_assert(qmask > 0);
-	int next_slot = queue->end;
+	int next_slot = queue->header.end;
 	if(full(queue, qmask)) {
+		critical_section_exit();
 		return -1;
 	}
 
-	queue->msg[next_slot].a0  = kernel_exception_framep[src].mf_a0;
-	queue->msg[next_slot].a1  = kernel_exception_framep[src].mf_a1;
-	queue->msg[next_slot].a2  = kernel_exception_framep[src].mf_a2;
+	msg_t* slot = &queue->msg[next_slot];
+	slot->c3 = c3;
+	slot->c4 = c4;
+	slot->c5 = c5;
+	slot->idc = NULL;
 
-	queue->msg[next_slot].c3  = kernel_exception_framep[src].cf_c3;
-	queue->msg[next_slot].c4  = kernel_exception_framep[src].cf_c4;
-	queue->msg[next_slot].c5  = kernel_exception_framep[src].cf_c5;
+	slot->c1 = sync_token;
+	slot->c2 = (sync_token == NULL) ? NULL : kernel_seal(src, act_sync_ref_type);
 
-	queue->msg[next_slot].v0  = kernel_exception_framep[src].mf_v0;
-	queue->msg[next_slot].idc = identifier;
-	queue->msg[next_slot].c1  = sync_token;
+	slot->a0 = a0;
+	slot->a1 = a1;
+	slot->a2 = a2;
+	slot->v0 = v0;
 
-	queue->end = safe(queue->end+1, qmask);
+	queue->header.end = safe(queue->header.end+1, qmask);
 
-	if(kernel_acts[dest].sched_status == sched_waiting) {
-		sched_d2a(dest, sched_schedulable);
-	}
+	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(queue), dest->name);
+	kernel_assert(!empty(queue));
+
+	sched_receives_msg(dest);
+
+	critical_section_exit();
 	return 0;
 }
 
-void msg_pop(aid_t act) {
-	queue_t * queue = msg_queues + act;
-	msg_nb_t  qmask  =  kernel_acts[act].queue_mask;
-
-	kernel_assert(kernel_acts[act].sched_status == sched_schedulable);
-	kernel_assert(!empty(queue));
-
-	int start = queue->start;
-
-	kernel_exception_framep[act].mf_a0  = queue->msg[start].a0;
-	kernel_exception_framep[act].mf_a1  = queue->msg[start].a1;
-	kernel_exception_framep[act].mf_a2  = queue->msg[start].a2;
-
-	kernel_exception_framep[act].cf_c3  = queue->msg[start].c3;
-	kernel_exception_framep[act].cf_c4  = queue->msg[start].c4;
-	kernel_exception_framep[act].cf_c5  = queue->msg[start].c5;
-
-	kernel_exception_framep[act].mf_v0  = queue->msg[start].v0;
-	kernel_exception_framep[act].cf_idc = queue->msg[start].idc;
-	kernel_exception_framep[act].cf_c1  = queue->msg[start].c1;
-
-	queue->start = safe(start+1, qmask);
-}
-
-int msg_queue_empty(aid_t act) {
-	queue_t * queue = msg_queues + act;
+int msg_queue_empty(act_t * act) {
+	queue_t * queue = act->msg_queue;
 	if(empty(queue)) {
 		return 1;
 	}
 	return 0;
 }
 
-void msg_queue_init(aid_t act) {
-	msg_queues[act].start = 0;
-	msg_queues[act].end = 0;
-	msg_queues[act].len = MAX_MSG;
+void msg_queue_init(act_t * act, queue_t * queue) {
+	size_t total_length_bytes = cheri_getlen(queue);
+
+	kernel_assert(total_length_bytes > sizeof(queue_t));
+
+	size_t queue_len = (total_length_bytes - sizeof(queue->header)) / sizeof(msg_t);
+
+	kernel_assert(is_power_2(queue_len));
+	kernel_assert(queue_len != 0);
+
+	act->msg_queue = queue;
+	act->queue_mask = queue_len-1;
+
+	act->msg_queue->header.start = 0;
+	act->msg_queue->header.end = 0;
+	act->msg_queue->header.len = queue_len;
 	//todo: zero queue?
 }
+
+
+/* Creates a token for synchronous CCalls. This ensures the answer is unique. */
+static capability get_and_set_sealed_sync_token(act_t* ccaller) {
+	// FIXME No static local variables
+	static sync_t unique = 0;
+	unique ++;
+
+	kernel_assert(ccaller->sync_state.sync_condition == 0);
+	ccaller->sync_state.sync_token = unique;
+	ccaller->sync_state.sync_condition = 1;
+
+	capability sync_token = cheri_andperm(cheri_getdefault(), 0);
+#ifdef _CHERI256_
+	sync_token = cheri_setbounds(sync_token, 0);
+#endif
+	sync_token = cheri_setoffset(sync_token, unique);
+	return kernel_seal(sync_token, act_sync_type);
+}
+
+static sync_t unseal_sync_token(capability token) {
+	token = kernel_unseal(token, act_sync_type);
+	return cheri_getoffset(token);
+}
+
+static int token_expected(act_t* ccaller, capability token) {
+	sync_t got = unseal_sync_token(token);
+	return ccaller->sync_state.sync_token == got;
+}
+
+/* This function 'returns' by setting the sync state ret values appropriately */
+void act_send_message(capability c3, capability c4, capability c5,
+					 register_t a0, register_t a1, register_t a2,
+					 ccall_selector_t selector, register_t v0, ret_t* ret) {
+
+	act_t* target_activation = (act_t*) get_idc();
+	act_t* source_activation = kernel_curr_act;
+
+	KERNEL_TRACE(__func__, "message from %s to %s", source_activation->name, target_activation->name);
+
+	if(target_activation->status != status_alive) {
+		KERNEL_ERROR("Trying to CCall revoked activation %s from %s",
+					 target_activation->name, source_activation->name);
+		ret->v0 = -1;
+		ret->v1 = -1;
+		ret->c3 = NULL;
+		return;
+	}
+
+	// Construct a sync_token if this is a synchronous call
+	capability sync_token = NULL;
+	if(selector == SYNC_CALL) {
+		source_activation->sync_state.sync_ret = ret;
+		sync_token = get_and_set_sealed_sync_token(source_activation);
+	}
+
+	//FIXME critical section here might be a bit much?
+
+	//TODO if we are going to switch we can (maybe) deliver this message without buffering
+	msg_push(c3, c4, c5, a0, a1, a2, v0, target_activation, source_activation, sync_token);
+
+	if(selector == SYNC_CALL) {
+		//TODO in a multicore world we may spin a little if we expect the answer to be fast
+		//TODO The user will indicate this with the switch flag
+		sched_block(source_activation, sched_sync_block, target_activation, 0);
+		KERNEL_TRACE(__func__, "%s has recieved return message from %s", source_activation->name, target_activation->name);
+		return;
+	} else if(selector == SEND_SWITCH) {
+		sched_reschedule(target_activation, sched_runnable, 0);
+	}
+
+	ret->v0 = 0;
+	ret->v1 = 0;
+	ret->c3 = NULL;
+	return;
+}
+
+_Static_assert(offsetof(ret_t, c3) == 0, "message return assumes these offsets");
+_Static_assert(offsetof(ret_t, v0) == 32, "message return assumes these offsets");
+_Static_assert(offsetof(ret_t, v1) == 40, "message return assumes these offsets");
+
+#define MESSAGE_RETURN_RESTORE_BEFORE	\
+	"daddiu $sp, $sp, -64\n"			\
+	"csetoffset $c6, $c11, $sp\n"
+
+
+
+#define MESSAGE_RETURN_RESTORE_AFTER	\
+	"clc	$c3, $sp, 0($c11)\n"		\
+	"cld $v0, $sp, 32($c11)\n"			\
+	"cld $v1, $sp, 40($c11)\n"			\
+	"daddiu $sp, $sp, 64\n"				\
+
+int act_send_return(capability c3, capability sync_token, register_t v0, register_t v1) {
+
+	act_t * returned_from = kernel_curr_act;
+	act_t * returned_to = (act_t*) get_idc();
+
+	if(sync_token == NULL) {
+		KERNEL_TRACE(__func__, "%s did not provide a sync token", returned_from->name);
+		kernel_freeze();
+	}
+
+	if(!token_expected(returned_to, sync_token)) {
+		KERNEL_ERROR("wrong sequence token from creturn");
+		kernel_freeze();
+	}
+
+	KERNEL_TRACE(__func__, "%s correctly makes a sync return to %s", returned_from->name, returned_to->name);
+
+	/* At any point we might pre-empted, so the order here is important */
+
+	/* First set the message to be picked up when the condition is unset */
+	returned_to->sync_state.sync_ret->c3 = c3;
+	returned_to->sync_state.sync_ret->v0 = v0;
+	returned_to->sync_state.sync_ret->v1 = v1;
+
+	/* Must no longer expect this sequence token */
+	returned_to->sync_state.sync_token = 0;
+
+	/* Set condition variable */
+	returned_to->sync_state.sync_condition = 0;
+
+	/* Make the caller runnable again */
+	sched_recieve_ret(returned_to);
+
+	sched_reschedule(returned_to, sched_runnable, 0);
+
+	return 0;
+}
+
+void kernel_setup_trampoline() {
+	/* When we create the reference to the trampoline, we also store the default capability of our creating context */
+	capability* c0_store = &kernel_ccall_trampoline_c0;
+	*c0_store = cheri_getdefault();
+}
+
+DEFINE_TRAMPOLINE_EXTRA(act_send_message, MESSAGE_RETURN_RESTORE_BEFORE, MESSAGE_RETURN_RESTORE_AFTER)
+DEFINE_TRAMPOLINE(act_send_return)

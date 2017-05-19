@@ -2,21 +2,19 @@
 #include "zlib.h"
 
 static void * zlib_ref = NULL;
-static void * zlib_id  = NULL;
 
 int ZEXPORT deflateInit_ OF((z_streamp strm, int level,
                                      const char *version, int stream_size)) {
 	if(zlib_ref == NULL) {
-		zlib_ref = namespace_get_ref(9);
-		zlib_id  = namespace_get_id(9);
+		zlib_ref = namespace_get_ref(namespace_num_zlib);
 	}
-	return ccall_rrcc_r(zlib_ref, zlib_id, 0, level, stream_size, strm, (char *)version);
+	return MESSAGE_SYNC_SEND_r(zlib_ref, level, stream_size, 0, strm, (char *)version, NULL, 0);
 }
 
 int ZEXPORT deflate OF((z_streamp strm, int flush)) {
-	return ccall_rc_r(zlib_ref, zlib_id, 1, flush, strm);
+	return MESSAGE_SYNC_SEND_r(zlib_ref, flush, 0, 0 , strm, NULL, NULL, 1);
 }
 
 int ZEXPORT deflateEnd OF((z_streamp strm)) {
-	return ccall_c_r(zlib_ref, zlib_id, 2, strm);
+	return MESSAGE_SYNC_SEND_r(zlib_ref, 0, 0, 0, strm, NULL, NULL, 2);
 }

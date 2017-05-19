@@ -30,9 +30,18 @@
 
 INCLUDE "mips.ld"
 
-__kernel_load_physaddr =   0x080000;
-__boot_load_physaddr   =   0x100000;
+CAP_ALIGN = 0x20;
+PAGE_ALIGN = 0x1000;
 
+/* Careful changing nano size, its hardcoded in the nano kernel still (as NANO_SIZE) */
+__nano_size            =    0x5000000;
+__nano_load_physaddr   =    0x0001000;
+__boot_load_physaddr   =    0x8000000;
 
-__kernel_load_virtaddr = __cached_base + __kernel_load_physaddr;
-__kernel_entry_point   = __kernel_load_virtaddr + 0xC0;
+/* Everything but the nano kernel are pcc/c0 base relative. */
+
+__kernel_load_virtaddr = 0x000000;
+__init_load_virtaddr   = 0x000000;
+
+__boot_load_virtaddr   = __cached_base + __boot_load_physaddr;
+__nano_load_virtaddr   = __cached_base + __nano_load_physaddr;

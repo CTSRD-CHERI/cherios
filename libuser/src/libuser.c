@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,10 +29,18 @@
  * SUCH DAMAGE.
  */
 
+#include "sys/types.h"
+#include "cheric.h"
 #include "object.h"
 #include "namespace.h"
+#include "queue.h"
+#include "assert.h"
+#include "syscalls.h"
 
-void libuser_init(void * self_ctrl, void * self_cap, void * ns_ref, void * ns_id) {
-	object_init(self_ctrl, self_cap);
-	namespace_init(ns_ref, ns_id);
+void libuser_init(act_control_kt self_ctrl,
+				  act_kt ns_ref,
+				  kernel_if_t* kernel_if_c,
+				  queue_t * queue) {
+	object_init(self_ctrl, queue, kernel_if_c);
+	namespace_init(ns_ref);
 }

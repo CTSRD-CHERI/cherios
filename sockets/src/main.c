@@ -36,7 +36,8 @@ void * new_identifier(void) {
 	int * object = malloc(sizeof(int));
 	assert(object != NULL);
 	*object = oid++;
-	return act_seal_id(object);
+	//TODO use a seal manager
+	return object;
 }
 
 extern void msg_entry;
@@ -52,7 +53,7 @@ int main(void)
 	socket_init();
 
 	/* Register ourself to the kernel as being the Sockets module */
-	int ret = namespace_register(2, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_sockets, act_self_ref);
 	if(ret!=0) {
 		printf("Sockets: register failed\n");
 		return -1;

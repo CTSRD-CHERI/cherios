@@ -1,9 +1,6 @@
-include_directories(include)
-
+include_directories(include ${CMAKE_SOURCE_DIR}/boot/include/boot ${CMAKE_SOURCE_DIR}/uart/include)
 set(KERNEL_SRCS
     src/act.c
-    src/ccall.c
-    src/cp0.c
     src/gc.c
     src/init.c
     src/interrupts.c
@@ -15,22 +12,22 @@ set(KERNEL_SRCS
     src/sched.c
     src/syscalls.c
     src/timer.c
-    src/uart.c
+    ${CMAKE_SOURCE_DIR}/uart/src/uart.c
 )
 set(KERNEL_ASM_SRCS
-    src/exception.S
     src/init.S
+    src/ccall_trampoline.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND KERNEL_SRCS src/uart_malta.c)
+    list(APPEND KERNEL_SRCS  ${CMAKE_SOURCE_DIR}/uart/src/uart_malta.c)
 elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND KERNEL_SRCS src/uart_altera.c)
+    list(APPEND KERNEL_SRCS  ${CMAKE_SOURCE_DIR}/uart/src/uart_altera.c)
 else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
 
-add_cherios_executable(kernel ADD_TO_FILESYSTEM LINKER_SCRIPT kernel.ld SOURCES
+add_cherios_kernel(kernel LINKER_SCRIPT kernel.ld SOURCES
     ${KERNEL_SRCS}
     ${KERNEL_ASM_SRCS}
 )

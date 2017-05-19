@@ -52,7 +52,7 @@ void socket_init(void) {
 }
 
 int socket(void) {
-	int * obj = get_curr_cookie();
+	int * obj = get_idc();
 	assert(obj != NULL);
 	assert(next_socket <= MAX_SOCKET);
 	assert(sockets[next_socket].status == 0);
@@ -105,7 +105,7 @@ void * recfrom(int socket) {
 	if((socket > MAX_SOCKET) || (sockets[socket].status == 0) ) {
 		goto end;
 	}
-	int * obj = get_curr_cookie();
+	int * obj = get_idc();
 	assert(obj != NULL);
 	if(sockets[socket].oid == *obj) {
 		ret = sockets[socket].msg;
@@ -131,7 +131,7 @@ int sendto(int socket, void * msg) {
 		retval = -4;
 		goto end;
 	}
-	int * obj = get_curr_cookie();
+	int * obj = get_idc();
 	assert(obj != NULL);
 	if((sockets[socket].oid == *obj) && (sockets[socksend].msg == NULL)) {
 		sockets[socksend].msg = msg;

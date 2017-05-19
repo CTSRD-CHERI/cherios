@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,10 +30,14 @@
  * SUCH DAMAGE.
  */
 
+#include "activations.h"
 #include "klib.h"
 #include "cp0.h"
+static act_t * int_child[7];
 
-static aid_t int_child[7];
+
+/* FIXME This entire thing will break when remove access from the kernel to CP0
+ * FIXME the solution will be to have the nano kernel expose a suitable interface
 
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */
 int get_others_interrupts_mask(void) {
@@ -45,7 +50,7 @@ int get_others_interrupts_mask(void) {
 }
 
 void kernel_interrupts_init(int enable_timer) {
-	KERNEL_TRACE("init", "enabling interrupts");
+	KERNEL_TRACE("interrupts", "enabling interrupts");
 	kernel_assert(cp0_status_ie_get() == 0);
 	cp0_status_ie_enable();
 
@@ -59,23 +64,21 @@ void kernel_interrupts_init(int enable_timer) {
 static void kernel_interrupt_others(register_t pending) {
 	for(size_t i=0; i<7; i++) {
 		if(pending & (1<<i)) {
-			if(int_child[i] == 0) {
+			if(int_child[i] == NULL) {
 				KERNEL_ERROR("unknown interrupt %lx", i);
 				continue;
 			}
 			cp0_status_im_disable(1<<i);
-			struct reg_frame * frame = kernel_exception_framep + 0;
-			frame->mf_v0 = -3;
-			frame->mf_a0 = i;
-			if(msg_push(int_child[i], 0, NULL, NULL)) {
+			// FIXME we probabably want a seperate interrupt source from the kernel
+			if(msg_push(NULL, NULL, NULL, i, 0, 0, -3, int_child[i], &kernel_acts[0], NULL)) {
 				kernel_panic("queue full (int)");
 			}
 		}
 	}
 }
 
-void kernel_interrupt(void) {
-	register_t ipending = cp0_cause_ipending_get();
+void kernel_interrupt(register_t cause) {
+	register_t ipending = cp0_cause_ipending_get(cause);
 	register_t toprocess = ipending & get_others_interrupts_mask();
 	KERNEL_TRACE("interrupt", "%lx %lx", ipending, toprocess);
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
@@ -93,26 +96,26 @@ static int validate_number(int number) {
 	return number;
 }
 
-int kernel_interrupt_enable(int number) {
+int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 	number = validate_number(number);
 	if(number < 0) {
 		return -1;
 	}
-	if(int_child[number] != kernel_curr_act) {
+	if(int_child[number] != ctrl) {
 		return -1;
 	}
 	cp0_status_im_enable(1<<number);
 	return 0;
 }
 
-int kernel_interrupt_register(int number) {
+int kernel_interrupt_register(int number, act_control_t * ctrl) {
 	number = validate_number(number);
 	if(number < 0) {
 		return -1;
 	}
-	if(int_child[number] != 0) {
+	if(int_child[number] != NULL) {
 		return -1;
 	}
-	int_child[number] = kernel_curr_act;
+	int_child[number] = (act_t*)ctrl;
 	return 0;
 }

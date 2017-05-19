@@ -32,27 +32,45 @@
 #include "sys/mman.h"
 #include "object.h"
 #include "namespace.h"
+#include "stdio.h"
+#include "assert.h"
 
-static void * memmgt_ref = NULL;
-static void * memmgt_id  = NULL;
+static act_kt memmgt_ref = NULL;
 
-static void *_mmap(void *addr, size_t length, int prot, int flags) {
+static int _mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 	if(memmgt_ref == NULL) {
-		memmgt_ref = namespace_get_ref(3);
-		memmgt_id  = namespace_get_id(3);
+		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
+		assert(memmgt_ref != NULL);
 	}
-	return ccall_rrrc_c(memmgt_ref, memmgt_id, 0, length, prot, flags, addr);
+	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, prot, flags, addr, result, NULL, 0);
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
-	return _mmap(addr, length, prot, flags);
+	cap_pair pair;
+
+	if((prot & PROT_EXECUTE) && (prot & PROT_WRITE)) {
+		assert(0 && "The old interface cannot return a single capability with both execute and write privs");
+	}
+
+	int res = _mmap(addr, length, prot, flags, &pair);
+
+	if(res == MAP_SUCCESS_INT) {
+		if((prot & PROT_EXECUTE) == 0) {
+			return pair.data;
+		} else {
+			return pair.code;
+		}
+	} else return NULL;
+}
+
+int mmap_new(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset, cap_pair* result) {
+	return _mmap(addr, length, prot, flags, result);
 }
 
 int munmap(void *addr, size_t length) {
-	return ccall_rc_r(memmgt_ref, memmgt_id, 1, length, addr);
+	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, 0, 0, addr, NULL, NULL, 1);
 }
 
-void mmap_set_act(void * ref, void * id) {
+void mmap_set_act(act_kt ref) {
 	memmgt_ref = ref;
-	memmgt_id  = id;
 }

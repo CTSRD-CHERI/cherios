@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,27 +29,37 @@
  * SUCH DAMAGE.
  */
 
+#ifndef  _KUTILS_H_
+#define _KUTILS_H_
+
 #include "klib.h"
 
 /*
  * Various util functions
  */
 
-/* Converts RW pointer to RX pointer */
-static inline void * kernel_cap_to_exec(const void * p) {
-	void * c = cheri_getpcc();
-	c = cheri_setoffset(c, cheri_getbase(p));
-	c = cheri_setbounds(c, cheri_getlen(p));
-	c = cheri_setoffset(c, cheri_getoffset(p));
-	return c;
+extern sealing_cap def_seal_cap;
+
+static inline void set_sealing_cap(sealing_cap cap) {
+	def_seal_cap = cap;
 }
 
-static inline void * kernel_seal(const void * p, uint64_t otype) {
-	void * seal = cheri_setoffset(cheri_getdefault(), otype);
+static inline sealing_cap sealing_cap_for(size_t type) {
+	return cheri_setoffset(def_seal_cap, type - cheri_getbase(def_seal_cap));
+}
+
+static inline capability kernel_seal(const_capability p, uint64_t otype) {
+	sealing_cap seal = sealing_cap_for(otype);
 	return cheri_seal(p, seal);
 }
 
-static inline void * kernel_unseal(void * p, uint64_t otype) {
-	void * seal = cheri_setoffset(cheri_getdefault(), otype);
+static inline capability kernel_unseal(capability p, uint64_t otype) {
+	sealing_cap seal = sealing_cap_for(otype);
 	return cheri_unseal(p, seal);
 }
+
+static inline capability kernel_unseal_any(capability p) {
+	return kernel_unseal(p, cheri_gettype(p));
+}
+
+#endif

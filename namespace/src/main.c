@@ -31,17 +31,20 @@
 #include "lib.h"
 
 extern void msg_entry;
-void (*msg_methods[]) = {ns_register, ns_get_reference, ns_get_identifier};
+void (*msg_methods[]) = {ns_register, ns_get_reference, ns_get_num_services};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
 int main(void)
 {
-	syscall_puts("Namespace Hello world\n");
+	syscall_puts("Namespace: Hello world\n");
 
 	ns_init();
 
 	msg_enable = 1; /* Go in waiting state instead of exiting */
+
+	syscall_puts("Namespace: Going into daemon mode\n");
+
 	return 0;
 }

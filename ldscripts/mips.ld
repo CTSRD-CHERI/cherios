@@ -33,7 +33,10 @@ __cached_base = 0xffffffff80000000;
 /*
  * Configure cached (BEV=0) exception vectors at the following addresses.
  */
-__cached_exception_vector_base = 0xffffffff80000000;
+
+__exception_vector_size = 0x80;
+
+__cached_exception_vector_base = __cached_base;
 __cached_exception_vector_tlbrefill =
     __cached_exception_vector_base + 0x000;
 __cached_exception_vector_xtlbrefill =

@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -33,6 +34,7 @@
 #define	_CHERIOS_KLIB_H_
 
 #include "kernel.h"
+#include "boot_info.h"
 #include "mips.h"
 #include "activations.h"
 #include "cdefs.h"
@@ -42,6 +44,8 @@
 #include "sched.h"
 #include "string.h"
 #include "kutils.h"
+#include "ccall_trampoline.h"
+#include "syscalls.h"
 
 #ifdef __TRACE__
 	#define KERNEL_TRACE kernel_trace
@@ -61,18 +65,27 @@
 	#define KERNEL_ERROR(...)
 #endif
 
+// FIXME we need to really think about the types of IDs and REFs
+
+/* The type of object activation references */
+static const uint64_t act_ref_type = 0x42002;
+/* The type of object activation control references */
+static const uint64_t act_ctrl_ref_type = 0x42001;
+/* The type of the synchronous sequence reply tokens */
+static const uint64_t act_sync_type = 0x42000;
+/* The type of object activation response references */
+static const uint64_t act_sync_ref_type = 0x42003;
 /*
  * Kernel library routines.
  */
-void	kernel_skip_instr(aid_t act);
+
 void	kernel_ccall(void);
 void	kernel_creturn(void);
-void	kernel_exception_syscall(void);
 
 void	kernel_interrupts_init(int enable_timer);
-void	kernel_interrupt(void);
-int	kernel_interrupt_register(int number);
-int	kernel_interrupt_enable(int number);
+void	kernel_interrupt(register_t cause);
+int kernel_interrupt_register(int number, act_control_t *ctrl);
+int kernel_interrupt_enable(int number, act_control_t *ctrl);
 
 void	kernel_timer_init(void);
 void	kernel_timer(void);
@@ -93,21 +106,33 @@ void	kernel_freeze(void) __dead2;
 
 int	try_gc(void * p, void * pool);
 
-int	msg_push(int dest, int src, void *, void *);
-void	msg_pop(aid_t act);
-void	msg_queue_init(aid_t act);
-int	msg_queue_empty(aid_t act);
+DECLARE_TRAMPOLINE(act_send_message);
+DECLARE_TRAMPOLINE(act_send_return);
 
-void	act_init(void);
-void	act_wait(int act, aid_t next_hint);
-void *	act_register(const reg_frame_t * frame, const char * name);
-void *	act_get_ref(act_t * ctrl);
-void *	act_get_id(act_t * ctrl);
-int	act_get_status(act_t * ctrl);
-int	act_revoke(act_t * ctrl);
-int	act_terminate(act_t * ctrl);
-void *	act_seal_identifier(void * identifier);
+int msg_push(capability c3, capability c4, capability c5,
+			 register_t a0, register_t a1, register_t a2,
+			 register_t v0,
+			 act_t * dest, act_t * src, capability sync_token);
+void	msg_queue_init(act_t* act, queue_t * queue);
+int	msg_queue_empty(act_t* act);
+
+context_t	act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry);
+void	act_wait(act_t* act, act_t* next_hint);
+act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
+					 status_e create_in_status, act_control_t *parent, size_t base);
+act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
+								   status_e create_in_status, act_control_t *parent);
+act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
+capability act_get_id(act_control_t * ctrl);
+
+status_e act_get_status(act_control_t *ctrl);
+int	act_revoke(act_control_t * ctrl);
+int	act_terminate(act_control_t * ctrl);
+capability act_seal_identifier(capability identifier);
 
 void	regdump(int reg_num);
 
+void setup_syscall_interface(kernel_if_t* kernel_if);
+
+void kernel_exception(context_t swap_to, context_t own_context);
 #endif /* _CHERIOS_KLIB_H_ */

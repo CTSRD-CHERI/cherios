@@ -39,25 +39,7 @@
 #define BUF_SIZE	0x100
 
 static void buf_puts(char * str) {
-	#if 1
-	/* Syscall version */
-	__asm__ __volatile__ (
-		"li   $v0, 34 \n"
-		"cmove $c3, %[str] \n"
-		"syscall      \n"
-		:: [str]"C" (str): "v0", "$c3");
-	#else
-	/* CCall version */
-	static void * uart_ref = NULL;
-	static void * uart_id  = NULL;
-	if(uart_ref == NULL) {
-		uart_ref = namespace_get_ref(1);
-		uart_id  = namespace_get_id(1);
-	}
-	assert(uart_ref != NULL);
-	assert(uart_id != NULL);
-	ccall_c_n(uart_ref, uart_id, 1, str);
-	#endif
+    syscall_puts(str);
 }
 
 void buf_putc(char chr) {

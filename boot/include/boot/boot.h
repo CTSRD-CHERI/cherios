@@ -1,78 +1,83 @@
+/*-
+ * Copyright (c) 2016 Robert N. M. Watson
+ * Copyright (c) 2016 Hadrien Barral
+ * All rights reserved.
+ *
+ * This software was developed by SRI International and the University of
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * ("CTSRD"), as part of the DARPA CRASH research programme.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
+ */
+
 #ifndef _BOOT_H_
 #define _BOOT_H_
 
 #include "mips.h"
 #include "cdefs.h"
 #include "stdio.h"
+#include "boot_info.h"
 
-typedef enum module_type {
-	m_memmgt,
-	m_namespace,
-	m_uart,
-	m_fs,
-	m_core,
-	m_user,
-	m_fence
-} module_t;
+extern char	__boot_load_virtaddr;
+extern char	__kernel_load_virtaddr;
+extern char	__kernel_entry_point;
+extern char	__init_load_virtaddr;
+extern char	__init_entry_point;
 
-typedef struct boot_elem_s {
-	module_t     type;
-	int          cond;
-	const char * name;
-	register_t   arg;
-	int          daemon;
-	int          status;
-	void 	   * ctrl;
-} boot_elem_t;
+#define BOOT_PRINT_PTR(ptr)						\
+	boot_printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n",		\
+		    __func__,						\
+		    cheri_getbase((const __capability void *)(ptr)),	\
+		    cheri_getlen((const __capability void *)(ptr)),	\
+		    cheri_getoffset((const __capability void *)(ptr)))
 
-extern void	kernel_trampoline;
-extern void	kernel_trampoline_end;
+#define BOOT_PRINT_CAP(cap)						\
+	boot_printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
+		    "b:%016jx l:%016zx o:%jx\n",			\
+		    __func__,						\
+		    #cap,						\
+		    cheri_gettag(cap),					\
+		    cheri_getsealed(cap),				\
+		    cheri_getperm(cap),					\
+		    cheri_getbase(cap),					\
+		    cheri_getlen(cap),					\
+		    cheri_getoffset(cap))
 
-extern char	__start_heap;
-extern char	__stop_heap;
 
-extern void	__boot_load_virtaddr;
-extern void	__kernel_load_virtaddr;
-extern void	__kernel_entry_point;
-
-//fixme
-#define	kernel_assert(e)	((e) ? (void)0 : __kernel_assert(__func__, \
-				__FILE__, __LINE__, #e))
-void	__kernel_assert(const char *, const char *, int, const char *) __dead2;
-void	kernel_panic(const char *fmt, ...) __dead2 __printflike(1, 2);
-#define printf kernel_printf
-int	kernel_printf(const char *fmt, ...) __printflike(1, 2);
-void	hw_reboot(void) __dead2;
-int	kernel_vprintf(const char *fmt, va_list ap);
-
-/*
- * Bootloader routines
- */
-void	boot_alloc_init(void);
-void	boot_alloc_enable_system(void * ctrl);
-void *	boot_alloc(size_t s);
-void	boot_free(void * p);
+#define	boot_assert(e)	((e) ? (void)0 : __boot_assert(__func__, 	\
+						       __FILE__, __LINE__, #e))
+void	__boot_assert(const char *, const char *, int, const char *) __dead2;
+void	boot_panic(const char *fmt, ...) __dead2 __printflike(1, 2);
 
 int	boot_printf(const char *fmt, ...) __printflike(1, 2);
 int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 
-void *	elf_loader(const char * s, int direct_map, size_t * maxaddr);
-void *	load(const char * filename, int * len);
-
-void	load_kernel(const char * file);
-void *	load_module(module_t type, const char * file, int arg);
+void		init_elf_loader(void);
+size_t		    load_kernel(void);
+capability 		load_nano(void);
+boot_info_t*	load_init(void);
 
 void	hw_init(void);
 void	install_exception_vector(void);
-
-void	caches_invalidate(void * addr, size_t size);
-
-void	glue_memmgt(void * memmgt_ctrl, void* ns_ctrl);
-
-int	acts_alive(boot_elem_t * boot_list, size_t  boot_list_len);
-
-void	stats_init(void);
-void	stats_display(void);
 
 #endif

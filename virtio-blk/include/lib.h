@@ -33,21 +33,12 @@
 #include "virtio_mmio.h"
 #include "virtio_queue.h"
 
-void mmio_disk(void*);
-
-int	vblk_init(void);
-int	vblk_read(void * buf, size_t sector);
-int	vblk_write(void * buf, size_t sector);
-int	vblk_status(void);
-size_t	vblk_size(void);
-
-int	vblk_interrupt(void);
-
 typedef struct req_s {
 	int used;
 	struct virtio_blk_outhdr outhdr;
 	struct virtio_blk_inhdr inhdr;
-	void * sync_token;
+	capability sync_token;
+	capability sync_caller;
 } req_t;
 
 typedef struct session_s {
@@ -58,3 +49,12 @@ typedef struct session_s {
 	req_t * reqs;
 } session_t;
 
+void mmio_disk(void*);
+
+int	vblk_init(session_t* session);
+int	vblk_read(session_t* session, void * buf, size_t sector);
+int	vblk_write(session_t* session, void * buf, size_t sector);
+int	vblk_status(session_t* session);
+size_t	vblk_size(session_t* session);
+
+int	vblk_interrupt(void);

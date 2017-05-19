@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,72 +29,105 @@
  * SUCH DAMAGE.
  */
 
+#include "sys/types.h"
+#include "activations.h"
 #include "klib.h"
+#include "queue.h"
+#include "namespace.h"
+#include "msg.h"
+#include "ccall_trampoline.h"
+#include "nanokernel.h"
 
 /*
  * Routines to handle activations
  */
 
-/* We only create activations for now, no delete */
-struct reg_frame		kernel_exception_framep[MAX_ACTIVATIONS];
-struct reg_frame *		kernel_exception_framep_ptr;
 act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
-aid_t 				kernel_curr_act;
 aid_t				kernel_next_act;
 
-static const void *            act_default_id = NULL;
+/* Really belongs to the sched, we will eventually seperate out the activation manager */
+act_t * 			kernel_curr_act;
 
-void act_init(void) {
+// TODO: Put these somewhere sensible;
+static queue_default_t init_queue, kernel_queue;
+static kernel_if_t internel_if;
+static act_t* ns_ref = NULL;
+
+static kernel_if_t* get_if() {
+	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
+}
+
+static act_t * act_create_sealed_ref(act_t * act) {
+	return (act_t *)kernel_seal(act, act_ref_type);
+}
+
+static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
+	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
+}
+
+context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry) {
 	KERNEL_TRACE("init", "activation init");
 
-	/* initialize the default identifier to a known value */
-	act_default_id = cheri_setbounds(cheri_getdefault(), 0);
+	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
+	internel_if.message_reply = kernel_seal(act_send_return_get_trampoline(), act_sync_ref_type);
+	setup_syscall_interface(&internel_if);
 
-	/*
-	 * create kernel activation
-	 * used to have a 'free' reg frame.
-	 * canot be scheduled: aid 0 is invalid
-	 */
 	kernel_next_act = 0;
-	struct reg_frame dummy_frame;
-	bzero(&dummy_frame, sizeof(struct reg_frame));
-	act_register(&dummy_frame, "kernel");
-	kernel_acts[0].status = status_terminated;
-	kernel_acts[0].sched_status = sched_terminated;
 
-	/* create the boot activation (activation that called us) */
-	kernel_curr_act = 1;
-	kernel_exception_framep_ptr = &kernel_exception_framep[kernel_curr_act];
-	act_register(kernel_exception_framep, "boot");
-	sched_d2a(kernel_curr_act, sched_runnable);
+	// This is a dummy. Our first context has already been created
+	reg_frame_t frame;
+	bzero(&frame, sizeof(struct reg_frame));
+
+	// Register the kernel (exception) activation
+	act_t * kernel_act = &kernel_acts[0];
+	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(cheri_getpcc()));
+	/* The kernel context already exists and we set it here */
+	kernel_act->context = own_context;
+
+	// Create and register the init activation
+	KERNEL_TRACE("act", "Retroactively creating init activation");
+
+	/* Not a dummy here. We will subset our own c0/pcc for init. init is loaded directly after the kernel */
+	bzero(&frame, sizeof(struct reg_frame));
+	size_t length = cheri_getlen(cheri_getdefault()) - init_base;
+
+    frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
+    capability pcc =  cheri_setbounds(cheri_setoffset(cheri_getpcc(), init_base), length);
+
+    KERNEL_TRACE("act", "assuming init has virtual entry point %lx", init_entry);
+	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
+
+	/* provide config info to init.  c3 is the conventional register */
+	frame.cf_c3 = info;
+
+	act_t * init_act = &kernel_acts[namespace_num_boot];
+	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL);
+
+	/* The boot activation should be the current activation */
+	sched_schedule(init_act);
+
+	return init_act->context;
 }
 
-void kernel_skip_instr(aid_t act) {
-	kernel_exception_framep[act].mf_pc += 4; /* assumes no branch delay slot */
-	void * pcc = (void *) kernel_exception_framep[act].cf_pcc;
-	pcc = __builtin_cheri_offset_increment(pcc, 4);
-	kernel_exception_framep[act].cf_pcc = pcc;
-}
-
-static void * act_create_ref(aid_t aid) {
-	return kernel_seal(kernel_cap_to_exec(kernel_acts + aid), aid);
-}
-
-static void * act_create_ctrl_ref(aid_t aid) {
-	return kernel_seal(kernel_acts + aid, 42001);
-}
-
-void * act_register(const reg_frame_t * frame, const char * name) {
-	aid_t aid = kernel_next_act;
-
-	if(aid >= MAX_ACTIVATIONS) {
+act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
+							status_e create_in_status, act_control_t *parent, size_t base) {
+	(void)parent;
+	KERNEL_TRACE("act", "Registering activation %s", name);
+	if(kernel_next_act >= MAX_ACTIVATIONS) {
 		kernel_panic("no act slot");
 	}
 
-	/* set aid */
-	kernel_acts[aid].aid = aid;
+	act_t * act = kernel_acts + kernel_next_act;
 
-	#ifndef __LITE__
+	act->image_base = base;
+
+	//TODO bit of a hack. the kernel needs to know what namespace service to use
+	if(kernel_next_act == namespace_num_namespace) {
+		KERNEL_TRACE("act", "found namespace");
+		ns_ref = act_create_sealed_ref(act);
+	}
+
+#ifndef __LITE__
 	/* set name */
 	kernel_assert(ACT_NAME_MAX_LEN > 0);
 	int name_len = 0;
@@ -102,87 +136,82 @@ void * act_register(const reg_frame_t * frame, const char * name) {
 	}
 	for(int i = 0; i < name_len; i++) {
 		char c = name[i];
-		kernel_acts[aid].name[i] = c; /* todo: sanitize the name if we do not trust it */
+		act->name[i] = c; /* todo: sanitize the name if we do not trust it */
 	}
-	kernel_acts[aid].name[name_len] = '\0';
-	#endif
+	act->name[name_len] = '\0';
+#endif
 
 	/* set status */
-	kernel_acts[aid].status = status_alive;
+	act->status = create_in_status;
 
-	/* set register frame */
-	memcpy(kernel_exception_framep + aid, frame, sizeof(struct reg_frame));
+/*Some "documentation" for the interface between the kernel and activation start                                        *
+* These fields are setup by the caller of act_register                                                                  *
+*                                                                                                                       *
+* a0    : user GP argument (goes to main)                                                                               *
+* c3    : user Cap argument (goes to main)                                                                              *
+*                                                                                                                       *
+* These fields are setup by act_register itself. Although the queue is an argument to the function                      *
+*                                                                                                                       *
+* c21   : self control reference                                                 										*
+* c23   : namespace reference (may be null for init and namespace)                                                      *
+* c24   : kernel interface table                                                                                        *
+* c25   : queue                                                                                                        */
+
+	/* set namespace */
+	frame->cf_c21 	= (capability)act_create_sealed_ctrl_ref(act);
+	frame->cf_c23	= (capability)ns_ref;
+	frame->cf_c24	= (capability)get_if();
+	frame->cf_c25	= (capability)queue;
 
 	/* set queue */
-	msg_queue_init(aid);
-	kernel_acts[aid].queue_mask = MAX_MSG-1;
+	msg_queue_init(act, queue);
 
-	/* set reference */
-	kernel_acts[aid].act_reference = act_create_ref(aid);
-
-	/* set default identifier */
-	kernel_acts[aid].act_default_id = kernel_seal(act_default_id, aid);
+	/* set expected sequence to not expecting */
+	act->sync_state.sync_token = 0;
+	act->sync_state.sync_condition = 0;
 
 	/* set scheduling status */
-	sched_create(aid);
+	sched_create(act);
 
-	KERNEL_TRACE("act", "%s OK! ", __func__);
-	/* done, update next_act */
+	/*update next_act */
 	kernel_next_act++;
-	return act_create_ctrl_ref(aid);
+	KERNEL_TRACE("register", "image base of %s is %lx", act->name, act->image_base);
+	KERNEL_TRACE("act", "%s OK! ", __func__);
+	return act;
 }
 
-int act_revoke(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	if(kernel_acts[aid].status == status_terminated) {
+act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
+							status_e create_in_status, act_control_t *parent) {
+	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc));
+	act->context = create_context(frame);
+	return act_create_sealed_ctrl_ref(act);
+}
+
+int act_revoke(act_control_t * ctrl) {
+	if(ctrl->status == status_terminated) {
 		return -1;
 	}
-	kernel_acts[aid].status = status_revoked;
+	ctrl->status = status_revoked;
 	return 0;
 }
 
-int act_terminate(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t act = ctrl->aid;
-	kernel_acts[act].status = status_terminated;
-	sched_delete(act);
-	kernel_acts[act].sched_status = sched_terminated;
-	KERNEL_TRACE("act", "Terminated %s:%d", kernel_acts[act].name, act);
-	if(act == kernel_curr_act) { /* terminated itself */
-		return 1;
+int act_terminate(act_control_t * ctrl) {
+	ctrl->status = status_terminated;
+	KERNEL_TRACE("act", "Terminating %s", ctrl->name);
+	/* This will never return if this is a self terminate. We will be removed from the queue and descheduled */
+	sched_delete(ctrl);
+	if(ctrl == kernel_curr_act) { /* terminated itself */
+		kernel_panic("Should not reach here");
 	}
 	return 0;
 }
 
-void * act_get_ref(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	return kernel_acts[aid].act_reference;
+act_t * act_get_sealed_ref_from_ctrl(act_control_t * ctrl) {
+	return act_create_sealed_ref(ctrl);
 }
 
-void * act_get_id(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	return kernel_acts[aid].act_default_id;
-}
 
-int act_get_status(act_t * ctrl) {
-	ctrl = kernel_unseal(ctrl, 42001);
-	aid_t aid = ctrl->aid;
-	return kernel_acts[aid].status;
-}
-
-void act_wait(int act, aid_t next_hint) {
-	kernel_assert(kernel_acts[act].sched_status == sched_runnable);
-	if(msg_queue_empty(act)) {
-		sched_a2d(act, sched_waiting);
-	} else {
-		kernel_acts[act].sched_status = sched_schedulable;
-	}
-	sched_reschedule(next_hint);
-}
-
-void * act_seal_identifier(void * identifier) {
-	return kernel_seal(cheri_andperm(identifier, 0b111100011111101), kernel_curr_act);
+status_e act_get_status(act_control_t *ctrl) {
+	KERNEL_TRACE("get status", "%s", ctrl->name);
+	return ctrl->status;
 }

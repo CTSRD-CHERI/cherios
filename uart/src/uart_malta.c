@@ -32,7 +32,7 @@
 #include "mips.h"
 #include "uart.h"
 
-extern void * uart_cap;
+static capability uart_cap;
 
 /*-
  * Routines for interacting with the MIPS Malta 16550 console UART.
@@ -88,6 +88,8 @@ extern void * uart_cap;
  */
 #define	MALTA_UART_BASE	0x180003f8
 
+size_t uart_base_phy_addr = MALTA_UART_BASE;
+size_t uart_base_size = 0x40;
 /*
  * Low-level read and write register routines.
  */
@@ -174,4 +176,9 @@ uart_init(void)
 	v = 0;
 	v |= 0x1;		/* Set DTR. */
 	uart_mcr_set(v);
+}
+
+void
+set_uart_cap(capability cap) {
+	uart_cap = cap;
 }

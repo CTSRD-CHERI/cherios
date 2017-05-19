@@ -34,12 +34,14 @@ static void * new_session(void * mmio_cap) {
 	session_t * session = malloc(sizeof(session_t));
 	assert(session != NULL);
 	if(!VCAP(mmio_cap, 0x200, VCAP_RW)) {
+		CHERI_PRINT_CAP(mmio_cap);
 		assert(0);
 		return NULL;
 	}
 	session->mmio_cap = mmio_cap;
 	session->init = 0;
-	return act_seal_id(session);
+	//TODO use a seal manager
+	return session;
 }
 
 void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size};
@@ -48,19 +50,21 @@ void (*ctrl_methods[]) = {NULL, new_session, dtor_null, vblk_interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
 int main(void) {
-	printf("Virtio-blk Hello world\n");
+	printf("Virtio-blk: Hello world\n");
 
 	/* Register ourself to the kernel as being the Virtio-blk module */
-	int ret = namespace_register(4, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_virtio, act_self_ref);
 	if(ret!=0) {
 		printf("Virtio-blk: register failed\n");
 		return -1;
 	}
 	printf("Virtio-blk: register OK\n");
 
-	interrupt_register(4);
-	interrupt_enable(4);
+	syscall_interrupt_register(4);
+	syscall_interrupt_enable(4);
 
 	msg_enable = 1; /* Go in waiting state instead of exiting */
+
+	printf("Virtio-blk: Going into daemon mode\n");
 	return 0;
 }

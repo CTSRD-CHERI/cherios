@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -38,7 +39,7 @@ void kernel_timer_init(void) {
 	/*
 	 * Start timer.
 	 */
-	KERNEL_TRACE("init", "starting timer");
+	KERNEL_TRACE("timer", "starting timer");
 	kernel_last_timer = cp0_count_get();
 	kernel_last_timer += TIMER_INTERVAL;
 	cp0_compare_set(kernel_last_timer);
@@ -58,7 +59,7 @@ void kernel_timer(void)
 	/*
 	 * Forced context switch of user process.
 	 */
-	sched_reschedule(0);
+	sched_reschedule(NULL, sched_runnable, 1);
 
 	/*
 	 * Reschedule timer for a future date -- if we've almost missed a

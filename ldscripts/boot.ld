@@ -30,31 +30,35 @@
 
 INCLUDE "common.ld"
 
-__boot_load_virtaddr = __cached_base + __boot_load_physaddr;
-
 __size_memory		= 0x1000000;	/* Start simple: 16M above load address */
 __size_boot_stack	= 0x10000;	/* Start simple: 64K */
 
-CAP_ALIGN = 0x20;
-PAGE_ALIGN = 0x1000;
-
 OUTPUT_FORMAT("elf64-tradbigmips");
 OUTPUT_ARCH(mips)
-ENTRY(start)
+
+PHDRS
+{
+	header PT_PHDR PHDRS ;
+	boot PT_LOAD;
+	text PT_LOAD;
+	data PT_LOAD;
+}
+
+ENTRY(beri_boot_start)
 SECTIONS
 {
-	. += __boot_load_virtaddr;
+	. = __boot_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
-	.init : {
-		KEEP (*(.init))
-	} = 0
+	.boot ALIGN(CAP_ALIGN): {
+		*(.boot)
+	} :boot = 0x0
+
+
 	.text ALIGN(CAP_ALIGN): {
 		*(.text)
-	}
-	.fini ALIGN(CAP_ALIGN): {
-		KEEP (*(.fini))
-	} = 0
+	} :text
+
 
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
@@ -63,47 +67,30 @@ SECTIONS
 	 */
 	.MIPS.options ALIGN(PAGE_ALIGN): {
 		*(.MIPS.options)
-	}
+	} : data
 	.ctors ALIGN(CAP_ALIGN) : {
 		KEEP (*/crtbeginC.o(.ctors))
 		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
 		KEEP (*(SORT(.ctors.*)))
 		KEEP (*/crtendC.o(.ctors))
-	}
+	} : data
 	.dtors ALIGN(CAP_ALIGN) : {
 		KEEP (*/crtbeginC.o(.dtors))
 		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
 		KEEP (*(SORT(.dtors.*)))
 		KEEP (*/crtendC.o(.dtors))
-	}
-	.preinit_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__preinit_array_start = .);
-		KEEP (*(.preinit_array))
-		PROVIDE_HIDDEN (__preinit_array_end = .);
-	}
-	.init_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__init_array_start = .);
-		KEEP (*(SORT(.init_array.*)))
-		KEEP (*(.init_array))
-		PROVIDE_HIDDEN (__init_array_end = .);
-	}
-	.fini_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__fini_array_start = .);
-		KEEP (*(.fini_array))
-		KEEP (*(SORT(.fini_array.*)))
-		PROVIDE_HIDDEN (__fini_array_end = .);
-	}
+	} : data
 	.data ALIGN(CAP_ALIGN): {
 		*(.data)
-	}
+	} : data
 	_gp = ALIGN(CAP_ALIGN) + 0x7fc0;
 	.got : {
 		*(.got.plt)
 		*(.got)
-	}
+	} : data
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)
-	}
+	} : data
 
 	__start_bss = ADDR(.bss);
 	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
@@ -113,8 +100,7 @@ SECTIONS
 	 * we just define symbols, and don't move '.'.
 	 */
 	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_heap = ALIGN((__boot_load_virtaddr + __size_memory) -
-	    __size_boot_stack, PAGE_ALIGN);
+	__stop_heap = ALIGN((__boot_load_virtaddr + __size_memory) - __size_boot_stack, PAGE_ALIGN);
 	__size_heap = __stop_heap - __start_heap;
 
 	__start_boot_stack	= __stop_heap;

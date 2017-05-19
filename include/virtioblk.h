@@ -32,46 +32,44 @@
 #include "object.h"
 #include "namespace.h"
 #include "assert.h"
+#include "cheric.h"
 
 extern void * vblk_ref;
-extern void * vblk_id;
+capability virt_session;
 
 static inline void virtio_check_refs(void) {
 	if(vblk_ref == NULL) {
-		vblk_ref = namespace_get_ref(4);
-		vblk_id  = namespace_get_id(4);
+		vblk_ref = namespace_get_ref(namespace_num_virtio);
 	}
 	assert(vblk_ref != NULL);
-	assert(vblk_id  != NULL);
 }
 
 static inline void virtio_blk_session(void * mmio_cap) {
 	virtio_check_refs();
-	vblk_id = ccall_c_c(vblk_ref, vblk_id, -1, mmio_cap);
+	virt_session = MESSAGE_SYNC_SEND_c(vblk_ref, 0, 0 ,0, mmio_cap, NULL, NULL, -1);
 }
-
 
 static inline int virtio_blk_init(void) {
 	virtio_check_refs();
-	return ccall_n_r(vblk_ref, vblk_id, 0);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 0);
 }
 
 static inline int virtio_read(void * buf, size_t sector) {
 	virtio_check_refs();
-	return ccall_rc_r(vblk_ref, vblk_id, 1, sector, buf);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, virt_session, buf, NULL, 1);
 }
 
 static inline int virtio_write(const void * buf, size_t sector) {
 	virtio_check_refs();
-	return ccall_rc_r(vblk_ref, vblk_id, 2, sector, buf);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, virt_session, (void *)buf, NULL, 2);
 }
 
 static inline int virtio_blk_status(void) {
 	virtio_check_refs();
-	return ccall_n_r(vblk_ref, vblk_id, 3);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 3);
 }
 
 static inline size_t virtio_blk_size(void) {
 	virtio_check_refs();
-	return ccall_n_r(vblk_ref, vblk_id, 4);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 4);
 }

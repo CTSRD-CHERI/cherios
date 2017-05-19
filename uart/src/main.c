@@ -31,7 +31,7 @@
 #include "lib.h"
 #include "uart.h"
 
-void * uart_cap = NULL;
+
 
 static void user_putc(char c) {
 	printf(KGRN KBLD"%c"KRST, c);
@@ -47,16 +47,16 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-int main(void)
+int main(capability uart_cap)
 {
-	syscall_puts("UART Hello world\n");
+	syscall_puts("UART: Hello world\n");
 
 	/* Get capability to use uart */
-	uart_cap = act_get_cap();
 	assert(VCAP(uart_cap, 0, VCAP_RW));
 
+	set_uart_cap(uart_cap);
 	/* Register ourself to the kernel as being the UART module */
-	int ret = namespace_register(1, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_uart, act_self_ref);
 	if(ret!=0) {
 		syscall_puts("UART: register failed\n");
 		return -1;
@@ -66,7 +66,7 @@ int main(void)
 	uart_init(); /* done during boot process */
 	#endif
 
-	syscall_puts("UART: setup OK\n");
+	syscall_puts("UART: Going into daemon mode\n");
 
 	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;

@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -30,33 +31,19 @@
 
 #include "lib.h"
 #include "sys/mman.h"
-
-char * pool = NULL;
-static size_t pages_nb = 0;
-
-typedef enum e_page_status {
-	page_unused,
-	page_used,
-	page_released,
-	page_child
-} e_page_status;
-
-typedef  struct
-{
-	e_page_status	status;
-	size_t	owner; /* activation owner */
-	size_t	len; /* number of pages in this chunk */
-	size_t	prev; /* start of previous chunk */
-}  page_t;
-
-static page_t * book = NULL;
+#include "types.h"
+#include "utils.h"
+#include "vmem.h"
 
 /* fd and offset are currently unused and discarded in userspace */
-void *__mmap(void *addr, size_t length, int prot, int flags) {
+int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 	int perms = CHERI_PERM_SOFT_1; /* can-free perm */
-	if(addr != NULL) {
+    result->data = NULL;
+    result->code = NULL;
+
+	if(addr != NULL)
 		panic("mmap: addr must be NULL");
-	}
+
 	if(!(flags & MAP_ANONYMOUS)) {
 		errno = EINVAL;
 		goto fail;
@@ -67,135 +54,60 @@ void *__mmap(void *addr, size_t length, int prot, int flags) {
 	}
 
 	if(flags & MAP_PRIVATE) {
-		perms |= 1 << 6;
+		perms |= CHERI_PERM_STORE_LOCAL_CAP;
 	} else if(flags & MAP_SHARED) {
-		perms |= 1 << 0;
+		perms |= CHERI_PERM_GLOBAL;
 	} else {
 		errno = EINVAL;
 		goto fail;
 	}
 
 	if(prot & PROT_READ) {
-		perms |= 1 << 2;
-		if(!(prot & PROT_NO_READ_CAP)) {
-			perms |= 1 << 4;
-		}
+		perms |= CHERI_PERM_LOAD;
+		if(!(prot & PROT_NO_READ_CAP))
+			perms |= CHERI_PERM_LOAD_CAP;
 	}
 	if(prot & PROT_WRITE) {
-		perms |= 1 << 3;
-		if(!(prot & PROT_NO_WRITE_CAP)) {
-			perms |= 1 << 5;
-		}
+		perms |= CHERI_PERM_STORE;
+		if(!(prot & PROT_NO_WRITE_CAP))
+			perms |= CHERI_PERM_STORE_CAP;
 	}
 
-	void * p = NULL;
-	#if !MMAP
-	p = __calloc(length, 1);
-	if(p) {
-		goto ok;
+	if(prot & PROT_EXECUTE) {
+        // Our system won't actually support W^X, we will lose one depending on where we derive from
+		perms |= CHERI_PERM_EXECUTE;
 	}
-	goto fail;
-	#endif
 
-	size_t pages_wanted = length/pagesz;
-	if(pages_wanted*pagesz < length) {
-		pages_wanted++;
-	}
-	assert(pages_wanted*pagesz >= length);
+    capability p = memgt_take_reservation(length);
 
-	/* fixme: fix for dlmalloc so it cannot try to merge chunks of memory */
-	pages_wanted++;
-
-	/* find some available space */
-	size_t page = 0;
-	while(page < pages_nb) {
-		if(book[page].status != page_unused) {
-			page += book[page].len;
-		} else if(book[page].len < pages_wanted) {
-			page += book[page].len;
-		} else {
-			goto found;
-		}
-	}
-	goto fail;
-	found:
-	/* update mapping */
-	book[page].status = page_used;
-	size_t curr_len = book[page].len;
-	book[page].len = pages_wanted;
-	if(pages_wanted < curr_len) {
-		book[page+pages_wanted].status = page_unused;
-		book[page+pages_wanted].len = curr_len-pages_wanted;
-	}
-	p = cheri_setbounds(pool+page*pagesz, length);
-	goto ok;
-
-	ok:
+ ok:
 	p = cheri_andperm(p, perms);
-	//CHERI_PRINT_CAP(p);
-	return p;
+    result->data = cheri_andperm(p, ~PROT_EXECUTE);
 
-	fail:
+    if(prot & PROT_EXECUTE) {
+        result->code = cheri_andperm(p, ~PROT_WRITE);
+    }
+
+	return 0;
+
+ fail:
 	printf(KRED "mmap fail %lx\n", length);
-	return MAP_FAILED;
+	return MAP_FAILED_INT;
 }
 
-static size_t addr2page(void * addr) {
-	size_t page = (((char *)addr) - pool) / pagesz;
-	assert((size_t)addr == (size_t)(pool + page*pagesz));
-	return page;
-}
-
-static size_t addr2chunk(void * addr, size_t length) {
-	size_t page = addr2page(addr);
-	assert(length == pagesz*book[page].len);
-	return page;
-}
 
 int __munmap(void *addr, size_t length) {
-	//CHERI_PRINT_CAP(addr);
-	#if !MMAP
-		free(addr);
-		return 0;
-	#endif
 	if(!(cheri_getperm(addr) & CHERI_PERM_SOFT_1)) {
 		errno = EINVAL;
 		printf(KRED"BAD MUNMAP\n");
 		return -1;
 	}
 
-	bzero(addr, length); /* clear mem */
-
-	length += pagesz; /* fixme: fix for dlmalloc, see above */
-	size_t page = addr2chunk(addr, length);
-
-	book[page].status = page_released;
-	release(addr);
+	// TODO
 	return 0;
 }
 
 void mfree(void *addr) {
-	//CHERI_PRINT_CAP(addr);
-	size_t page = addr2page(addr);
-	book[page].status = page_unused;
-}
-
-void minit(char *heap) {
-	assert((size_t)heap == roundup2((size_t)heap, pagesz));
-	assert(cheri_getoffset(heap) == 0);
-
-	size_t length = cheri_getlen(heap);
-
-	pages_nb = length / (pagesz + sizeof(page_t));
-	assert(pages_nb > 0);
-	size_t pool_len = pages_nb*pagesz;
-	pool = cheri_setbounds(heap, pool_len);
-
-	size_t book_len = pages_nb*sizeof(page_t);
-	//printf("Heaplen:%jx Poollen: %jx, Booklen: %jx\n", length, pool_len, book_len);
-	assert(book_len + pool_len <= length);
-	book = cheri_setbounds(heap + pool_len, book_len);
-
-	book[0].status = page_unused;
-	book[0].len = pages_nb;
+	// TODO
+	return;
 }

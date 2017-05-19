@@ -28,101 +28,65 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
+#include "activations.h"
 #include "klib.h"
 #include "cp0.h"
+#include "kernel_exceptions.h"
 
 /*
  * Exception demux
  */
 
-#ifndef __LITE__
-static const char * capcausestr[0x20] = {
-	"None",
-	"Length Violation",
-	"Tag Violation",
-	"Seal Violation",
-	"Type Violation",
-	"Call Trap",
-	"Return Trap",
-	"Underflow of trusted system stack",
-	"User-defined Permission Violation",
-	"TLB prohibits store capability",
-	"Requested bounds cannot be represented exactly",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"Global Violation",
-	"Permit Execute Violation",
-	"Permit Load Violation",
-	"Permit Store Violation",
-	"Permit Load Capability Violation",
-	"Permit Store Capability Violation",
-	"Permit Store Local Capability Violation",
-	"Permit Seal Violation",
-	"Access System Registers Violation",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved",
-	"reserved"
-};
-
-#define exception_printf kernel_printf
-#else
-#define exception_printf(...)
+#ifndef HARDWARE_fpga
+register_t badinstr_glob = 0;
 #endif
 
-static inline const char * getcapcause(int cause) {
-	#ifndef __LITE__
-		return capcausestr[cause];
-	#else
-		return ""; cause++;
-	#endif
-}
+DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
 
-static void kernel_exception_capability(void) {
-	KERNEL_TRACE("exception", "kernel_capability");
-	register_t capcause = cheri_getcause();
-	int cause = (capcause >> 8) & 0x1F;
+static void kernel_exception_capability(register_t cause) __dead2;
+static void kernel_exception_capability(register_t cause) {
+	cap_exception_t exception = parse_cause(cause);
 
-	if(cause == 5) { /* todo: give them their own handler */
-		kernel_ccall();
-		return;
+	KERNEL_TRACE("exception", "kernel_capability %s", enum_cap_cause_exception_t_tostring(exception.cause));
+
+	if(exception.cause == Call_Trap) {
+		exception_printf("ccall No longer an exception\n");
 	}
-	if(cause == 6) {
-		kernel_creturn();
-		return;
+	if(exception.cause == Return_Trap) {
+		exception_printf("creturn No longer an exception\n");
 	}
 
-	int reg_num = capcause & 0xFF;
-	exception_printf(KRED "Capability exception catched for activation! %s-%d"
+	exception_printf(KRED "Capability exception caught in activation %s"
 	             " (0x%X: %s) [Reg C%d]" KRST"\n",
-	        kernel_acts[kernel_curr_act].name, kernel_curr_act,
-		cause, getcapcause(cause), reg_num);
+	        kernel_curr_act->name,
+		exception.cause, enum_cap_cause_exception_t_tostring(exception.cause), exception.reg_num);
 
-	regdump(reg_num);
+	regdump(exception.reg_num);
 	kernel_freeze();
 }
 
 static void kernel_exception_data(register_t excode) __dead2;
-
 static void kernel_exception_data(register_t excode) {
-	exception_printf(KRED"Data abort type %lu, BadVAddr:0x%lx in %s-%d\n",
+	exception_printf(KRED"Data abort type %ld, BadVAddr:0x%lx in %s"KRST"\n",
 	       excode, cp0_badvaddr_get(),
-	       kernel_acts[kernel_curr_act].name, kernel_curr_act);
+	       kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();
 }
 
+static void kernel_exception_trap(void) __dead2;
+static void kernel_exception_trap(void) {
+	exception_printf(KRED"trap in %s"KRST"\n"
+					 , kernel_curr_act->name);
+	regdump(-1);
+	kernel_freeze();
+}
 
 static void kernel_exception_unknown(register_t excode) __dead2;
 static void kernel_exception_unknown(register_t excode) {
-	exception_printf(KRED"Unknown exception type '%lu' in  %s-%d"KRST"\n",
-	       excode, kernel_acts[kernel_curr_act].name, kernel_curr_act);
+	exception_printf(KRED"Unknown exception type '%ld' in  %s"KRST"\n",
+	       excode, kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();
 }
@@ -132,52 +96,85 @@ static void kernel_exception_unknown(register_t excode) {
  * Exception handler demux to various more specific exception
  * implementations.
  */
-void kernel_exception(void) {
-	static int entered = 0;
-	entered++;
-	KERNEL_TRACE("exception", "enters %d", entered);
-	if(entered > 1) {
-		KERNEL_ERROR("interrupt in interrupt");
-	}
+void kernel_exception(context_t swap_to, context_t own_context) {
+	register_t cause;
+	context_t victim_context = swap_to;
+	context_t own_save; // We never use this, there is currently no reason to restore the exception context
 
-	/*
-	 * Check assumption that kernel is running at EXL=1.  The kernel is
-	 * non-preemptive and will fail horribly if this isn't true.
-	 */
-	kernel_assert(cp0_status_exl_get() != 0);
+	set_exception_handler(own_context);
+	cp0_status_bev_set(0);
+	kernel_interrupts_init(1);
+	while(1) {
+		KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
+		context_switch(victim_context, &own_save);
+		// We will next to be switched to with c3 containing a victim context.
+		// We could make this a call, it would be neater, i.e. get_last_victim
+		__asm__ __volatile__ (
+		"cmove %[x], $c3\n"
+		"move  %[y], $a0\n"
+		: [x]"=C"(victim_context) , [y]"=r"(cause));
 
-	register_t excode = cp0_cause_excode_get();
-	switch (excode) {
-	case MIPS_CP0_EXCODE_INT:
-		kernel_interrupt();
-		break;
+		if(victim_context != own_context) {
+			// We only do this as handles are not guaranteed to stay fresh (although they are currently)
+			kernel_curr_act->context = victim_context;
+		} else {
+			// This happens if an interrupt happened during the exception level. As soon as we exit
+			// Another exception happens and so take another.
+		}
 
-	case MIPS_CP0_EXCODE_SYSCALL:
-		kernel_exception_syscall();
-		break;
 
-	case MIPS_CP0_EXCODE_C2E:
-		kernel_exception_capability();
-		break;
+		static int entered = 0;
+		entered++;
 
-	case MIPS_CP0_EXCODE_TLBL:
-	case MIPS_CP0_EXCODE_TLBS:
-	case MIPS_CP0_EXCODE_ADEL:
-	case MIPS_CP0_EXCODE_ADES:
-	case MIPS_CP0_EXCODE_IBE:
-	case MIPS_CP0_EXCODE_DBE:
-		kernel_exception_data(excode);
-		break;
+		register_t excode = cp0_cause_excode_get(cause);
 
-	default:
-		kernel_exception_unknown(excode);
-		break;
-	}
+		KERNEL_TRACE("exception", "in %s. Enter: %d. Code %lx.",
+					 kernel_curr_act->name,
+					 entered,
+					 (unsigned long)(cause));
 
-	KERNEL_TRACE("exception", "returns %d", entered);
-	entered--;
-	if(entered) {
-		KERNEL_ERROR("interrupt in interrupt");
-		kernel_freeze();
+		if(entered > 1) {
+			KERNEL_ERROR("interrupt in interrupt");
+			kernel_freeze();
+		}
+
+
+		switch (excode) {
+			case MIPS_CP0_EXCODE_INT:
+				kernel_interrupt(cause);
+				break;
+
+			case MIPS_CP0_EXCODE_SYSCALL:
+				exception_printf(KRED"Synchronous syscalls now use the ccall interface"KRST"\n");
+				regdump(-1);
+				kernel_freeze();
+				break;
+
+			case MIPS_CP0_EXCODE_C2E:
+				kernel_exception_capability(cause);
+				break;
+			case MIPS_CP0_EXCODE_TLBL:
+			case MIPS_CP0_EXCODE_TLBS:
+			case MIPS_CP0_EXCODE_ADEL:
+			case MIPS_CP0_EXCODE_ADES:
+			case MIPS_CP0_EXCODE_IBE:
+			case MIPS_CP0_EXCODE_DBE:
+				kernel_exception_data(excode);
+				break;
+
+			case MIPS_CP0_EXCODE_TRAP:
+				kernel_exception_trap();
+				break;
+			default:
+				kernel_exception_unknown(excode);
+				break;
+		}
+
+		KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
+
+		entered--;
+
+		// We have changed context due to this exception, and so we should restore the current context
+		victim_context = kernel_curr_act->context;
 	}
 }

@@ -80,7 +80,7 @@ static inline void resetStatCounters (void)
 
 #include <inttypes.h>
 #define DECLARE_GET_STAT_COUNTER(name,X,Y)  \
-inline uint64_t get_##name##_count (void);
+inline uint64_t get_##name##_count (void)
 #define DEFINE_GET_STAT_COUNTER(name,X,Y)   \
 inline uint64_t get_##name##_count (void)					\
 {										\

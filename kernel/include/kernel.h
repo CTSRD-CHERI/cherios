@@ -31,7 +31,7 @@
 #ifndef __KERNEL_H__
 #define	__KERNEL_H__
 
-//#define __TRACE__
+#define __TRACE__
 //#define __LITE__
 
 #define MAX_ACTIVATIONS 32
@@ -46,8 +46,5 @@ extern void	__stop_bss;
 
 extern char	__start_heap;
 extern char	__stop_heap;
-
-extern void	kernel_exception_trampoline;
-extern void	kernel_exception_trampoline_end;
 
 #endif /* !__KERNEL_H__ */

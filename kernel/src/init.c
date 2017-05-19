@@ -29,33 +29,57 @@
  */
 
 #include "klib.h"
+#include "nanokernel.h"
+#include "cp0.h"
+#include "uart.h"
 
-static void install_exception_vectors(void) {
-	/* Copy exception trampoline to exception vector */
-	char * all_mem = cheri_getdefault() ;
-	void *mips_bev0_exception_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
-	memcpy(mips_bev0_exception_vector_ptr, &kernel_exception_trampoline,
-	    (char *)&kernel_exception_trampoline_end - (char *)&kernel_exception_trampoline);
-	void *mips_bev0_ccall_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_CCALL_VECTOR);
-	memcpy(mips_bev0_ccall_vector_ptr, &kernel_exception_trampoline,
-	    (char *)&kernel_exception_trampoline_end - (char *)&kernel_exception_trampoline);
+ALLOCATE_PLT_NANO
 
-	/* Invalidate I-cache */
-	__asm volatile("sync");
-	__asm volatile(
-		"cache %[op], 0(%[line]) \n"
-		:: [op]"i" ((0b100 << 2) + 0), [line]"r" (MIPS_BEV0_EXCEPTION_VECTOR & 0xFFFF));
-	/* does not work with kseg0 address, hence the `& 0xFFFF` */
-	__asm volatile("sync");
-}
+#define printf kernel_printf
 
-int cherios_main(void) {
+/* Use linker allocated memory to store boot-info. */
+static init_info_t init_info;
+sealing_cap def_seal_cap;
+
+int cherios_main(nano_kernel_if_t* interface,
+				 capability def_data,
+				 context_t own_context,
+                 sealing_cap sealer,
+				 size_t init_base,
+                 size_t init_entry) {
+	/* This MUST be called before trying to use the nano kernel, which we will need to do in order
+	 * to get access to the phy mem we need */
+
+	init_nano_kernel_if_t(interface, def_data);
+    set_sealing_cap(sealer);
+
+	/* Get the capability for the uart. We should save this somewhere sensible */
+	capability  cap_for_uart = get_phy_cap(get_book(), uart_base_phy_addr, uart_base_size, 0);
+	set_uart_cap(cap_for_uart);
+
 	kernel_puts("Kernel Hello world\n");
-	install_exception_vectors();
-	act_init();
-	kernel_interrupts_init(1);
-	KERNEL_TRACE("init", "init done");
-	return 0;
+
+    CHERI_PRINT_CAP(interface);
+    CHERI_PRINT_CAP(def_data);
+    CHERI_PRINT_CAP(own_context);
+    //CHERI_PRINT_CAP(reservation);
+    CHERI_PRINT_CAP(sealer);
+    kernel_printf("init_base: %lx. entry: %lx\n", init_base, init_entry);
+
+	kernel_setup_trampoline();
+
+	init_info.nano_if = interface;
+	init_info.nano_default_cap = def_data;
+	init_info.kernel_size = cheri_getlen(cheri_getdefault());
+	kernel_assert((init_info.kernel_size & (PAGE_SIZE-1)) == 0);
+    init_info.uart_cap = cap_for_uart;
+	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
+
+	context_t init_context = act_init(own_context, &init_info, init_base, init_entry);
+
+	KERNEL_TRACE("kernel", "Going into exception handling mode");
+
+	// We re-use this context as an exception context. Maybe we should create a proper one?
+	kernel_exception(init_context, own_context); // Only here can we start taking exceptions, otherwise we crash horribly
+	kernel_panic("exception handler should never return");
 }

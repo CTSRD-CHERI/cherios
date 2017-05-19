@@ -35,24 +35,22 @@ typedef struct id_s {
 	u64 sum;
 } id_t;
 
-static void sum(void) {
+static void sum(id_t * id, register_t* buf) {
 	static int i=0x1800;
-	//id_t * id = get_curr_cookie();
-	//id->sum += id->buf[0];
 	if(!(++i&0x1FFF)) {
 		printf("T1B: %x\n", i);
-		__asm("li $0, 0x1337");
 		//printf("T1B: %x %ld\n", i, id->sum);
 	}
 	return;
 }
 
-static void * setup(void * buf) {
+static id_t * setup(register_t * buf) {
 	id_t * object = malloc(sizeof(id_t));
 	assert(object != NULL);
 	object->buf = buf;
 	object->sum = 0;
-	return act_seal_id(object);
+	//TODO use a seal manager
+	return object;
 }
 
 extern void msg_entry;
@@ -66,7 +64,7 @@ int main(void)
 	syscall_puts("Test1B Hello world\n");
 
 	/* Register ourself to the kernel as being the UART module */
-	int ret = namespace_register(12, act_self_ref, act_self_id);
+	int ret = namespace_register(12, act_self_ref);
 	if(ret!=0) {
 		printf("Test1B: register failed\n");
 		return -1;

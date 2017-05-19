@@ -39,7 +39,8 @@ void * new_identifier(void) {
 	int * object = malloc(sizeof(int));
 	assert(object != NULL);
 	*object = oid++;
-	return act_seal_id(object);
+    //TODO use a seal manager
+	return object;
 }
 
 extern void msg_entry;
@@ -295,10 +296,10 @@ void selftest(size_t chunk) {
 /* compress or decompress from stdin to stdout */
 int main(void)
 {
-	printf("zlib Hello world\n");
+	printf("zlib: Hello world\n");
 
 	/* Register ourself to the kernel as being the zlib module */
-	int ret = namespace_register(9, act_self_ref, act_self_id);
+	int ret = namespace_register(namespace_num_zlib, act_self_ref);
 	if(ret!=0) {
 		printf("zlib: register failed\n");
 		return -1;
@@ -310,7 +311,7 @@ int main(void)
 	}
 	#endif
 
-	printf("zlib: done\n");
+	printf("zlib: Going into daemon mode\n");
 	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;
 }

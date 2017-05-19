@@ -28,20 +28,33 @@
  * SUCH DAMAGE.
  */
 
+#ifndef SYS_MMAN_H
+#define SYS_MMAN_H
+
 #include "cdefs.h"
 #include "errno.h"
+#include "types.h"
 
-void *	mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
+typedef struct cap_pair {
+    capability code;
+    capability data;
+} cap_pair;
+
+#define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
+
+void *  mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
+int mmap_new(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset, cap_pair* result);
 int	munmap(void *addr, size_t length);
 
-void	mmap_set_act(void * ref, void * id);
+void	mmap_set_act(act_kt ref);
 
 enum mmap_prot
 {
   PROT_READ		= 1 << 0,
   PROT_WRITE		= 1 << 1,
   PROT_NO_READ_CAP	= 1 << 2,
-  PROT_NO_WRITE_CAP	= 1 << 3
+  PROT_NO_WRITE_CAP	= 1 << 3,
+  PROT_EXECUTE = 1 << 4
 };
 #define PROT_RW (PROT_READ | PROT_WRITE)
 
@@ -60,6 +73,7 @@ enum mmap_return
   ENOMEM = 1
 };
 
-#define MAP_FAILED ((void *) -1)
-
-
+#define MAP_FAILED_OLD ((void *) -1)
+#define MAP_FAILED_INT -1
+#define MAP_SUCCESS_INT 0
+#endif // SYS_MMAN_H

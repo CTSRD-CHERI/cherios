@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,6 +30,23 @@
  */
 
 #include "mips.h"
+#include "cheric.h"
+#include "queue.h"
+#include "object.h"
+#include "syscalls.h"
+#include "ccall.h"
 
-void *	sync_token = NULL;
+/* These are used by the runtime to know who to respond to */
+//FIXME should be local to the pop loop, anybody who wants to use creturn should do so to a creturn method
+sync_state_t sync_state = {.sync_caller = NULL, .sync_token = NULL};
+
 long	msg_enable = 0;
+
+void pop_msg(msg_t * msg) {
+    // TODO what are the blocking semantics of pop? Fow now just do the safe thing
+    if(act_self_queue->header.start == act_self_queue->header.end) {
+        wait();
+    }
+    *msg = act_self_queue->msg[act_self_queue->header.start];
+    act_self_queue->header.start = (act_self_queue->header.start + 1) % act_self_queue->header.len;
+}

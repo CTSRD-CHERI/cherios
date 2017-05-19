@@ -28,26 +28,29 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
+#include "activations.h"
 #include "klib.h"
 
-//#ifndef __LITE__
-#ifdef notyet
+#ifndef __LITE__
 
 /*
  * Prints a nice regump
  */
 
+#define printf kernel_printf
+
 #define REG_DUMP_M(_reg) {\
-	register_t reg = kernel_exception_framep_ptr->mf_##_reg; \
+	register_t reg = frame->mf_##_reg; \
 	__REGDUMP(reg, reg, #_reg, 64); \
 	}
 
 #define REG_DUMP_C(_reg) \
 	regdump_c(#_reg, creg++==reg_num, \
-		kernel_exception_framep_ptr->cf_##_reg);
+		frame->cf_##_reg);
 
 #define __REGDUMP(elem, cond, name, bits) { \
-	printf("%s"name":"KFNT"0x", cond?"":KFNT,elem); \
+	printf("%s"name":"KFNT"0x", cond?"":KFNT); \
 	int elem_lead_0 = bits - 3 - slog2(elem); \
 	for(int i=0; i<elem_lead_0; i+=4) { printf("0");} \
 	if(elem) { printf(KREG"%jx ", elem); } else { printf(" "KREG);} \
@@ -72,10 +75,187 @@ static void regdump_c(const char * str_cap, int hl, const void * cap) {
 	printf(KRST"\n");
 }
 
-void regdump(int reg_num) {
-	int creg = 0;
+static inline size_t correct_base(size_t image_base, capability pcc) {
+	return ((cheri_getoffset(pcc) + cheri_getbase(pcc)) - image_base);
+}
 
+static act_t* get_act_for_address(size_t address) {
+    /* Assuming images are contiguous, we want the greatest base less than address */
+    size_t base = 0;
+    size_t top_bits = 2;
+    act_t* base_act = NULL;
+    for(size_t i = 0; i < kernel_next_act; i++) {
+        act_t *act = &kernel_acts[i];
+        size_t new_base = act->image_base;
+
+        /* Should not confuse our two regions */
+
+        if(new_base >> (64 - top_bits) == address >> (64 - top_bits)) {
+            if(new_base <= address && new_base > base) {
+                base = act->image_base;
+                base_act = act;
+            }
+        }
+    }
+
+    return base_act;
+}
+
+static act_t* get_act_for_pcc(capability pcc) {
+    return get_act_for_address(cheri_getcursour(pcc));
+}
+
+static inline void print_frame(int num, capability ra, char * sp) {
+    act_t* act = get_act_for_pcc(ra);
+    size_t base = MIPS_KSEG0;
+    char* name = "nano";
+    if(act) {
+        base = act->image_base;
+        name = act->name;
+    }
+
+    size_t correct = correct_base(base, ra);
+	printf("%2d| [0x%016lx] in %16s (sp=%p)\n", num, correct, name, (void*)sp);
+}
+
+int check_cap(capability cap) {
+	size_t perm = CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP;
+	return ((cheri_getoffset(cap) >= cheri_getlen(cap)) ||
+	((cheri_getperm(cap) & perm) != perm) ||
+	(cap == NULL));
+}
+
+static inline void backtrace(char* stack_pointer, capability return_address) {
+	int i = 0;
+
+	// Function prolog:
+	// daddiu  sp,sp,-size			// allocates space
+	// ...
+	// csc     c17,sp,offset(c11)		// stores return address
+
+	// Instruction Format
+
+	// daddiu 	rs,rt, im				// |011001|rs   |rt   |im(16)
+	// |011001|11101|11101|im(16)
+
+	// csc     cs,rt,im(cb)				// |111110|cs   |cb   |rt   |im(11)
+	// |111110|10001|01011|11101|im(11)
+
+	uint32_t daddiu_form_mask = 0xFFFF0000;
+	uint32_t csc_form_mask    = 0xFFFFF800;
+	uint32_t daddiu_form_val  = 0b0110011110111101U << 16U;
+	uint32_t csc_form_val	  = 0b111110100010101111101U << 11U;
+	uint32_t daddiu_i_mask 	  = (1 << 16) - 1;
+	uint32_t csc_i_mask		  = (1 << 11) - 1;
+
+	// FIXME assumes a function prolog with daddiu. Not true for leaf functions
+
+	do {
+		print_frame(i++, return_address, stack_pointer);
+
+		//scan backwards for daddiu
+		int16_t stack_size = 0;
+		int16_t offset = 0;
+		for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
+			if(check_cap(instr)) {
+				printf("***bad frame***\n");
+				return;
+			}
+			uint32_t val = *instr;
+			if((val & daddiu_form_mask) == daddiu_form_val) {
+				stack_size = (int16_t)(val & daddiu_i_mask);
+				break;
+			}
+			if((val & csc_form_mask) == csc_form_val) {
+				offset = (int16_t)((val & csc_i_mask) << 4);
+			}
+		}
+
+		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
+
+
+		if(check_cap(ra_ptr)) {
+			printf("***bad frame***\n");
+			return;
+		}
+
+		return_address = *ra_ptr;
+		// Offset by 2 instructions for the cjal + nop
+		return_address = (capability)((uint32_t*)return_address-2);
+		stack_pointer = stack_pointer - stack_size;
+	} while(cheri_getoffset(stack_pointer) != cheri_getlen(stack_pointer));
+	print_frame(i++, return_address, stack_pointer);
+}
+
+static inline void dump_tlb() {
+
+#define STRINGIFY(X) #X
+#define ASM_MTCO(var, reg) "mtc0 %[" #var "], " STRINGIFY(reg) "\n"
+#define ASM_MFCO(var, reg) "dmfc0 %[" #var "], " STRINGIFY(reg) "\n"
+
+    register_t hi, lo0, lo1, pm;
+
+    printf("TLB status:\n\n");
+
+    printf("|------------------------------------------------------------------------------|\n");
+    printf("|        |        EntryHi      |         EntryLO0      |         EntryLO1      |\n");
+    printf("|PageSize|---------------------|-----------------------|-----------------------|\n");
+    printf("|        |      VPN     | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
+    printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
+    printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
+    for(int i = 0; i < 32; i++) {
+        __asm__ __volatile__(
+            ASM_MTCO(ndx, MIPS_CP0_REG_INDEX)
+            "tlbr  \n"
+            ASM_MFCO(HI, MIPS_CP0_REG_ENTRYHI)
+            ASM_MFCO(LO0, MIPS_CP0_REG_ENTRYLO0)
+            ASM_MFCO(LO1, MIPS_CP0_REG_ENTRYLO1)
+            ASM_MFCO(PM, MIPS_CP0_REG_PAGEMASK)
+        : [HI]"=r"(hi), [LO0]"=r"(lo0), [LO1]"=r"(lo1), [PM]"=r"(pm)
+        : [ndx]"r"(i)
+        :
+        );
+
+        register_t vpn = hi >> 13;
+        register_t asid = hi & ((1 << 13) - 1);
+
+        register_t pfn0 = lo0 >> 6;
+        register_t c0 = (lo0 >> 3) & 0b111;
+        register_t d0 = (lo0 >> 2) & 1;
+        register_t v0 = (lo0 >> 1) & 1;
+        register_t g0 = (lo0) & 1;
+
+        register_t pfn1 = lo1 >> 6;
+        register_t c1 = (lo1 >> 3) & 0b111;
+        register_t d1 = (lo1 >> 2) & 1;
+        register_t v1 = (lo1 >> 1) & 1;
+        register_t g1 = (lo1) & 1;
+
+        register_t pm_sz_k = (pm+1) * 4;
+        int is_m = pm_sz_k >= 1024;
+        if(is_m) pm_sz_k /= 1024;
+
+        printf("|%4lx%sB*2|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|\n",
+               pm_sz_k,is_m? "M" : "K", vpn, asid, pfn0, c0, d0, v0, g0,
+            pfn1, c1, d1, v1, g1);
+    }
+
+    printf("\n\n");
+}
+
+void regdump(int reg_num) {
+    // Note, dumping will not be possible when we enforce things properly
+    // For now we use the obtain super powers to make it possible.
+    capability all_powerfull = obtain_super_powers(); // Super magic wow!
+    set_sealing_cap(all_powerfull);
+
+	int creg = 0;
 	printf("Regdump:\n");
+	CHERI_PRINT_CAP(kernel_curr_act->context);
+	reg_frame_t* frame = kernel_unseal_any(kernel_curr_act->context);
+	CHERI_PRINT_CAP(frame);
+
+    dump_tlb();
 
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
 
@@ -93,9 +273,7 @@ void regdump(int reg_num) {
 
 	REG_DUMP_M(hi); REG_DUMP_M(lo); printf("\n");
 
-	#if 0
 	REG_DUMP_M(pc); printf("\n"); /* does not seem in sync with pcc */
-	#endif
 
 	printf("\n");
 
@@ -115,13 +293,18 @@ void regdump(int reg_num) {
 	REG_DUMP_C(c22); REG_DUMP_C(c23); REG_DUMP_C(c24); REG_DUMP_C(c25); printf("\n");
 
 	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
-}
 
-#else
+	printf("\nLoaded images:\n");
+	for(size_t i = 0; i < kernel_next_act; i++) {
+		act_t* act = &kernel_acts[i];
+		printf("%16s: %lx\n", act->name, act->image_base);
+	}
+    printf("%16s: %lx\n", "nano", MIPS_KSEG0);
 
-void regdump(int reg_num __unused) {
-	return;
+	printf("\nAttempting backtrace:\n\n");
+	char * stack_pointer = (char*)frame->cf_c11 + frame->mf_sp;
+	capability return_address = frame->cf_pcc;
+	backtrace(stack_pointer, return_address);
 }
 
 #endif
-

@@ -1,6 +1,7 @@
 #-
 # Copyright (c) 2016 Robert N. M. Watson
 # Copyright (c) 2016 Hadrien Barral
+# Copyright (c) 2017 Lawrence Esswood
 # All rights reserved.
 #
 # This software was developed by SRI International and the University of
@@ -33,6 +34,23 @@
 .set nobopt
 .set noat
 
+.ifeq _MIPS_SZCAP-256
+.set CAP_SIZE_BITS, 5
+.set CAP_SIZE,     32
+.set CAP_IN_MESSAGE, 7
+.else
+.ifeq _MIPS_SZCAP-128
+.set CAP_SIZE_BITS, 4
+.set CAP_SIZE,     16
+.set CAP_IN_MESSAGE, 6
+.else
+.error "Unknown cap size"
+.endif
+.endif
+
+#define __ASSEMBLY__ 1
+#include "syscalls.h"
+
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Jump to various startup functions to initialise the C
 # runtime, and then call main().
@@ -41,12 +59,25 @@
 	.global start_common
 	.ent start_common
 start_common:
+
+#########################################################################################################################
+# Some "documentation" for the interface between the kernel and activation start                                        #
+# These fields are setup by the caller of act_register                                                                  #
+#                                                                                                                       #
+# a0    : user GP argument (goes to main)                                                                               #
+# c3    : user Cap argument (goes to main)                                                                              #
+#                                                                                                                       #
+# These fields are setup by act_register itself. Although the queue is an argument to the function                      #
+#                                                                                                                       #
+# c21   : self control reference                                                                                        #
+# c23   : namespace reference (may be null for init and namespace)                                                      #
+# c24   : kernel interface table                                                                                        #
+# c25   : queue                                                                                                         #
+#########################################################################################################################
+
 	# Save arguments
 	move		$s0, $a0
-	move		$s1, $a1
-	cmove		$c17, $c3
-	cmove		$c18, $c4
-	cmove		$c19, $c5
+    cmove       $c20, $c3
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -74,10 +105,11 @@ start_common:
 	nop
 
 	# Call object init.
-	cmove		$c3, $c19
-	cmove		$c4, $c22
-	cmove		$c5, $c23
-	cmove		$c6, $c24
+	cmove		$c3, $c21 #self_ctrl
+	cmove		$c4, $c23 #ns_ref
+	cmove		$c5, $c24 #kernel_if
+	cmove       $c6, $c25 #queue
+
 	cgetpcc		$c12
 	dla		$t0, libuser_init
 	csetoffset	$c12, $c12, $t0
@@ -86,9 +118,7 @@ start_common:
 
 	# Restore arguments
 	move		$a0, $s0
-	move		$a1, $s1
-	cmove		$c3, $c17
-	cmove		$c4, $c18
+	cmove		$c3, $c20
 
 	# Call main().
 	cgetpcc		$c12
@@ -97,22 +127,15 @@ start_common:
 	cjalr		$c12, $c17
 	nop
 
-	# main() done. Exit or CReturn
+	# main() done. Go to msg_entry if msg_enable, call terminate otherwise
 	dla		$t0, msg_enable
 	cgetdefault	$c17
 	cld		$t0, $t0, 0($c17)
-	bne		$t0, $zero, to_msg
+	bne		$t0, $zero, msg_entry
 	nop
 	dla		$t0, act_self_ctrl
-	clc		$c3, $t0, 0($c17)
-	li		$v0, 26
-	syscall
-
-to_msg:
-	# CReturn to go in waiting state.
-	cfromptr	$c1, $c1, $0
-	creturn
-
-	#First 'real' message. Go to appropriate handler
-	j msg_entry
-	nop
+	clc		$c2, $t0, 0($c17)
+	dla     $t0, kernel_if
+	clc     $c1, $t0, syscall_act_terminate_offset($c17)
+	# We don't bother setting up a return as this will terminate us
+	ccall   $c1, $c2

@@ -30,12 +30,11 @@
 
 #include "lib.h"
 
-typedef  struct
-{
+typedef struct {
 	int	used;
 	void *	p;
 	int	r;
-}  rel_t;
+} rel_t;
 
 #define RELEASE_PENDING_SIZE 0x10
 static rel_t release_pending[RELEASE_PENDING_SIZE];
@@ -63,17 +62,7 @@ static void rel_push(void * p) {
 }
 
 static int try_gc(void * p) {
-	register_t ret;
-	__asm__ __volatile__ (
-		"li    $v0, 66       \n"
-		"cmove $c3, %[p]     \n"
-		"cmove $c4, %[pool]  \n"
-		"syscall             \n"
-		"move %[ret], $v0    \n"
-		: [ret] "=r" (ret)
-		: [p] "C" (p), [pool] "C" (pool)
-		: "v0", "$c3", "$c4");
-	return ret;
+	return -1;
 }
 
 static void try_gc_rel(void) {
@@ -100,8 +89,7 @@ void release(void * p) {
 }
 
 void release_init(void) {
-	for(size_t i=0; i<RELEASE_PENDING_SIZE; i++) {
+	for(size_t i=0; i<RELEASE_PENDING_SIZE; i++)
 		release_pending[i].used = 0;
-	}
 }
 

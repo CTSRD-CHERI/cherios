@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,133 +32,121 @@
 #include "mips.h"
 #include "cheric.h"
 #include "cp0.h"
+#include "plat.h"
 #include "boot/boot.h"
+#include "boot/boot_info.h"
 #include "object.h"
 #include "string.h"
 #include "uart.h"
-#include "assert.h"
-#include "stdio.h"
+#include "elf.h"
+#include "utils.h"
 
-static void * boot_act_register(reg_frame_t * frame, const char * name) {
-	void * ret;
-	__asm__ __volatile__ (
-		"li    $v0, 20       \n"
-		"cmove $c3, %[frame] \n"
-		"cmove $c4, %[name] \n"
-		"syscall             \n"
-		"cmove %[ret], $c3   \n"
-		: [ret] "=C" (ret)
-		: [frame] "C" (frame), [name] "C" (name)
-		: "v0", "$c3", "$c4");
-	return ret;
+#define TRACE_BOOT_LOADER	0
+
+#if TRACE_BOOT_LOADER
+
+#define TRACE_PRINT_PTR(ptr) BOOT_PRINT_PTR(ptr)
+#define TRACE_PRINT_CAP(cap) BOOT_PRINT_CAP(cap)
+
+#else
+
+#define TRACE_PRINT_PTR(...)
+#define TRACE_PRINT_CAP(...)
+
+#endif
+
+#define K_ALLOC_ALIGN (0x10000)
+
+extern char __nano_size;
+extern char __boot_load_physaddr;
+
+static char* phy_mem;
+
+static cap_pair kernel_alloc_mem(size_t _size) {
+	/* We will allocate the first few objects in low physical memory. THe first thing we load is the nano kernel
+	 * and this will be direct mapped.*/
+    static int alloc_direct = 1;
+    size_t nano_size = (size_t)&(__nano_size);
+    size_t boot_load_physaddr = (size_t)&(__boot_load_physaddr);
+
+    capability alloc;
+
+    if(alloc_direct) {
+        if(_size > nano_size + MIPS_KSEG0) {
+            boot_printf(KRED"nano kernel too large. %lx vs %lx\n"KRST, _size  - MIPS_KSEG0, nano_size);
+            hw_reboot();
+        }
+        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, nano_size);
+        phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + nano_size);
+        alloc = cheri_getdefault();
+        alloc_direct = 0;
+    } else {
+        alloc = phy_mem;
+        size_t align_off = (K_ALLOC_ALIGN - (_size & (K_ALLOC_ALIGN-1)) & (K_ALLOC_ALIGN-1));
+        phy_mem += _size + align_off;
+    }
+
+    size_t largest = cheri_getoffset(phy_mem) - MIPS_KSEG0;
+    if(largest > boot_load_physaddr) {
+		boot_printf(KRED"boot loader overwriting itself. Ooops. Allocated up to address %lx, beri_load at %lx\n"KRST,
+        largest, boot_load_physaddr);
+		hw_reboot();
+	}
+
+	return (cap_pair){.code = rederive_perms(alloc, cheri_getpcc()), .data = alloc};
 }
 
-static void * boot_act_create(const char * name, void * c0, void * pcc, void * stack,
-	                 void * act_cap, void * ns_ref, void * ns_id, register_t a0) {
-	reg_frame_t frame;
-	memset(&frame, 0, sizeof(reg_frame_t));
-
-	/* set pc */
-	frame.cf_pcc	= pcc;
-	frame.mf_pc	= cheri_getoffset(pcc);
-
-	/* set stack */
-	frame.cf_c11	= stack;
-	frame.mf_sp	= cheri_getlen(stack);
-
-	/* set c12 */
-	frame.cf_c12	= frame.cf_pcc;
-
-	/* set c0 */
-	frame.cf_c0	= c0;
-
-	/* set cap */
-	frame.cf_c22	= act_cap;
-
-	/* set namespace */
-	frame.cf_c23	= ns_ref;
-	frame.cf_c24	= ns_id;
-
-	void * ctrl = boot_act_register(&frame, name);
-	CCALL(1, act_ctrl_get_ref(ctrl), act_ctrl_get_id(ctrl), 0,
-	      a0, 0, 0, NULL, NULL, ctrl);
-	return ctrl;
+static void kernel_free_mem(void *addr) {
+	/* no-op */
+	(void)addr;
 }
 
-/* Return the capability needed by the activation */
-static void * get_act_cap(module_t type) {
-	void * cap = NULL;
-	switch(type) {
-		case m_uart:{}
-			#ifdef CONSOLE_malta
-				#define	UART_BASE	0x180003f8
-				#define	UART_SIZE	0x40
-			#elif defined(CONSOLE_altera)
-				#define	UART_BASE	0x7f000000
-				#define	UART_SIZE	0x08
-			#else
-			#error UART type not found
-			#endif
-			cap = cheri_getdefault();
-			cap = cheri_setoffset(cap,
-			    mips_phys_to_uncached(UART_BASE));
-			cap = cheri_setbounds(cap, UART_SIZE);
-			break;
-		case m_memmgt:{}
-			size_t heaplen = (size_t)&__stop_heap - (size_t)&__start_heap;
-			void * heap = cheri_setoffset(cheri_getdefault(), (size_t)&__start_heap);
-			heap = cheri_setbounds(heap, heaplen);
-			cap = cheri_andperm(heap, 0b1111101 | CHERI_PERM_SOFT_1);
-			break;
-		case m_fs:{}
-			void * mmio_cap = cheri_setoffset(cheri_getdefault(), mips_phys_to_uncached(0x1e400000));
-			cap = cheri_setbounds(mmio_cap, 0x200);
-			break;
-		case m_namespace:
-		case m_core:
-		case m_user:
-		case m_fence:
-		default:{}
-	}
-	return cap;
+static void *boot_memcpy(void *dest, const void *src, size_t n) {
+	return memcpy(dest, src, n);
 }
 
-static void * ns_ref = NULL;
-static void * ns_id  = NULL;
+static boot_info_t bi;
+static Elf_Env env;
 
-void * load_module(module_t type, const char * file, int arg) {
-	char *prgmp = elf_loader(file, 0, NULL);
-	if(!prgmp) {
-		assert(0);
-		return NULL;
-	}
-	size_t allocsize = cheri_getlen(prgmp);
-
-	size_t stack_size = 0x10000;
-	void * stack = boot_alloc(stack_size);
-	if(!stack) {
-		assert(0);
-		return NULL;
-	}
-	void * pcc = cheri_getpcc();
-	pcc = cheri_setbounds(cheri_setoffset(pcc, cheri_getbase(prgmp)) , allocsize);
-	pcc = cheri_setoffset(pcc, cheri_getoffset(prgmp));
-	pcc = cheri_andperm(pcc, 0b10111);
-	void * ctrl = boot_act_create(file, cheri_setoffset(prgmp, 0),
-	              pcc, stack, get_act_cap(type), ns_ref, ns_id, arg);
-	if(ctrl == NULL) {
-		return NULL;
-	}
-	if(type == m_namespace) {
-		ns_ref = act_ctrl_get_ref(ctrl);
-		ns_id = act_ctrl_get_id(ctrl);
-	}
-	return ctrl;
+void init_elf_loader() {
+  env.alloc   = kernel_alloc_mem;
+  env.free    = kernel_free_mem;
+  env.printf  = boot_printf;
+  env.vprintf = boot_vprintf;
+  env.memcpy  = boot_memcpy;
 }
 
-void load_kernel(const char * file) {
-	size_t maxaddr = 0;
-	char *prgmp = elf_loader(file, 1, &maxaddr);
+capability load_nano() {
+	extern u8 __nano_elf_start, __nano_elf_end;
+	size_t minaddr, maxaddr, entry;
+	char *prgmp = elf_loader_mem(&env, &__nano_elf_start,
+								 &minaddr, &maxaddr, &entry).data;
+    if(!prgmp) {
+        boot_printf(KRED"Could not load nano kernel file"KRST"\n");
+        goto err;
+    }
+
+
+	__asm__ ("sync");
+
+	bi.nano_begin = 0;
+	bi.nano_end = (size_t)&(__nano_size);
+
+    boot_printf("Loaded nano kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
+                minaddr, maxaddr, entry);
+
+    return prgmp + entry;
+
+    err:
+    hw_reboot();
+}
+
+size_t load_kernel() {
+	extern u8 __kernel_elf_start, __kernel_elf_end;
+	size_t minaddr, maxaddr, entry;
+	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
+				     &minaddr, &maxaddr, &entry).data;
+
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
 		goto err;
@@ -165,66 +154,57 @@ void load_kernel(const char * file) {
 
 	if(maxaddr > (size_t)(&__boot_load_virtaddr)) {
 		boot_printf(KRED"Kernel too large: %lx > %lx"KRST"\n",
-		    maxaddr, (size_t)(&__boot_load_virtaddr));
+			    maxaddr, (size_t)(&__boot_load_virtaddr));
 		goto err;
 	}
 
-	if(&__kernel_entry_point != prgmp) {
-		boot_printf(KRED"Bad kernel entry point: %p"KRST"\n", prgmp);
-		goto err;
-	}
+    bi.kernel_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
+    bi.kernel_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
 
-	caches_invalidate(&__kernel_load_virtaddr,
-	                  maxaddr - (size_t)(&__kernel_load_virtaddr));
+	boot_printf("Loaded kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
+		    minaddr, maxaddr, entry);
 
-	return;
-	err:
+	return entry;
+err:
 	hw_reboot();
 }
 
-void install_exception_vector(void) {
-	/* Copy exception trampoline to exception vector */
-	char * all_mem = cheri_getdefault() ;
-	void *mips_bev0_exception_vector_ptr =
-	                (void *)(all_mem + MIPS_BEV0_EXCEPTION_VECTOR);
-	memcpy(mips_bev0_exception_vector_ptr, &kernel_trampoline,
-	    (char *)&kernel_trampoline_end - (char *)&kernel_trampoline);
-	cp0_status_bev_set(0);
+boot_info_t *load_init() {
+	extern u8 __init_elf_start, __init_elf_end;
+	size_t minaddr, maxaddr, entry;
+
+	// FIXME: init is direct mapped for now
+	char *prgmp = elf_loader_mem(&env, &__init_elf_start,
+				     &minaddr, &maxaddr, &entry).data;
+
+	if(!prgmp) {
+		boot_printf(KRED"Could not load init file"KRST"\n");
+		goto err;
+	}
+
+	if(maxaddr > (size_t)(&__boot_load_virtaddr)) {
+		boot_printf(KRED"Init too large: %lx > %lx"KRST"\n",
+			    maxaddr, (size_t)(&__boot_load_virtaddr));
+		goto err;
+	}
+
+	boot_printf("Loaded init: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
+		    minaddr, maxaddr, entry);
+
+    bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
+    bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
+    bi.init_entry = entry;
+
+	return &bi;
+err:
+	hw_reboot();
 }
 
 void hw_init(void) {
+    capability ucap = cheri_getdefault();
+    ucap = cheri_setoffset(ucap, MIPS_XKPHYS_UNCACHED_BASE + uart_base_phy_addr);
+    ucap = cheri_setbounds(ucap, uart_base_size);
+    set_uart_cap(ucap);
 	uart_init();
 	cp0_hwrena_set(cp0_hwrena_get() | (1<<2));
-}
-
-static int act_alive(void * ctrl) {
-	if(!ctrl) {
-		return 0;
-	}
-	int ret;
-	__asm__ __volatile__ (
-		"li    $v0, 23      \n"
-		"cmove $c3, %[ctrl] \n"
-		"syscall            \n"
-		"move %[ret], $v0   \n"
-		: [ret] "=r" (ret)
-		: [ctrl] "C" (ctrl)
-		: "v0", "$c3");
-	if(ret == 2) {
-		return 0;
-	}
-	return 1;
-}
-
-int acts_alive(boot_elem_t * boot_list, size_t  boot_list_len) {
-	int nb = 0;
-	for(size_t i=0; i<boot_list_len; i++) {
-		boot_elem_t * be = boot_list + i;
-		if((!be->daemon) && act_alive(be->ctrl)) {
-			nb++;
-			break;
-		}
-	}
-	//boot_printf(KRED"%d still alive\n", nb);
-	return nb;
 }

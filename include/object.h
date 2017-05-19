@@ -32,60 +32,44 @@
 #define	_OBJECT_H_
 
 #include "mips.h"
+#include "cheric.h"
+#include "queue.h"
+#include "ccall.h"
+#include "msg.h"
+#include "types.h"
+#include "stddef.h"
 
-extern void * act_self_ctrl;
-extern void * act_self_ref;
-extern void * act_self_id;
-extern void * act_self_cap;
-void *	act_ctrl_get_ref(void * ctrl);
-void *	act_ctrl_get_id(void * ctrl);
-int	act_ctrl_revoke(void * ctrl);
-int	act_ctrl_terminate(void * ctrl);
-void *	act_get_cap(void);
-void *	act_seal_id(void * id);
+extern act_control_kt act_self_ctrl;
+extern act_kt act_self_ref;
+extern capability act_self_cap;
+extern queue_t * act_self_queue;
+//TODO these should be provided by the linker/runtime
+extern void (*msg_methods[]);
+extern size_t msg_methods_nb;
+extern void (*ctrl_methods[]);
+extern size_t ctrl_methods_nb;
 
-void	object_init(void * self_ctrl, void * self_cap);
+void	object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c);
 
 void	ctor_null(void);
 void	dtor_null(void);
-void *	get_curr_cookie(void);
-void	set_curr_cookie(void * cookie);
 
-void * get_cookie(void * cb, void * cs);
+void * get_idc_from_ref(capability act_ref, capability act_id);
 
-extern void * sync_token;
+typedef struct sync_state_t {
+    capability sync_token;
+    capability sync_caller;
+} sync_state_t;
+
+_Static_assert(offsetof(sync_state_t, sync_token) == 0, "used by assembly");
+_Static_assert(offsetof(sync_state_t, sync_caller) == sizeof(capability), "used by assembly");
+
+extern sync_state_t sync_state;
+
+extern kernel_if_t kernel_if;
+
 extern long msg_enable;
 
-typedef struct
-{
-	void * cret;
-	register_t rret;
-}  ret_t;
-
-#define CCALL(selector, ...) ccall_##selector(__VA_ARGS__)
-register_t ccall_1(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3);
-register_t ccall_2(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2, register_t rarg3,
-                  const void * carg1, const void * carg2, const void * carg3);
-
-void	ccall_c_n(void * cb, void * cs, int method_nb, const void * carg);
-void *	ccall_n_c(void * cb, void * cs, int method_nb);
-void *	ccall_r_c(void * cb, void * cs, int method_nb, int rarg);
-void *	ccall_c_c(void * cb, void * cs, int method_nb, const void * carg);
-void *	ccall_rr_c(void * cb, void * cs, int method_nb, int rarg, int rarg2);
-register_t ccall_n_r(void * cb, void * cs, int method_nb);
-register_t ccall_r_r(void * cb, void * cs, int method_nb, int rarg);
-register_t ccall_c_r(void * cb, void * cs, int method_nb, void * carg);
-register_t ccall_rr_r(void * cb, void * cs, int method_nb, int rarg, int rarg2);
-register_t ccall_rc_r(void * cb, void * cs, int method_nb, int rarg, const void * carg);
-void	ccall_cc_n(void * cb, void * cs, int method_nb, void * carg1, void * carg2);
-void	ccall_rc_n(void * cb, void * cs, int method_nb, int rarg, void * carg);
-register_t ccall_rcc_r(void * cb, void * cs, int method_nb, register_t rarg1, void * carg1, void * carg2);
-void *	ccall_rrrc_c(void * cb, void * cs, int method_nb,
-                    register_t, register_t, register_t, void * carg);
-register_t ccall_rrcc_r(void * cb, void * cs, int method_nb,
-                    register_t rarg1, register_t rarg2, void * carg1, void * carg2);
+void pop_msg(msg_t * msg);
 
 #endif

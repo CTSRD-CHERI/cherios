@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2016 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,42 +32,25 @@
 #include "boot/boot.h"
 #include "stdio.h"
 #include "uart.h"
+#include "syscalls.h"
+#include "plat.h"
 
-#define	BUF_SIZE	0x100
+/*
+ * Provide a kernel-compatible version of printf, which invokes the UART
+ * driver.
+ */
+void
+uart_putchar(int c, void *arg __unused)
+{
 
-int syscall_print = 0;
-
-void boot_printf_syscall_enable(void) {
-	syscall_print = 1;
+	uart_putc(c);
 }
 
-static void buf_puts(const char * str) {
-	if(syscall_print == 0) {
-		kernel_printf("%s", str);
-	} else {
-		__asm__ __volatile__ (
-		"li   $v0, 34 \n"
-		"cmove $c3, %[str] \n"
-		"syscall      \n"
-		:: [str]"C" (str): "v0", "$c3");
-	}
-}
+int
+boot_vprintf(const char *fmt, va_list ap)
+{
 
-static void buf_putc(int c, void *arg __unused) {
-	char chr = (char)c;
-	static size_t offset;
-	static char buf[BUF_SIZE + 1];
-	buf[offset++] = chr;
-	if((chr == '\n') || (offset == BUF_SIZE)) {
-		buf[offset] = '\0';
-		buf_puts(buf);
-		offset = 0;
-	}
-}
-
-int boot_vprintf(const char *fmt, va_list ap) {
-
-	return (kvprintf(fmt, buf_putc, NULL, 10, ap));
+	return (kvprintf(fmt, uart_putchar, NULL, 10, ap));
 }
 
 static int boot_printf2(const char *fmt, ...) {
@@ -91,4 +75,39 @@ int boot_printf(const char *fmt, ...) {
 	boot_printf2(KRST);
 
 	return (retval);
+}
+
+/*
+ * Various util functions
+ */
+
+void __boot_assert(const char *assert_function, const char *assert_file,
+		   int assert_lineno, const char *assert_message) {
+	boot_panic("assertion failure in %s at %s:%d: %s", assert_function,
+		   assert_file, assert_lineno, assert_message);
+}
+
+void boot_vtrace(const char *context, const char *fmt, va_list ap) {
+	boot_printf(KYLW KBLD"%s" KRST KYLW" - ", context);
+	boot_vprintf(fmt, ap);
+	boot_printf(KRST"\n");
+}
+
+void boot_trace(const char *context, const char *fmt, ...) {
+	va_list ap;
+	va_start(ap, fmt);
+	boot_vtrace(context, fmt, ap);
+	va_end(ap);
+}
+
+void boot_panic(const char *fmt, ...) {
+	va_list ap;
+
+	boot_printf(KMAJ"panic: ");
+	va_start(ap, fmt);
+	boot_vprintf(fmt, ap);
+	va_end(ap);
+	boot_printf(KRST"\n");
+
+	hw_reboot();
 }

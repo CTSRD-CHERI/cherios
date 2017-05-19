@@ -30,47 +30,39 @@
 
 #include "lib.h"
 #include "malloc_heap.h"
+#include "../../boot/include/boot/boot_info.h"
 
 extern void msg_entry;
 void (*msg_methods[]) = {__mmap, __munmap};
 size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null, register_ns};
+void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-size_t pagesz;			/* page size */
+ALLOCATE_PLT_NANO
 
-void register_ns(void * ns_ref, void * ns_id) {
-	namespace_init(ns_ref, ns_id);
-	int ret = namespace_register(3, act_self_ref, act_self_id);
+void register_ns(void * ns_ref) {
+	namespace_init(ns_ref);
+	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
 	if(ret!=0) {
-		syscall_puts(KRED"Register failed\n");
+		printf(KRED"memmgt: Register failed %d\n", ret);
 	}
 }
 
-int main(void) {
-	syscall_puts("memmgt Hello world\n");
+int main(memmgt_init_t* mem_init) {
+	/* So we can call nano kernel functions. This would normally be done by the linker */
+	init_nano_kernel_if_t(mem_init->nano_if, mem_init->nano_default_cap);
 
-	/* Get capability to heap */
-	void * heap = act_get_cap();
-	//CHERI_PRINT_CAP(heap);
-	assert(heap != NULL);
+	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
+	if(ret!=0) {
+		printf(KRED"memmgt: Register failed %d\n", ret);
+	}
 
-	/*
-	 * setup memory and
-	 * align break pointer so all data will be page aligned.
-	 */
-	pagesz = CHERIOS_PAGESIZE;
-	#if MMAP
-	minit(heap);
-	#else
-	init_pagebucket();
-	__init_heap(heap);
-	#endif
+	minit();
 
 	/* init release mecanism */
 	release_init();
 
-	syscall_puts("memmgt: setup done\n");
+	syscall_puts("memmgt: Going into daemon mode\n");
 
 	msg_enable = 1; /* Go in waiting state instead of exiting */
 	return 0;

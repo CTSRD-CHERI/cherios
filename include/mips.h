@@ -32,6 +32,11 @@
 #ifndef _CHERIOS_MIPS_H_
 #define	_CHERIOS_MIPS_H_
 
+#ifdef HARDWARE_qemu
+#define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
+#define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
+#endif
+
 /*
  * Provide more convenient names for useful qualifiers from gcc/clang.
  */
@@ -48,7 +53,7 @@ typedef unsigned long	vaddr_t;		/* Virtual address */
 typedef long		ssize_t;
 typedef	unsigned long	size_t;
 
-typedef long		off_t;
+typedef unsigned long		off_t;
 
 /*
  * Useful integer type names that we can't pick up from the compile-time
@@ -97,10 +102,14 @@ typedef uint64_t	u_int64_t;
 /*
  * Useful addresses on MIPS.
  */
-#define	MIPS_BEV0_EXCEPTION_VECTOR	0xffffffff80000180
+#define MIPS_KSEG1 0xffffffffA0000000
+#define MIPS_KSEG0 0xffffffff80000000
+#define MIPS_VRT   0
+
+#define	MIPS_BEV0_EXCEPTION_VECTOR	(MIPS_KSEG0 + 0x180)
 #define	MIPS_BEV0_EXCEPTION_VECTOR_PTR	((void *)MIPS_BEV0_EXCEPTION_VECTOR)
 
-#define	MIPS_BEV0_CCALL_VECTOR		0xffffffff80000280
+#define	MIPS_BEV0_CCALL_VECTOR		(MIPS_KSEG0 + 0x280)
 #define	MIPS_BEV0_CCALL_VECTOR_PTR	((void *)MIPS_BEV0_EXCEPTION_VECTOR)
 
 /*
@@ -244,8 +253,8 @@ typedef uint64_t	u_int64_t;
 /*
  * MIPS address space layout.
  */
-#define	MIPS_XKPHYS_UNCACHED_BASE	0x9000000000000000
-#define	MIPS_XKPHYS_CACHED_NC_BASE	0x9800000000000000
+#define	MIPS_XKPHYS_UNCACHED_BASE	0x9800000000000000
+#define	MIPS_XKPHYS_CACHED_NC_BASE	0x9000000000000000
 
 static inline vaddr_t
 mips_phys_to_cached(paddr_t phys)
@@ -269,7 +278,7 @@ static inline uint16_t
 byteswap16(uint16_t v)
 {
 
-	return ((v & 0xff00) >> 8 | (v & 0xff) << 8);
+	return (uint16_t)((v & 0xff00) >> 8 | (v & 0xff) << 8);
 }
 
 static inline uint32_t

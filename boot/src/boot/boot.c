@@ -29,147 +29,53 @@
  * SUCH DAMAGE.
  */
 
+#include "sys/types.h"
 #include "boot/boot.h"
 #include "cp0.h"
-#include "misc.h"
-#include "object.h"
-#include "string.h"
+#include "plat.h"
+#include "uart.h"
 
-#define B_FS 1
-#define B_SO 1
-#define B_ZL 1
-#define B_T1 0
-#define B_T2 0
-#define B_T3 0
+typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, register_t arg0, register_t arg1);
 
-#define B_ENTRY(_type, _name, _arg, _daemon, _cond) \
-	{_type,	_cond, _name, _arg, _daemon, 0, NULL},
-#define B_DENTRY(_type, _name, _arg, _cond) \
-	 B_ENTRY(_type, _name, _arg, 1, _cond)
-#define B_PENTRY(_type, _name, _arg, _cond) \
-	 B_ENTRY(_type, _name, _arg, 0, _cond)
-#define B_FENCE \
-	{m_fence, 1, NULL, 0, 0, 0, NULL},
+void bootloader_main(void);
+void bootloader_main(void) {
 
-boot_elem_t boot_list[] = {
-	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
-	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
-	B_DENTRY(m_uart,	"uart.elf",		0,	1)
-	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
-	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
-	B_DENTRY(m_core,	"virtio-blk.elf",	0,	B_FS)
-	B_DENTRY(m_core,	"test1b.elf",		0,	B_T1)
-	B_FENCE
-	B_PENTRY(m_fs,		"fatfs.elf",		0,	B_FS)
-	B_FENCE
-	B_PENTRY(m_user,	"hello.elf",		0,	1)
-	B_FENCE
-	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
-	B_PENTRY(m_user,	"prga.elf",		2,	B_SO)
-	B_PENTRY(m_user,	"zlib_test.elf",	0,	B_ZL)
-	B_PENTRY(m_user,	"test1a.elf",		0,	B_T1)
-	B_PENTRY(m_user,	"test2a.elf",		0,	B_T2)
-	B_PENTRY(m_user,	"test2b.elf",		0,	B_T2)
-
-#if 0
-	#define T3(_arg) \
-	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
-	T3(16) T3(17) T3(18) T3(19)
-	T3(20) T3(21) T3(22) T3(23) T3(24) T3(25) T3(26) T3(27) T3(28) T3(29)
-	T3(30) T3(31) T3(32) T3(33) T3(34) T3(35) T3(36) T3(37) T3(38) T3(39)
-	T3(40) T3(41) T3(42) T3(43) T3(44) T3(45) T3(46) T3(47) T3(48) T3(49)
-	T3(50) T3(51) T3(52) T3(53) T3(54) T3(55) T3(56) T3(57) T3(58) T3(59)
-	T3(60) T3(61) T3(62) T3(63) T3(64) T3(65) T3(66) T3(67) T3(68) T3(69)
-	T3(70) T3(71) T3(72) T3(73) T3(74) T3(75) T3(76) T3(77) T3(78) T3(79)
-#endif
-
-	{m_fence, 0, NULL, 0, 0, 0, NULL}
-};
-
-const size_t boot_list_len = countof(boot_list);
-
-void print_build_date(void) {
-	int filelen=0;
-	char * date = load("t1", &filelen);
-	if(date == NULL) {
-		boot_printf("%s failed\n", __func__);
-		return;
-	}
-	date[filelen-1] = '\0';
-	boot_printf("%s\n", date);
-}
-
-static void load_modules(void) {
-	static void * c_memmgt = NULL;
-
-	for(size_t i=0; i<boot_list_len; i++) {
-		boot_elem_t * be = boot_list + i;
-		if(be->cond == 0) {
-			continue;
-		}
-		if(be->type == m_fence) {
-			nssleep(3);
-			continue;
-		}
-		be->ctrl = load_module(be->type, be->name, be->arg);
-		switch(boot_list[i].type) {
-			case m_memmgt:
-				nssleep(3);
-				c_memmgt = be->ctrl;
-				boot_alloc_enable_system(be->ctrl);
-				break;
-			case m_namespace:
-				nssleep(3);
-				/* glue memmgt to namespace */
-				glue_memmgt(c_memmgt, be->ctrl);
-				break;
-			default:{}
-		}
-	}
-}
-
-int cherios_main(void) {
 	/* Init hardware */
 	hw_init();
 
-	boot_printf("Hello world\n");
+	/* Initialize elf-loader environment */
+	init_elf_loader();
 
-	/* Init bootloader */
-	boot_printf("B\n");
-	stats_init();
-	boot_alloc_init();
+    /* Load the nano kernel. Doing this will install exception vectors */
+    boot_printf("Boot: loading nano kernel ...\n");
+	nano_init_t * nano_init = (nano_init_t *)load_nano(); //We have to rederive this as an executable cap
+    nano_init = (nano_init_t*)cheri_setoffset(cheri_getpcc(),cheri_getoffset(nano_init));
 
-	/* Print fs build date */
-	boot_printf("C\n");
-	print_build_date();
+    /* TODO: we could have some boot exception vectors if we want exception  handling in boot. */
+    /* These should be in ROM as a part of the boot image (i.e. make a couple more dedicated sections */
+    cp0_status_bev_set(0);
 
-	/* Load and init kernel */
-	boot_printf("D\n");
-	load_kernel("kernel.elf");
-	install_exception_vector();
-	__asm__ __volatile__ (
-		"li    $v0, 0        \n"
-		"syscall             \n"
-		::: "v0");
-	/* Interrupts are ON from here */
-	boot_printf("E\n");
+    boot_printf("Boot: loading kernel ...\n");
+    size_t entry = load_kernel();
 
-	/* Switch to syscall print */
-	boot_printf_syscall_enable();
+    boot_printf("Boot: loading init ...\n");
+    boot_info_t *bi = load_init();
 
-	/* Load modules */
-	boot_printf("F\n");
-	load_modules();
+    size_t invalid_length = bi->init_end;
+    capability phy_start = cheri_setbounds(cheri_setoffset(cheri_getdefault(), MIPS_KSEG0), invalid_length);
 
-	boot_printf("Z\n");
+    /* Do we actually need this? */
+    //boot_printf("Invalidating %p length %lx:\n", phy_start, invalid_length);
+    //caches_invalidate(phy_start, invalid_length);
 
-	while(acts_alive(boot_list, boot_list_len)) {
-		ssleep(0);
-	}
 
-	boot_printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
-	stats_display();
-	hw_reboot();
+    register_t mem_size = bi->init_end - bi->nano_end;
 
-	return 0;
+    /* Jumps to the nano kernel init. This will completely destroy boot and so we can never return here.
+     * All registers will be cleared apart from a specified few. mem_size of memory will be left unmanaged and the
+     * rest will be returned as a reservation. The third argument is an extra argument to the kernel */
+
+    boot_printf("Jumping to nano kernel...\n");
+    BOOT_PRINT_CAP(nano_init);
+    nano_init(mem_size, entry, bi->init_begin - bi->kernel_begin, bi->init_entry);
 }

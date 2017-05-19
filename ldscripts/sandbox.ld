@@ -33,7 +33,8 @@
  * 0x1000 byte "guard" region to catch NULL pointer dereferences.
  */
 
-CAP_ALIGN = 0x20;
+INCLUDE "common.ld"
+
 __code_base__ = 0x1000;
 
 SECTIONS

@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -32,23 +33,28 @@
 #include "object.h"
 #include "cheric.h"
 #include "assert.h"
+#include "stdio.h"
 
-void * namespace_ref = NULL;
-void * namespace_id  = NULL;
+act_kt namespace_ref = NULL;
 
-void namespace_init(void *ns_ref, void *ns_id) {
+int namespace_rdy(void) {
+	return namespace_ref != NULL;
+}
+
+void namespace_init(act_kt ns_ref) {
 	namespace_ref = ns_ref;
-	namespace_id  = ns_id;
 }
 
-int namespace_register(int nb, void *ref, void *id) {
-	return ccall_rcc_r(namespace_ref, namespace_id, 0, nb, ref, id);
+int namespace_register(int nb, act_kt ref) {
+	return MESSAGE_SYNC_SEND_r(namespace_ref, nb, 0, 0, ref, NULL, NULL, 0);
 }
 
-void * namespace_get_ref(int nb) {
-	return ccall_r_c(namespace_ref, namespace_id, 1, nb);
+act_kt namespace_get_ref(int nb) {
+	return MESSAGE_SYNC_SEND_c(namespace_ref, nb, 0, 0, NULL, NULL, NULL, 1);
 }
 
-void * namespace_get_id(int nb) {
-	return ccall_r_c(namespace_ref, namespace_id, 2, nb);
+int namespace_get_num_services(void) {
+	if (namespace_ref == NULL)
+		return -1;
+	return MESSAGE_SYNC_SEND_r(namespace_ref, 0, 0, 0, NULL, NULL, NULL, 2);
 }

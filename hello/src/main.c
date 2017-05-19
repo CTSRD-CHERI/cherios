@@ -50,6 +50,8 @@ int main(void)
 
 	#if _MSG
 	msg_enable = 1; /* Go in waiting state instead of exiting */
+    #else
+	syscall_puts("Hello Goodbye World!\n");
 	#endif
 	return 0;
 }
