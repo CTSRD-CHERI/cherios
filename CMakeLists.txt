@@ -61,6 +61,13 @@ if(NOT MAKEFS_PROGRAM)
     message(FATAL_ERROR "Could not find makefs program, please install it!")
 endif()
 
+option(BUILD_FOR_CHERI128 "build for cheri128" OFF)
+if(BUILD_FOR_CHERI128)
+  set(CHERI_CPU cheri128)
+else()
+  set(CHERI_CPU cheri)
+endif()
+
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
@@ -83,9 +90,13 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # CMake will try to link ctr1.o into the executable and this might not exist
 # We don't need it as we are building in a freestanding environment here anyway
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
-set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -v -fuse-ld=lld -static"
+set(CMAKE_ASM_FLAGS_INIT "-mcpu=${CHERI_CPU}")
+set(CMAKE_C_FLAGS_INIT "-mcpu=${CHERI_CPU}")
+set(CMAKE_CXX_FLAGS_INIT "-mcpu=${CHERI_CPU}")
+set(CMAKE_EXE_LINKER_FLAGS "-mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -v -fuse-ld=lld -static"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
+
 enable_language(C)
 enable_language(ASM)
 
@@ -120,6 +131,7 @@ include_directories(include)
 include_directories(include/sys)
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
+    -mcpu=${CHERI_CPU}
     -mabi=purecap
     -cheri-linker
     -integrated-as
@@ -138,7 +150,6 @@ set(C_COMPILER_FLAGS
     -nostdinc
     -fno-builtin
     -ffreestanding
-    -mcpu=cheri
     -mllvm
     -mxmxgot
     -mxgot
