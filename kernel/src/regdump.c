@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <activations.h>
 #include "activations.h"
 #include "klib.h"
 
@@ -78,8 +79,43 @@ static inline size_t correct_base(size_t image_base, capability pcc) {
 	return ((cheri_getoffset(pcc) + cheri_getbase(pcc)) - image_base);
 }
 
-static inline void print_frame(int num, size_t ra, char * sp) {
-	printf("%2d| [0x%016lx] (sp=%p)\n", num, ra, sp);
+static act_t* get_act_for_address(size_t address) {
+    /* Assuming images are contiguous, we want the greatest base less than address */
+    size_t base = 0;
+    size_t top_bits = 2;
+    act_t* base_act = NULL;
+    for(size_t i = 0; i < kernel_next_act; i++) {
+        act_t *act = &kernel_acts[i];
+        size_t new_base = act->image_base;
+
+        /* Should not confuse our two regions */
+
+        if(new_base >> (64 - top_bits) == address >> (64 - top_bits)) {
+            if(new_base <= address && new_base > base) {
+                base = act->image_base;
+                base_act = act;
+            }
+        }
+    }
+
+    return base_act;
+}
+
+static act_t* get_act_for_pcc(capability pcc) {
+    return get_act_for_address(cheri_getcursour(pcc));
+}
+
+static inline void print_frame(int num, capability ra, char * sp) {
+    act_t* act = get_act_for_pcc(ra);
+    size_t base = MIPS_KSEG0;
+    char* name = "nano";
+    if(act) {
+        base = act->image_base;
+        name = act->name;
+    }
+
+    size_t correct = correct_base(base, ra);
+	printf("%2d| [0x%016lx] in %16s (sp=%p)\n", num, correct, name, (void*)sp);
 }
 
 int check_cap(capability cap) {
@@ -89,7 +125,7 @@ int check_cap(capability cap) {
 	(cap == NULL));
 }
 
-static inline void backtrace(size_t image_base, char* stack_pointer, capability return_address) {
+static inline void backtrace(char* stack_pointer, capability return_address) {
 	int i = 0;
 
 	// Function prolog:
@@ -115,7 +151,7 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 	// FIXME assumes a function prolog with daddiu. Not true for leaf functions
 
 	do {
-		print_frame(i++, correct_base(image_base, return_address), stack_pointer);
+		print_frame(i++, return_address, stack_pointer);
 
 		//scan backwards for daddiu
 		int16_t stack_size = 0;
@@ -148,37 +184,34 @@ static inline void backtrace(size_t image_base, char* stack_pointer, capability 
 		return_address = (capability)((uint32_t*)return_address-2);
 		stack_pointer = stack_pointer - stack_size;
 	} while(cheri_getoffset(stack_pointer) != cheri_getlen(stack_pointer));
-	print_frame(i++, correct_base(image_base, return_address), stack_pointer);
+	print_frame(i++, return_address, stack_pointer);
 }
 
 static inline void dump_tlb() {
 
-#define CR_EHI      "10"
-#define CR_ELO0     "2"
-#define CR_ELO1     "3"
-#define CR_PAGEMask "5"
-#define CR_Index    "0"
+#define STRINGIFY(X) #X
+#define ASM_MTCO(var, reg) "mtc0 %[" #var "], " STRINGIFY(reg) "\n"
+#define ASM_MFCO(var, reg) "dmfc0 %[" #var "], " STRINGIFY(reg) "\n"
 
-
-    register_t hi, lo1, lo2, pm;
+    register_t hi, lo0, lo1, pm;
 
     printf("TLB status:\n\n");
 
     printf("|------------------------------------------------------------------------------|\n");
     printf("|        |        EntryHi      |         EntryLO0      |         EntryLO1      |\n");
-    printf("|PageMask|---------------------|-----------------------|-----------------------|\n");
+    printf("|PageSize|---------------------|-----------------------|-----------------------|\n");
     printf("|        |      VPN     | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
     for(int i = 0; i < 32; i++) {
         __asm__ __volatile__(
-            "mtc0  %[ndx], $"CR_Index"\n"
+            ASM_MTCO(ndx, MIPS_CP0_REG_INDEX)
             "tlbr  \n"
-            "dmfc0  %[HI], $"CR_EHI"\n"
-            "dmfc0  %[LO1], $"CR_ELO0"\n"
-            "dmfc0  %[LO2], $"CR_ELO1"\n"
-            "dmfc0  %[PM], $"CR_PAGEMask"\n"
-        : [HI]"=r"(hi), [LO1]"=r"(lo1), [LO2]"=r"(lo2), [PM]"=r"(pm)
+            ASM_MFCO(HI, MIPS_CP0_REG_ENTRYHI)
+            ASM_MFCO(LO0, MIPS_CP0_REG_ENTRYLO0)
+            ASM_MFCO(LO1, MIPS_CP0_REG_ENTRYLO1)
+            ASM_MFCO(PM, MIPS_CP0_REG_PAGEMASK)
+        : [HI]"=r"(hi), [LO0]"=r"(lo0), [LO1]"=r"(lo1), [PM]"=r"(pm)
         : [ndx]"r"(i)
         :
         );
@@ -186,21 +219,25 @@ static inline void dump_tlb() {
         register_t vpn = hi >> 13;
         register_t asid = hi & ((1 << 13) - 1);
 
-        register_t pfn0 = lo1 >> 6;
-        register_t c0 = (lo1 >> 3) & 0b111;
-        register_t d0 = (lo1 >> 2) & 1;
-        register_t v0 = (lo1 >> 1) & 1;
-        register_t g0 = (lo1) & 1;
+        register_t pfn0 = lo0 >> 6;
+        register_t c0 = (lo0 >> 3) & 0b111;
+        register_t d0 = (lo0 >> 2) & 1;
+        register_t v0 = (lo0 >> 1) & 1;
+        register_t g0 = (lo0) & 1;
 
-        register_t pfn1 = lo2 >> 6;
-        register_t c1 = (lo2 >> 3) & 0b111;
-        register_t d1 = (lo2 >> 2) & 1;
-        register_t v1 = (lo2 >> 1) & 1;
-        register_t g1 = (lo2) & 1;
-        printf("|%8lx|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|\n",
-               pm, vpn, asid, pfn0, c0, d0, v0, g0,
+        register_t pfn1 = lo1 >> 6;
+        register_t c1 = (lo1 >> 3) & 0b111;
+        register_t d1 = (lo1 >> 2) & 1;
+        register_t v1 = (lo1 >> 1) & 1;
+        register_t g1 = (lo1) & 1;
+
+        register_t pm_sz_k = (pm+1) * 4;
+        int is_m = pm_sz_k >= 1024;
+        if(is_m) pm_sz_k /= 1024;
+
+        printf("|%4lx%sB*2|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|\n",
+               pm_sz_k,is_m? "M" : "K", vpn, asid, pfn0, c0, d0, v0, g0,
             pfn1, c1, d1, v1, g1);
-        //printf("PageMask: %16lx. EntryHi: %16lx. EntryLo1: %16lx. EntryLo2: %16lx\n", pm, hi, lo1 ,lo2);
     }
 
     printf("\n\n");
@@ -257,19 +294,17 @@ void regdump(int reg_num) {
 
 	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
 
-	size_t offset_index = correct_base(kernel_curr_act->image_base, frame->cf_pcc);
-	printf("pcc at %lx in %s\n", offset_index, kernel_curr_act->name);
-
 	printf("\nLoaded images:\n");
 	for(size_t i = 0; i < kernel_next_act; i++) {
 		act_t* act = &kernel_acts[i];
 		printf("%16s: %lx\n", act->name, act->image_base);
 	}
+    printf("%16s: %lx\n", "nano", MIPS_KSEG0);
 
 	printf("\nAttempting backtrace:\n\n");
 	char * stack_pointer = (char*)frame->cf_c11 + frame->mf_sp;
 	capability return_address = frame->cf_pcc;
-	backtrace(kernel_curr_act->image_base, stack_pointer, return_address);
+	backtrace(stack_pointer, return_address);
 }
 
 #endif

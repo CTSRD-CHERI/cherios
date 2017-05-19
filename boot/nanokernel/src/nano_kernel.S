@@ -1185,7 +1185,7 @@ kernel_exception_trampoline_end:
     .ent tlb_trampoline
 tlb_trampoline: # TODO
 ################################################################################################
-
+    TRACE_ON
     dmfc0       $k0, cp0_badvaddr
     dla         $k1, top_virt_page_label                            # k1 = phy poiter to L0
 
@@ -1219,6 +1219,7 @@ tlb_trampoline: # TODO
     dmtc0       $k1, cp0_entrylo1
 
     tlbwr                                                           # write tlb entry
+    TRACE_OFF
     eret
 
 tlb_trampoline_end:
