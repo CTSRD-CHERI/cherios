@@ -41,8 +41,10 @@
 
 #if _MIPS_SZCAP == 256
 	#define _CHERI256_
+	#define U_PERM_BITS 4
 #elif _MIPS_SZCAP == 128
 	#define _CHERI128_
+	#define U_PERM_BITS 16
 #else
 	#error Unknown capability size
 #endif
@@ -128,7 +130,7 @@ typedef capability sealing_cap;
 #define CHERI_PERM_SOFT_2		(1 << 16)
 #define CHERI_PERM_SOFT_3		(1 << 17)
 #define CHERI_PERM_SOFT_4		(1 << 18)
-
+#define CHERI_PERM_ALL		 	((1 << (11 + U_PERM_BITS)) - 1)
 /*
  * Two variations on cheri_ptr() based on whether we are looking for a code or
  * data capability.  The compiler's use of CFromPtr will be with respect to

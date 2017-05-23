@@ -37,7 +37,13 @@
 
 /* fd and offset are currently unused and discarded in userspace */
 int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
-	int perms = CHERI_PERM_SOFT_1; /* can-free perm */
+    /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
+     * Types are numerous. Permissions are not. */
+
+	int perms = CHERI_PERM_ALL &
+            ~(CHERI_PERM_EXECUTE|CHERI_PERM_LOAD|CHERI_PERM_STORE
+              |CHERI_PERM_LOAD_CAP|CHERI_PERM_STORE_CAP|CHERI_PERM_STORE_LOCAL_CAP);
+
     result->data = NULL;
     result->code = NULL;
 
@@ -54,9 +60,9 @@ int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 	}
 
 	if(flags & MAP_PRIVATE) {
-		perms |= CHERI_PERM_STORE_LOCAL_CAP;
+		perms &= ~CHERI_PERM_GLOBAL;
 	} else if(flags & MAP_SHARED) {
-		perms |= CHERI_PERM_GLOBAL;
+
 	} else {
 		errno = EINVAL;
 		goto fail;
@@ -69,8 +75,10 @@ int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 	}
 	if(prot & PROT_WRITE) {
 		perms |= CHERI_PERM_STORE;
-		if(!(prot & PROT_NO_WRITE_CAP))
-			perms |= CHERI_PERM_STORE_CAP;
+		if(!(prot & PROT_NO_WRITE_CAP)) {
+            perms |= CHERI_PERM_STORE_CAP;
+            perms |= CHERI_PERM_STORE_LOCAL_CAP;
+        }
 	}
 
 	if(prot & PROT_EXECUTE) {
