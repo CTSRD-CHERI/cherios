@@ -109,7 +109,7 @@ typedef struct {
 /* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
     ITEM(rescap_parent, res_t, (res_t res), __VA_ARGS__)\
 /* Get a physical page. Can only be done if the page is not nano owned, or mapped to from a virtual address*/\
-    ITEM(get_phy_page, capability, (register_t page_n, register_t cached), __VA_ARGS__)\
+    ITEM(get_phy_page, void, (register_t page_n, int cached, register_t npages, cap_pair* out), __VA_ARGS__)\
 /* Allocate a physical page to be page table. */\
     ITEM(create_table, ptable_t, (register_t page_n, ptable_t parent, register_t index),  __VA_ARGS__)\
 /* Map an entry in a leaf page table to a physical page. The adjacent physical page will also be mapped */\
@@ -134,11 +134,15 @@ PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 #define ALLOCATE_PLT_NANO PLT_ALLOCATE(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
-/* Current not able to request multiple pages. Only really for getting access to magic regs w/o virtual memory */
 /* Try to ask memgt instead of using this */
-static inline capability get_phy_cap(page_t* book, size_t address, size_t size, register_t cached) {
+static inline capability get_phy_cap(page_t* book, size_t address, size_t size, int cached) {
     size_t phy_page = address / PAGE_SIZE;
     size_t phy_offset = address & (PAGE_SIZE - 1);
+
+    if((phy_offset + size) > PAGE_SIZE) {
+        /* If you want a better version use mmap */
+        return NULL;
+    }
 
     if(book[phy_page].len == 0) {
         size_t search_index = 0;
@@ -148,8 +152,13 @@ static inline capability get_phy_cap(page_t* book, size_t address, size_t size, 
         split_phy_page_range(search_index, phy_page - search_index);
     }
 
-    split_phy_page_range(phy_page, 1);
-    capability cap_for_phy = get_phy_page(phy_page, cached);
+    if(book[phy_page].len != 1) {
+        split_phy_page_range(phy_page, 1);
+    }
+
+    cap_pair pair;
+    get_phy_page(phy_page, cached, 1, &pair);
+    capability cap_for_phy = pair.data;
     cap_for_phy = cheri_setoffset(cap_for_phy, phy_offset);
     cap_for_phy = cheri_setbounds(cap_for_phy, size);
     return cap_for_phy;

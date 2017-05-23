@@ -87,7 +87,7 @@ void init_alloc_enable_system(void * c_memmgt) {
 cap_pair init_alloc(size_t s) {
 	if(system_alloc == 1) {
 		cap_pair p;
-		int result = mmap_new(NULL, s, PROT_RW | PROT_EXECUTE, MAP_SHARED|MAP_ANONYMOUS, -1, 0, &p);
+		int result = mmap_new(0, s, CHERI_PERM_ALL, MAP_SHARED|MAP_ANONYMOUS, &p);
 		return p;
 	}
 	return init_alloc_core(s);

@@ -157,7 +157,11 @@ static void * get_act_cap(module_t type, init_info_t* info) {
 
         case m_fs:{}
         //TODO get this from memmgt.
-            //return get_phy_cap(FS_PHY_BASE, FS_PHY_SIZE, 0);
+            cap_pair pair;
+			mmap_new(FS_PHY_BASE, FS_PHY_SIZE,
+                            CHERI_PERM_ALL & ~CHERI_PERM_EXECUTE,
+                            MAP_ANONYMOUS | MAP_SHARED | MAP_PHY, &pair);
+            return pair.data;
         case m_namespace:
         case m_core:
         case m_user:

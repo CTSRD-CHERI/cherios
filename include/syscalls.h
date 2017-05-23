@@ -40,8 +40,8 @@
 // FIXME this will solve many issues. It has been done properly for the nano kernel
 
 #define SYS_CALL_LIST(ITEM, ...)                                                                                   \
-        ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2,                               \
-                                        const_capability c3, const_capability c4, const_capability c5,             \
+        ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
+                                        const_capability c3, const_capability c4, const_capability c5, const_capability,     \
                                         register_t selector, register_t v0), __VA_ARGS__)                                    \
         ITEM(message_reply, int, (capability c3, capability sync_token, register_t v0, register_t v1), __VA_ARGS__)          \
         ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \

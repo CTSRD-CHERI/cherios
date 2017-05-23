@@ -43,7 +43,7 @@ typedef struct cap_pair {
 #define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
 
 void *  mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
-int mmap_new(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset, cap_pair* result);
+int mmap_new(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result);
 int	munmap(void *addr, size_t length);
 
 void	mmap_set_act(act_kt ref);
@@ -62,7 +62,9 @@ enum mmap_flags
 {
   map_private	= 1 << 0,
   map_shared	= 1 << 1,
-  map_anonymous	= 1 << 2
+  map_anonymous	= 1 << 2,
+  MAP_CACHED    = 1 << 3,
+  MAP_PHY       = 1 << 4
 };
 #define MAP_PRIVATE map_private
 #define MAP_ANONYMOUS map_anonymous

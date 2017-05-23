@@ -36,12 +36,10 @@
 .ifeq _MIPS_SZCAP-256
 .set CAP_SIZE_BITS, 5
 .set CAP_SIZE,     32
-.set CAP_IN_MESSAGE, 7
 .else
 .ifeq _MIPS_SZCAP-128
 .set CAP_SIZE_BITS, 4
 .set CAP_SIZE,     16
-.set CAP_IN_MESSAGE, 6
 .else
 .error "Unknown cap size"
 .endif
@@ -113,19 +111,20 @@ msg_entry_loop:
     ccall   $c1, $c2
 
 pop:
-    sll     $t1, start_g, (CAP_SIZE_BITS + 3)                 # 8 capabilities worth of stuff in a message
+    dsll     $t1, start_g, (MSG_LEN_SHIFT)                 # t1 has offet of message in queue
 
     # pops message #
     clc     $c3, $t1,  (MSGS_START_OFFSET)(queue)
     clc     $c4, $t1,  (MSGS_START_OFFSET + CAP_SIZE)(queue)
     clc     $c5, $t1,  (MSGS_START_OFFSET + 2 * CAP_SIZE)(queue)
-    clc     $idc, $t1, (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
+    clc     $c6, $t1,  (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
     clc     $c1, $t1,  (MSGS_START_OFFSET + 4 * CAP_SIZE)(queue)
     clc     $c2, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
-    cld     $a0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE)(queue)
-    cld     $a1, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 8)(queue)
-    cld     $a2, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 16)(queue)
-    cld     $v0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 24)(queue)
+    cld     $a0, $t1,  (MSGS_START_OFFSET + 6 * CAP_SIZE)(queue)
+    cld     $a1, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 8)(queue)
+    cld     $a2, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 16)(queue)
+    cld     $a3, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 24)(queue)
+    cld     $v0, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 32)(queue)
 
     cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        # load length
     addi    start_g, start_g, 1                         #

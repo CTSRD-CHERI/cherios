@@ -623,21 +623,22 @@ get_last_exception:
     creturn
 
 ###############################################################
-# capability get_phy_page(register_t page_n, register_t cached)
+# capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out)
 .global get_phy_page
 get_phy_page:
 ###############################################################
 
-
+    beqz        $a2, get_phy_page_end
     dli         $t0, N_PHY_PAGES_ENTRIES
+    cmove       $c5, $c3
     slt         $t0, $a0, $t0
     beq         $t0, $zero, get_phy_page_end            # $a0 >= $t0
     dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
     cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
-    daddiu      $t1, $t1, -1
-    bnez        $t1, get_phy_page_end                   # $t1 must be 1
+
+    bne         $t1, $a2, get_phy_page_end              # $t1 must be npages
     clw         $t1, $t0, 0($idc)                       # $t1 = state
     bnez        $t1, get_phy_page_end                   # state must be un-used
     dli         $t1, PHY_SYSTEM
@@ -646,15 +647,21 @@ get_phy_page:
     bnez        $a1, 1f                                 # 0: uncached. ow: cached
     dli         $t1, PHY_MEM_START_TOP
     dli         $t1, PHY_MEM_START_UNCACHED_TOP
-    1: dsll      $t1, $t1, TOP_ADDR_SHIFT
+    1: dsll     $t1, $t1, TOP_ADDR_SHIFT
 
-    dsll         $t2, $a0, PHY_PAGE_SIZE_BITS
-    dli         $t0, PHY_PAGE_SIZE
+    dsll        $t2, $a0, PHY_PAGE_SIZE_BITS
+    dsll        $t0, $a2, PHY_PAGE_SIZE_BITS
     daddu       $t1, $t1, $t2                           # t1 is the offset required for our cap
     csetoffset  $c3, $kdc, $t1
-    csetbounds  $c3, $c3, $t0                           # bounds should be one page
+    csetoffset  $c4, $kcc, $t1
+    csetbounds  $c3, $c3, $t0                           # bounds number of pages requested
+    csetbounds  $c4, $c4, $t0
     dli         $t0, DEF_DATA_PERMS   #t0 is the permission mask
     candperm    $c3, $c3, $t0
+    candperm    $c4, $c4, $t0
+
+    csc         $c3, $zero, CAP_SIZE($c5)
+    csc         $c4, $zero, 0($c5)
 
 get_phy_page_end:
     creturn

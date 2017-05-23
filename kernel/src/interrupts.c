@@ -70,7 +70,7 @@ static void kernel_interrupt_others(register_t pending) {
 			}
 			cp0_status_im_disable(1<<i);
 			// FIXME we probabably want a seperate interrupt source from the kernel
-			if(msg_push(NULL, NULL, NULL, i, 0, 0, -3, int_child[i], &kernel_acts[0], NULL)) {
+			if(msg_push(NULL, NULL, NULL, NULL, i, 0, 0, 0, -3, int_child[i], &kernel_acts[0], NULL)) {
 				kernel_panic("queue full (int)");
 			}
 		}

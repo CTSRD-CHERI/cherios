@@ -37,22 +37,55 @@
 
 static act_kt memmgt_ref = NULL;
 
-static int _mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
+static int _mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result) {
 	if(memmgt_ref == NULL) {
 		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
 		assert(memmgt_ref != NULL);
 	}
-	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, prot, flags, addr, result, NULL, 0);
+	return MESSAGE_SYNC_SEND_r(memmgt_ref, base, length, cheri_perms, flags, result, NULL, NULL, NULL, 0);
 }
 
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
 	cap_pair pair;
 
+	assert(addr == NULL && "The old interface only supports an addr of null");
+
 	if((prot & PROT_EXECUTE) && (prot & PROT_WRITE)) {
 		assert(0 && "The old interface cannot return a single capability with both execute and write privs");
 	}
 
-	int res = _mmap(addr, length, prot, flags, &pair);
+	int perms = CHERI_PERM_ALL &
+				~(CHERI_PERM_EXECUTE|CHERI_PERM_LOAD|CHERI_PERM_STORE
+				  |CHERI_PERM_LOAD_CAP|CHERI_PERM_STORE_CAP|CHERI_PERM_STORE_LOCAL_CAP);
+
+	if(flags & MAP_PRIVATE) {
+		perms &= ~CHERI_PERM_GLOBAL;
+	} else if(flags & MAP_SHARED) {
+
+	} else {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if(prot & PROT_READ) {
+		perms |= CHERI_PERM_LOAD;
+		if(!(prot & PROT_NO_READ_CAP))
+			perms |= CHERI_PERM_LOAD_CAP;
+	}
+	if(prot & PROT_WRITE) {
+		perms |= CHERI_PERM_STORE;
+		if(!(prot & PROT_NO_WRITE_CAP)) {
+			perms |= CHERI_PERM_STORE_CAP;
+			perms |= CHERI_PERM_STORE_LOCAL_CAP;
+		}
+	}
+
+	if(prot & PROT_EXECUTE) {
+		// Our system won't actually support W^X, we will lose one depending on where we derive from
+		perms |= CHERI_PERM_EXECUTE;
+	}
+
+	int res = _mmap(0, length, perms, flags, &pair);
 
 	if(res == MAP_SUCCESS_INT) {
 		if((prot & PROT_EXECUTE) == 0) {
@@ -63,12 +96,12 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 	} else return NULL;
 }
 
-int mmap_new(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset, cap_pair* result) {
-	return _mmap(addr, length, prot, flags, result);
+int mmap_new(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result) {
+	return _mmap(base, length, cheri_perms, flags, result);
 }
 
 int munmap(void *addr, size_t length) {
-	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, 0, 0, addr, NULL, NULL, 1);
+	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, 0, 0, 0, addr, NULL, NULL, NULL, 1);
 }
 
 void mmap_set_act(act_kt ref) {

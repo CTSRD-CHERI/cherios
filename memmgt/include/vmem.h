@@ -57,7 +57,7 @@ void break_page_to(size_t page_n, size_t len);
 size_t get_valid_page_entry(size_t page_n);
 
 /* Searches for a range of pages of a particular size and minimum length */
-size_t find_page_type(size_t required_len, size_t required_type);
+size_t find_page_type(size_t required_len, e_page_status required_type);
 
 /* Get one free page */
 size_t get_free_page();
@@ -71,7 +71,5 @@ int memget_create_mapping(ptable_t L2_table, register_t index);
 /* Takes a reservation from the system, i.e. will return a new virtual capability of length */
 void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out);
 
-/* Calls the nano kernel interface for you and also updates its own bookeeping */
-capability memgt_get_phy_page(size_t pagen, register_t cached);
-
+void print_book(page_t* book, size_t page_n, size_t times);
 #endif //CHERIOS_VMEM_H

@@ -46,30 +46,30 @@ static inline void virtio_check_refs(void) {
 
 static inline void virtio_blk_session(void * mmio_cap) {
 	virtio_check_refs();
-	virt_session = MESSAGE_SYNC_SEND_c(vblk_ref, 0, 0 ,0, mmio_cap, NULL, NULL, -1);
+	virt_session = MESSAGE_SYNC_SEND_c(vblk_ref, 0, 0 ,0, 0, mmio_cap, NULL, NULL, NULL, -1);
 }
 
 static inline int virtio_blk_init(void) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 0);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, 0, virt_session, NULL, NULL, NULL, 0);
 }
 
 static inline int virtio_read(void * buf, size_t sector) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, virt_session, buf, NULL, 1);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, 0, virt_session, buf, NULL, NULL, 1);
 }
 
 static inline int virtio_write(const void * buf, size_t sector) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, virt_session, (void *)buf, NULL, 2);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, 0, virt_session, (void *)buf, NULL, NULL, 2);
 }
 
 static inline int virtio_blk_status(void) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 3);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, 0, virt_session, NULL, NULL, NULL, 3);
 }
 
 static inline size_t virtio_blk_size(void) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 4);
+	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, 0, virt_session, NULL, NULL, NULL, 4);
 }

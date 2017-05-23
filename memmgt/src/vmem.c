@@ -35,7 +35,7 @@
 page_t* book;
 free_chain_t *chain_start, *chain_end;
 
-static inline void print_page(page_t* book, size_t page_n, size_t times) {
+void print_book(page_t* book, size_t page_n, size_t times) {
     while(times-- > 0) {
         printf("page: %lx. state = %d. len = %lx. prev = %lx\n",
                page_n,
@@ -74,7 +74,7 @@ size_t get_valid_page_entry(size_t page_n) {
     return page_n;
 }
 
-size_t find_page_type(size_t required_len, size_t required_type) {
+size_t find_page_type(size_t required_len, e_page_status required_type) {
     size_t search_index = 0;
 
     while((search_index != BOOK_END) && (book[search_index].len < required_len || book[search_index].status != required_type)) {
@@ -133,12 +133,4 @@ void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out) {
     rescap_take(old, out);
     out->code = cheri_setbounds(out->code, length);
     out->data = cheri_setbounds(out->data, length);
-}
-
-capability memgt_get_phy_page(size_t pagen, register_t cached) {
-    pagen = get_valid_page_entry(pagen);
-    assert(book[pagen].status == page_unused);
-    break_page_to(pagen, 1);
-    book[pagen].status = page_system_owned;
-    return get_phy_page(pagen, cached);
 }

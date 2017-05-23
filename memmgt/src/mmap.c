@@ -36,19 +36,13 @@
 #include "vmem.h"
 
 /* fd and offset are currently unused and discarded in userspace */
-int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
+int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result) {
     /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
      * Types are numerous. Permissions are not. */
-
-	int perms = CHERI_PERM_ALL &
-            ~(CHERI_PERM_EXECUTE|CHERI_PERM_LOAD|CHERI_PERM_STORE
-              |CHERI_PERM_LOAD_CAP|CHERI_PERM_STORE_CAP|CHERI_PERM_STORE_LOCAL_CAP);
 
     result->data = NULL;
     result->code = NULL;
 
-	if(addr != NULL)
-		panic("mmap: addr must be NULL");
 
 	if(!(flags & MAP_ANONYMOUS)) {
 		errno = EINVAL;
@@ -59,45 +53,53 @@ int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 		goto fail;
 	}
 
-	if(flags & MAP_PRIVATE) {
-		perms &= ~CHERI_PERM_GLOBAL;
-	} else if(flags & MAP_SHARED) {
-
-	} else {
-		errno = EINVAL;
-		goto fail;
-	}
-
-	if(prot & PROT_READ) {
-		perms |= CHERI_PERM_LOAD;
-		if(!(prot & PROT_NO_READ_CAP))
-			perms |= CHERI_PERM_LOAD_CAP;
-	}
-	if(prot & PROT_WRITE) {
-		perms |= CHERI_PERM_STORE;
-		if(!(prot & PROT_NO_WRITE_CAP)) {
-            perms |= CHERI_PERM_STORE_CAP;
-            perms |= CHERI_PERM_STORE_LOCAL_CAP;
-        }
-	}
-
-	if(prot & PROT_EXECUTE) {
-        // Our system won't actually support W^X, we will lose one depending on where we derive from
-		perms |= CHERI_PERM_EXECUTE;
-	}
-
-    /* TODO we probably need a reference here */
+    cap_pair pair;
     /* Because people ask for silly lengths, round up to a cap */
     length += ((CHERICAP_SIZE - (length & (CHERICAP_SIZE-1))) & (CHERICAP_SIZE-1));
 
-    cap_pair pair;
-    memgt_take_reservation(length, NULL, &pair);
+    if(flags & MAP_PHY) {
+        size_t npages = (length + PAGE_SIZE - 1) / PAGE_SIZE;
+        if(base == 0) {
+            size_t page_index = find_page_type(npages, page_unused);
+            get_phy_page(page_index, (cheri_perms & MAP_CACHED) != 0, npages, &pair);
+        } else {
+            size_t page_index = base / PAGE_SIZE;
+            page_index = get_valid_page_entry(page_index);
+            size_t of_length = book[page_index].len;
+
+            if((of_length < npages) || (book[page_index].status != page_unused)) {
+                printf(KRED"A physical range was requested with a range that overlaps a taken region."
+                               "Requested pages %lx. Region of size %lx. State: %d \n"KRST,
+                       npages, of_length, book[page_index].status);
+                print_book(book, 0, 1000);
+                goto fail;
+            }
+
+            if(of_length > npages) {
+                break_page_to(page_index, npages);
+            }
+
+            get_phy_page(page_index, (cheri_perms & MAP_CACHED) != 0, npages, &pair);
+        }
+
+        if(pair.data != NULL) pair.data = cheri_setbounds(pair.data, length);
+        if(pair.code != NULL) pair.code = cheri_setbounds(pair.code, length);
+
+    } else {
+        if(base == 0) {
+            /* TODO we probably need a reference here */
+            memgt_take_reservation(length, NULL, &pair);
+        } else {
+            printf("I have not finished virtual memory yet - only the first few pages are allocated =(\n");
+            goto fail;
+        }
+    }
+
  ok:
 
-    result->data = cheri_andperm(pair.data, perms);
-
-    if(prot & PROT_EXECUTE) {
-        result->code = cheri_andperm(pair.code, perms);
+    result->data = cheri_andperm(pair.data, cheri_perms);
+    if(cheri_perms & CHERI_PERM_EXECUTE) {
+        result->code = cheri_andperm(pair.code, cheri_perms);
         assert((cheri_getperm(result->code) & CHERI_PERM_EXECUTE) != 0);
     }
 

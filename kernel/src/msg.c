@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <queue.h>
 #include "sys/types.h"
 #include "klib.h"
 #include "activations.h"
@@ -60,8 +61,8 @@ static msg_nb_t msg_queue_fill(queue_t* queue) {
 	return (queue->header.end - queue->header.start + queue->header.len) % queue->header.len;
 }
 
-int msg_push(capability c3, capability c4, capability c5,
-			 register_t a0, register_t a1, register_t a2,
+int msg_push(capability c3, capability c4, capability c5, capability c6,
+			 register_t a0, register_t a1, register_t a2, register_t a3,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
 
@@ -82,7 +83,7 @@ int msg_push(capability c3, capability c4, capability c5,
 	slot->c3 = c3;
 	slot->c4 = c4;
 	slot->c5 = c5;
-	slot->idc = NULL;
+	slot->c6 = c6;
 
 	slot->c1 = sync_token;
 	slot->c2 = (sync_token == NULL) ? NULL : kernel_seal(src, act_sync_ref_type);
@@ -90,6 +91,8 @@ int msg_push(capability c3, capability c4, capability c5,
 	slot->a0 = a0;
 	slot->a1 = a1;
 	slot->a2 = a2;
+	slot->a3 = a3;
+
 	slot->v0 = v0;
 
 	queue->header.end = safe(queue->header.end+1, qmask);
@@ -160,8 +163,8 @@ static int token_expected(act_t* ccaller, capability token) {
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
-void act_send_message(capability c3, capability c4, capability c5,
-					 register_t a0, register_t a1, register_t a2,
+void act_send_message(capability c3, capability c4, capability c5, capability c6,
+					 register_t a0, register_t a1, register_t a2, register_t a3,
 					 ccall_selector_t selector, register_t v0, ret_t* ret) {
 
 	act_t* target_activation = (act_t*) get_idc();
@@ -172,8 +175,8 @@ void act_send_message(capability c3, capability c4, capability c5,
 	if(target_activation->status != status_alive) {
 		KERNEL_ERROR("Trying to CCall revoked activation %s from %s",
 					 target_activation->name, source_activation->name);
-		ret->v0 = -1;
-		ret->v1 = -1;
+		ret->v0 = (register_t)-1;
+		ret->v1 = (register_t)-1;
 		ret->c3 = NULL;
 		return;
 	}
@@ -188,7 +191,7 @@ void act_send_message(capability c3, capability c4, capability c5,
 	//FIXME critical section here might be a bit much?
 
 	//TODO if we are going to switch we can (maybe) deliver this message without buffering
-	msg_push(c3, c4, c5, a0, a1, a2, v0, target_activation, source_activation, sync_token);
+	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
 
 	if(selector == SYNC_CALL) {
 		//TODO in a multicore world we may spin a little if we expect the answer to be fast
@@ -212,7 +215,7 @@ _Static_assert(offsetof(ret_t, v1) == 40, "message return assumes these offsets"
 
 #define MESSAGE_RETURN_RESTORE_BEFORE	\
 	"daddiu $sp, $sp, -64\n"			\
-	"csetoffset $c6, $c11, $sp\n"
+	"csetoffset $c7, $c11, $sp\n"
 
 
 
@@ -226,6 +229,9 @@ int act_send_return(capability c3, capability sync_token, register_t v0, registe
 
 	act_t * returned_from = kernel_curr_act;
 	act_t * returned_to = (act_t*) get_idc();
+
+    kernel_assert(returned_to != NULL);
+    kernel_assert(returned_to->sync_state.sync_ret != NULL);
 
 	if(sync_token == NULL) {
 		KERNEL_TRACE(__func__, "%s did not provide a sync token", returned_from->name);

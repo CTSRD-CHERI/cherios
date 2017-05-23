@@ -109,8 +109,8 @@ int	try_gc(void * p, void * pool);
 DECLARE_TRAMPOLINE(act_send_message);
 DECLARE_TRAMPOLINE(act_send_return);
 
-int msg_push(capability c3, capability c4, capability c5,
-			 register_t a0, register_t a1, register_t a2,
+int msg_push(capability c3, capability c4, capability c5, capability c6,
+			 register_t a0, register_t a1, register_t a2, register_t a3,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token);
 void	msg_queue_init(act_t* act, queue_t * queue);

@@ -41,6 +41,9 @@
 #define HEADER_LEN_OFFSET (MSG_NB_T_SIZE * 2)
 #define MSGS_START_OFFSET 32
 
+// FIXME: adjust padding and this value for 128
+#define MSG_LEN_SHIFT	8
+
 #ifndef __ASSEMBLY__
 
 #include "cheric.h"
@@ -58,22 +61,19 @@ typedef struct
 	capability c3; /* cap arguments */
 	capability c4;
 	capability c5;
+	capability c6;
 
-	/* Deprecated. Nobody should use this */
-	capability idc; /* identifier */
 	capability c1;  /* sync token */
 	capability c2;	/* message sender cap */
-
-	/* This serves to align msg_t to a power of 2 * sizeof(capability). It made my life easier. also */
-	/* at some point we may wan't more argument passing registers, especially if we use another 2 for a continuation */
-#ifdef _CHERI256_
-	capability pad;
-#endif
 
 	register_t a0; /* GP arguments */
 	register_t a1;
 	register_t a2;
+	register_t a3;
+
 	register_t v0;  /* method nb */
+
+	char pad[20];	/* Makes the size 256 bytes in 256. Steal these bytes if you want larger messages. */
 }  msg_t;
 
 struct header_t {
@@ -93,6 +93,7 @@ typedef struct {
 	msg_t msgs[MAX_MSG];
 } queue_default_t;
 
+_Static_assert(sizeof(msg_t) == (1 << MSG_LEN_SHIFT), "size used by msg.S");
 _Static_assert(sizeof(msg_nb_t) == MSG_NB_T_SIZE, "size used by msg.S");
 _Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, start)) == HEADER_START_OFFSET, "offset used by msg.S");
 _Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, end)) == HEADER_END_OFFSET, "offset used by msg.S");

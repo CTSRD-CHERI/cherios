@@ -50,7 +50,7 @@ void register_ns(void * ns_ref);
 void	release(void * p) __attribute__((cheri_ccallee));
 void	release_init(void);
 
-int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result);
+int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result);
 int	__munmap(void *addr, size_t length);
 void	minit(void);
 void	mfree(void *addr);

@@ -46,15 +46,15 @@ void namespace_init(act_kt ns_ref) {
 }
 
 int namespace_register(int nb, act_kt ref) {
-	return MESSAGE_SYNC_SEND_r(namespace_ref, nb, 0, 0, ref, NULL, NULL, 0);
+	return MESSAGE_SYNC_SEND_r(namespace_ref, nb, 0, 0, 0, ref, NULL, NULL, NULL, 0);
 }
 
 act_kt namespace_get_ref(int nb) {
-	return MESSAGE_SYNC_SEND_c(namespace_ref, nb, 0, 0, NULL, NULL, NULL, 1);
+	return MESSAGE_SYNC_SEND_c(namespace_ref, nb, 0, 0, 0, NULL, NULL, NULL, NULL, 1);
 }
 
 int namespace_get_num_services(void) {
 	if (namespace_ref == NULL)
 		return -1;
-	return MESSAGE_SYNC_SEND_r(namespace_ref, 0, 0, 0, NULL, NULL, NULL, 2);
+	return MESSAGE_SYNC_SEND_r(namespace_ref, 0, 0, 0, 0, NULL, NULL, NULL, NULL, 2);
 }
