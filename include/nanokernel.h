@@ -36,7 +36,10 @@
 
 typedef capability context_t;
 typedef capability res_t;
-#define RES_SPLIT_OVERHEAD sizeof(capability)
+
+#define RES_PRIV_SIZE                  (sizeof(register_t) * 4)
+#define RES_META_SIZE                  256
+#define RES_USER_SIZE                  (RES_META_SIZE - RES_PRIV_SIZE)
 
 
 #define PAGE_SIZE (0x1000)
@@ -66,6 +69,12 @@ typedef struct {
 /* This is how big the structure is in the nano kernel */
 _Static_assert(sizeof(page_t) == 4 * sizeof(register_t), "Assumed by nano kernel");
 
+
+typedef struct {
+    context_t victim_context;
+    register_t cause;
+    register_t ccause;
+} exection_cause_t;
 
 #define NANO_KERNEL_IF_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
@@ -113,7 +122,11 @@ _Static_assert(sizeof(page_t) == 4 * sizeof(register_t), "Assumed by nano kernel
     ITEM(split_phy_page_range, void, (register_t pagen, register_t new_len), __VA_ARGS__)\
 /* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
 /* For debugging. Returns a global cap and gives your pcc all the permission bits it can */\
-    ITEM(obtain_super_powers, capability, (void), __VA_ARGS__)
+    ITEM(obtain_super_powers, capability, (void), __VA_ARGS__)\
+/* Gets a R/W cap for the userdata space of a meta data node of a reservation. */\
+    ITEM(get_userdata_for_res, capability, (res_t res), __VA_ARGS__)\
+/* Get the victim context and cause register for the last exception. */\
+    ITEM(get_last_exception, void, (exection_cause_t* out), __VA_ARGS__)
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 

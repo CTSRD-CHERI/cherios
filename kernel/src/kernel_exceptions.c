@@ -29,6 +29,7 @@
  */
 
 #include <activations.h>
+#include <nanokernel.h>
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"
@@ -44,9 +45,9 @@ register_t badinstr_glob = 0;
 
 DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
 
-static void kernel_exception_capability(register_t cause) __dead2;
-static void kernel_exception_capability(register_t cause) {
-	cap_exception_t exception = parse_cause(cause);
+static void kernel_exception_capability(register_t ccause) __dead2;
+static void kernel_exception_capability(register_t ccause) {
+	cap_exception_t exception = parse_cause(ccause);
 
 	KERNEL_TRACE("exception", "kernel_capability %s", enum_cap_cause_exception_t_tostring(exception.cause));
 
@@ -97,8 +98,9 @@ static void kernel_exception_unknown(register_t excode) {
  * implementations.
  */
 void kernel_exception(context_t swap_to, context_t own_context) {
-	register_t cause;
-	context_t victim_context = swap_to;
+    exection_cause_t ex_info;
+    ex_info.victim_context = swap_to;
+
 	context_t own_save; // We never use this, there is currently no reason to restore the exception context
 
 	set_exception_handler(own_context);
@@ -106,17 +108,13 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 	kernel_interrupts_init(1);
 	while(1) {
 		KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
-		context_switch(victim_context, &own_save);
-		// We will next to be switched to with c3 containing a victim context.
-		// We could make this a call, it would be neater, i.e. get_last_victim
-		__asm__ __volatile__ (
-		"cmove %[x], $c3\n"
-		"move  %[y], $a0\n"
-		: [x]"=C"(victim_context) , [y]"=r"(cause));
+		context_switch(ex_info.victim_context, &own_save);
 
-		if(victim_context != own_context) {
+        get_last_exception(&ex_info);
+
+		if(ex_info.victim_context != own_context) {
 			// We only do this as handles are not guaranteed to stay fresh (although they are currently)
-			kernel_curr_act->context = victim_context;
+			kernel_curr_act->context = ex_info.victim_context;
 		} else {
 			// This happens if an interrupt happened during the exception level. As soon as we exit
 			// Another exception happens and so take another.
@@ -126,12 +124,12 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 		static int entered = 0;
 		entered++;
 
-		register_t excode = cp0_cause_excode_get(cause);
+		register_t excode = cp0_cause_excode_get(ex_info.cause);
 
 		KERNEL_TRACE("exception", "in %s. Enter: %d. Code %lx.",
 					 kernel_curr_act->name,
 					 entered,
-					 (unsigned long)(cause));
+					 (unsigned long)(ex_info.cause));
 
 		if(entered > 1) {
 			KERNEL_ERROR("interrupt in interrupt");
@@ -141,7 +139,7 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 
 		switch (excode) {
 			case MIPS_CP0_EXCODE_INT:
-				kernel_interrupt(cause);
+				kernel_interrupt(ex_info.cause);
 				break;
 
 			case MIPS_CP0_EXCODE_SYSCALL:
@@ -151,7 +149,7 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 				break;
 
 			case MIPS_CP0_EXCODE_C2E:
-				kernel_exception_capability(cause);
+				kernel_exception_capability(ex_info.ccause);
 				break;
 			case MIPS_CP0_EXCODE_TLBL:
 			case MIPS_CP0_EXCODE_TLBS:
@@ -175,6 +173,6 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 		entered--;
 
 		// We have changed context due to this exception, and so we should restore the current context
-		victim_context = kernel_curr_act->context;
+		ex_info.victim_context = kernel_curr_act->context;
 	}
 }

@@ -53,27 +53,21 @@
 .set VTABLE_TYPE_L1,     VTABLE_TYPE_L0 + 1  # The type of the L1 level page table
 .set VTABLE_TYPE_L2,     VTABLE_TYPE_L0 + 2  # The type of the L2 level page table
 
-# Out virtual state is harder. We will ask the user to allocate this for us, using our allowance mechanism
-# struct virt_ent {
-    #PFN1
-    #PFN2
-    #enum state{un-used, allocated, stale}
-#};
-
-
-
-.set VPN_MASK, ((1 << 64) - 1) ^ ((1 << 13) - 1)
-.set PFN_MASK, ((1 << 55) - 1) ^ ((1 << 6) - 1)
-
 #struct res_t {
 #    enum state{open, taken, merged, collecting}
 #    size_t length <- length of reservation (not including meta data). Not set when open.
 #    size_t pid <- an id for the parent node. Checked for merging
 #    padding to size of one cap
+#    user data to pad to size of cache_line
 #    union{cap for region, user data} <- store a cheeky cap here when open for ease. Part of user data o/w
 #
 #}
 
+.set CACHE_LINE_SIZE,                64
+
+.set RES_PRIV_SIZE,                 4 * REG_SIZE
+.set RES_META_SIZE,                 256
+.set RES_USER_SIZE,                 RES_META_SIZE - RES_PRIV_SIZE
 
 # Top bits of virtual address decide which range we are using
 .set PHY_MEM_START_TOP,             0x90
@@ -156,8 +150,12 @@ START_LOCALS CAP_SIZE_BITS
 local_cap_var current_context
 local_cap_var exception_context
 local_cap_var next_context
+local_cap_var victim_context
 local_reg_var exception_level
 local_reg_var exception_cause
+local_reg_var exception_ccause
+local_reg_var last_exception_cause
+local_reg_var last_exception_ccause
 
 # Stuff to do with virtual space management
 local_reg_var made_first_res
@@ -184,6 +182,8 @@ local_cap_var make_first_reservation_cap
 local_cap_var get_book_cap
 local_cap_var split_phy_page_range_cap
 local_cap_var obtain_super_powers_cap
+local_cap_var get_userdata_for_res_cap
+local_cap_var get_last_exception_cap
 .set cap_table_end, local_ctr
 
 local_var top_virt_page, PAGE_TABLE_SIZE, PAGE_TABLE_ENT_BITS
@@ -319,7 +319,8 @@ nano_kernel_init:
     init_table get_book
     init_table split_phy_page_range
     init_table obtain_super_powers
-
+    init_table get_userdata_for_res
+    init_table get_last_exception
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
     dli          $k1, cap_table_end - create_context_cap
@@ -483,7 +484,7 @@ make_first_reservation:
     csetbounds  $c3, $c3, $t1
     candperm    $c3, $c3, $t0                     # c3 is a cap to all of virtual mem
 
-    dli         $t0, CAP_SIZE                     # amount of space we lost to meta data
+    dli         $t0, RES_META_SIZE                # amount of space we lost to meta data
     dsubu       $t2, $t1, $t0                     # remaining length
     dli         $t1, RES_TYPE                     # sealing type
 
@@ -559,7 +560,12 @@ switch_exception:                                       # void switch_exception(
                 # interrupt we will just use this.
 
     clc     $c3, $zero, current_context($idc)           # Current context is the victim
-    cseal   $kr2c, $c3, $kr1c                           # Seal c3 to pass to exception handler
+    cld     $t0, $zero, exception_ccause($idc)          # load ccause
+    cseal   $c4, $c3, $kr1c                             # Seal c3 to pass to exception handler
+    csd     $k0, $zero, last_exception_cause($idc)      # store cause
+    csc     $c4, $zero, victim_context($idc)            # store victim
+    csd     $t0, $zero, last_exception_ccause($idc)     # store ccause
+
     clc     $c3, $zero, exception_context($idc)         # load exception context
     csc     $c3, $zero, current_context($idc)           # set it as current context
     # HERE # If you want to restore the exception context with magic values, store via c3
@@ -584,26 +590,37 @@ switch_restore_final:
     restore_reg_frame_gen crestore_setc0, grestore, $kr1c, $t0, $c1, $epcc
 
 return:
+    # This tackles a qemu bug
     cgetoffset $k1, $epcc
-    beqz       $k0, normal_return
     dmtc0      $k1, $14
 
+    beqz       $k0, normal_return
+    dmfc0      $k0, $12
+
 exceptional_return:
-    move       $a0, $k0                                 # pass the cause to the exception handler
-    cmove      $c3, $kr2c                               # pass the sealed context to the exception handler
-    dmfc0      $k0, $12                                 # disable interrupts otherwise the exception handlel
-    dli        $k1, 1                                   # will may immediately have one
-    not        $k1, $k1
+    dli        $k1, 1                                   # disable interrupts otherwise the exception handler
+    not        $k1, $k1                                 # will may immediately have one
     and        $k0, $k0, $k1
     mtc0       $k0, $12
     eret
 
 normal_return:
-    dmfc0      $k0, $12                                 # enable interupts again
-    ori        $k0, $k0, 1
+    ori        $k0, $k0, 1                              # enable interupts again
     mtc0       $k0, $12
     eret
 
+#################################################
+# void get_last_exception(exection_cause_t* out)
+.global get_last_exception
+get_last_exception:
+#################################################
+    clc        $c4, $zero, victim_context($idc)
+    cld        $t0, $zero, last_exception_cause($idc)
+    cld        $t1, $zero, last_exception_ccause($idc)
+    csc        $c4, $zero, 0($c3)
+    csd        $t0, $zero, CAP_SIZE($c3)
+    csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
+    creturn
 
 ###############################################################
 # capability get_phy_page(register_t page_n, register_t cached)
@@ -776,6 +793,19 @@ nano_kernel_die:
     li  $k1,  0x42
     csb $k1, $k0, 0($kdc)
 
+#############################################
+# capability get_userdata_for_res(res_t res)
+.global get_userdata_for_res
+get_userdata_for_res:
+#############################################
+    dli         $t0, RES_TYPE
+    dli         $t1, RES_PRIV_SIZE
+    csetoffset  $c4, $kdc, $t0
+    dli         $t2, RES_USER_SIZE
+    cunseal     $c3, $c3, $c4
+    cincoffset  $c3, $c3, $t1
+    csetbounds  $c3, $c3, $t2
+    creturn
 
 ####################################
 # capability rescap_take(res_t res)
@@ -793,7 +823,7 @@ rescap_take:
     cgetlen     $t1, $c3
     csd         $t0, $zero, 0($c3)          # set to taken
     csd         $t1, $zero, REG_SIZE($c3)   # set length (needed for merge)
-    clc         $c3, $zero, CAP_SIZE($c3)   # load return capability from struct
+    clc         $c3, $zero, RES_META_SIZE($c3)   # load return capability from struct
     creturn
 take_er:
     csetbounds  $c3, $c3, $zero
@@ -809,7 +839,7 @@ rescap_info:
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
     cld         $t0, $zero, 0($c3)          # get state
-    clc         $c3, $zero, CAP_SIZE($c3)   # load return capability from struct
+    clc         $c3, $zero, RES_META_SIZE($c3) # load return capability from struct
     dli         $t1, RES_VIEW_TYPE
     csetoffset  $c4, $kdc, $t1              # create sealing cap
     cseal       $c3, $c3, $c4
@@ -849,7 +879,7 @@ rescap_collect:
     dli         $a1, PHY_MEM_END            #a1 the end
     addu        $a2, $t0, $t1               #a2 is the base of our collection
     cld         $t1, $zero, REG_SIZE($c3)
-    daddiu      $a4, $t1, CAP_SIZE          #a4 is the size of collection
+    daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of collection
     addu        $a3, $a2, $a4               #a3 is the end of our collection (not inclusive)
 
     csetoffset  $c3, $kdc, $a2
@@ -890,7 +920,7 @@ collect_loop_footer:
 collect_loop_end:
 
     # Make a new reservation here now
-    dli         $t0, CAP_SIZE
+    dli         $t0, RES_META_SIZE
     csetoffset  $c3, $kdc, $a2
     csetbounds  $c3, $c3,  $a4
     sub         $a4, $a4, $t0               #some space for metadata
@@ -923,7 +953,7 @@ rescap_split:
     cunseal     $c3, $c3, $c4               # unseal res
     cld         $t0, $zero, 0($c3)          # get state
     cld         $t2, $zero, (2 * REG_SIZE)($c3)  # get depth of old res
-    clc         $c3, $zero, CAP_SIZE($c3)   # load return capability from res
+    clc         $c3, $zero, RES_META_SIZE($c3)   # load return capability from res
     bnez        $t0, split_er               # reservation must be open
     cld         $t0, $zero, (2 * REG_SIZE)($c3) # get pid
 
@@ -931,12 +961,12 @@ rescap_split:
     cgetlen     $t1, $c3                    # t1 = original space
     csetoffset  $c5, $c3, $a0               # c5 = start of the new reservation
     csetbounds  $c3, $c3, $a0               # c3 = size for the old reservation
-    dli         $t0, CAP_SIZE
+    dli         $t0, RES_META_SIZE
     csc         $c3, $zero, 0($c3)          # store new sized cap for old reservation
     cseal       $c3, $c5, $c4               # this is old reservation but resized
     csd         $zero, $zero, 0($c5)        # set state of new reservation to open
     csd         $t2, $zero, (2 * REG_SIZE)($c5) # set depth for new res
-    cincoffset  $c5, $c5, $t0               # new size is reduced by size of one cap to store metadata in band
+    cincoffset  $c5, $c5, $t0               # new size is reduced by size of metadata in band
 
     dsubu         $t1, $t1, $t0             # take away space wasted for meta data
     dsubu         $a0, $t1, $a0             # and size for lower address reservation
@@ -976,7 +1006,7 @@ rescap_merge:
 
     cld         $t0, $zero, REG_SIZE($c3)   # get first length
     cld         $t1, $zero, REG_SIZE($c4)   # get second length
-    daddiu      $t0, CAP_SIZE
+    daddiu      $t0, RES_META_SIZE
     cincoffset  $c6, $c3, $t0               # c6 should point to the next reservation
     cne         $t2, $c6, $c4               # if not equal then we are not merging adjacent blocks
     bnez        $t2, merge_er
@@ -1006,10 +1036,10 @@ rescap_parent:
 
     cgetbase    $t0, $c3
     cgetoffset  $t1, $c3
-    dli         $a0, CAPS_SIZE
+    dli         $a0, RES_META_SIZE
     daddu       $t0, $t0, $t1               # the cursor of the parent is the depth of the child
 
-    clc         $c5, $zero, CAP_SIZE($c3)   # get capability that ranges over open space
+    clc         $c5, $zero, RES_META_SIZE($c3)   # get capability that ranges over open space
     cgetlen     $t1, $c5                    # get length for parent
     dli         $t2, 1
     csd         $t1, $zero, REG_SIZE($c3)   # set length field for parent
@@ -1152,11 +1182,13 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens between nano begin and nano end we should just die.
+        cgetcause $k0
         dla $k1, locals_start
         csetoffset $kr1c, $kdc, $k1
         cld $k1, $zero, exception_level($kr1c)
         beqz $k1, take_exception
-        nop
+        csd     $k0, $zero, exception_ccause($kr1c)
+
 skip_exception:
         dmfc0   $k1, $13
         csd     $k1, $zero, exception_cause($kr1c)
@@ -1185,7 +1217,6 @@ kernel_exception_trampoline_end:
     .ent tlb_trampoline
 tlb_trampoline: # TODO
 ################################################################################################
-    TRACE_ON
     dmfc0       $k0, cp0_badvaddr
     dla         $k1, top_virt_page_label                            # k1 = phy poiter to L0
 
@@ -1219,7 +1250,6 @@ tlb_trampoline: # TODO
     dmtc0       $k1, cp0_entrylo1
 
     tlbwr                                                           # write tlb entry
-    TRACE_OFF
     eret
 
 tlb_trampoline_end:
