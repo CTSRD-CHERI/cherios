@@ -33,6 +33,7 @@
 
 #include "cheric.h"
 #include "cheriplt.h"
+#include "mman.h"
 
 typedef capability context_t;
 typedef capability res_t;
@@ -50,14 +51,16 @@ typedef capability ptable_t;
 #define TOTAL_PHY_PAGES (PHY_MEM_SIZE/PAGE_SIZE)
 #define BOOK_END ((size_t)(TOTAL_PHY_PAGES))
 
+//TODO make this dynamic
+
+/* WARN: these structures are used in assembly */
+
 typedef enum e_page_status {
     page_unused,
     page_nano_owned,
     page_system_owned,
     page_mapped,
 } e_page_status;
-
-//TODO make this dynamic
 
 typedef struct {
     e_page_status	status;
@@ -68,7 +71,6 @@ typedef struct {
 
 /* This is how big the structure is in the nano kernel */
 _Static_assert(sizeof(page_t) == 4 * sizeof(register_t), "Assumed by nano kernel");
-
 
 typedef struct {
     context_t victim_context;
@@ -94,7 +96,7 @@ typedef struct {
  * TODO case we might want to restore that context straight away */ \
     ITEM(set_exception_handler, void, (context_t context), __VA_ARGS__) \
 /* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
-    ITEM(rescap_take, capability, (res_t res), __VA_ARGS__)\
+    ITEM(rescap_take, void, (res_t res, cap_pair* out), __VA_ARGS__)\
 /* Returns a SEALED version of rescap_take, but does not change state. Then get fields using normal ops */\
     ITEM(rescap_info, capability, (res_t res), __VA_ARGS__)\
 /* Tells the collector to start collecting this reservation. collecting fails if already collecting */\

@@ -807,12 +807,13 @@ get_userdata_for_res:
     csetbounds  $c3, $c3, $t2
     creturn
 
-####################################
-# capability rescap_take(res_t res)
+############################################
+# void rescap_take(res_t res, cap_pair* out)
 .global rescap_take
 rescap_take:
-####################################
+############################################
     dli         $t0, RES_TYPE
+    cmove       $c5, $c4
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
     cld         $t0, $zero, 0($c3)          # get state
@@ -824,6 +825,16 @@ rescap_take:
     csd         $t0, $zero, 0($c3)          # set to taken
     csd         $t1, $zero, REG_SIZE($c3)   # set length (needed for merge)
     clc         $c3, $zero, RES_META_SIZE($c3)   # load return capability from struct
+
+    cgetbase    $t0, $c3                    # We must rederive a cap to have the execute bit
+    cgetlen     $t1, $c3
+    csetoffset  $c4, $kcc, $t0
+    dli         $t2, DEF_DATA_PERMS
+    csetbounds  $c4, $c4, $t1
+    candperm    $c4, $c4, $t2
+
+    csc         $c3, $zero, CAP_SIZE($c5)
+    csc         $c4, $zero, 0($c5)
     creturn
 take_er:
     csetbounds  $c3, $c3, $zero

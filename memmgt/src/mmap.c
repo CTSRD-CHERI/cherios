@@ -78,14 +78,19 @@ int __mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
 		perms |= CHERI_PERM_EXECUTE;
 	}
 
-    capability p = memgt_take_reservation(length);
+    /* TODO we probably need a reference here */
+    /* Because people ask for silly lengths, round up to a cap */
+    length += ((CHERICAP_SIZE - (length & (CHERICAP_SIZE-1))) & (CHERICAP_SIZE-1));
 
+    cap_pair pair;
+    memgt_take_reservation(length, NULL, &pair);
  ok:
-	p = cheri_andperm(p, perms);
-    result->data = cheri_andperm(p, ~PROT_EXECUTE);
+
+    result->data = cheri_andperm(pair.data, perms);
 
     if(prot & PROT_EXECUTE) {
-        result->code = cheri_andperm(p, ~PROT_WRITE);
+        result->code = cheri_andperm(pair.code, perms);
+        assert((cheri_getperm(result->code) & CHERI_PERM_EXECUTE) != 0);
     }
 
 	return 0;

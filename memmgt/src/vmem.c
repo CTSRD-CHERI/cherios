@@ -33,7 +33,7 @@
 #include "stdio.h"
 
 page_t* book;
-free_chain_t first_reservation;
+free_chain_t *chain_start, *chain_end;
 
 static inline void print_page(page_t* book, size_t page_n, size_t times) {
     while(times-- > 0) {
@@ -74,22 +74,6 @@ size_t get_valid_page_entry(size_t page_n) {
     return page_n;
 }
 
-void set_pages_state(size_t page_n, size_t len, e_page_status from_status, e_page_status to_status) {
-    size_t n = get_valid_page_entry(page_n);
-
-    assert(book[n].len >= len);
-    assert(book[n].status == from_status);
-
-    if(book[n].len > len) {
-        break_page_to(n, len);
-    }
-
-    book[n].status = to_status;
-
-    // TODO seetting state may allow us to merge a record
-    // TODO or maybe we should do this as we search through the structure
-}
-
 size_t find_page_type(size_t required_len, size_t required_type) {
     size_t search_index = 0;
 
@@ -125,14 +109,30 @@ int memget_create_mapping(ptable_t L2_table, register_t index) {
     return 0;
 }
 
-capability memgt_take_reservation(size_t length) {
-    // TODO we are completely losing track of reservations because malloc doesn't seem to be here
-    // TODO add a flag that will mean return the reservation rather than the virt cap itself
-    res_t old = first_reservation.reservation;
-    first_reservation.reservation = rescap_split(old, length);
-    capability p = rescap_take(old);
+void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out) {
+    /* Have to ask for a length that will keep alignment */
+    size_t aligned_length = length;
+    size_t mis_align = (length & (RES_META_SIZE-1));
+    if(mis_align != 0) {
+        aligned_length = length + RES_META_SIZE - mis_align;
+    }
 
-    return p;
+    res_t old = chain_end->used.res;
+    res_t new = rescap_split(old, aligned_length);
+    free_chain_t* chain = (free_chain_t*)get_userdata_for_res(new);
+
+    chain->used.res = new;
+    chain->used.allocated_to = NULL;
+    chain->used.next_res = NULL;
+    chain->used.prev_res = chain_end;
+    chain_end->used.next_res = chain;
+    chain_end->used.allocated_to = assign_to;
+
+    chain_end = chain;
+
+    rescap_take(old, out);
+    out->code = cheri_setbounds(out->code, length);
+    out->data = cheri_setbounds(out->data, length);
 }
 
 capability memgt_get_phy_page(size_t pagen, register_t cached) {

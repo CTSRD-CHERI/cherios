@@ -35,26 +35,26 @@
 #include "nanokernel.h"
 #include "assert.h"
 
-struct free_chain_t;
-struct free_chain_t {
-    struct free_chain_t * next;
-    struct free_chain_t * prev;
-    res_t reservation;
-};
-
-typedef struct free_chain_t free_chain_t;
+typedef struct free_chain_t {
+    struct used {
+        res_t res;
+        struct free_chain_t* prev_res;
+        struct free_chain_t* next_res;
+        act_kt allocated_to;
+    } used;
+    _Static_assert(RES_USER_SIZE >= sizeof(struct used), "We need space for our metadata");
+    char spare[(RES_USER_SIZE - sizeof(struct used))];
+} free_chain_t;
 
 extern page_t* book;
-extern free_chain_t first_reservation;
+extern free_chain_t* chain_start;
+extern free_chain_t* chain_end;
 
 /* Sets page_n to cover a range of len (MUST ALREADY BE A VALID RECORD)*/
 void break_page_to(size_t page_n, size_t len);
 
 /* Gets the pagen that can be used to index the book. If in doubt, call this.*/
 size_t get_valid_page_entry(size_t page_n);
-
-/* Sets the state of a range of pages from one state to another */
-void set_pages_state(size_t page_n, size_t len, e_page_status from_status, e_page_status to_status);
 
 /* Searches for a range of pages of a particular size and minimum length */
 size_t find_page_type(size_t required_len, size_t required_type);
@@ -68,8 +68,8 @@ ptable_t memmget_create_table(ptable_t parent, register_t index);
 /* Creates a virt->phy mapping but chooses a physical page for you */
 int memget_create_mapping(ptable_t L2_table, register_t index);
 
-/* Takes a reservation from the system, i.e. will return a new virtual capability of length length */
-capability memgt_take_reservation(size_t length);
+/* Takes a reservation from the system, i.e. will return a new virtual capability of length */
+void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out);
 
 /* Calls the nano kernel interface for you and also updates its own bookeeping */
 capability memgt_get_phy_page(size_t pagen, register_t cached);

@@ -34,6 +34,8 @@
 static ptable_t top_table, L1_0, L2_0;
 
 static void init_vmem(void) {
+    /* This creates anough virtual memory to get started */
+
     top_table = get_top_level_table();
     assert(top_table != NULL);
     CHERI_PRINT_CAP(top_table);
@@ -48,11 +50,17 @@ static void init_vmem(void) {
         assert(res == 0);
     }
 
-
     /* Now we get the first reservation which NEEDS virtual mem */
-    first_reservation.reservation = make_first_reservation();
-    first_reservation.next = NULL;
-    first_reservation.prev = NULL;
+    res_t first = make_first_reservation();
+
+    chain_start = get_userdata_for_res(first);
+
+    chain_start->used.allocated_to = NULL;
+    chain_start->used.prev_res = NULL;
+    chain_start->used.next_res = NULL;
+    chain_start->used.res = first;
+
+    chain_end = chain_start;
 }
 
 static void init_book(void) {
