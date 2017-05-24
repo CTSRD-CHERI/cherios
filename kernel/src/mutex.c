@@ -30,6 +30,10 @@
 
 #include "mutex.h"
 #include "sched.h"
+#include "nanokernel.h"
+
+ex_lvl_t* ex_lvl;
+cause_t* ex_cause;
 
 void spinlock_init(spinlock_t* lock) {
     lock->lock = 0;
@@ -165,4 +169,9 @@ int  mutex_try_acquire(mutex_t* mu, act_t* owner) {
         }
         return res;
     }
+}
+
+void init_fast_critical_section(void) {
+    ex_lvl = get_critical_level_ptr();
+    ex_cause = get_critical_cause_ptr();
 }

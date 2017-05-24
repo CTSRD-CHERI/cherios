@@ -52,12 +52,13 @@ int cherios_main(nano_kernel_if_t* interface,
 
 	init_nano_kernel_if_t(interface, def_data);
     set_sealing_cap(sealer);
-
 	/* Get the capability for the uart. We should save this somewhere sensible */
 	capability  cap_for_uart = get_phy_cap(get_book(), uart_base_phy_addr, uart_base_size, 0);
 	set_uart_cap(cap_for_uart);
 
 	kernel_puts("Kernel Hello world\n");
+
+    init_fast_critical_section();
 
     CHERI_PRINT_CAP(interface);
     CHERI_PRINT_CAP(def_data);

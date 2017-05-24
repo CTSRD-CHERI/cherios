@@ -184,6 +184,8 @@ local_cap_var split_phy_page_range_cap
 local_cap_var obtain_super_powers_cap
 local_cap_var get_userdata_for_res_cap
 local_cap_var get_last_exception_cap
+local_cap_var get_critical_level_ptr_cap
+local_cap_var get_critical_cause_ptr_cap
 .set cap_table_end, local_ctr
 
 local_var top_virt_page, PAGE_TABLE_SIZE, PAGE_TABLE_ENT_BITS
@@ -321,6 +323,8 @@ nano_kernel_init:
     init_table obtain_super_powers
     init_table get_userdata_for_res
     init_table get_last_exception
+    init_table get_critical_level_ptr
+    init_table get_critical_cause_ptr
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
     dli          $k1, cap_table_end - create_context_cap
@@ -734,7 +738,31 @@ destroy_context_end:
     cclearlo    (1 << 13) | (1 << 14) | (1 << 3)
     creturn
 
+################################
+.global get_critical_level_ptr
+get_critical_level_ptr:
+################################
 
+    dli        $t0, exception_level
+    dli        $t1, REG_SIZE
+    cincoffset $c3, $idc, $t0
+    dli        $t2, DEF_DATA_PERMS
+    csetbounds $c3, $c3, $t1
+    candperm   $c3, $c3, $t2
+    creturn
+
+################################
+.global get_critical_cause_ptr
+get_critical_cause_ptr:
+################################
+
+    dli        $t0, exception_cause
+    dli        $t1, REG_SIZE
+    cincoffset $c3, $idc, $t0
+    dli        $t2, DEF_DATA_PERMS
+    csetbounds $c3, $c3, $t1
+    candperm   $c3, $c3, $t2
+    creturn
 
 #################################
 # void critical_section_enter();

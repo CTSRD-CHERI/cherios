@@ -58,12 +58,18 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
     length += ((CHERICAP_SIZE - (length & (CHERICAP_SIZE-1))) & (CHERICAP_SIZE-1));
 
     if(flags & MAP_PHY) {
-        size_t npages = (length + PAGE_SIZE - 1) / PAGE_SIZE;
         if(base == 0) {
+            size_t npages = (length + PAGE_SIZE - 1) / PAGE_SIZE;
             size_t page_index = find_page_type(npages, page_unused);
             get_phy_page(page_index, (cheri_perms & MAP_CACHED) != 0, npages, &pair);
         } else {
+            size_t npages = (length + PAGE_SIZE - 1) / PAGE_SIZE;
             size_t page_index = base / PAGE_SIZE;
+            size_t page_offset = (base & (PAGE_SIZE-1));
+
+            /* For overlapping reasons */
+            if(((npages * PAGE_SIZE) - page_offset) < length) npages++;
+
             page_index = get_valid_page_entry(page_index);
             size_t of_length = book[page_index].len;
 
@@ -79,7 +85,10 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
                 break_page_to(page_index, npages);
             }
 
-            get_phy_page(page_index, (cheri_perms & MAP_CACHED) != 0, npages, &pair);
+            get_phy_page(page_index, (flags & MAP_CACHED) != 0, npages, &pair);
+
+            if(pair.data != NULL) pair.data = cheri_setoffset(pair.data, page_offset);
+            if(pair.code != NULL) pair.code = cheri_setoffset(pair.code, page_offset);
         }
 
         if(pair.data != NULL) pair.data = cheri_setbounds(pair.data, length);

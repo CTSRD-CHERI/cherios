@@ -68,7 +68,7 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 
 	//FIXME this is still really racey, this critical section function stops interrupts, but will not work on multicore
 
-	critical_section_enter();
+	FAST_CRITICAL_ENTER
 
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
@@ -102,7 +102,7 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 
 	sched_receives_msg(dest);
 
-	critical_section_exit();
+	FAST_CRITICAL_EXIT
 	return 0;
 }
 

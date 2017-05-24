@@ -33,19 +33,27 @@
 
 #include "stddef.h"
 #include "mips.h"
+#include "nanokernel.h"
 
 /* TODO align this nicely */
 #define CACHE_LINE_SIZE 64;
 
 /* TODO these are now used so frequently we should make a faster version of critical enter */
 
+extern ex_lvl_t* ex_lvl;
+extern cause_t* ex_cause;
+
+/* This first one may need to be atomix. The second will be guarded by the first */
+#define FAST_CRITICAL_ENTER (*ex_lvl)++;
+#define FAST_CRITICAL_EXIT (*ex_lvl)--; if(*ex_lvl == 0 && *ex_cause != 0) {*ex_lvl = 1; critical_section_exit();}
+
 #define CRITICAL_LOCKED_BEGIN(lock)     \
-    critical_section_enter();           \
+    FAST_CRITICAL_ENTER                 \
     spinlock_acquire(lock);
 
 #define CRITICAL_LOCKED_END(lock)       \
     spinlock_release(lock);             \
-    critical_section_exit();
+    FAST_CRITICAL_EXIT
 
 typedef struct spinlock_t{
     volatile char lock;
@@ -78,5 +86,5 @@ void mutex_release(mutex_t* mu, struct act_t* owner);
 void mutex_acquire(mutex_t* mu, struct act_t* owner);
 int  mutex_try_acquire(mutex_t* mu, struct act_t* owner);
 
-
+void init_fast_critical_section(void);
 #endif //CHERIOS_MUTEX_H

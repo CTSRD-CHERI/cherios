@@ -78,6 +78,9 @@ typedef struct {
     register_t ccause;
 } exection_cause_t;
 
+typedef register_t ex_lvl_t;
+typedef register_t cause_t;
+
 #define NANO_KERNEL_IF_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
 /* Creates a context from a intial reg_frame and returns a handle */\
@@ -128,7 +131,10 @@ typedef struct {
 /* Gets a R/W cap for the userdata space of a meta data node of a reservation. */\
     ITEM(get_userdata_for_res, capability, (res_t res), __VA_ARGS__)\
 /* Get the victim context and cause register for the last exception. */\
-    ITEM(get_last_exception, void, (exection_cause_t* out), __VA_ARGS__)
+    ITEM(get_last_exception, void, (exection_cause_t* out), __VA_ARGS__)\
+/* For both diagnostic and performance reasons a r.w capability to the EL is available. Use this for a fast critical region*/\
+    ITEM(get_critical_level_ptr, ex_lvl_t*,  (void), __VA_ARGS__)\
+    ITEM(get_critical_cause_ptr, cause_t*,  (void), __VA_ARGS__)
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 

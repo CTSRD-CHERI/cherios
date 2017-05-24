@@ -38,7 +38,7 @@
 #include "namespace.h"
 #include "utils.h"
 
-#define B_FS 1
+#define B_FS 0
 #define B_SO 0
 #define B_ZL 1
 #define B_T1 0
@@ -199,8 +199,9 @@ static void load_modules(init_info_t * init_info) {
 				nssleep(3);
                 if(namespace_rdy()) {
                     act_kt mem = namespace_get_ref(namespace_num_memmgt);
-                    act_kt virt = namespace_get_ref(namespace_num_virtio);
-                    if(mem != NULL && virt != NULL) break;
+                    //act_kt virt = namespace_get_ref(namespace_num_virtio);
+                    //if(mem != NULL && virt != NULL) break;
+                    if(mem != NULL) break;
                 }
 				cnt = num_registered_modules();
 				printf(" only %d core services registered with ns\n", cnt);

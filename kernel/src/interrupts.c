@@ -68,6 +68,7 @@ static void kernel_interrupt_others(register_t pending) {
 				KERNEL_ERROR("unknown interrupt %lx", i);
 				continue;
 			}
+            KERNEL_TRACE("interrupt disable", "%ld", i);
 			cp0_status_im_disable(1<<i);
 			// FIXME we probabably want a seperate interrupt source from the kernel
 			if(msg_push(NULL, NULL, NULL, NULL, i, 0, 0, 0, -3, int_child[i], &kernel_acts[0], NULL)) {
@@ -81,6 +82,7 @@ void kernel_interrupt(register_t cause) {
 	register_t ipending = cp0_cause_ipending_get(cause);
 	register_t toprocess = ipending & get_others_interrupts_mask();
 	KERNEL_TRACE("interrupt", "%lx %lx", ipending, toprocess);
+    KERNEL_TRACE("interrupt", "mask: %d\n", get_others_interrupts_mask());
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
 		kernel_timer();
 	}
@@ -97,6 +99,7 @@ static int validate_number(int number) {
 }
 
 int kernel_interrupt_enable(int number, act_control_t * ctrl) {
+    KERNEL_TRACE("interrupt enable", "%d", number);
 	number = validate_number(number);
 	if(number < 0) {
 		return -1;

@@ -201,11 +201,12 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 		sched_nothing_to_run();
 	} else {
 
-		if(!in_exception_handler) {
-			critical_section_enter();
-		}
+        if(!in_exception_handler) {
+            FAST_CRITICAL_ENTER
+        }
 
 		if(hint != kernel_curr_act) {
+
 			act_t* from = kernel_curr_act;
 			act_t* to = hint;
 
@@ -221,6 +222,8 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 				/* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
 				context_switch(to->context, &from->context);
 			}
-		}
+		} else {
+            FAST_CRITICAL_EXIT
+        }
 	}
 }

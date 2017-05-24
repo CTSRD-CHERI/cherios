@@ -76,6 +76,7 @@ act_t * kernel_act_ctrl_get_ref(void) {
 status_e kernel_act_ctrl_get_status(void);
 status_e kernel_act_ctrl_get_status(void) {
 	act_control_t * ctrl = (act_control_t *)get_idc();
+    KERNEL_TRACE("get status", "Level: %ld. Cause: %lx", *ex_lvl, *ex_cause);
 	return act_get_status(ctrl);
 }
 
