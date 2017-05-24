@@ -32,11 +32,11 @@
 #include "sys/types.h"
 #include "activations.h"
 #include "klib.h"
-#include "queue.h"
 #include "namespace.h"
 #include "msg.h"
 #include "ccall_trampoline.h"
 #include "nanokernel.h"
+#include "queue.h"
 
 /*
  * Routines to handle activations

@@ -29,6 +29,7 @@
  */
 
 #include <syscalls.h>
+#include <activations.h>
 #include "sys/types.h"
 #include "klib.h"
 #include "syscalls.h"
@@ -51,7 +52,7 @@ void kernel_syscall_sleep(int time) {
 	if(time != 0) {
 		KERNEL_ERROR("sleep >0 not implemented");
 	} else {
-		sched_reschedule(NULL, sched_runnable, 0);
+		sched_reschedule(NULL, 0);
 	}
 }
 

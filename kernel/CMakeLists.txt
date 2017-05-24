@@ -1,4 +1,5 @@
 include_directories(include ${CMAKE_SOURCE_DIR}/boot/include/boot ${CMAKE_SOURCE_DIR}/uart/include)
+
 set(KERNEL_SRCS
     src/act.c
     src/gc.c
@@ -12,6 +13,7 @@ set(KERNEL_SRCS
     src/sched.c
     src/syscalls.c
     src/timer.c
+    src/mutex.c
     ${CMAKE_SOURCE_DIR}/uart/src/uart.c
 )
 set(KERNEL_ASM_SRCS

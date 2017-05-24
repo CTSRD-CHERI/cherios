@@ -28,41 +28,55 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _TYPES_H_
-#define _TYPES_H_
+#ifndef CHERIOS_MUTEX_H
+#define CHERIOS_MUTEX_H
 
-#include "cheric.h"
-/*
- * Possible status for an activation
- */
-typedef enum status_e
-{
-    status_alive = 0,
-    status_revoked = 1,
-    status_terminated = 2
-} status_e;
+#include "stddef.h"
+#include "mips.h"
 
-/*
- * Scheduling status for an activation
- */
-typedef enum sched_status_e
-{
-    sched_waiting,      /* Waiting on its message queue*/
-    sched_sem,          /* Waiting on a kernel semaphore */
-    sched_runnable,
-    sched_running,
-    sched_sync_block,
-    sched_terminated
-} sched_status_e;
+/* TODO align this nicely */
+#define CACHE_LINE_SIZE 64;
 
-typedef struct
-{
-    capability c3;
-    register_t v0;
-    register_t v1;
-}  ret_t;
+/* TODO these are now used so frequently we should make a faster version of critical enter */
 
-typedef capability act_kt;
-typedef capability act_control_kt;
+#define CRITICAL_LOCKED_BEGIN(lock)     \
+    critical_section_enter();           \
+    spinlock_acquire(lock);
 
-#endif
+#define CRITICAL_LOCKED_END(lock)       \
+    spinlock_release(lock);             \
+    critical_section_exit();
+
+typedef struct spinlock_t{
+    volatile char lock;
+} spinlock_t;
+
+typedef struct semaphore_t {
+    struct act_t* first_waiter;
+    struct act_t* last_waiter;
+    int level;
+    spinlock_t lock;
+} semaphore_t;
+
+typedef struct mutex_t {
+    struct act_t* owner;
+    semaphore_t sem;
+    size_t recursions;
+} mutex_t;
+
+void spinlock_init(spinlock_t* lock);
+void spinlock_acquire(spinlock_t* lock);
+void spinlock_release(spinlock_t* lock);
+
+void semaphore_init(semaphore_t* sem);
+void semaphore_signal(semaphore_t* sem);
+void semaphore_wait(semaphore_t* sem, struct act_t* waiter);
+int  semaphore_try_wait(semaphore_t* sem, struct act_t* waiter);
+
+void mutex_init(mutex_t* mu);
+void mutex_release(mutex_t* mu, struct act_t* owner);
+void mutex_acquire(mutex_t* mu, struct act_t* owner);
+int  mutex_try_acquire(mutex_t* mu, struct act_t* owner);
+
+
+#endif //CHERIOS_MUTEX_H

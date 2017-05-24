@@ -31,7 +31,7 @@
 #ifndef __KERNEL_H__
 #define	__KERNEL_H__
 
-#define __TRACE__
+//#define __TRACE__
 //#define __LITE__
 
 #define MAX_ACTIVATIONS 32

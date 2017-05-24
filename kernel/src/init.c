@@ -75,6 +75,8 @@ int cherios_main(nano_kernel_if_t* interface,
     init_info.uart_cap = cap_for_uart;
 	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
 
+	sched_init();
+
 	context_t init_context = act_init(own_context, &init_info, init_base, init_entry);
 
 	KERNEL_TRACE("kernel", "Going into exception handling mode");

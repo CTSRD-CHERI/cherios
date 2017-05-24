@@ -33,14 +33,19 @@
 #ifndef _CHERIOS_SCHED_H_
 #define	_CHERIOS_SCHED_H_
 
+#include "activations.h"
+
+void    sched_init(void);
+
 void    sched_schedule(act_t * act);
-void    sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel);
+void    sched_reschedule(act_t *hint, int in_exception_handler);
 
 void	sched_create(act_t * act);
 void	sched_delete(act_t * act);
 
 void    sched_block_until_msg(act_t * act, act_t * next_hint);
-void	sched_block(act_t *act, sched_status_e status, act_t* next_hint, int in_kernel);
+void	sched_block(act_t *act, sched_status_e status);
+void    sched_receives_sem_signal(act_t * act);
 void	sched_receives_msg(act_t * act);
 void    sched_recieve_ret(act_t * act);
 

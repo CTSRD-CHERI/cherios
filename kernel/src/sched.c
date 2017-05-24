@@ -29,7 +29,7 @@
  * SUCH DAMAGE.
  */
 
-#include <activations.h>
+#include "mutex.h"
 #include "activations.h"
 #include "klib.h"
 #include "nanokernel.h"
@@ -45,13 +45,22 @@ static act_t * act_queue[MAX_ACTIVATIONS];
 static size_t   act_queue_current = 0;
 static size_t   act_queue_end = 0;
 
+spinlock_t queue_lock;
+
+void sched_init() {
+	spinlock_init(&queue_lock);
+}
+
 static void add_act_to_queue(act_t * act) {
 	kernel_assert(act_queue_end != MAX_ACTIVATIONS);
+	CRITICAL_LOCKED_BEGIN(&queue_lock);
 	act_queue[act_queue_end++] = act;
+	CRITICAL_LOCKED_END(&queue_lock);
 }
 
 static void delete_act_from_queue(act_t * act) {
-	size_t index = 0;
+    size_t index;
+	restart: index = 0;
 	if (act_queue[act_queue_current] == act) {
 		index = act_queue_current;
 	} else {
@@ -64,8 +73,15 @@ static void delete_act_from_queue(act_t * act) {
 		}
 		kernel_assert(i != act_queue_end);
 	}
+
+	CRITICAL_LOCKED_BEGIN(&queue_lock);
+	if(act_queue[index] != act) {
+		CRITICAL_LOCKED_END(&queue_lock);
+		goto restart;
+	}
 	act_queue_end--;
 	act_queue[index] = act_queue[act_queue_end];
+	CRITICAL_LOCKED_END(&queue_lock);
 }
 
 void sched_create(act_t * act) {
@@ -86,10 +102,17 @@ void sched_delete(act_t * act) {
 	}
 	act->status = status_terminated;
 	if(act->sched_status == sched_running) {
-		sched_reschedule(NULL, sched_terminated, 0);
+		sched_reschedule(NULL, 0);
 	} else {
 		act->sched_status = sched_terminated;
 	}
+}
+
+void sched_receives_sem_signal(act_t * act) {
+	kernel_assert(act->sched_status == sched_sem);
+	KERNEL_TRACE("sched", "now unblocked on sempahore%s", act->name);
+	add_act_to_queue(act);
+	act->sched_status = sched_runnable;
 }
 
 void sched_receives_msg(act_t * act) {
@@ -108,36 +131,37 @@ void sched_recieve_ret(act_t * act) {
 }
 
 void sched_block_until_msg(act_t * act, act_t * next_hint) {
-	// would MUCH prefer to use a lighter lock here, or better yet go lockless and just check nothing went wrong at the
-	// end
-	critical_section_enter();
+	kernel_assert(act->sched_status == sched_running);
+
+	CRITICAL_LOCKED_BEGIN(&act->writer_spinlock);
+
 	if(msg_queue_empty(act)) {
-		// This block will result in a critical section exit
-		sched_block(act, sched_waiting, next_hint, 0);
+		sched_block(act, sched_waiting);
+		CRITICAL_LOCKED_END(&act->writer_spinlock);
+		/* Somebody may now send a message. This is ok, we will get back in the queue */
+		sched_reschedule(next_hint, 0);
 	} else {
-		critical_section_exit();
+		CRITICAL_LOCKED_END(&act->writer_spinlock);
 	}
-
-
 }
 
-void sched_block(act_t *act, sched_status_e status, act_t* next_hint, int in_kernel) {
+void sched_block(act_t *act, sched_status_e status) {
 	KERNEL_TRACE("sched", "blocking %s", act->name);
-	kernel_assert((status == sched_sync_block) || (status == sched_waiting));
+	kernel_assert((status == sched_sync_block) || (status == sched_waiting) || (status == sched_sem));
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
 		delete_act_from_queue(act);
 	}
 
-	if(act->sched_status == sched_running) {
-		sched_reschedule(next_hint, status, in_kernel);
-	}
+    act->sched_status = status;
 }
 
-static void sched_deschedule(act_t * act, sched_status_e into_state) {
-	kernel_assert(act->sched_status == sched_running);
+static void sched_deschedule(act_t * act) {
+	/* The caller should have put this in a sensible state if wanted something different */
+	if(act->sched_status == sched_running) {
+		act->sched_status = sched_runnable;
+	}
 	KERNEL_TRACE("sched", "Reschedule from activation '%s'", act->name);
-	act->sched_status = into_state;
 }
 
 void sched_schedule(act_t * act) {
@@ -160,10 +184,11 @@ static act_t * sched_picknext(void) {
 	return next;
 }
 
-void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
-	KERNEL_TRACE("sched", "being asked to schedule someone else. in_kernel=%d. have %lu choices.",
-				 in_kernel,
+void sched_reschedule(act_t *hint, int in_exception_handler) {
+	KERNEL_TRACE("sched", "being asked to schedule someone else. in_exception_handler=%d. have %lu choices.",
+				 in_exception_handler,
 				 act_queue_end);
+
 	if(hint != NULL) {
 		KERNEL_TRACE("sched", "hint is %s", hint->name);
 	}
@@ -174,27 +199,28 @@ void sched_reschedule(act_t *hint, sched_status_e into_state, int in_kernel) {
 
 	if(!hint) {
 		sched_nothing_to_run();
-	} else if(hint != kernel_curr_act) {
-		act_t* from = kernel_curr_act;
-		act_t* to = hint;
+	} else {
 
-		if(!in_kernel) {
+		if(!in_exception_handler) {
 			critical_section_enter();
-
-			sched_deschedule(from, into_state);
-			sched_schedule(to);
-			if(from->status == status_terminated) {
-				KERNEL_TRACE("sched", "now destroying %s", from->name);
-				destroy_context(from->context, to->context); // This will never return
-			}
-			/* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
-			/* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
-			context_switch(to->context, &from->context);
-		} else {
-			sched_deschedule(from, into_state);
-			sched_schedule(to);
 		}
 
-	}
+		if(hint != kernel_curr_act) {
+			act_t* from = kernel_curr_act;
+			act_t* to = hint;
 
+			sched_deschedule(from);
+			sched_schedule(to);
+
+			if(!in_exception_handler) {
+				if(from->status == status_terminated) {
+					KERNEL_TRACE("sched", "now destroying %s", from->name);
+					destroy_context(from->context, to->context); // This will never return
+				}
+				/* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
+				/* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
+				context_switch(to->context, &from->context);
+			}
+		}
+	}
 }

@@ -38,19 +38,20 @@
 #ifndef __ASSEMBLY__
 
 #include "cheric.h"
-#include "queue.h"
 #include "types.h"
 #include "stddef.h"
 #include "nanokernel.h"
-typedef u32 aid_t;
+#include "queue.h"
+#include "mutex.h"
 
+typedef u32 aid_t;
 
 /*
  * Kernel structure for an activation
  */
 typedef	uint64_t sync_t;
 
-typedef struct
+typedef struct act_t
 {
 	/* Stack for the kernel when acting on users behalf */
 	/* Warning: The offset of this is assumed by assembly */
@@ -64,6 +65,7 @@ typedef struct
 
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */
+    struct spinlock_t writer_spinlock;
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
 					   which has write access to queue) */
 	/* Used by the scheduler to beat races without having to turn off premption */
@@ -80,6 +82,8 @@ typedef struct
 		int sync_condition;
 	} sync_state;
 
+	/* Semaphore related */
+	struct act_t * semaphore_next_waiter;
 #ifndef __LITE__
 	char name[ACT_NAME_MAX_LEN];	/* Activation name (for debuging) */
 #endif

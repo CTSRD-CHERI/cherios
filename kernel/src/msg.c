@@ -29,14 +29,14 @@
  * SUCH DAMAGE.
  */
 
-#include <queue.h>
 #include "sys/types.h"
 #include "klib.h"
 #include "activations.h"
-#include "queue.h"
 #include "syscalls.h"
 #include "ccall_trampoline.h"
 #include "stddef.h"
+#include "queue.h"
+#include "mutex.h"
 
 DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
@@ -124,6 +124,8 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 	kernel_assert(is_power_2(queue_len));
 	kernel_assert(queue_len != 0);
 
+    spinlock_init(&act->writer_spinlock);
+
 	act->msg_queue = queue;
 	act->queue_mask = queue_len-1;
 
@@ -188,19 +190,21 @@ void act_send_message(capability c3, capability c4, capability c5, capability c6
 		sync_token = get_and_set_sealed_sync_token(source_activation);
 	}
 
-	//FIXME critical section here might be a bit much?
-
-	//TODO if we are going to switch we can (maybe) deliver this message without buffering
+    CRITICAL_LOCKED_BEGIN(&target_activation->writer_spinlock);
 	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
 
 	if(selector == SYNC_CALL) {
 		//TODO in a multicore world we may spin a little if we expect the answer to be fast
 		//TODO The user will indicate this with the switch flag
-		sched_block(source_activation, sched_sync_block, target_activation, 0);
+		sched_block(source_activation, sched_sync_block);
+        CRITICAL_LOCKED_END(&target_activation->writer_spinlock);
+        sched_reschedule(target_activation, 0);
+
 		KERNEL_TRACE(__func__, "%s has recieved return message from %s", source_activation->name, target_activation->name);
 		return;
 	} else if(selector == SEND_SWITCH) {
-		sched_reschedule(target_activation, sched_runnable, 0);
+        source_activation->sched_status = sched_runnable;
+		sched_reschedule(target_activation, 0);
 	}
 
 	ret->v0 = 0;
@@ -261,7 +265,7 @@ int act_send_return(capability c3, capability sync_token, register_t v0, registe
 	/* Make the caller runnable again */
 	sched_recieve_ret(returned_to);
 
-	sched_reschedule(returned_to, sched_runnable, 0);
+	sched_reschedule(returned_to, 0);
 
 	return 0;
 }
