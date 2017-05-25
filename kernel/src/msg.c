@@ -59,6 +59,8 @@ static inline int empty(queue_t * queue) {
 }
 
 int msg_push(capability c3, capability c4, capability c5,
+			 capability c6, capability c7, capability c8,
+			 capability c9,
 			 register_t a0, register_t a1, register_t a2,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
@@ -74,6 +76,13 @@ int msg_push(capability c3, capability c4, capability c5,
 	slot->c3 = c3;
 	slot->c4 = c4;
 	slot->c5 = c5;
+	slot->c6 = c6;
+	slot->c7 = c7;
+	slot->c8 = c8;
+	slot->c9 = c9;
+	/* c10 left for the selector argument for the convenience of msg send
+	 * trampoline wrapper which uses it for ret_t* argument. */
+	slot->c10 = NULL;
 	slot->idc = NULL;
 
 	slot->c1 = sync_token;
@@ -82,6 +91,10 @@ int msg_push(capability c3, capability c4, capability c5,
 	slot->a0 = a0;
 	slot->a1 = a1;
 	slot->a2 = a2;
+	/* a3 left for the selector argument for the convenience of msg send cap invoker.
+	 * Note that this leaves only 3 non-cap arguments.  The invoker could instead
+	 * follow the ABI of CCall */
+	slot->a3 = 0;
 	slot->v0 = v0;
 
 	queue->header.end = safe(queue->header.end+1, qmask);
@@ -104,10 +117,16 @@ int msg_push_deprecated(act_t *dest, act_t *src, capability identifier, capabili
 	queue->msg[next_slot].a0  = src->saved_registers.mf_a0;
 	queue->msg[next_slot].a1  = src->saved_registers.mf_a1;
 	queue->msg[next_slot].a2  = src->saved_registers.mf_a2;
+	queue->msg[next_slot].a3  = src->saved_registers.mf_a3;
 
 	queue->msg[next_slot].c3  = src->saved_registers.cf_c3;
 	queue->msg[next_slot].c4  = src->saved_registers.cf_c4;
 	queue->msg[next_slot].c5  = src->saved_registers.cf_c5;
+	queue->msg[next_slot].c6  = src->saved_registers.cf_c6;
+	queue->msg[next_slot].c7  = src->saved_registers.cf_c7;
+	queue->msg[next_slot].c8  = src->saved_registers.cf_c8;
+	queue->msg[next_slot].c9  = src->saved_registers.cf_c9;
+	queue->msg[next_slot].c10  = src->saved_registers.cf_c10;
 
 	queue->msg[next_slot].v0  = src->saved_registers.mf_v0;
 	queue->msg[next_slot].idc = identifier;
@@ -208,6 +227,8 @@ static int token_expected(act_t* ccaller, capability token) {
 
 /* This function 'returns' by setting the sync state ret values appropriately */
 void act_send_message(capability c3, capability c4, capability c5,
+					 capability c6, capability c7, capability c8,
+					 capability c9,
 					 register_t a0, register_t a1, register_t a2,
 					 ccall_selector_t selector, register_t v0, ret_t* ret) {
 
@@ -236,7 +257,8 @@ void act_send_message(capability c3, capability c4, capability c5,
 
 	//TODO if we are going to switch we can (maybe) deliver this message without buffering
 	kernel_critical_section_enter();
-	msg_push(c3, c4, c5, a0, a1, a2, v0, target_activation, source_activation, sync_token);
+	msg_push(c3, c4, c5, c6, c7, c8, c9, a0, a1, a2, v0,
+	         target_activation, source_activation, sync_token);
 	kernel_critical_section_exit();
 
 	sched_receives_msg(target_activation);
@@ -263,7 +285,7 @@ _Static_assert(offsetof(ret_t, v1) == 40, "message return assumes these offsets"
 
 #define MESSAGE_RETURN_RESTORE_BEFORE	\
 	"daddiu $sp, $sp, -64\n"			\
-	"csetoffset $c6, $c11, $sp\n"
+	"csetoffset $c10, $c11, $sp\n"
 
 
 

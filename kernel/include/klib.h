@@ -97,6 +97,8 @@ DECLARE_TRAMPOLINE(act_send_message);
 DECLARE_TRAMPOLINE(act_send_return);
 
 int msg_push(capability c3, capability c4, capability c5,
+			 capability c6, capability c7, capability c8,
+			 capability c9,
 			 register_t a0, register_t a1, register_t a2,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token);
