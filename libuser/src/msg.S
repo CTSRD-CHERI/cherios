@@ -36,12 +36,12 @@
 .ifeq _MIPS_SZCAP-256
 .set CAP_SIZE_BITS, 5
 .set CAP_SIZE,     32
-.set CAP_IN_MESSAGE, 7
+.set CAP_IN_MESSAGE, 14
 .else
 .ifeq _MIPS_SZCAP-128
 .set CAP_SIZE_BITS, 4
 .set CAP_SIZE,     16
-.set CAP_IN_MESSAGE, 6
+.set CAP_IN_MESSAGE, 12
 .else
 .error "Unknown cap size"
 .endif
@@ -93,19 +93,25 @@ msg_entry_loop:
     syscall                                               # SYSCALL(WAIT)
 
 pop:
-    sll     $t1, $t0, (CAP_SIZE_BITS + 3)                 # 8 capabilities worth of stuff in a message
+    sll     $t1, $t0, (CAP_SIZE_BITS + 4)                 # 16 capabilities worth of stuff in a message
 
     # pops message #
     clc     $c3, $t1,  (MSGS_START_OFFSET)(queue)
     clc     $c4, $t1,  (MSGS_START_OFFSET + CAP_SIZE)(queue)
     clc     $c5, $t1,  (MSGS_START_OFFSET + 2 * CAP_SIZE)(queue)
-    clc     $idc, $t1, (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
-    clc     $c1, $t1,  (MSGS_START_OFFSET + 4 * CAP_SIZE)(queue)
-    clc     $c2, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
+    clc     $c6, $t1,  (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
+    clc     $c7, $t1,  (MSGS_START_OFFSET + 4 * CAP_SIZE)(queue)
+    clc     $c8, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
+    clc     $c9, $t1,  (MSGS_START_OFFSET + 6 * CAP_SIZE)(queue)
+    clc     $c10, $t1, (MSGS_START_OFFSET + 7 * CAP_SIZE)(queue)
+    clc     $idc, $t1, (MSGS_START_OFFSET + 8 * CAP_SIZE)(queue)
+    clc     $c1, $t1,  (MSGS_START_OFFSET + 9 * CAP_SIZE)(queue)
+    clc     $c2, $t1,  (MSGS_START_OFFSET + 10 * CAP_SIZE)(queue)
     cld     $a0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE)(queue)
     cld     $a1, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 8)(queue)
     cld     $a2, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 16)(queue)
-    cld     $v0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 24)(queue)
+    cld     $a3, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 24)(queue)
+    cld     $v0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 32)(queue)
 
     cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        #
     addi    $t0, $t0, 1                                 #

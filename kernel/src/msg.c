@@ -61,10 +61,16 @@ int msg_push(act_t * dest, act_t * src, capability identifier, capability sync_t
 	queue->msg[next_slot].a0  = src->saved_registers.mf_a0;
 	queue->msg[next_slot].a1  = src->saved_registers.mf_a1;
 	queue->msg[next_slot].a2  = src->saved_registers.mf_a2;
+	queue->msg[next_slot].a3  = src->saved_registers.mf_a3;
 
 	queue->msg[next_slot].c3  = src->saved_registers.cf_c3;
 	queue->msg[next_slot].c4  = src->saved_registers.cf_c4;
 	queue->msg[next_slot].c5  = src->saved_registers.cf_c5;
+	queue->msg[next_slot].c6  = src->saved_registers.cf_c6;
+	queue->msg[next_slot].c7  = src->saved_registers.cf_c7;
+	queue->msg[next_slot].c8  = src->saved_registers.cf_c8;
+	queue->msg[next_slot].c9  = src->saved_registers.cf_c9;
+	queue->msg[next_slot].c10  = src->saved_registers.cf_c10;
 
 	queue->msg[next_slot].v0  = src->saved_registers.mf_v0;
 	queue->msg[next_slot].idc = identifier;

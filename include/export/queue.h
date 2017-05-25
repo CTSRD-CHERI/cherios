@@ -46,21 +46,30 @@ typedef struct
 	capability c3; /* cap arguments */
 	capability c4;
 	capability c5;
+	capability c6;
+	capability c7;
+	capability c8;
+	capability c9;
+	capability c10;
 
 	capability idc; /* identifier */
 	capability c1;  /* sync token */
 	capability c2;	/* message sender cap */
 
-	/* This serves to align msg_t to a power of 2 * sizeof(capability). It made my life easier. also */
+	/* This and the one below serves to align msg_t to a power of 2 * sizeof(capability). It made my life easier. also */
 	/* at some point we may wan't more argument passing registers, especially if we use another 2 for a continuation */
 #if _MIPS_SZCAP == 256
-	capability pad;
+	capability pad0[3];
+#else
+	capability pad0;
 #endif
 
 	register_t a0; /* GP arguments */
 	register_t a1;
 	register_t a2;
+	register_t a3;
 	register_t v0;  /* method nb */
+	register_t pad1[3];  /* method nb */
 }  msg_t;
 
 typedef struct
