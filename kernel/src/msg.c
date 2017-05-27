@@ -302,6 +302,7 @@ int act_send_return(capability c3, capability sync_token, register_t v0, registe
 
 	if(sync_token == NULL) {
 		KERNEL_TRACE(__func__, "%s did not provide a sync token", returned_from->name);
+		(void)returned_from;
 		kernel_freeze();
 	}
 
