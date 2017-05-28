@@ -2,10 +2,7 @@ include_directories(include)
 
 set(KERNEL_SRCS
     src/act.c
-    src/cp0.c
     src/gc.c
-    src/interrupts.c
-    src/kernel_exceptions.c
     src/kernel_utils.c
     src/msg.c
     src/regdump.c
