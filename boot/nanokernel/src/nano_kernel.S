@@ -142,6 +142,36 @@ END_LOCALS
 
 nano_kernel_start:
 
+# We have no stack, and this sub routine may need to be callable from a couple of places. Set appropriately.
+
+.set zero_page_tmp_1,   $t1
+.set zero_page_ctmp_1,  $c13
+.set zero_page_arg,     $t0
+.set zero_page_rreg,    $c17
+
+.set UNROLL_FACTOR,     8
+
+# Zeros page. I unrolled this a few times on point of principle. This is in no way optimal.
+
+nano_zero_page:
+    candperm    zero_page_ctmp_1, $kdc, $zero # Get this right...
+    csetbounds  zero_page_ctmp_1, zero_page_ctmp_1, $zero
+    daddiu      zero_page_tmp_1, zero_page_arg, (PHY_PAGE_SIZE) - (UNROLL_FACTOR * CAP_SIZE)
+
+1:
+    csc         zero_page_ctmp_1, zero_page_tmp_1, 0($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (1*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (2*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (3*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (4*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (5*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (6*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (7*CAP_SIZE)($kdc)
+    bne         zero_page_tmp_1,  zero_page_arg, 1b
+    daddiu      zero_page_tmp_1, zero_page_tmp_1, -(UNROLL_FACTOR * CAP_SIZE)
+
+    cjr         zero_page_rreg
+
 #################################################################
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, register_t arg0)
 .global nano_kernel_init
@@ -1059,16 +1089,19 @@ good_level: #t2 now contains the type we will seal the next level with
     clw         $t1, $t0, 0($idc)                       # $t1 = state
     bnez        $t1, create_ptable_er                   # state must be un-used
 
-    dli         $t1, page_nano_owned
+    dli         $t1, page_ptable
     csw         $t1, $t0, 0($idc)                       # set to nano owned
 
-    # TODO: zero the page
     dsll        $t0, $a0, PHY_PAGE_SIZE_BITS
     dli         $t1, PHY_MEM_START
     daddu       $t0, $t0, $t1                          # t0 is the address of the new page
     dsll        $t1, $a1, PAGE_TABLE_ENT_BITS          # t1 is index in the parent page to write to
 
-    # TODO: check not already mapped
+    # Check table not already created/deleted
+    cld         $t3, $t1, 0($c3)
+    bnez        $t3, create_ptable_er
+    nop
+
     csd         $t0, $t1, 0($c3)
     dli         $t1, PHY_PAGE_SIZE
     csetoffset  $c3, $kdc, $t0
@@ -1076,7 +1109,12 @@ good_level: #t2 now contains the type we will seal the next level with
     csetoffset  $c4, $kdc, $t2
     cseal       $c3, $c3, $c4
 
-    cclearlo    EN1(c4)
+    cmove       $c4, $c17
+    jal         nano_zero_page
+    nop
+
+    cmove       $c17, $c4
+    cclearlo    EN2(c4,c17)
     creturn
 
 create_ptable_er:
@@ -1113,6 +1151,10 @@ create_mapping:
 
     clw         $t1, $t0, 0($idc)                       # $t1 is the state of this phy page
     bnez        $t1, create_mapping_er                  # must be un-used
+    dsll        $t2, $a1, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
+
+    cld         $t1, $t2, 0($c3)                        # check -virtual- mapping is un-used
+    bnez        $t1, create_mapping_er
 
     dli         $t1, page_mapped
     csw         $t1, $t0, 0($idc)                       # set page to be mapped
@@ -1120,11 +1162,10 @@ create_mapping:
     # TODO add perms
     # TODO add autharising cap
     # TODO add the checked top bits
-    # TODO check virt un-used
-    dsll         $t0, $a1, PAGE_TABLE_ENT_BITS
-    dsll         $t1, $a0, pfn_shift
+
+    dsll        $t1, $a0, pfn_shift
     ori         $t1, $t1, pfn_flags
-    csd         $t1, $t0, 0($c3)                        # store EntryLo
+    csd         $t1, $t2, 0($c3)                        # store EntryLo
 create_mapping_er:
     cclearlo    EN2(c3,c4)
     creturn

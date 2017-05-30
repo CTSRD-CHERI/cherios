@@ -161,6 +161,7 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
     ITEM(page_nano_owned, 1)                       \
     ITEM(page_system_owned, 2)                     \
     ITEM(page_mapped, 3)                           \
+    ITEM(page_ptable, 4)                           \
 
 DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
 
