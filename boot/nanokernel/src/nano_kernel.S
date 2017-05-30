@@ -1203,10 +1203,12 @@ tlb_trampoline: # TODO
     daddu       $k1, $k1, $k0
 
     cld         $k1, $k1, 0($kdc)                                   # k1 = pfn entry
-
+    # Setup virtual page mask
+    # dli         $k0, (1 << (PHY_PAGE_SIZE_BITS - 12)) - 1
     # TODO check the top bits of the vaddr
 
     dmtc0       $k1, cp0_entrylo0
+    # dmtc0       $k0, cp0_pagemask
     daddiu      $k1, $k1, (1 << pfn_shift)                          # make second maping the next page
     dmtc0       $k1, cp0_entrylo1
 

@@ -67,6 +67,8 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 /* Page sizes etc */
 #define PHY_MEM_SIZE                    (1L << 32)
 
+
+/* TODO: Would like to increase this but QEMU does not seem to support a page pask not 0 */
 #define PHY_PAGE_SIZE_BITS              (12)
 #define PHY_PAGE_SIZE                   (1 << PHY_PAGE_SIZE_BITS)
 #define TOTAL_PHY_PAGES                 (PHY_MEM_SIZE/PAGE_SIZE)
