@@ -32,6 +32,7 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 .include "asm.S"
 #include "assembly_utils.h"
+#include "nanokernel.h"
 
 # We will lay out our contexts like this
 
@@ -44,14 +45,6 @@
 
 
 .set N_CONTEXTS,         64             # We never reallocate these, so its currently a huge limitation
-#FIXME we need to choose appropriate types and remove their accessibility from the rest of the system
-.set CONTEXT_TYPE,       0x5555         # The type of contexts
-.set NANO_KERNEL_TYPE,   0x6666         # The type of sealed local data
-.set RES_TYPE,           0x7777         # The type that means 'is allowed to
-.set RES_VIEW_TYPE,      0x7778         # The type that means 'is allowed to
-.set VTABLE_TYPE_L0,     0x8880         # The type of the top level page table
-.set VTABLE_TYPE_L1,     VTABLE_TYPE_L0 + 1  # The type of the L1 level page table
-.set VTABLE_TYPE_L2,     VTABLE_TYPE_L0 + 2  # The type of the L2 level page table
 
 #struct res_t {
 #    enum state{open, taken, merged, collecting}
@@ -64,10 +57,6 @@
 #}
 
 .set CACHE_LINE_SIZE,                64
-
-.set RES_PRIV_SIZE,                 4 * REG_SIZE
-.set RES_META_SIZE,                 256
-.set RES_USER_SIZE,                 RES_META_SIZE - RES_PRIV_SIZE
 
 # Top bits of virtual address decide which range we are using
 .set PHY_MEM_START_TOP,             0x90
@@ -84,22 +73,13 @@
 .set VIRT_MEM_SIZE,                 VIRT_MEM_END - VIRT_MEM_START
 
 # This is the physical memory we will scan in order to support revocation
-.set PHY_MEM_START,          PHY_MEM_START_TOP << TOP_ADDR_SHIFT
-.set PHY_MEM_START_UNCACHED, PHY_MEM_START_UNCACHED_TOP << TOP_ADDR_SHIFT
+.set PHY_MEM_START,                 PHY_MEM_START_TOP << TOP_ADDR_SHIFT
+.set PHY_MEM_START_UNCACHED,        PHY_MEM_START_UNCACHED_TOP << TOP_ADDR_SHIFT
 
-.set PHY_MEM_SIZE,  (1 << 32)
-.set PHY_MEM_END,   PHY_MEM_START + PHY_MEM_START
+.set PHY_MEM_END,                   PHY_MEM_START + PHY_MEM_SIZE
 
 #.set NANO_SIZE, __nano_size
 .set NANO_SIZE, 0x5000000
-.set PHY_PAGE_SIZE_BITS, 12
-.set PHY_PAGE_SIZE, (1 << PHY_PAGE_SIZE_BITS)
-
-
-.set N_PHY_PAGES_ENTRIES, PHY_MEM_SIZE / PHY_PAGE_SIZE
-.set PHY_PAGE_ENTRY_SIZE, 4 * REG_SIZE
-.set PHY_PAGE_ENTRY_SIZE_BITS, REG_SIZE_BITS + 2
-
 
 # We will lay out PHYSICAL state like this. The PFN is just the index in the table:
 # struct phy_ent {
@@ -110,32 +90,12 @@
 #
 #};
 
-.set PHY_UNUSED, 0
-.set PHY_NANO, 1
-.set PHY_SYSTEM, 2
-.set PHY_MAPPED, 3
-
 
 # The general idea is this: Physical pages are un-used and their state can be set (once) by the system
 # Some will be set to nano_owned for private use (constant set at init time).
 # Some will system_owned, we hand out PHYSICAL capabilities
 # Some will be mapped, and we will remember the mapping. When the VPN is proveably not in use, we can go back to un-used
 
-.set PAGE_TABLE_BITS, PHY_PAGE_SIZE_BITS
-.set PAGE_TABLE_SIZE, PHY_PAGE_SIZE
-.set PAGE_TABLE_ENT_SIZE, REG_SIZE
-.set PAGE_TABLE_ENT_BITS, REG_SIZE_BITS
-.set PAGE_TABLE_ENT_PER_TABLE, PAGE_TABLE_SIZE / PAGE_TABLE_ENT_SIZE
-.set PAGE_TABLE_BITS_PER_LEVEL, PAGE_TABLE_BITS - PAGE_TABLE_ENT_BITS
-
-.set L0_BITS, PAGE_TABLE_BITS_PER_LEVEL
-.set L1_BITS, PAGE_TABLE_BITS_PER_LEVEL
-.set L2_BITS, PAGE_TABLE_BITS_PER_LEVEL
-.set UNTRANSLATED_BITS, 1 + PHY_PAGE_SIZE_BITS
-
-# These bits will eventually be untranslated high bits, but we will check they are equal to a field in the leaf
-# Of the page table. These could be considered a genration count.
-.set CHECKED_BITS, 63 - L0_BITS - L1_BITS - L2_BITS - UNTRANSLATED_BITS
 ####################################################################################################################
 # The (very incorrectly named) global data for the nano kernel. idc will hold a capability that covers the range
 # locals_start to locals_end.
@@ -162,37 +122,14 @@ local_reg_var made_first_res
 local_reg_var collection_state
 
 # Method table for nano kernel
-local_cap_var create_context_cap
-local_cap_var destroy_context_cap
-local_cap_var context_switch_cap
-local_cap_var critical_section_enter_cap
-local_cap_var critical_section_exit_cap
-local_cap_var set_exception_handler_cap
-local_cap_var rescap_take_cap
-local_cap_var rescap_info_cap
-local_cap_var rescap_collect_cap
-local_cap_var rescap_split_cap
-local_cap_var rescap_merge_cap
-local_cap_var rescap_parent_cap
-local_cap_var get_phy_page_cap
-local_cap_var create_table_cap
-local_cap_var create_mapping_cap
-local_cap_var get_top_level_table_cap
-local_cap_var make_first_reservation_cap
-local_cap_var get_book_cap
-local_cap_var split_phy_page_range_cap
-local_cap_var obtain_super_powers_cap
-local_cap_var get_userdata_for_res_cap
-local_cap_var get_last_exception_cap
-local_cap_var get_critical_level_ptr_cap
-local_cap_var get_critical_cause_ptr_cap
+NANO_KERNEL_IF_LIST(LOCAL_CAP_VAR_MACRO)
 .set cap_table_end, local_ctr
 
 local_var top_virt_page, PAGE_TABLE_SIZE, PAGE_TABLE_ENT_BITS
 
 local_var context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
-local_var phy_page_table, (N_PHY_PAGES_ENTRIES + 1) * PHY_PAGE_ENTRY_SIZE, PHY_PAGE_ENTRY_SIZE_BITS
+local_var phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, PHY_PAGE_ENTRY_SIZE_BITS
 
 END_LOCALS
 
@@ -253,7 +190,7 @@ nano_kernel_init:
 
     dli         $t0, phy_page_table                     # t0 is start of book
     dli         $t1, (NANO_SIZE / PHY_PAGE_SIZE)        # t1 is number of pages for the nano
-    dli         $t2, PHY_NANO
+    dli         $t2, page_nano_owned
     dsrl        $t3, $a0, PHY_PAGE_SIZE_BITS           # t3 is number of pages for system
 
     csw         $t2, $t0, 0($kr1c)                      # book[0].state = nano owned
@@ -261,7 +198,7 @@ nano_kernel_init:
 
     dsll        $t2, $t1, PHY_PAGE_ENTRY_SIZE_BITS
     daddu       $t0, $t0, $t2                           # t0 is the start of the systems pages
-    dli         $t2, PHY_SYSTEM
+    dli         $t2, page_system_owned
 
 
     csw         $t2, $t0, 0($kr1c)                      # book[nano].state = system owned
@@ -270,15 +207,15 @@ nano_kernel_init:
 
     dsll        $t2, $t3, PHY_PAGE_ENTRY_SIZE_BITS
     daddu       $t0, $t0, $t2                           # t0 is the start of the free pages
-    dli         $t2, (N_PHY_PAGES_ENTRIES - (NANO_SIZE / PHY_PAGE_SIZE))
+    dli         $t2, (TOTAL_PHY_PAGES - (NANO_SIZE / PHY_PAGE_SIZE))
     dsubu       $t2, $t2, $t3
 
     csd         $t2, $t0, (REG_SIZE)($kr1c)             # book[nano + system].len = all - nano - system
     csd         $t1, $t0, (REG_SIZE*2)($kr1c)           # book[nano + system].prev = nano
 
     # We have a cheeky extra terminal page of size 1 that doesn't really exist
-    dli         $t0, phy_page_table + (N_PHY_PAGES_ENTRIES * PHY_PAGE_ENTRY_SIZE)
-    dli         $t1, PHY_NANO
+    dli         $t0, phy_page_table + (TOTAL_PHY_PAGES * PHY_PAGE_ENTRY_SIZE)
+    dli         $t1, page_nano_owned
     daddiu      $t3, $t3, (NANO_SIZE / PHY_PAGE_SIZE)
     dli         $t2, 1
 
@@ -301,30 +238,8 @@ nano_kernel_init:
 
     dli         $k1, create_context_cap
     # Store a sealed capability for each nanokernel function in a table
-    init_table create_context
-    init_table destroy_context
-    init_table context_switch
-    init_table critical_section_enter
-    init_table critical_section_exit
-    init_table set_exception_handler
-    init_table rescap_take
-    init_table rescap_info
-    init_table rescap_collect
-    init_table rescap_split
-    init_table rescap_merge
-    init_table rescap_parent
-    init_table get_phy_page
-    init_table create_table
-    init_table create_mapping
-    init_table get_top_level_table
-    init_table make_first_reservation
-    init_table get_book
-    init_table split_phy_page_range
-    init_table obtain_super_powers
-    init_table get_userdata_for_res
-    init_table get_last_exception
-    init_table get_critical_level_ptr
-    init_table get_critical_cause_ptr
+    NANO_KERNEL_IF_LIST(INIT_TABLE_MACRO)
+
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
     dli          $k1, cap_table_end - create_context_cap
@@ -408,7 +323,7 @@ obtain_super_powers:
 get_book:
 ###################################
     dli        $t0, phy_page_table
-    dli        $t1, (N_PHY_PAGES_ENTRIES) * PHY_PAGE_ENTRY_SIZE
+    dli        $t1, (TOTAL_PHY_PAGES) * PHY_PAGE_ENTRY_SIZE
     csetoffset $c3, $idc, $t0
     dli        $t2, Perm_Load
     csetbounds $c3, $c3, $t1
@@ -421,7 +336,7 @@ get_book:
 split_phy_page_range:
 #################################################################
     beqz        $a1, split_phy_end
-    dli         $t0, N_PHY_PAGES_ENTRIES                # check index in range
+    dli         $t0, TOTAL_PHY_PAGES                # check index in range
     slt         $t0, $a0, $t0
     beq         $t0, $zero, split_phy_end               # $a0 >= $t0
     dli         $t0, phy_page_table                     # $t0 = start of book
@@ -633,7 +548,7 @@ get_phy_page:
 ###############################################################
 
     beqz        $a2, get_phy_page_end
-    dli         $t0, N_PHY_PAGES_ENTRIES
+    dli         $t0, TOTAL_PHY_PAGES
     cmove       $c5, $c3
     slt         $t0, $a0, $t0
     beq         $t0, $zero, get_phy_page_end            # $a0 >= $t0
@@ -645,7 +560,7 @@ get_phy_page:
     bne         $t1, $a2, get_phy_page_end              # $t1 must be npages
     clw         $t1, $t0, 0($idc)                       # $t1 = state
     bnez        $t1, get_phy_page_end                   # state must be un-used
-    dli         $t1, PHY_SYSTEM
+    dli         $t1, page_system_owned
     csw         $t1, $t0, 0($idc)                       # set to system owned
 
     bnez        $a1, 1f                                 # 0: uncached. ow: cached
@@ -1129,7 +1044,7 @@ good_level: #t2 now contains the type we will seal the next level with
     slt         $t0, $a1, $t0
     beq         $t0, $zero, create_ptable_er            # $a1 >= $t0
 
-    dli         $t0, N_PHY_PAGES_ENTRIES                # check page number in range
+    dli         $t0, TOTAL_PHY_PAGES                # check page number in range
     slt         $t0, $a0, $t0
     beq         $t0, $zero, create_ptable_er            # $a0 >= $t0
 
@@ -1144,7 +1059,7 @@ good_level: #t2 now contains the type we will seal the next level with
     clw         $t1, $t0, 0($idc)                       # $t1 = state
     bnez        $t1, create_ptable_er                   # state must be un-used
 
-    dli         $t1, PHY_NANO
+    dli         $t1, page_nano_owned
     csw         $t1, $t0, 0($idc)                       # set to nano owned
 
     # TODO: zero the page
@@ -1199,7 +1114,7 @@ create_mapping:
     clw         $t1, $t0, 0($idc)                       # $t1 is the state of this phy page
     bnez        $t1, create_mapping_er                  # must be un-used
 
-    dli         $t1, PHY_MAPPED
+    dli         $t1, page_mapped
     csw         $t1, $t0, 0($idc)                       # set page to be mapped
 
     # TODO add perms
