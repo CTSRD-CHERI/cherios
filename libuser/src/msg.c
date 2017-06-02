@@ -38,9 +38,9 @@
 
 /* These are used by the runtime to know who to respond to */
 //FIXME should be local to the pop loop, anybody who wants to use creturn should do so to a creturn method
-sync_state_t sync_state = {.sync_caller = NULL, .sync_token = NULL};
+__thread sync_state_t sync_state;
 
-long	msg_enable = 0;
+__thread long msg_enable = 0;
 
 void pop_msg(msg_t * msg) {
     // TODO what are the blocking semantics of pop? Fow now just do the safe thing
@@ -49,4 +49,8 @@ void pop_msg(msg_t * msg) {
     }
     *msg = act_self_queue->msg[act_self_queue->header.start];
     act_self_queue->header.start = (act_self_queue->header.start + 1) % act_self_queue->header.len;
+}
+
+int msg_queue_empty(void) {
+    return (act_self_queue->header.start == act_self_queue->header.end);
 }

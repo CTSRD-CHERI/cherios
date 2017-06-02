@@ -35,7 +35,11 @@
 #include "plat.h"
 #include "uart.h"
 
-typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, register_t arg0, register_t arg1);
+struct packaged_args {
+    register_t a0,a1,a2,a3;
+};
+typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, struct packaged_args* args);
+
 
 void bootloader_main(void);
 void bootloader_main(void) {
@@ -77,5 +81,11 @@ void bootloader_main(void) {
 
     boot_printf("Jumping to nano kernel...\n");
     BOOT_PRINT_CAP(nano_init);
-    nano_init(mem_size, entry, bi->init_begin - bi->kernel_begin, bi->init_entry);
+
+    struct packaged_args args;
+    args.a0 = bi->init_begin - bi->kernel_begin;
+    args.a1 = bi->init_entry;
+    args.a2 = bi->init_tls_base;
+    args.a3 = 0;
+    nano_init(mem_size, entry, &args);
 }

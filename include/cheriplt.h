@@ -56,8 +56,8 @@
                         __attribute__((cheri_method_class(PLT_UNIQUE_OBJECT(name))))            \
                         ret name sig;
 
-    #define MAKE_DEFAULT(name, ...) extern struct cheri_object PLT_UNIQUE_OBJECT(name);
-    #define ALLOCATE_DEFAULT(name, ...) struct cheri_object PLT_UNIQUE_OBJECT(name);
+    #define MAKE_DEFAULT(name, ret, sig, per_thr) extern per_thr struct cheri_object PLT_UNIQUE_OBJECT(name);
+    #define ALLOCATE_DEFAULT(name,  ret, sig, per_thr) per_thr struct cheri_object PLT_UNIQUE_OBJECT(name);
 
     #define INIT_OBJ(name, ret, sig, data)    \
         PLT_UNIQUE_OBJECT(name).code = plt_if -> name;  \
@@ -68,17 +68,20 @@
         LIST(INIT_OBJ, data)                                            \
     }
 
-    #define PLT(type, LIST)                 \
+    #define PLT_thr(type, LIST, per_thr)    \
     typedef struct                          \
     {                                       \
         LIST(PLT_GOT_ENTRY,)                \
     } type;                                 \
-    LIST(MAKE_DEFAULT,)                     \
+    LIST(MAKE_DEFAULT, per_thr)             \
     LIST(CCALL_WRAP,)                       \
     DECLARE_PLT_INIT(type, LIST)
 
-    #define PLT_ALLOCATE(type, LIST) LIST(ALLOCATE_DEFAULT,)
+    #define PLT(type, LIST) PLT_thr(type, LIST,)
 
+    #define PLT_ALLOCATE_thr(type, LIST, per_thr) LIST(ALLOCATE_DEFAULT,per_thr)
+
+    #define PLT_ALLOCATE(type, LIST)  PLT_ALLOCATE_thr(type, LIST, )
 #else // __ASSEMBLY__
 
     // If this is included from assembly, we should instead create a set of .set directives that define the offsets
@@ -86,6 +89,7 @@
     .set enum_ctr, 0
     #define SET_NAME(NAME, ...) .set NAME ## _offset, (enum_ctr * CAP_SIZE); .set enum_ctr, enum_ctr + 1;
     #define PLT(type, LIST) LIST(SET_NAME,)
+    #define PLT_thr(type, LIST, ...) PLT(type, LIST)
 
 #endif // __ASSEMBLY__
 

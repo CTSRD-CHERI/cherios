@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -30,12 +30,8 @@
 
 #include "mips.h"
 #include "misc.h"
-#include "string.h"
 #include "stdlib.h"
 #include "sys/mman.h"
-#include "cherireg.h"
-#include "object.h"
-#include "init.h"
 #include "utils.h"
 
 static inline void *align_upwards(void *p, uintptr_t align)
@@ -48,17 +44,12 @@ static inline void *align_upwards(void *p, uintptr_t align)
     return (p);
 }
 
-#define POOL_SIZE (1024*1024*32)
-static capability pool[POOL_SIZE/sizeof(capability)];
-
-static char * pool_start = NULL;
 static char * pool_end = NULL;
 static char * pool_next = NULL;
 
-static int system_alloc = 0;
+static char * pool_ex = NULL;
 
-
-static cap_pair init_alloc_core(size_t s) {
+cap_pair tmp_alloc(size_t s) {
 	if(pool_next + s >= pool_end) {
 		return (cap_pair){.code = NULL, .data = NULL};
 	}
@@ -66,36 +57,32 @@ static cap_pair init_alloc_core(size_t s) {
 	p = __builtin_cheri_bounds_set(p, s);
 	pool_next = align_upwards(pool_next+s, 0x1000);
 
-	return (cap_pair){.code = rederive_perms(p, cheri_getpcc()), .data = p};
+	return (cap_pair){.code = rederive_perms(p, pool_ex), .data = p};
 }
 
-void init_alloc_init(void) {
-	pool_start = (char *)(pool);
-	pool_end = pool_start + POOL_SIZE;
-	pool_start = __builtin_cheri_bounds_set(pool_start, POOL_SIZE);
-	pool_start = __builtin_cheri_perms_and(pool_start, ~ CHERI_PERM_EXECUTE);
+void init_tmp_alloc(cap_pair pool) {
+	char * pool_start = pool.data;
+
+	size_t pool_remaining = cheri_getlen(pool_start) - cheri_getoffset(pool_start);
+	pool_start = cheri_setbounds(pool_start, pool_remaining);
+
+	pool_end = pool_start + pool_remaining;
+
+	pool_ex = pool.code;
 	pool_next = pool_start;
-	bzero(pool, POOL_SIZE);
-	system_alloc = 0;
 }
 
-void init_alloc_enable_system(void * c_memmgt) {
-	mmap_set_act(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, c_memmgt));
-	system_alloc = 1;
+cap_pair get_remaining(void) {
+	size_t pool_remaining = cheri_getlen(pool_next) - cheri_getoffset(pool_next);
+	char * pool_start = cheri_setbounds(pool_next, pool_remaining);
+
+	cap_pair ret = (cap_pair){.code = rederive_perms(pool_start, pool_ex), .data = pool_start};
+
+	pool_next = pool_end;
+
+	return ret;
 }
 
-cap_pair init_alloc(size_t s) {
-	if(system_alloc == 1) {
-		cap_pair p;
-		int result = mmap_new(0, s, CHERI_PERM_ALL, MAP_SHARED|MAP_ANONYMOUS, &p);
-		return p;
-	}
-	return init_alloc_core(s);
-}
-
-void init_free(void * p __unused) {
-	if(system_alloc == 1) {
-		/* fixme: use munmap */
-	}
+void tmp_free(void * p __unused) {
 	/* init alloc has no free */
 }

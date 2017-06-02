@@ -42,9 +42,11 @@
 #if _MIPS_SZCAP == 256
 	#define _CHERI256_
 	#define U_PERM_BITS 4
+    #define CAP_SIZE 0x20
 #elif _MIPS_SZCAP == 128
 	#define _CHERI128_
 	#define U_PERM_BITS 16
+    #define CAP_SIZE 0x10
 #else
 	#error Unknown capability size
 #endif
@@ -331,8 +333,10 @@ typedef struct reg_frame {
 	register_t	mf_hi, mf_lo;
 
 	/* Program counter. */
-	register_t	mf_pc;
+	/* register_t	mf_pc; <-- this really isn't needed, and its nice to keep to 32 regs
 
+    /* User local kernel register */
+    register_t mf_user_loc;
 	/*
 	 * Capability registers.
 	 */

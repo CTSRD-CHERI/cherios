@@ -34,6 +34,7 @@
  * $FreeBSD$
  */
 
+#include <elf.h>
 #include "init.h"
 #include "debug.h"
 #include "stdio.h"
@@ -88,7 +89,7 @@ load(const char *filepath, int *bufsize)
 		return NULL;
 	}
 
-	void * buf = init_alloc(size).data;
+	void * buf = env.alloc(size).data;
 	if (buf == NULL) {
 		printf("Failed to allocate read buffer %zu for '%s'\n",
 		       size, filepath);
@@ -99,7 +100,7 @@ load(const char *filepath, int *bufsize)
 	if ((size_t)read != size) {
 		printf("Failed to read '%s' (%zd != %zu)\n", filepath, read,
 		       size);
-		init_free(buf);
+		env.free(buf);
 		return NULL;
 	}
 

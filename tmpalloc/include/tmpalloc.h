@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2016 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,21 +28,20 @@
  * SUCH DAMAGE.
  */
 
-#include "sys/types.h"
-#include "cheric.h"
-#include "object.h"
-#include "namespace.h"
-#include "queue.h"
-#include "assert.h"
-#include "syscalls.h"
-#include "thread.h"
+#ifndef CHERIOS_TMPALLOC_H
+#define CHERIOS_TMPALLOC_H
 
-void libuser_init(act_control_kt self_ctrl,
-				  act_kt ns_ref,
-				  kernel_if_t* kernel_if_c,
-				  queue_t * queue,
-				  capability proc) {
-	proc_handle = proc;
-	object_init(self_ctrl, queue, kernel_if_c);
-	namespace_init(ns_ref);
-}
+#include "cheric.h"
+#include "mman.h"
+
+#define POOL_SIZE (1024*1024*32)
+
+cap_pair tmp_alloc(size_t s);
+
+void init_tmp_alloc(cap_pair pool);
+
+cap_pair get_remaining(void);
+
+void tmp_free(void * p __unused);
+
+#endif //CHERIOS_TMPALLOC_H

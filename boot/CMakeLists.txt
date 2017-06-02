@@ -1,5 +1,7 @@
 include_directories(include)
 include_directories(${CMAKE_SOURCE_DIR}/uart/include)
+include_directories(${CMAKE_SOURCE_DIR}/elf/include)
+include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
 
 set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
@@ -13,7 +15,7 @@ set(LIBCRT_SRCS
 )
 
 set(COMMON_SRCS
-    src/elf_loader.c
+    ${CMAKE_SOURCE_DIR}/elf/src/elf_loader.c
     src/plat.c
     src/caches.c
 )
@@ -42,7 +44,8 @@ set(NANO_ASM_SRCS
 set(INIT_SRCS
     src/init/init.c
     src/init/init_utils.c
-    src/init/alloc.c
+    ${CMAKE_SOURCE_DIR}/tmpalloc/src/alloc.c
+    ${CMAKE_SOURCE_DIR}/elf/src/cprogram.c
     src/init/stats.c
     src/init/ufs_module.c
     src/init/ufs_read.c

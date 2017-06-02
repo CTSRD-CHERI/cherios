@@ -93,6 +93,20 @@ static void kernel_exception_unknown(register_t excode) {
 }
 
 
+static void kernel_exception_tlb(register_t badvaddr);
+static void kernel_exception_tlb(register_t badvaddr) {
+	if(memgt_ref == NULL) {
+		exception_printf(KRED"Virtual memory exception before memmgt created\n"KRST);
+	}
+	if(kernel_curr_act == memgt_ref) {
+		exception_printf(KRED"Virtual memory exception in memmgt is not allowed\n"KRST);
+		regdump(-1);
+		kernel_freeze();
+	}
+
+	msg_push(act_create_sealed_ref(kernel_curr_act), NULL, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
+	sched_reschedule(memgt_ref, 1);
+}
 /*
  * Exception handler demux to various more specific exception
  * implementations.
@@ -153,6 +167,8 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 				break;
 			case MIPS_CP0_EXCODE_TLBL:
 			case MIPS_CP0_EXCODE_TLBS:
+				kernel_exception_tlb(ex_info.badvaddr);
+				break;
 			case MIPS_CP0_EXCODE_ADEL:
 			case MIPS_CP0_EXCODE_ADES:
 			case MIPS_CP0_EXCODE_IBE:

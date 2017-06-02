@@ -46,6 +46,8 @@ void *  mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __
 int mmap_new(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result);
 int	munmap(void *addr, size_t length);
 
+void commit_vmem(act_kt activation, size_t addr);
+
 void	mmap_set_act(act_kt ref);
 
 enum mmap_prot
@@ -78,4 +80,15 @@ enum mmap_return
 #define MAP_FAILED_OLD ((void *) -1)
 #define MAP_FAILED_INT -1
 #define MAP_SUCCESS_INT 0
+
+static cap_pair mmap_based_alloc(size_t s) {
+    cap_pair p;
+    int result = mmap_new(0, s, CHERI_PERM_ALL, MAP_SHARED|MAP_ANONYMOUS, &p);
+    return p;
+}
+
+static void mmap_based_free(void * p __unused) {
+    /* fixme: use munmap */
+}
+
 #endif // SYS_MMAN_H

@@ -32,6 +32,7 @@
 
 #include <elf.h>
 #include "boot/boot.h"
+#include "math.h"
 
 #define assert(e) boot_assert(e)
 
@@ -157,7 +158,69 @@ static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
 
 /* not secure */
 
-cap_pair elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry) {
+static void load_PT_loads(Elf_Env* env, struct image* elf, char* prgmp) {
+    char* addr = (char*)elf->hdr;
+
+    assert(elf != NULL);
+    assert(elf->hdr != NULL);
+
+    for(int i=0; i<elf->hdr->e_phnum; i++) {
+        Elf64_Phdr *seg = elf_segment(elf->hdr, i);
+        if(seg->p_type == PT_LOAD) {
+            TRACE("memcpy: [%lx %lx] <-- [%lx %lx] (%lx bytes)",
+                  seg->p_vaddr, seg->p_vaddr + seg->p_filesz,
+                  seg->p_offset, seg->p_offset + seg->p_filesz,
+                  seg->p_filesz);
+            env->memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
+        }
+    }
+}
+
+/* Load an image */
+cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_type store_type) {
+
+    assert(elf != NULL);
+    assert(elf->hdr != NULL);
+
+	memcpy(out_elf, elf, sizeof(elf));
+
+    assert(out_elf != NULL);
+    assert(out_elf->hdr != NULL);
+
+    switch(store_type) {
+
+        case storage_process:
+			out_elf->loaded_process = env->alloc(elf->maxaddr);
+			out_elf->tls_num = 0;
+
+			char *prgmp = out_elf->loaded_process.data;
+			if(!prgmp) {
+				ERROR("alloc failed");
+				return NULL_PAIR;
+			}
+
+			TRACE("Allocated %lx bytes of target memory", elf->maxaddr);
+			ENV_PRINT_CAP(env, prgmp);
+
+			load_PT_loads(env, out_elf, prgmp);
+
+        case storage_thread:
+            assert(out_elf->tls_size == 0 || out_elf->tls_num != MAX_THREADS);
+            //TODO initialise TLS  BSS to 0 and globals to appropriate values
+            if(out_elf->tls_size != 0) {
+                char* tls_base = (char*)out_elf->loaded_process.data + out_elf->tls_base + (out_elf->tls_size * out_elf->tls_num++);
+                memcpy(tls_base, out_elf->tls_load_start, out_elf->tls_load_size);
+                /* tbss always follows tdata. zero here */
+                bzero(tls_base + out_elf->tls_load_size, out_elf->tls_size - out_elf->tls_load_size);
+            }
+            break;
+    }
+
+	return out_elf->loaded_process;
+}
+
+/* Parse an elf file already resident in memory. */
+cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf) {
 	char *addr = (char *)p;
 	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
@@ -166,10 +229,17 @@ cap_pair elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr,
 		return NULL_PAIR;
 	}
 
+    bzero(out_elf, sizeof(image));
+    out_elf->hdr = hdr;
+
 	Elf64_Addr e_entry = hdr->e_entry;
 	TRACE("e_entry:%lX e_phnum:%d e_shnum:%d", hdr->e_entry, hdr->e_phnum, hdr->e_shnum);
 
 	size_t allocsize = 0;
+    size_t tls_align = 0;
+
+    int has_tls = 0;
+
 	for(int i=0; i<hdr->e_phnum; i++) {
 		Elf64_Phdr *seg = elf_segment(hdr, i);
 		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX filesz:%lX memsz:%lX align:%lX",
@@ -186,37 +256,29 @@ cap_pair elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr,
 			TRACE("lowaddr:%lx allocsize:%lx bound:%lx", lowaddr, allocsize, bound);
 		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO) {
             /* Ignore these headers */
+        } else if(seg->p_type == PT_TLS) {
+            assert(has_tls == 0);
+            has_tls = 1;
+            out_elf->tls_load_start = addr + seg->p_offset;
+            out_elf->tls_load_size = seg->p_filesz;
+            out_elf->tls_size = seg->p_memsz;
+            tls_align = seg->p_align;
 		} else {
 			ERROR("Unknown section");
 			return NULL_PAIR;
 		}
 	}
 
-	cap_pair pair = env->alloc(allocsize);
-	char *prgmp = pair.data;
-	if(!prgmp) {
-		ERROR("alloc failed");
-		return NULL_PAIR;
-	}
+    if(has_tls) {
+        /* Round allocsize to tls_align */
+        allocsize = align_up_to(allocsize, tls_align);
+		out_elf->tls_base = allocsize;
+		allocsize += (MAX_THREADS)*out_elf->tls_size;
+    }
 
-	TRACE("Allocated %lx bytes of target memory", allocsize);
-	ENV_PRINT_CAP(env, prgmp);
+	out_elf->minaddr = lowaddr;
+	out_elf->maxaddr = allocsize;
+	out_elf->entry   = e_entry;
 
-	for(int i=0; i<hdr->e_phnum; i++) {
-		Elf64_Phdr *seg = elf_segment(hdr, i);
-		if(seg->p_type == 1) {
-			TRACE("memcpy: [%lx %lx] <-- [%lx %lx] (%lx bytes)",
-				  seg->p_vaddr, seg->p_vaddr + seg->p_filesz,
-				  seg->p_offset, seg->p_offset + seg->p_filesz,
-				  seg->p_filesz);
-			env->memcpy(prgmp+seg->p_vaddr, addr + seg->p_offset, seg->p_filesz);
-		}
-	}
-	env->free(addr);
-
-	if(minaddr)	*minaddr = lowaddr;
-	if(maxaddr)	*maxaddr = allocsize;
-	if(entry)	*entry   = e_entry;
-
-	return pair;
+	return create_image(env, out_elf, out_elf, storage_process);
 }

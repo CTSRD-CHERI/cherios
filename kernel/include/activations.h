@@ -106,6 +106,8 @@ extern aid_t 		kernel_next_act;
 /* The currently scheduled activation */
 extern act_t* 		kernel_curr_act;
 
+extern act_t* memgt_ref;
+
 #endif // __ASSEMBLY__
 
 #endif

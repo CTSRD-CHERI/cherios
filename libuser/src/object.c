@@ -36,23 +36,30 @@
 #include "queue.h"
 #include "syscalls.h"
 #include "string.h"
+#include "stdio.h"
 
-act_control_kt act_self_ctrl = NULL;
-act_kt act_self_ref  = NULL;
-queue_t * act_self_queue = NULL;
+/* TODO these should be thread local */
+__thread act_control_kt act_self_ctrl = NULL;
+__thread act_kt act_self_ref  = NULL;
+__thread queue_t * act_self_queue = NULL;
+
 kernel_if_t kernel_if;
 
 ALLOCATE_PLT_SYSCALLS
 
 void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c) {
-	assert(kernel_if_c != NULL);
-	// I feel like as we use these methods on every syscall we should remove the indirection
-	memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
+
+    /* This comes in null for threads other than the first - the interface is not thread local */
+	if(kernel_if_c != NULL) {
+        // I feel like as we use these methods on every syscall we should remove the indirection
+        memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
+    }
+
 
 	act_self_ctrl = self_ctrl;
 	act_self_ref  = SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, self_ctrl);
 
-	init_kernel_if_t(kernel_if_c, self_ctrl);
+	init_kernel_if_t(&kernel_if, self_ctrl);
 
 	// The message send has a different default obj
 	message_send_default_obj.data = (capability)act_self_ref;
@@ -61,6 +68,8 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 	message_reply_default_obj.data = NULL;
 
 	act_self_queue = queue;
+
+    sync_state = (sync_state_t){.sync_caller = NULL, .sync_token = NULL};
 }
 
 void ctor_null(void) {

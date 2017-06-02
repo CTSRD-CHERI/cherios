@@ -30,6 +30,7 @@
  * SUCH DAMAGE.
  */
 
+#include <elf.h>
 #include "plat.h"
 #include "misc.h"
 #include "init.h"
@@ -37,6 +38,11 @@
 #include "stdio.h"
 #include "namespace.h"
 #include "utils.h"
+#include "string.h"
+#include "cprogram.h"
+#include "thread.h"
+#include "tmpalloc.h"
+#include "assert.h"
 
 #define B_FS 0
 #define B_SO 0
@@ -56,7 +62,7 @@
 
 init_elem_t init_list[] = {
   /*
-   * The namespace-mgr and mem-mgr are mutually dependent.
+   * The namespace-mgr and mem-mgr and proc_manager are mutually dependent.
    *
    * - the namespace-mgr needs to allocate memory for tracking ids,
    *   and hence its libuser needs the id of the mem-mgr service
@@ -65,27 +71,34 @@ init_elem_t init_list[] = {
    *   hence it needs to know the id of the namespace-mgr to send the
    *   announcement.
    *
+   * - the mem-mgr spawns a worker thread to handle TLB misses. This needs the process manager.
+   *
+   * - the process manager needs to do allocation, which requires mem-mgr
+   *
    * The current approach to cutting this recursive knot is via the
    * following:
    *
    * - the namespace-mgr is initialized with enough memory to track at
    *   least one service, i.e. enough to last it until the first
    *   service announcement it receives.  by convention, it will be
-   *   the first service started.
+   *   the first service started. Init will allocate memory for it. // NOTE: this is currently not true
    *
-   * - by convention, the memory-mgr will be the second service
+   * - The process manager is started second. It will be passed the remainging pool from init and announce itself
+   *   to the namespace manager
+   *
+   * - by convention, the memory-mgr will be the third service
    *   started.  it will be passed the id of the namespace-mgr service
    *   as an initialization argument.  its very first action will be to
    *   announce itself to the namespace-mgr.
    *
    * - the init process will query the namespace-mgr for the number of
    *   registered services.  it will start the remaining services once
-   *   it can be sure that the mem-mgr service has registered itself.
+   *   it can be sure that the mem-mgr service has registered itself. // NOTE: Not needed. We check every registration
    *
    */
 	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
+    B_DENTRY(m_proc,     "proc.elf", 0, 1)
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
-
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
@@ -143,6 +156,8 @@ static void print_init_info(init_info_t * init_info) {
 extern char __nano_size;
 
 memmgt_init_t memmgt_init;
+Elf_Env env;
+cap_pair remaining_pool;
 
 /* Return the capability needed by the activation */
 static void * get_act_cap(module_t type, init_info_t* info) {
@@ -162,6 +177,8 @@ static void * get_act_cap(module_t type, init_info_t* info) {
                             CHERI_PERM_ALL & ~CHERI_PERM_EXECUTE,
                             MAP_ANONYMOUS | MAP_SHARED | MAP_PHY, &pair);
             return pair.data;
+        case m_proc:
+            return &remaining_pool;
         case m_namespace:
         case m_core:
         case m_user:
@@ -171,13 +188,94 @@ static void * get_act_cap(module_t type, init_info_t* info) {
     }
 }
 
-static void load_modules(init_info_t * init_info) {
-	static void * c_memmgt = NULL;
-	int core_ready = 0;
+static capability load_check(const char* name) {
+    int filelen=0;
+    capability addr = load(name, &filelen);
+    if(!addr) {
+        printf("Could not read file %s", name);
+        assert(0);
+    }
+    return addr;
+}
 
-	for(size_t i=0; i<init_list_len; i++) {
+static void load_modules(init_info_t * init_info) {
+    /* This got a little complicated and has been taken out the loop */
+
+    size_t i=0;
+
+
+    init_elem_t * namebe = init_list + i;
+    assert(namebe->type == m_namespace);
+
+    i++;
+
+    init_elem_t * procbe = init_list + i;
+    assert(procbe->type == m_proc);
+
+    i++;
+
+    init_elem_t * memgtbe = init_list + i;
+    assert(memgtbe->type == m_memmgt);
+
+    i++;
+
+
+    /* Namespace */
+    namebe->ctrl =
+            simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info));
+
+
+    namespace_init(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, namebe->ctrl));
+
+    /* Proc */
+
+    capability proc_file = load_check(procbe->name);
+
+    /* We have to load this file early as once we hand over the file we will not be able to allocate */
+    /* Order VERY important here */
+    capability memmgt_file = load_check(memgtbe->name);
+
+    procbe->ctrl =
+            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info));
+
+    /* FIXME technically a bit of a race. This global will be read by proc so it needs to be set before context switch */
+
+    remaining_pool = get_remaining();
+    /* Wait for registration */
+
+    printf("Waiting for proc manager to register \n");
+    while(namespace_get_ref(namespace_num_proc_manager) == NULL) {
+        nssleep(3);
+    }printf("proc manager registered \n");
+
+    /* Memmgt */
+
+    startup_desc_t desc;
+    desc.arg = memgtbe->arg;
+    desc.carg = get_act_cap(m_memmgt, init_info);
+    desc.stack_args = NULL;
+    desc.stack_args_size = 0;
+    /* This version allows the process to spawn new threads */
+    memgtbe->ctrl = thread_start_process(thread_create_process(memgtbe->name, memmgt_file), &desc);
+
+    /* Wait for registration */
+
+    printf("Waiting for memory manager to register \n");
+    while(namespace_get_ref(namespace_num_memmgt) == NULL) {
+        nssleep(3);
+    }
+    printf("memory manager registered \n");
+
+    /* We no longer have our pool. But now we can use virtual memory */
+
+    env.alloc = &mmap_based_alloc;
+    env.free = &mmap_based_free;
+
+    /* Now load the rest */
+
+	for(; i<init_list_len; i++) {
 		int cnt;
-		init_elem_t * be = init_list + i;
+        init_elem_t * be = init_list + i;
 
 		if(be->cond == 0)
 			continue;
@@ -187,57 +285,35 @@ static void load_modules(init_info_t * init_info) {
 			continue;
 		}
 
-		/* We don't have a nice dependency system for modules
-		   yet. For example, fatfs depends on virtio-blk being
-		   registered with the nameserver.
+        void *carg = get_act_cap(be->type, init_info);
+        capability  addr = load_check(be->name);
 
-		   For now, for all non-core services, ensure that all
-		   core services have registered.
-		*/
-		if ((be->type == m_fs || be->type == m_user) && !core_ready) {
-			while(1) {
-				nssleep(3);
-                if(namespace_rdy()) {
-                    act_kt mem = namespace_get_ref(namespace_num_memmgt);
-                    //act_kt virt = namespace_get_ref(namespace_num_virtio);
-                    //if(mem != NULL && virt != NULL) break;
-                    if(mem != NULL) break;
-                }
-				cnt = num_registered_modules();
-				printf(" only %d core services registered with ns\n", cnt);
-			}
-			core_ready = 1;
-		}
-
-		void *carg = get_act_cap(be->type, init_info);
-		be->ctrl = load_module(be->type, be->name, be->arg, carg, init_info);
-
-		if(be->type == m_namespace) {
-			namespace_init(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, be->ctrl));
-		}
+        desc.arg = be->arg;
+        desc.carg = carg;
+        desc.stack_args = NULL;
+        desc.stack_args_size = 0;
+        /* This version allows the process to spawn new threads */
+        be->ctrl = thread_start_process(thread_create_process(be->name, addr), &desc);
 
 		printf("Module ready: %s\n", be->name);
-		if (be->type == m_memmgt) {
-			/* Ensure that the memory-mgr has been
-			 * properly registered before proceeding.
-			 */
-			do {
-				cnt = num_registered_modules();
-                nssleep(1);
-			} while (cnt == 0);
-			c_memmgt = be->ctrl;
-			init_alloc_enable_system(be->ctrl);
-		}
 	}
 }
+
+static capability pool[POOL_SIZE/sizeof(capability)];
 
 int main(init_info_t * init_info) {
 	stats_init();
 
-	printf("Init loaded\n");
+    env.free = &tmp_free;
+    env.alloc = &tmp_alloc;
+    env.printf = &printf;
+    env.vprintf = &printf;
+    env.memcpy = &memcpy;
+
+    printf("Init loaded\n");
 
 	/* Initialize the memory pool. */
-	init_alloc_init();
+	init_tmp_alloc((cap_pair){.data = pool, .code = rederive_perms(pool, cheri_getpcc())});
 
 	/* Print fs build date */
 	print_build_date();

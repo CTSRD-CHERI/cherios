@@ -273,7 +273,7 @@ void regdump(int reg_num) {
 
 	REG_DUMP_M(hi); REG_DUMP_M(lo); printf("\n");
 
-	REG_DUMP_M(pc); printf("\n"); /* does not seem in sync with pcc */
+	REG_DUMP_M(user_loc); printf("\n");
 
 	printf("\n");
 

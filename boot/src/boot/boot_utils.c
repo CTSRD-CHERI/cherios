@@ -119,9 +119,16 @@ void init_elf_loader() {
 capability load_nano() {
 	extern u8 __nano_elf_start, __nano_elf_end;
 	size_t minaddr, maxaddr, entry;
+	image im;
+
 	char *prgmp = elf_loader_mem(&env, &__nano_elf_start,
-								 &minaddr, &maxaddr, &entry).data;
-    if(!prgmp) {
+								 &im).data;
+
+	minaddr = im.minaddr;
+	maxaddr = im.maxaddr;
+	entry = im.entry;
+
+	if(!prgmp) {
         boot_printf(KRED"Could not load nano kernel file"KRST"\n");
         goto err;
     }
@@ -144,8 +151,15 @@ capability load_nano() {
 size_t load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	size_t minaddr, maxaddr, entry;
+
+	image im;
+
 	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
-				     &minaddr, &maxaddr, &entry).data;
+				     &im).data;
+
+	minaddr = im.minaddr;
+	maxaddr = im.maxaddr;
+	entry = im.entry;
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
@@ -173,9 +187,13 @@ boot_info_t *load_init() {
 	extern u8 __init_elf_start, __init_elf_end;
 	size_t minaddr, maxaddr, entry;
 
+	image im;
 	// FIXME: init is direct mapped for now
-	char *prgmp = elf_loader_mem(&env, &__init_elf_start,
-				     &minaddr, &maxaddr, &entry).data;
+	char *prgmp = elf_loader_mem(&env, &__init_elf_start, &im).data;
+
+	minaddr = im.minaddr;
+	maxaddr = im.maxaddr;
+	entry = im.entry;
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load init file"KRST"\n");
@@ -188,12 +206,13 @@ boot_info_t *load_init() {
 		goto err;
 	}
 
-	boot_printf("Loaded init: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
-		    minaddr, maxaddr, entry);
+	boot_printf("Loaded init: minaddr=%lx maxaddr=%lx entry=%lx tls_base:%lx\n",
+		    minaddr, maxaddr, entry, im.tls_base);
 
     bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
     bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
     bi.init_entry = entry;
+    bi.init_tls_base = im.tls_base;
 
 	return &bi;
 err:

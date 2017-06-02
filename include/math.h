@@ -64,4 +64,7 @@ static inline int is_power_2(size_t x) {
 	return (x & (x-1)) == 0;
 }
 
+static inline size_t align_up_to(size_t size, size_t align) {
+	return size + ((align - (size & (align - 1))) & (align - 1));
+}
 #endif

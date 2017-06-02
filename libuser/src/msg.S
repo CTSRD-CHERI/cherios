@@ -75,13 +75,29 @@
 # Load a bunch of symbols using the default capability.
 # If we were doing this robustly we would also set bounds. I can't be bothered.
 
+# lui     \reg, %tprel_hi(\sym)
+# daddiu  \reg, \reg, %tprel_lo(\sym)
+
+.macro get_tls_sym reg, sym, user_hw_reg
+    dla     \reg, \sym
+    daddu   \reg, \user_hw_reg, \reg
+.endm
+
+.type act_self_queue, "tls_object"
+.type sync_state, "tls_object"
+.type act_self_ctrl, "tls_object"
+
 msg_entry:
     cgetdefault	def_cap
-    dla         $t0, act_self_queue
+
+    rdhwr       $t1, $29
+    daddiu      $t1, $t1, -0x7000
+
+    get_tls_sym $t0, act_self_queue, $t1
     clc         queue, $t0, 0(def_cap)
     dla         $t0, kernel_if
     csetoffset  kernel_if_cap, def_cap, $t0
-    dla         $t0, sync_state
+    get_tls_sym $t0, sync_state, $t1
     csetoffset  sync_state_cap, def_cap, $t0
     dla         $t0, msg_methods_nb
     cld         msg_methods_nb_g, $t0, 0(def_cap)
@@ -91,7 +107,7 @@ msg_entry:
     csetoffset  msg_table, def_cap, $t0
     dla		    $t0, ctrl_methods
     csetoffset  ctrl_table, def_cap, $t0
-    dla         $t0, act_self_ctrl
+    get_tls_sym $t0, act_self_ctrl, $t1
     clc         self_ctrl_cap, $t0, 0(def_cap)
     cgetpcc     msg_entry_loop_cap
 

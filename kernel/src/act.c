@@ -52,20 +52,21 @@ act_t * 			kernel_curr_act;
 static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
 static act_t* ns_ref = NULL;
+act_t* memgt_ref = NULL;
 
 static kernel_if_t* get_if() {
 	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
 }
 
-static act_t * act_create_sealed_ref(act_t * act) {
+act_t * act_create_sealed_ref(act_t * act) {
 	return (act_t *)kernel_seal(act, act_ref_type);
 }
 
-static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
+act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
 }
 
-context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry) {
+context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base) {
 	KERNEL_TRACE("init", "activation init");
 
 	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
@@ -94,13 +95,15 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
     frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
     capability pcc =  cheri_setbounds(cheri_setoffset(cheri_getpcc(), init_base), length);
 
-    KERNEL_TRACE("act", "assuming init has virtual entry point %lx", init_entry);
 	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
 
 	/* provide config info to init.  c3 is the conventional register */
 	frame.cf_c3 = info;
 
-	act_t * init_act = &kernel_acts[namespace_num_boot];
+    /* init has put its thread locals somewhere sensible (base + 0x100) */
+    frame.mf_user_loc = 0x7000 + init_tls_base;
+
+	act_t * init_act = &kernel_acts[namespace_num_init];
 	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL);
 
 	/* The boot activation should be the current activation */
@@ -125,6 +128,9 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	if(kernel_next_act == namespace_num_namespace) {
 		KERNEL_TRACE("act", "found namespace");
 		ns_ref = act_create_sealed_ref(act);
+	}
+	if(kernel_next_act == namespace_num_memmgt) {
+		memgt_ref = act;
 	}
 
 #ifndef __LITE__

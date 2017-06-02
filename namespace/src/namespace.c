@@ -81,10 +81,9 @@ static int ns_register_core(int nb, void * act_reference) {
 
 	bind[nb].act_reference  = act_reference;
 
-	/* By convention, the first service registration is from the
-	 * mem-mgr.
+	/* Use the globally accepted numbers rather than the order
 	 */
-	if (count == 0) {
+	if (nb == namespace_num_memmgt) {
 		mmap_set_act(act_reference);
 		printf("%s: #%d (mem-mgr) registered at port %d\n", __func__, count, nb);
 	} else {

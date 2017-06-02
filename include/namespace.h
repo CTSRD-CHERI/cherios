@@ -44,12 +44,14 @@ extern act_kt namespace_ref;
 
 // TODO this is not a good way to handle names, we probably want string ids, or a string to integer id
 static const int namespace_num_kernel = 0;
-static const int namespace_num_boot = 1;
+static const int namespace_num_init = 1;
 static const int namespace_num_namespace = 2;
-static const int namespace_num_memmgt = 3;
-static const int namespace_num_uart = 4;
-static const int namespace_num_zlib = 5;
-static const int namespace_num_sockets = 6;
-static const int namespace_num_virtio = 7;
+static const int namespace_num_proc_manager = 3;
+static const int namespace_num_memmgt = 4;
+
+static const int namespace_num_uart = 0x40;
+static const int namespace_num_zlib = 0x41;
+static const int namespace_num_sockets = 0x42;
+static const int namespace_num_virtio = 0x43;
 
 #endif

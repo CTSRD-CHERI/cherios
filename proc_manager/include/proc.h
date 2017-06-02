@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,21 +28,30 @@
  * SUCH DAMAGE.
  */
 
-#include "sys/types.h"
-#include "cheric.h"
-#include "object.h"
-#include "namespace.h"
-#include "queue.h"
-#include "assert.h"
-#include "syscalls.h"
-#include "thread.h"
+#ifndef CHERIOS_PROC_H
+#define CHERIOS_PROC_H
 
-void libuser_init(act_control_kt self_ctrl,
-				  act_kt ns_ref,
-				  kernel_if_t* kernel_if_c,
-				  queue_t * queue,
-				  capability proc) {
-	proc_handle = proc;
-	object_init(self_ctrl, queue, kernel_if_c);
-	namespace_init(ns_ref);
-}
+#include "elf.h"
+
+#define MAX_PROCS 20
+
+typedef struct process_t {
+    const char* name; // Or some other appropriate i.d.
+    image im;
+    act_control_kt threads[MAX_THREADS];
+    size_t n_threads;
+} process_t;
+
+
+process_t* seal_proc_for_user(process_t* process);
+process_t* unseal_proc(process_t* process);
+
+act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
+                             char* stack_args, size_t stack_args_size);
+
+act_control_kt start_process(process_t* proc,
+                             register_t arg, capability carg, char* stack_args, size_t stack_args_size);
+
+process_t* create_process(const char* name, capability file);
+
+#endif //CHERIOS_PROC_H

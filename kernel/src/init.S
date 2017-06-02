@@ -49,6 +49,8 @@ start:
     cmove       $c22, $c4   # types
     move        $s0,  $a0
     move        $s1,  $a1
+    move        $s2,  $a2
+    move        $s3,  $a3
 
 	# Set up an exception stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
@@ -86,6 +88,8 @@ start:
 
 	move		$a0, $s0
 	move        $a1, $s1
+	move        $a2, $s2
+	move        $a3, $s3
     cmove       $c3, $c19
     cmove       $c4, $c20
     cmove       $c5, $c21

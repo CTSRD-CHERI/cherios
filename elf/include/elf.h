@@ -107,11 +107,42 @@ typedef struct {
 	void *(*memcpy)(void *dest, const void *src, size_t n);
 } Elf_Env;
 
+typedef struct image{
+	/* Pointer to file for when we need the headers again*/
+	Elf64_Ehdr *hdr;
+
+	/* These are per process */
+	cap_pair loaded_process;
+	size_t minaddr, maxaddr, entry;
+
+	/* TLS stuff */
+	char* tls_load_start;
+	size_t tls_load_size;
+
+	size_t tls_base;
+	size_t tls_size;
+	size_t tls_num;
+} image;
+
+/* Currently the only supported models */
+enum e_storage_type {
+	storage_process,
+	storage_thread
+};
+
 /* given pointer p to ELF image, returns a pointer to the loaded
    image.  if provided, it also sets the min and max addresses touched
    by the loader, and the entry point.
  */
-cap_pair elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, size_t *entry);
+
+cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf);
+
+/* Given a pointer to loaded image creates another image that shares storage with the first image
+ * specified by image type */
+
+cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_type store_type);
+
+#define MAX_THREADS 4 // We have to overallocate this much.
 
 #define PT_NULL 	0
 #define PT_LOAD 	1

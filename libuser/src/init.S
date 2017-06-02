@@ -55,6 +55,9 @@
 # global and suitable.  Jump to various startup functions to initialise the C
 # runtime, and then call main().
 
+.type act_self_ctrl, "tls_object"
+.type msg_enable, "tls_object"
+
 	.text
 	.global start_common
 	.ent start_common
@@ -70,6 +73,7 @@ start_common:
 # These fields are setup by act_register itself. Although the queue is an argument to the function                      #
 #                                                                                                                       #
 # c21   : self control reference                                                                                        #
+# c22   : process reference                                                                                             *
 # c23   : namespace reference (may be null for init and namespace)                                                      #
 # c24   : kernel interface table                                                                                        #
 # c25   : queue                                                                                                         #
@@ -109,6 +113,7 @@ start_common:
 	cmove		$c4, $c23 #ns_ref
 	cmove		$c5, $c24 #kernel_if
 	cmove       $c6, $c25 #queue
+	cmove       $c7, $c22 # process ref
 
 	cgetpcc		$c12
 	dla		$t0, libuser_init

@@ -1,5 +1,4 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
@@ -29,21 +28,16 @@
  * SUCH DAMAGE.
  */
 
-#include "sys/types.h"
-#include "cheric.h"
-#include "object.h"
-#include "namespace.h"
-#include "queue.h"
-#include "assert.h"
-#include "syscalls.h"
-#include "thread.h"
+#ifndef CHERIOS_CPROGRAM_H
+#define CHERIOS_CPROGRAM_H
 
-void libuser_init(act_control_kt self_ctrl,
-				  act_kt ns_ref,
-				  kernel_if_t* kernel_if_c,
-				  queue_t * queue,
-				  capability proc) {
-	proc_handle = proc;
-	object_init(self_ctrl, queue, kernel_if_c);
-	namespace_init(ns_ref);
-}
+#include "cheric.h"
+#include "elf.h"
+#include "queue.h"
+
+act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg);
+
+queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
+                     capability pcc, char* stack_args, size_t stack_args_size);
+
+#endif //CHERIOS_CPROGRAM_H

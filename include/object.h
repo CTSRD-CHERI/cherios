@@ -39,10 +39,10 @@
 #include "types.h"
 #include "stddef.h"
 
-extern act_control_kt act_self_ctrl;
-extern act_kt act_self_ref;
-extern capability act_self_cap;
-extern queue_t * act_self_queue;
+extern __thread act_control_kt act_self_ctrl;
+extern __thread act_kt act_self_ref;
+extern __thread queue_t * act_self_queue;
+
 //TODO these should be provided by the linker/runtime
 extern void (*msg_methods[]);
 extern size_t msg_methods_nb;
@@ -64,12 +64,12 @@ typedef struct sync_state_t {
 _Static_assert(offsetof(sync_state_t, sync_token) == 0, "used by assembly");
 _Static_assert(offsetof(sync_state_t, sync_caller) == sizeof(capability), "used by assembly");
 
-extern sync_state_t sync_state;
+extern __thread sync_state_t sync_state;
 
 extern kernel_if_t kernel_if;
 
-extern long msg_enable;
+extern __thread long msg_enable;
 
 void pop_msg(msg_t * msg);
-
+int msg_queue_empty(void);
 #endif

@@ -185,7 +185,7 @@ li  $zero, 0xdead
     mflo	\tmp
     csd	\tmp, $0, 30*REG_SIZE(\frame_ptr)
 
-    cgetoffset	\tmp, \pcc
+    dmfc0       \tmp, $4, 2
     csd	        \tmp, $0, 31*REG_SIZE(\frame_ptr)
 
 .endm
@@ -206,6 +206,9 @@ li  $zero, 0xdead
     mthi	\tmp
     cld	\tmp, $0, 30*REG_SIZE(\frame_ptr)
     mtlo	\tmp
+    cld \tmp, $0, 31*REG_SIZE(\frame_ptr)
+    dmtc0   \tmp, $4, 2
+
     # Expands to a list of the form
     # cld	$greg, $0, offset*REG_SIZE(\frame_ptr)
     foreachi \macrog, 0, \frame_ptr, $at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	$s7, $t8, $t9, $gp, $sp, $fp, $ra

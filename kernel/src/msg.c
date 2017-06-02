@@ -66,8 +66,6 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
 
-	//FIXME this is still really racey, this critical section function stops interrupts, but will not work on multicore
-
 	FAST_CRITICAL_ENTER
 
 	queue_t * queue = dest->msg_queue;

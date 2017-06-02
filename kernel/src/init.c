@@ -46,7 +46,8 @@ int cherios_main(nano_kernel_if_t* interface,
 				 context_t own_context,
                  sealing_cap sealer,
 				 size_t init_base,
-                 size_t init_entry) {
+                 size_t init_entry,
+                 size_t init_tls_base) {
 	/* This MUST be called before trying to use the nano kernel, which we will need to do in order
 	 * to get access to the phy mem we need */
 
@@ -65,7 +66,7 @@ int cherios_main(nano_kernel_if_t* interface,
     CHERI_PRINT_CAP(own_context);
     //CHERI_PRINT_CAP(reservation);
     CHERI_PRINT_CAP(sealer);
-    kernel_printf("init_base: %lx. entry: %lx\n", init_base, init_entry);
+    kernel_printf("init_base: %lx. entry: %lx. tls_base: %lx\n", init_base, init_entry, init_tls_base);
 
 	kernel_setup_trampoline();
 
@@ -78,7 +79,7 @@ int cherios_main(nano_kernel_if_t* interface,
 
 	sched_init();
 
-	context_t init_context = act_init(own_context, &init_info, init_base, init_entry);
+	context_t init_context = act_init(own_context, &init_info, init_base, init_entry, init_tls_base);
 
 	KERNEL_TRACE("kernel", "Going into exception handling mode");
 

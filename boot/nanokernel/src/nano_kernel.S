@@ -173,13 +173,15 @@ nano_zero_page:
     cjr         zero_page_rreg
 
 #################################################################
-# nano_kernel_init(register_t unmanaged_space, register_t return_addr, register_t arg0)
+# nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
 .global nano_kernel_init
 nano_kernel_init:
 ################################################################
 	# Populate exception registers: $kdc and $kcc
 	cgetpccsetoffset $kcc, $zero                 # kdcc will hold the code global capability
 	cgetdefault	$kdc                                    # kdc will hold the data global capability
+
+    cmove       $c15, $c3                               # save this for the end
 
     dla         $k0, locals_start
     dli         $k1, locals_size
@@ -311,6 +313,11 @@ nano_kernel_init:
     # Now remove capabilities to the nano kernel. We should deny access to kernel regs
     # TODO: and the tlb
 
+    cld         $a0, $zero, 0($c15)
+    cld         $a1, $zero, REG_SIZE($c15)
+    cld         $a2, $zero, 2*REG_SIZE($c15)
+    cld         $a3, $zero, 3*REG_SIZE($c15)
+
     # The only registers not cleared will be
     # Kernel regs (not accessible outside this module)
     # pcc/c17 (will be the return address)
@@ -322,9 +329,9 @@ nano_kernel_init:
     # a0 is to allow boot to pass an argument to the kernel. Don't want capabilities or they would have to be checked.
     cclearlo    EncodeReg(all) & ~(EN6(c0, c1, c2, c3, c4, c5))
     cclearhi    EncodeReg(all) & ~(EN4(c17, kdc, kcc, c31))
-    move        $a1, $a3
+
     cjr         $c17
-    move        $a0, $a2
+    nop
 
 
 
@@ -566,9 +573,11 @@ get_last_exception:
     clc        $c4, $zero, victim_context($idc)
     cld        $t0, $zero, last_exception_cause($idc)
     cld        $t1, $zero, last_exception_ccause($idc)
+    dmfc0      $t2, $8
     csc        $c4, $zero, 0($c3)
     csd        $t0, $zero, CAP_SIZE($c3)
     csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
+    csd        $t2, $zero, (CAP_SIZE+(2*REG_SIZE))($c3)
     creturn
 
 ###############################################################
@@ -1127,6 +1136,42 @@ create_ptable_er:
 .set pfn_flags, 0b101111
 .set pfn_shift, 6
 
+###########################################################
+# ptable_t get_sub_table(ptable_t table, register_t index)
+.global get_sub_table
+get_sub_table:
+###########################################################
+
+    cgettype    $t0, $c3
+    dli         $t2, VTABLE_TYPE_L0
+    beq         $t0, $t2, 1f
+    daddiu      $t2, 1
+    bne         $t0, $t2, get_sub_table_er
+    daddiu      $t2, 1
+
+    1:
+    csetoffset  $c4, $kdc, $t0
+    cunseal     $c3, $c3, $c4                           # unseal parent page
+
+
+    dli         $t0, PAGE_TABLE_ENT_PER_TABLE           # check index in range
+    slt         $t0, $a0, $t0
+    beq         $t0, $zero, get_sub_table_er            # $a0 >= $t0
+
+    dsll        $t0, $a0, PAGE_TABLE_ENT_BITS
+    csetoffset  $c4, $kdc, $t2
+    cld         $t0, $t0, 0($c3)
+    csetoffset  $c3, $kdc, $t0
+    cseal       $c3, $c3, $c4
+
+    cclearlo    EN1(c4)
+    creturn
+
+    get_sub_table_er:
+
+    cclearlo    EN2(c3,c4)
+    creturn
+
 #####################################################################
 # void create_mapping(register_t page, ptable table, register_t index)
 .global create_mapping
@@ -1170,6 +1215,18 @@ create_mapping_er:
     cclearlo    EN2(c3,c4)
     creturn
 
+
+
+
+tlb_table_missing:
+    cgetcause $k0
+    dla $k1, locals_start
+    csetoffset $kr1c, $kdc, $k1
+    csd     $k0, $zero, exception_ccause($kr1c)
+    b context_switch_exception_entry
+    dmfc0 $k0, $13
+
+
 .section .trampoline_exc, "ax"
 
 ###########################################################################################################
@@ -1201,8 +1258,7 @@ skip_exception:
         mtc0    $k1, $12      # Disable interrupts, we are happy to take the hit as this is rare
         eret
 take_exception:
-		dla	$k1, context_switch_exception_entry
-		jr	$k1
+		b context_switch_exception_entry
 		dmfc0 $k0, $13
 kernel_exception_trampoline_end:
 		nop
@@ -1229,6 +1285,7 @@ tlb_trampoline: # TODO
 
     dmfc0       $k0, cp0_badvaddr
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L1
+    beqz        $k1, tlb_table_missing
 
     dsll        $k0, $k0, CHECKED_BITS + L0_BITS                                   # clear top bits
     dsrl        $k0, $k0, (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS)   # clear lower bits
@@ -1237,6 +1294,7 @@ tlb_trampoline: # TODO
 
     dmfc0       $k0, cp0_badvaddr
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L2
+    beqz        $k1, tlb_table_missing
 
     dsll        $k0, $k0, CHECKED_BITS + L1_BITS + L0_BITS                         # clear top bits
     dsrl        $k0, $k0, (CHECKED_BITS + L1_BITS + L0_BITS + UNTRANSLATED_BITS)   # clear lower bits
@@ -1244,6 +1302,8 @@ tlb_trampoline: # TODO
     daddu       $k1, $k1, $k0
 
     cld         $k1, $k1, 0($kdc)                                   # k1 = pfn entry
+    beqz        $k1, tlb_table_missing
+
     # Setup virtual page mask
     # dli         $k0, (1 << (PHY_PAGE_SIZE_BITS - 12)) - 1
     # TODO check the top bits of the vaddr

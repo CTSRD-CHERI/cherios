@@ -109,6 +109,33 @@ int memget_create_mapping(ptable_t L2_table, register_t index) {
     return 0;
 }
 
+/* TODO commiting per page is a stupid policy. We are doing this for now to make sure everything works */
+void commit_vmem(act_kt activation, size_t addr) {
+    printf("commiting vaddr: ");
+
+    ptable_t top_table = get_top_level_table();
+
+    size_t l0_index = L0_INDEX(addr);
+
+    ptable_t l1 = get_sub_table(top_table, l0_index);
+
+    if(l1 == NULL) {
+        printf("memmgt: creating a l1 table");
+        memmget_create_table(top_table, l0_index);
+    }
+
+    size_t l1_index = L1_INDEX(addr);
+
+    ptable_t l2 = get_sub_table(l1, l1_index);
+
+    if(l2 == NULL) {
+        printf("memmgt: creating a l2 table");
+        memmget_create_table(top_table, l1_index);
+    }
+
+    memget_create_mapping(l2, L2_INDEX(addr));
+}
+
 void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out) {
     /* Have to ask for a length that will keep alignment */
     size_t aligned_length = length;

@@ -47,6 +47,7 @@ typedef struct boot_info {
 	size_t 		init_end;
 
 	size_t		init_entry;
+	size_t 		init_tls_base;
 } boot_info_t;
 
 typedef struct memmgt_init_t {

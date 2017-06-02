@@ -35,6 +35,7 @@ set(LIBUSER_SRCS
     src/stdlib.c
     src/strcmp.c
     src/virtioblk.c
+    src/thread.c
 )
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})

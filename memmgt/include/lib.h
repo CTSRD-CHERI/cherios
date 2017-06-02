@@ -55,4 +55,6 @@ int	__munmap(void *addr, size_t length);
 void	minit(void);
 void	mfree(void *addr);
 
+void commit_vmem(act_kt activation, size_t addr);
+
 #endif /* !_LIB_H_ */

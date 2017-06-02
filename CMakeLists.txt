@@ -147,6 +147,7 @@ set(ASM_COMPILER_FLAGS
 )
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
+    -ftls-model=local-exec
     -nostdinc
     -fno-builtin
     -ffreestanding
@@ -329,6 +330,7 @@ add_subdirectory(fatfs)
 add_subdirectory(hello)
 add_subdirectory(memmgt)
 add_subdirectory(namespace)
+add_subdirectory(proc_manager)
 #add_subdirectory(prga)
 add_subdirectory(sockets)
 #add_subdirectory(test1a)

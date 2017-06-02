@@ -31,9 +31,10 @@
 #include "lib.h"
 #include "malloc_heap.h"
 #include "../../boot/include/boot/boot_info.h"
+#include "thread.h"
 
 extern void msg_entry;
-void (*msg_methods[]) = {__mmap, __munmap};
+void (*msg_methods[]) = {__mmap, __munmap, commit_vmem};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
@@ -48,9 +49,9 @@ void register_ns(void * ns_ref) {
 	}
 }
 
-int main(memmgt_init_t* mem_init) {
-	/* So we can call nano kernel functions. This would normally be done by the linker */
-	init_nano_kernel_if_t(mem_init->nano_if, mem_init->nano_default_cap);
+static void worker_start(register_t arg, capability carg) {
+
+	memmgt_init_t* mem_init = (memmgt_init_t*)carg;
 
 	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
 	if(ret!=0) {
@@ -64,6 +65,23 @@ int main(memmgt_init_t* mem_init) {
 
 	syscall_puts("memmgt: Going into daemon mode\n");
 
+	/* This thread handles everything else */
 	msg_enable = 1; /* Go in waiting state instead of exiting */
+}
+
+int main(memmgt_init_t* mem_init) {
+	/* So we can call nano kernel functions. This would normally be done by the linker */
+	init_nano_kernel_if_t(mem_init->nano_if, mem_init->nano_default_cap);
+
+	printf("spawning worker\n");
+
+	/* Virtual memory fails cannot occur in this activation as exception.c relies on us answering messages during
+	 * TLB miss. In order to fix this we create a worker thread that is allowed to fail. We then go into message
+ 	 * receiving mode immediately to handle TLB misses . */
+
+	thread_new("memgt_worker", 0, mem_init, &worker_start);
+
+	/* This thread handles only commit_vmem */
+	msg_enable = 1;
 	return 0;
 }

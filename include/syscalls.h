@@ -82,8 +82,8 @@ DECLARE_ENUM(shutdown_t, SHUTDOWN_TYPES_LIST)
 
 #endif
 
-PLT(kernel_if_t, SYS_CALL_LIST)
+PLT_thr(kernel_if_t, SYS_CALL_LIST, __thread)
 
-#define ALLOCATE_PLT_SYSCALLS PLT_ALLOCATE(kernel_if_t, SYS_CALL_LIST)
+#define ALLOCATE_PLT_SYSCALLS PLT_ALLOCATE_thr(kernel_if_t, SYS_CALL_LIST, __thread)
 
 #endif //CHERIOS_SYSCALLS_H

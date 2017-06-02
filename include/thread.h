@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,21 +28,40 @@
  * SUCH DAMAGE.
  */
 
-#include "sys/types.h"
-#include "cheric.h"
-#include "object.h"
-#include "namespace.h"
-#include "queue.h"
-#include "assert.h"
-#include "syscalls.h"
-#include "thread.h"
+#ifndef CHERIOS_UNISTD_H_H
+#define CHERIOS_UNISTD_H_H
 
-void libuser_init(act_control_kt self_ctrl,
-				  act_kt ns_ref,
-				  kernel_if_t* kernel_if_c,
-				  queue_t * queue,
-				  capability proc) {
-	proc_handle = proc;
-	object_init(self_ctrl, queue, kernel_if_c);
-	namespace_init(ns_ref);
-}
+#include "types.h"
+#include "queue.h"
+
+typedef struct startup_desc_t {
+    capability carg;
+    capability pcc;
+    char* stack_args;
+    register_t arg;
+    size_t stack_args_size;
+} startup_desc_t;
+
+/* The type of a start function */
+typedef void thread_start_func_t(register_t arg, capability carg);
+
+/* Map a user thread onto a single activation */
+typedef act_control_kt thread;
+
+/* We will get sealed handles from the process manager that represent a process */
+typedef capability process_kt;
+
+/* A global reference to the handle for the process this thread belongs to */
+extern process_kt proc_handle;
+
+/* Create a thread with the same c0 and pcc capabilities as the caller,
+ * but with its own stack and queue and ref/ctrl ref */
+thread thread_new(const char* name, register_t arg, capability carg, thread_start_func_t* start);
+
+/* These are wrappers for messages to the process manager */
+
+process_kt thread_create_process(const char* name, capability file);
+thread thread_start_process(process_kt* proc, startup_desc_t* desc);
+thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* desc);
+
+#endif //CHERIOS_UNISTD_H_H

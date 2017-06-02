@@ -98,7 +98,14 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 
 #define CHECKED_BITS                    (63 - L0_BITS - L1_BITS - L2_BITS - UNTRANSLATED_BITS)
 
-#define PAGE_SIZE                       (PHY_PAGE_SIZE)
+
+#define L0_INDEX(addr)          ((addr << CHECKED_BITS) >> (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
+#define L1_INDEX(addr)          ((addr << CHECKED_BITS + L0_BITS) >> (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS))
+#define L2_INDEX(addr)          ((addr << CHECKED_BITS + L0_BITS + L1_BITS) >> (CHECKED_BITS + L0_BITS + L1_BITS + UNTRANSLATED_BITS))
+#define PAGE_INDEX(addr)        (addr & (PHY_PAGE_SIZE - 1))
+#define GENERATION_COUNT(addr)  (addr >> (L0_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
+
+#define PAGE_SIZE                 (PHY_PAGE_SIZE)
 
 #define NANO_KERNEL_IF_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
@@ -138,6 +145,8 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
     ITEM(create_mapping, void, (register_t page_n, ptable_t table, register_t index),  __VA_ARGS__) \
 /* Get a handle for the top level page table*/\
     ITEM(get_top_level_table, ptable_t, (void), __VA_ARGS__) \
+/* Get a handle for a sub table from an L0 or L1 table. */\
+    ITEM(get_sub_table, ptable_t, (ptable_t table, register_t index), __VA_ARGS__)\
 /* Create the reservation for all of virtual memory */\
     ITEM(make_first_reservation, res_t, (void), __VA_ARGS__) \
 /* Get a read only capability to the nano kernels book */\
@@ -192,6 +201,7 @@ typedef struct {
     context_t victim_context;
     register_t cause;
     register_t ccause;
+    register_t badvaddr;
 } exection_cause_t;
 
 typedef register_t ex_lvl_t;

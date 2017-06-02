@@ -45,6 +45,15 @@ static int _mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pai
 	return MESSAGE_SYNC_SEND_r(memmgt_ref, base, length, cheri_perms, flags, result, NULL, NULL, NULL, 0);
 }
 
+void commit_vmem(act_kt activation, size_t addr) {
+	if(memmgt_ref == NULL) {
+		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
+		assert(memmgt_ref != NULL);
+	}
+	MESSAGE_SEND_MODE_r(memmgt_ref, addr, 0, 0, 0, activation, NULL, NULL, NULL, SEND_SWITCH, 2);
+}
+
+
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
 	cap_pair pair;
 

@@ -31,10 +31,9 @@
 #include "vmem.h"
 #include "stdio.h"
 
-static ptable_t top_table, L1_0, L2_0;
-
 static void init_vmem(void) {
     /* This creates anough virtual memory to get started */
+    ptable_t top_table, L1_0, L2_0;
 
     top_table = get_top_level_table();
     assert(top_table != NULL);
@@ -45,10 +44,9 @@ static void init_vmem(void) {
     L2_0 = memmget_create_table(L1_0, 0);
     assert(L2_0 != NULL);
     CHERI_PRINT_CAP(L2_0);
-    for(size_t index = 0; index != PAGE_TABLE_ENT_PER_TABLE; index++) {
-        int res = memget_create_mapping(L2_0, index);
-        assert(res == 0);
-    }
+
+    int res = memget_create_mapping(L2_0, 0);
+    assert(res == 0);
 
     /* Now we get the first reservation which NEEDS virtual mem */
     res_t first = make_first_reservation();
