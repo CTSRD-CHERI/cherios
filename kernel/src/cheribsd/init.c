@@ -33,6 +33,7 @@
 int cherios_main(void) {
 	kernel_printf("Kernel Hello world\n");
 	act_init();
+	kernel_interrupts_init(1);
 	KERNEL_TRACE("init", "init done");
 	return 0;
 }
