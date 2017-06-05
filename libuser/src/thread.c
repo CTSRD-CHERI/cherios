@@ -41,6 +41,7 @@ act_kt* proc_man_ref = NULL;
 process_kt proc_handle = NULL;
 
 extern void thread_start(void);
+extern void msg_entry(void);
 
 struct start_stack_args {
     thread_start_func_t* start;
@@ -57,18 +58,28 @@ _Static_assert((offsetof(struct start_stack_args, start)) == START_OFF, "used by
 _Static_assert((sizeof(struct start_stack_args)) == ARGS_SIZE, "used by assembly below");
 
 __asm__ (
+    ".text\n"
+    ".global thread_start\n"
     "thread_start:\n"
     "cmove $c4, $c25\n"
     "cmove $c5, $c21\n"
     "clc   $c6, $sp, " HELP(START_OFF) "($c11)\n"
     "daddiu $sp, $sp, " HELP(ARGS_SIZE) "\n"
-    "b c_thread_start\n"
+    "dla    $t0, c_thread_start\n"
+    "cgetpccsetoffset $c12, $t0\n"
+    "cjr    $c12\n"
 );
 
 void c_thread_start(register_t arg, capability carg, queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start) {
     object_init(self_ctrl, queue, NULL);
+
     start(arg, carg);
-    // TODO exit nicely
+
+    if(msg_enable) {
+        msg_entry();
+    } else {
+        syscall_act_terminate();
+    }
 }
 
 process_kt thread_create_process(const char* name, capability file) {
