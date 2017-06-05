@@ -133,12 +133,16 @@ start_common:
 	nop
 
 	# main() done. Go to msg_entry if msg_enable, call terminate otherwise
+	rdhwr   $t1, $29
+	daddiu  $t1, $t1, -0x7000
 	dla		$t0, msg_enable
+	daddu   $t0, $t0, $t1
 	cgetdefault	$c17
 	cld		$t0, $t0, 0($c17)
 	bne		$t0, $zero, msg_entry
 	nop
 	dla		$t0, act_self_ctrl
+	daddu   $t0, $t0, $t1
 	clc		$c2, $t0, 0($c17)
 	dla     $t0, kernel_if
 	clc     $c1, $t0, syscall_act_terminate_offset($c17)
