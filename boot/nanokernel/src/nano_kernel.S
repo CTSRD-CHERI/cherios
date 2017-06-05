@@ -116,6 +116,7 @@ local_reg_var exception_cause
 local_reg_var exception_ccause
 local_reg_var last_exception_cause
 local_reg_var last_exception_ccause
+local_reg_var last_bad_vaddr
 
 # Stuff to do with virtual space management
 local_reg_var made_first_res
@@ -155,7 +156,7 @@ nano_kernel_start:
 
 nano_zero_page:
     candperm    zero_page_ctmp_1, $kdc, $zero # Get this right...
-    csetbounds  zero_page_ctmp_1, zero_page_ctmp_1, $zero
+    cfromptr    zero_page_ctmp_1, zero_page_ctmp_1, $zero
     daddiu      zero_page_tmp_1, zero_page_arg, (PHY_PAGE_SIZE) - (UNROLL_FACTOR * CAP_SIZE)
 
 1:
@@ -211,7 +212,7 @@ nano_kernel_init:
 
     cseal       $c3, $c3, $kr2c                          # Seal the first context
 
-    csetbounds  $kr2c, $kr2c, $zero
+    cfromptr    $kr2c, $kr2c, $zero
     csc         $kr2c, $zero, exception_context($kr1c)   # Set exception context = NULL
 
     csd         $zero, $zero, exception_level($kr1c)     # Set exception level to 0
@@ -521,6 +522,9 @@ switch_exception:                                       # void switch_exception(
     csd     $k0, $zero, last_exception_cause($idc)      # store cause
     csc     $c4, $zero, victim_context($idc)            # store victim
     csd     $t0, $zero, last_exception_ccause($idc)     # store ccause
+    dmfc0   $t0, cp0_badvaddr
+    csd     $t0, $zero, last_bad_vaddr($idc)
+
 
     clc     $c3, $zero, exception_context($idc)         # load exception context
     csc     $c3, $zero, current_context($idc)           # set it as current context
@@ -573,7 +577,7 @@ get_last_exception:
     clc        $c4, $zero, victim_context($idc)
     cld        $t0, $zero, last_exception_cause($idc)
     cld        $t1, $zero, last_exception_ccause($idc)
-    dmfc0      $t2, $8
+    cld        $t2, $zero, last_bad_vaddr($idc)
     csc        $c4, $zero, 0($c3)
     csd        $t0, $zero, CAP_SIZE($c3)
     csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
@@ -826,7 +830,7 @@ rescap_take:
     csc         $c4, $zero, 0($c5)
     creturn
 take_er:
-    csetbounds  $c3, $c3, $zero
+    cfromptr    $c3, $c3, $zero
     creturn
 
 
@@ -844,11 +848,11 @@ rescap_info:
     csetoffset  $c4, $kdc, $t1              # create sealing cap
     cseal       $c3, $c3, $c4
     bnez        $t0, info_er                # error if not open
-    csetbounds  $c4, $c4, $zero             # clear our sealing cap
+    cfromptr    $c4, $c4, $zero             # clear our sealing cap
 
     creturn
 info_er:
-    csetbounds  $c3, $c3, $zero
+    cfromptr    $c3, $c3, $zero
     creturn
 
 ##################################
@@ -1141,7 +1145,6 @@ create_ptable_er:
 .global get_sub_table
 get_sub_table:
 ###########################################################
-
     cgettype    $t0, $c3
     dli         $t2, VTABLE_TYPE_L0
     beq         $t0, $t2, 1f
@@ -1161,14 +1164,19 @@ get_sub_table:
     dsll        $t0, $a0, PAGE_TABLE_ENT_BITS
     csetoffset  $c4, $kdc, $t2
     cld         $t0, $t0, 0($c3)
+    beqz        $t0, get_sub_table_end
+    cfromptr    $c3, $c3, $zero
+
     csetoffset  $c3, $kdc, $t0
+    dli         $t1, PAGE_TABLE_SIZE
+    csetbounds  $c3, $c3, $t1
     cseal       $c3, $c3, $c4
 
+    get_sub_table_end:
     cclearlo    EN1(c4)
     creturn
 
     get_sub_table_er:
-
     cclearlo    EN2(c3,c4)
     creturn
 
