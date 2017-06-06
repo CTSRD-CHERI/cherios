@@ -37,24 +37,18 @@
 
 # Thoughts #
 
-# We should make this look like a jump and link. The caller will already have linked c17, but it will be unsealed
-# We should rely on ccall to set c12 AS WELL as pcc to c1
-# We should be in charge of linking data. IDC is the equivalent of c12 but for data
-# We still need a data link register. It should not be the stack register, as this may be used for the stack.
-# Instead maybe have something like c18 ?
+# We should make this look like a jump and link.
 
-# So with a jump and link we have the pcc = c12 = target and c17 to return
-# With a ccall we ALSO have idc = data target and c18 data return
+# So with a jump and link we have: pcc = target , and c17 = return
+# With a ccall we ALSO have idc = data target, and c18 = data return
 
 # So a normal return is jump c17.
 # Now a return is creturn c17 c18
 
 # If the target ALWAYS uses creturn (scrap using jump for function return) it does not matter if the return edge
-# is trusting or not. If c12 was unsealed, it is just a jump. if c12 is sealed, we check the c17/c18 pair and do a jump
+# is trusting or not. If c17 was unsealed, it is just a jump. if c17 is sealed, we check the c17/c18 pair and do a jump
 
-# By setting c12 on the invoke, the callee also does not need to know if it was ccalled. Might have trouble
-# With idc vs c11 for data. I imagine functions will have a slightly earlier entry point that sets up the stack
-# from idc (if it has a stack), on in general uses idc to setup the convention used by the main function entry
+# By always using idc on function entry to setup our stack pointer and c0, we don't need multiple entries
 
 # The ABI is that parties -SHOULD- obey the normal ABI plus above changes. Unlesss maybe if c17 is sealed, everything
 # Is caller saved? It would be weird for a caller to expect a sealed return, but assume its registers were not trampled
@@ -63,11 +57,10 @@
 # If the caller is distrusting it should seal its return context, clear what it wants to
 # If the callee is distrusting, it exposes itself to only be accessible by ccall and clears caller saved registers
 
-# We can also have levels of trust. To clear only capabilities? DO we trust the caller to provide a stack?
-# If we use our callers stack, they can spy on values we put there, but this might be the case where callee is trusting
 
 cheri_invoke:
-    # all argument registers and c1 and c2 and v0 will be
-    # c11 and c17 will already be setup with the correct return address, but may need sealing
-    # it is up to this stub to store anything if required (not needed in trusting mode)
+    # c17/c18 will already be setup with the correct return address / data. May be sealed
+
+    daddiu  $sp,  $sp, 0            # fools my backtracer
+    nop
     ccall $c1, $c2, 0

@@ -125,7 +125,7 @@ int check_cap(capability cap) {
 	(cap == NULL));
 }
 
-static inline void backtrace(char* stack_pointer, capability return_address) {
+static inline void backtrace(char* stack_pointer, capability return_address, capability r17) {
 	int i = 0;
 
 	// Function prolog:
@@ -174,12 +174,17 @@ static inline void backtrace(char* stack_pointer, capability return_address) {
 		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
 
 
-		if(check_cap(ra_ptr)) {
-			printf("***bad frame***\n");
-			return;
-		}
+		if((i == 1) && (offset == 0)) {
+            return_address = r17;
+        } else {
+            if(check_cap(ra_ptr)) {
+                printf("***bad frame***\n");
+                return;
+            }
 
-		return_address = *ra_ptr;
+            return_address = *ra_ptr;
+        }
+
 		// Offset by 2 instructions for the cjal + nop
 		return_address = (capability)((uint32_t*)return_address-2);
 		stack_pointer = stack_pointer - stack_size;
@@ -304,7 +309,7 @@ void regdump(int reg_num) {
 	printf("\nAttempting backtrace:\n\n");
 	char * stack_pointer = (char*)frame->cf_c11 + frame->mf_sp;
 	capability return_address = frame->cf_pcc;
-	backtrace(stack_pointer, return_address);
+	backtrace(stack_pointer, return_address, frame->cf_c17);
 }
 
 #endif
