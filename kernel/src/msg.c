@@ -163,12 +163,12 @@ static int token_expected(act_t* ccaller, capability token) {
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
-void act_send_message(capability c3, capability c4, capability c5, capability c6,
+void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
 					 register_t a0, register_t a1, register_t a2, register_t a3,
-					 ccall_selector_t selector, register_t v0, ret_t* ret) {
+					 act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret) {
 
-	act_t* target_activation = (act_t*) get_idc();
-	act_t* source_activation = kernel_curr_act;
+	target_activation = act_unseal_ref(target_activation);
+	act_t* source_activation = (act_t*) get_idc();
 
 	KERNEL_TRACE(__func__, "message from %s to %s", source_activation->name, target_activation->name);
 
@@ -215,22 +215,10 @@ _Static_assert(offsetof(ret_t, c3) == 0, "message return assumes these offsets")
 _Static_assert(offsetof(ret_t, v0) == 32, "message return assumes these offsets");
 _Static_assert(offsetof(ret_t, v1) == 40, "message return assumes these offsets");
 
-#define MESSAGE_RETURN_RESTORE_BEFORE	\
-	"daddiu $sp, $sp, -64\n"			\
-	"csetoffset $c7, $c11, $sp\n"
+int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token) {
 
-
-
-#define MESSAGE_RETURN_RESTORE_AFTER	\
-	"clc	$c3, $sp, 0($c11)\n"		\
-	"cld $v0, $sp, 32($c11)\n"			\
-	"cld $v1, $sp, 40($c11)\n"			\
-	"daddiu $sp, $sp, 64\n"				\
-
-int act_send_return(capability c3, capability sync_token, register_t v0, register_t v1) {
-
-	act_t * returned_from = kernel_curr_act;
-	act_t * returned_to = (act_t*) get_idc();
+	act_t * returned_from = (act_t*) get_idc();
+	act_t * returned_to = kernel_unseal(caller, act_sync_ref_type);
 
     kernel_assert(returned_to != NULL);
     kernel_assert(returned_to->sync_state.sync_ret != NULL);
@@ -267,12 +255,3 @@ int act_send_return(capability c3, capability sync_token, register_t v0, registe
 
 	return 0;
 }
-
-void kernel_setup_trampoline() {
-	/* When we create the reference to the trampoline, we also store the default capability of our creating context */
-	capability* c0_store = &kernel_ccall_trampoline_c0;
-	*c0_store = cheri_getdefault();
-}
-
-DEFINE_TRAMPOLINE_EXTRA(act_send_message, MESSAGE_RETURN_RESTORE_BEFORE, MESSAGE_RETURN_RESTORE_AFTER)
-DEFINE_TRAMPOLINE(act_send_return)

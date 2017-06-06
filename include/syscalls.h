@@ -41,23 +41,23 @@
 
 #define SYS_CALL_LIST(ITEM, ...)                                                                                   \
         ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
-                                        const_capability c3, const_capability c4, const_capability c5, const_capability,     \
-                                        register_t selector, register_t v0), __VA_ARGS__)                                    \
-        ITEM(message_reply, int, (capability c3, capability sync_token, register_t v0, register_t v1), __VA_ARGS__)          \
+                                        const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
+                                        act_kt dest, register_t selector, register_t v0), __VA_ARGS__)                        \
+        ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, capability sync_token), __VA_ARGS__)          \
         ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \
         ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
-        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue), __VA_ARGS__)  \
-        ITEM(syscall_act_ctrl_get_ref, act_kt, (void), __VA_ARGS__)                                                          \
-        ITEM(syscall_act_ctrl_get_status, status_e, (void), __VA_ARGS__)                                                     \
-        ITEM(syscall_act_ctrl_get_sched_status, sched_status_e, (void), __VA_ARGS__)                                         \
-        ITEM(syscall_act_revoke, int, (void), __VA_ARGS__)                                                                   \
-        ITEM(syscall_act_terminate, int, (void), __VA_ARGS__)                                                                \
+        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue), __VA_ARGS__)   \
+        ITEM(syscall_act_ctrl_get_ref, act_kt, (act_control_kt ctrl), __VA_ARGS__)                                                          \
+        ITEM(syscall_act_ctrl_get_status, status_e, (act_control_kt ctrl), __VA_ARGS__)                                      \
+        ITEM(syscall_act_ctrl_get_sched_status, sched_status_e, (act_control_kt ctrl), __VA_ARGS__)                          \
+        ITEM(syscall_act_revoke, int, (act_control_kt ctrl), __VA_ARGS__)                                                    \
+        ITEM(syscall_act_terminate, int, (act_control_kt ctrl), __VA_ARGS__)                                                 \
         ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)                                                             \
         ITEM(syscall_panic, void, (void), __VA_ARGS__)                                                                       \
         ITEM(syscall_interrupt_register, int, (int number), __VA_ARGS__)                                                     \
         ITEM(syscall_interrupt_enable, int, (int number), __VA_ARGS__)                                                       \
         ITEM(syscall_gc,int, (capability p, capability pool), __VA_ARGS__)                                                   \
-        ITEM(syscall_shutdown, void, (shutdown_t), __VA_ARGS__)                                                                     \
+        ITEM(syscall_shutdown, void, (shutdown_t), __VA_ARGS__)                                                              \
 
 
 #define CCALL_SELECTOR_LIST(ITEM)   \
@@ -76,9 +76,6 @@ DECLARE_ENUM(shutdown_t, SHUTDOWN_TYPES_LIST)
 
 #include "types.h"
 #include "queue.h"
-
-        #define SYSCALL_OBJ(call, obj, ...) call ## _inst (CONTEXT(kernel_if.call, obj),  __VA_ARGS__ )
-        #define SYSCALL_OBJ_void(call, obj) call ## _inst (CONTEXT(kernel_if.call, obj))
 
 #endif
 

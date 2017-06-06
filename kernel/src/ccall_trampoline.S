@@ -39,24 +39,24 @@
 # Only needed if we need a stack.
 
 .text
-.align 5
-		.size kernel_ccall_trampoline_c0, CAP_SIZE
-		.global kernel_ccall_trampoline_c0
-		kernel_ccall_trampoline_c0: .space CAP_SIZE  # Allocate sapce for a C0 restore capability
 
 # Has a weird ABI due to having to swap registers. We use c16 instead of c12 and c14 instead of c17
 # On return we will have conventional register usage back
 
 .global kernel_ccall_stack_swap
         kernel_ccall_stack_swap:
+		li     $t1, (USER_KERNEL_STACK_SIZE) # Also points to our entry guard variable
 
-		clc    $c16, $zero, -(CAP_SIZE)($c16)      # Recover kernel_ccall_trampoline_c0 used to make this trampoline ($c16)
+        # Sets guard to 0 -> 1
+        cincoffset  $c15, $idc, $t1
+        clld        $t2, $c15
+        bnez        $t2, kernel_ccall_entry_er
+        li          $t2, 1
+        cscd        $t2, $t2, $c15
+        beqz        $t2, kernel_ccall_entry_er
 
-
-		li     $t1, USER_KERNEL_STACK_SIZE
-		dla    $t2, kernel_curr_act
-		clc    $c15, $t2, 0($c16)
-		csetbounds $c15, $c15, $t1 # our stack is in the activation struct pointed to by kernel_current_act
+		csetbounds $c15, $idc, $t1 # our stack is in the activation struct pointed to idc
+        clc        $c16, $t1, -1 * CAP_SIZE($c15)   # pop c0 from the stack
 
 		# push callers c0, spc, rac, and sp
 		cgetdefault $c13
@@ -64,12 +64,13 @@
 		csc    $c17, $t1, -2 * CAP_SIZE($c15)
 		csc    $c12, $t1, -3 * CAP_SIZE($c15)
 		csc    $c11, $t1, -4 * CAP_SIZE($c15)
-		csd    $sp,  $t1, -5 * CAP_SIZE($c15)
+        csc    $idc, $t1, -5 * CAP_SIZE($c15)
+		csd    $sp,  $t1, -6 * CAP_SIZE($c15)
 
 		# now setup our conventional c0, spc, rac and sp
 		csetdefault $c16                  # New c0
 		cmove       $c11, $c15            # New spc
-		daddiu  $sp, $t1, -(5 * CAP_SIZE) # New sp
+		daddiu  $sp, $t1, -(6 * CAP_SIZE) # New sp
 
         cjr     $c14
 
@@ -81,16 +82,27 @@
 		# pop callers c0, spc, rac, and sp
 		# We need to take a copy c11 as we will be overwriting it
 		cmove  $c15, $c11
-		clc    $c13, $sp, 4 * CAP_SIZE($c15)
-		csetdefault $c13
-		clc    $c17, $sp, 3 * CAP_SIZE($c15)
-		clc    $c12, $sp, 2 * CAP_SIZE($c15)
-		clc    $c11, $sp, 1 * CAP_SIZE($c15)
+		clc    $c13, $sp, 5 * CAP_SIZE($c15)
+		cgetdefault $c14
+		csetdefault $c13                            # push c0 back to kernel stack
+		csc    $c14, $sp, 5 * CAP_SIZE($c15)
+
+		clc    $c17, $sp, 4 * CAP_SIZE($c15)
+		clc    $c12, $sp, 3 * CAP_SIZE($c15)
+		clc    $c11, $sp, 2 * CAP_SIZE($c15)
+		clc    $idc, $sp, 1 * CAP_SIZE($c15)
 		cld    $sp,  $sp, 0 * CAP_SIZE($c15)
 
+        # sets guard 1 -> 0
+        li     $t1, (USER_KERNEL_STACK_SIZE)
+        csd    $zero, $t1, 0($idc)
+
+# Our ccall convetion allows multiple entries concurrently - which would break the kernel
+# In order to enforce 'one caller at once' semantics we have a guard variable
+kernel_ccall_entry_er:
 #TODO when the day comes and we care, REALLY check these are all the registers to be cleared
 		# Clear everything caller saved ($c1 to $c16 minus 3, 11 and 12)
 		cclearlo   (0b1110011111110110)
 		cmove      $c16, $c1
 
-		creturn
+        creturn

@@ -54,11 +54,9 @@ void	object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 void	ctor_null(void);
 void	dtor_null(void);
 
-void * get_idc_from_ref(capability act_ref, capability act_id);
-
 typedef struct sync_state_t {
-    capability sync_token;
-    capability sync_caller;
+    sync_token_t sync_token;
+    act_reply_kt sync_caller;
 } sync_state_t;
 
 _Static_assert(offsetof(sync_state_t, sync_token) == 0, "used by assembly");

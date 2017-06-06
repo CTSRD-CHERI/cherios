@@ -47,8 +47,8 @@
  * TODO that is, if we want to sleep it should contain just enough to do a context switch
  * TODO this works nicely when we just want, for example, to get a field from a struct
  */
-void kernel_syscall_sleep(int time);
-void kernel_syscall_sleep(int time) {
+void kernel_sleep(int time);
+void kernel_sleep(int time) {
 	if(time != 0) {
 		KERNEL_ERROR("sleep >0 not implemented");
 	} else {
@@ -56,45 +56,45 @@ void kernel_syscall_sleep(int time) {
 	}
 }
 
-void kernel_syscall_wait(void);
-void kernel_syscall_wait(void) {
+void kernel_wait(void);
+void kernel_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
 	sched_block_until_msg(kernel_curr_act, NULL);
 }
 
-act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue);
-act_control_t * kernel_act_register(reg_frame_t *frame, char *name, queue_t *queue) {
+act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue);
+act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue) {
 	return act_register_create(frame, queue, name, status_alive, NULL);
 }
 
-act_t * kernel_act_ctrl_get_ref(void);
-act_t * kernel_act_ctrl_get_ref(void) {
-	act_control_t * ctrl = (act_control_t *)get_idc();
+act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl);
+act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_get_sealed_ref_from_ctrl(ctrl);
 }
 
-status_e kernel_act_ctrl_get_status(void);
-status_e kernel_act_ctrl_get_status(void) {
-	act_control_t * ctrl = (act_control_t *)get_idc();
+status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl);
+status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
     KERNEL_TRACE("get status", "Level: %ld. Cause: %lx", *ex_lvl, *ex_cause);
 	return act_get_status(ctrl);
 }
 
-sched_status_e kernel_act_ctrl_get_sched_status(void);
-sched_status_e kernel_act_ctrl_get_sched_status(void) {
-	act_control_t * ctrl = (act_control_t *)get_idc();
+sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl);
+sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
 	return ctrl->sched_status;
 }
 
-int kernel_act_revoke(void);
-int kernel_act_revoke(void) {
-	act_control_t * ctrl = (act_control_t *)get_idc();
+int kernel_syscall_act_revoke(act_control_t* ctrl);
+int kernel_syscall_act_revoke(act_control_t* ctrl) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_revoke(ctrl);
 }
 
-int kernel_act_terminate(void);
-int kernel_act_terminate(void) {
-	act_control_t * ctrl = (act_control_t *)get_idc();
+int kernel_syscall_act_terminate(act_control_t* ctrl);
+int kernel_syscall_act_terminate(act_control_t* ctrl) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_terminate(ctrl);
 }
 
@@ -142,35 +142,46 @@ void kernel_syscall_shutdown(shutdown_t mode) {
 
 }
 
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_sleep)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_wait)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_register)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_ref)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_status)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_ctrl_get_sched_status)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_revoke)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_act_terminate)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_puts)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_panic)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_register)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_interrupt_enable)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_gc)
-DECLARE_AND_DEFINE_TRAMPOLINE(kernel_syscall_shutdown)
+extern void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
+                         register_t a0, register_t a1, register_t a2, register_t a3,
+                         act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret);
+
+extern int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token);
+
+
+#define message_send_BEFORE	\
+	"daddiu $sp, $sp, -64\n"			\
+	"csetoffset $c8, $c11, $sp\n"
+
+#define message_send_AFTER	\
+	"clc	$c3, $sp, 0($c11)\n"		\
+	"cld $v0, $sp, 32($c11)\n"			\
+	"cld $v1, $sp, 40($c11)\n"			\
+	"daddiu $sp, $sp, 64\n"				\
+
+#define SET_IF(call, ...)\
+kernel_if -> call = kernel_seal((capability)(&(kernel_ ## call ## _trampoline)), act_ctrl_ref_type);
+
+
+#define DADT(call) DEFINE_TRAMPOLINE_EXTRA(kernel_ ## call,,)
+
+DEFINE_TRAMPOLINE_EXTRA(kernel_message_send, message_send_BEFORE, message_send_AFTER);
+DADT(message_reply)
+DADT(sleep)
+DADT(wait)
+DADT(syscall_act_register)
+DADT(syscall_act_ctrl_get_ref)
+DADT(syscall_act_ctrl_get_status)
+DADT(syscall_act_ctrl_get_sched_status)
+DADT(syscall_act_revoke)
+DADT(syscall_act_terminate)
+DADT(syscall_puts)
+DADT(syscall_panic)
+DADT(syscall_interrupt_register)
+DADT(syscall_interrupt_enable)
+DADT(syscall_gc)
+DADT(syscall_shutdown)
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
-
-	kernel_if->sleep = kernel_seal(kernel_syscall_sleep_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->wait = kernel_seal(kernel_syscall_wait_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_act_register = kernel_seal(kernel_act_register_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_act_ctrl_get_ref = kernel_seal(kernel_act_ctrl_get_ref_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_act_ctrl_get_status = kernel_seal(kernel_act_ctrl_get_status_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_act_ctrl_get_sched_status = kernel_seal(kernel_act_ctrl_get_sched_status_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_act_revoke = kernel_seal(kernel_act_revoke_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_act_terminate = kernel_seal(kernel_act_terminate_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_puts = kernel_seal(kernel_syscall_puts_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_panic = kernel_seal(kernel_syscall_panic_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_interrupt_register = kernel_seal(kernel_syscall_interrupt_register_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_interrupt_enable = kernel_seal(kernel_syscall_interrupt_enable_get_trampoline(), act_ctrl_ref_type);
-	kernel_if->syscall_gc = kernel_seal(kernel_syscall_gc_get_trampoline(), act_ctrl_ref_type);
-    kernel_if->syscall_shutdown = kernel_seal(kernel_syscall_shutdown_get_trampoline(), act_ctrl_ref_type);
+    SYS_CALL_LIST(SET_IF,)
 }

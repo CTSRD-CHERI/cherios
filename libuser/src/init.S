@@ -144,6 +144,7 @@ start_common:
 	dla		$t0, act_self_ctrl
 	daddu   $t0, $t0, $t1
 	clc		$c2, $t0, 0($c17)
+	cmove   $c3, $c2
 	dla     $t0, kernel_if
 	clc     $c1, $t0, syscall_act_terminate_offset($c17)
 	# We don't bother setting up a return as this will terminate us

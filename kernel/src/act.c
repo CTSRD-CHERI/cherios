@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <syscalls.h>
 #include "sys/types.h"
 #include "activations.h"
 #include "klib.h"
@@ -66,11 +67,17 @@ act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
 }
 
+act_t * act_unseal_ref(act_t * act) {
+	return  (act_t *)kernel_unseal(act, act_ref_type);
+}
+
+act_control_t* act_unseal_ctrl_ref(act_t* act) {
+	return (act_control_t*)kernel_unseal(act, act_ctrl_ref_type);
+}
+
 context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base) {
 	KERNEL_TRACE("init", "activation init");
 
-	internel_if.message_send = kernel_seal(act_send_message_get_trampoline(), act_ref_type);
-	internel_if.message_reply = kernel_seal(act_send_return_get_trampoline(), act_sync_ref_type);
 	setup_syscall_interface(&internel_if);
 
 	kernel_next_act = 0;
@@ -121,6 +128,11 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	}
 
 	act_t * act = kernel_acts + kernel_next_act;
+
+	/* Push C0 to the bottom of the stack so it can be popped when we ccall in */
+	act->user_kernel_stack[(USER_KERNEL_STACK_SIZE / sizeof(capability)) -1] = cheri_getdefault();
+
+    act->stack_guard = 0;
 
 	act->image_base = base;
 

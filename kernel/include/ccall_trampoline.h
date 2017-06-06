@@ -32,18 +32,12 @@
 #define CHERIOS_CCALL_TRAMPOLINE_H
 
 /* Helper functions to make assembly trampolines for ccallable functions. Exposes a _get_trampoline for a function */
+/* Eventually loading the stakc from idc and popping c0 will be a part of the calling convention */
 
-extern capability kernel_ccall_trampoline_c0;
-void kernel_setup_trampoline(void);
-
-#define DECLARE_TRAMPOLINE(F) capability F ## _get_trampoline(void)
-
+#define EXPAND_F(F)
 
 #define DEFINE_TRAMPOLINE_EXTRA(F, EXTRA_B, EXTRA_A)            \
 extern void F ## _trampoline(void);                             \
-capability F ## _get_trampoline(void) {                         \
-    return (capability)(&(F ## _trampoline));                   \
-}                                                               \
 __asm__ (                                                       \
         ".text\n"                                               \
         ".global " #F "_trampoline\n"                           \
@@ -59,11 +53,8 @@ __asm__ (                                                       \
         "nop\n"                                                 \
         EXTRA_A                                                 \
         "dla            $t0, kernel_ccall_stack_unswap\n"       \
-        "jr				$t0"                                    \
+        "jr				$t0\n"                                  \
+        "nop"                                                   \
 );
-
-#define DEFINE_TRAMPOLINE(F) DEFINE_TRAMPOLINE_EXTRA(F,,)
-
-#define DECLARE_AND_DEFINE_TRAMPOLINE(F) DECLARE_TRAMPOLINE(F); DEFINE_TRAMPOLINE(F)
 
 #endif //CHERIOS_CCALL_TRAMPOLINE_H

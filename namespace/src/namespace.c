@@ -31,6 +31,7 @@
 #include "lib.h"
 #include "sys/mman.h"
 #include "syscalls.h"
+#include "object.h"
 
 typedef struct {
 	void * act_reference;
@@ -46,7 +47,7 @@ void ns_init(void) {
 	   caps. */
 
 	extern act_kt namespace_ref;
-	namespace_ref = syscall_act_ctrl_get_ref();
+	namespace_ref = act_self_ref;
 
 	bzero(bind, sizeof(bind));
 	count = 0;

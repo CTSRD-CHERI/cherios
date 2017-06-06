@@ -57,15 +57,10 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 
 
 	act_self_ctrl = self_ctrl;
-	act_self_ref  = SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, self_ctrl);
 
-	init_kernel_if_t(&kernel_if, self_ctrl);
+    init_kernel_if_t(&kernel_if, self_ctrl);
 
-	// The message send has a different default obj
-	message_send_default_obj.data = (capability)act_self_ref;
-
-	// TODO default reply should be set automatically in msg.S
-	message_reply_default_obj.data = NULL;
+	act_self_ref  = syscall_act_ctrl_get_ref(self_ctrl);
 
 	act_self_queue = queue;
 

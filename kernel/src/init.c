@@ -68,8 +68,6 @@ int cherios_main(nano_kernel_if_t* interface,
     CHERI_PRINT_CAP(sealer);
     kernel_printf("init_base: %lx. entry: %lx. tls_base: %lx\n", init_base, init_entry, init_tls_base);
 
-	kernel_setup_trampoline();
-
 	init_info.nano_if = interface;
 	init_info.nano_default_cap = def_data;
 	init_info.kernel_size = cheri_getlen(cheri_getdefault());

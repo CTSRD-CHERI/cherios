@@ -78,7 +78,7 @@ void c_thread_start(register_t arg, capability carg, queue_t* queue, act_control
     if(msg_enable) {
         msg_entry();
     } else {
-        syscall_act_terminate();
+        syscall_act_terminate(self_ctrl);
     }
 }
 
@@ -87,21 +87,21 @@ process_kt thread_create_process(const char* name, capability file) {
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }
     assert(proc_man_ref != NULL);
-    return MESSAGE_SYNC_SEND_c(proc_man_ref, 0, 0, 0, 0, name, file, NULL, NULL, 0);
+    return message_send_c(0, 0, 0, 0, name, file, NULL, NULL, proc_man_ref, SYNC_CALL, 0);
 }
 thread thread_start_process(process_kt* proc, startup_desc_t* desc) {
     if(proc_man_ref == NULL) {
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }
     assert(proc_man_ref != NULL);
-    return MESSAGE_SYNC_SEND_c(proc_man_ref, 0, 0, 0, 0, proc, desc, NULL, NULL, 1);
+    return message_send_c(0, 0, 0, 0, proc, desc, NULL, NULL, proc_man_ref, SYNC_CALL, 1);
 }
 thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* desc) {
     if(proc_man_ref == NULL) {
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }
     assert(proc_man_ref != NULL);
-    return MESSAGE_SYNC_SEND_c(proc_man_ref, 0, 0, 0, 0, proc, name, desc, NULL, 2);
+    return message_send_c(0, 0, 0, 0, proc, name, desc, NULL, proc_man_ref, SYNC_CALL, 2);
 }
 
 thread thread_new(const char* name, register_t arg, capability carg, thread_start_func_t* start) {

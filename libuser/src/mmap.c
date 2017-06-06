@@ -42,7 +42,7 @@ static int _mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pai
 		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
 		assert(memmgt_ref != NULL);
 	}
-	return MESSAGE_SYNC_SEND_r(memmgt_ref, base, length, cheri_perms, flags, result, NULL, NULL, NULL, 0);
+	return (int)message_send(base, length, cheri_perms, flags, result, NULL, NULL, NULL, memmgt_ref, SYNC_CALL, 0);
 }
 
 void commit_vmem(act_kt activation, size_t addr) {
@@ -50,7 +50,7 @@ void commit_vmem(act_kt activation, size_t addr) {
 		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
 		assert(memmgt_ref != NULL);
 	}
-	MESSAGE_SEND_MODE_r(memmgt_ref, addr, 0, 0, 0, activation, NULL, NULL, NULL, SEND_SWITCH, 2);
+	message_send(addr, 0, 0, 0, activation, NULL, NULL, NULL, memmgt_ref, SEND_SWITCH, 2);
 }
 
 
@@ -110,7 +110,7 @@ int mmap_new(size_t base, size_t length, int cheri_perms, int flags, cap_pair* r
 }
 
 int munmap(void *addr, size_t length) {
-	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, 0, 0, 0, addr, NULL, NULL, NULL, 1);
+	return (int)message_send(length, 0, 0, 0, addr, NULL, NULL, NULL, memmgt_ref, SYNC_CALL, 1);
 }
 
 void mmap_set_act(act_kt ref) {

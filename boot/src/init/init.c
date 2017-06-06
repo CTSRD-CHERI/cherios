@@ -225,7 +225,7 @@ static void load_modules(init_info_t * init_info) {
             simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info));
 
 
-    namespace_init(SYSCALL_OBJ_void(syscall_act_ctrl_get_ref, namebe->ctrl));
+    namespace_init(syscall_act_ctrl_get_ref(namebe->ctrl));
 
     /* Proc */
 

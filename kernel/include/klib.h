@@ -106,9 +106,6 @@ void	kernel_freeze(void) __dead2;
 
 int	try_gc(void * p, void * pool);
 
-DECLARE_TRAMPOLINE(act_send_message);
-DECLARE_TRAMPOLINE(act_send_return);
-
 int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t a0, register_t a1, register_t a2, register_t a3,
 			 register_t v0,
@@ -127,6 +124,8 @@ capability act_get_id(act_control_t * ctrl);
 
 act_t * act_create_sealed_ref(act_t * act);
 act_control_t * act_create_sealed_ctrl_ref(act_t * act);
+act_t * act_unseal_ref(act_t * act);
+act_control_t* act_unseal_ctrl_ref(act_t* act);
 
 status_e act_get_status(act_control_t *ctrl);
 int	act_revoke(act_control_t * ctrl);

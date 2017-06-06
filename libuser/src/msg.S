@@ -189,9 +189,9 @@ overflow:
 end:
 
 	#Restore sync_token
-	clc		$c4, $zero, 0(sync_state_cap)
+	clc		$c5, $zero, 0(sync_state_cap)
 	#Restore caller activation reference
-	clc     $c2, $zero, CAP_SIZE(sync_state_cap)
+	clc     $c4, $zero, CAP_SIZE(sync_state_cap)
 
 #FIXME this instruction cannot jump backwards due to a QEMU bug
 	cbts    $c4, make_return
@@ -202,17 +202,18 @@ end:
 make_return:
     # c3 is both a return register and an arugment register so needs no work.
     # v0 and v1 need to be arguments.
-    # c4 has the token from above.
+
     # c1 needs the return cap, we kept it in a saved register
-    # c2 needs the message reply cap, this is already installed.
+    # c2 needs our self ctrl
+    # c4 needs the caller (from above)
+    # c5 needs the sync (from above)
     # c17 needs a good return address. We took the address of the loop symbol which is as good as any
     move  $a0, $v0
     move  $a1, $v1
     clc   $c1, $zero, message_reply_offset(kernel_if_cap)
+    cmove $c2, self_ctrl_cap
     cmove $c17, msg_entry_loop_cap
 	ccall $c1, $c2
-	b msg_entry_loop
-    nop
 
 msg_entry_end:
 	.end msg_entry
