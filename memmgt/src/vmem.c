@@ -111,7 +111,7 @@ int memget_create_mapping(ptable_t L2_table, register_t index) {
 
 /* TODO commiting per page is a stupid policy. We are doing this for now to make sure everything works */
 void commit_vmem(act_kt activation, size_t addr) {
-    printf("commiting vaddr %lx:\n", addr);
+    //printf("commiting vaddr %lx:\n", addr);
 
     ptable_t top_table = get_top_level_table();
 
