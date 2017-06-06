@@ -35,6 +35,20 @@
 page_t* book;
 free_chain_t *chain_start, *chain_end;
 
+static void try_merge(size_t page_n) {
+    size_t before = book[page_n].prev;
+    size_t after = page_n + book[page_n].len;
+
+    if(book[before].status == book[page_n].status) {
+        merge_phy_page_range(before);
+        page_n = before;
+    }
+
+    if((after != BOOK_END) && book[page_n].status == book[after].status) {
+        merge_phy_page_range(page_n);
+    }
+}
+
 void print_book(page_t* book, size_t page_n, size_t times) {
     while(times-- > 0) {
         printf("page: %lx. state = %d. len = %lx. prev = %lx\n",
@@ -97,7 +111,9 @@ size_t get_free_page() {
 ptable_t memmget_create_table(ptable_t parent, register_t index) {
     size_t page = get_free_page();
     if(page == BOOK_END) return NULL;
-    return create_table(page, parent, index);
+    ptable_t r = create_table(page, parent, index);
+    try_merge(page);
+    return  r;
 }
 
 int memget_create_mapping(ptable_t L2_table, register_t index) {
@@ -106,6 +122,7 @@ int memget_create_mapping(ptable_t L2_table, register_t index) {
 
     create_mapping(page, L2_table, index);
 
+    try_merge(page);
     return 0;
 }
 

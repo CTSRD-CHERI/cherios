@@ -405,6 +405,42 @@ split_phy_page_range:
 split_phy_end:
     creturn
 
+##############################################
+# void merge_phy_page_range(register_t pagen)
+.global merge_phy_page_range
+merge_phy_page_range:
+##############################################
+
+    dli         $t0, TOTAL_PHY_PAGES                # check index in range
+    slt         $t0, $a0, $t0
+    beq         $t0, $zero, merge_phy_page_range_end    # $a0 >= $t0
+    dli         $t0, phy_page_table                     # $t0 = start of book
+    dsll        $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
+    daddu       $t0, $t0, $t1                           # $t0 = book + pagen
+
+    cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
+    beqz        $t2, merge_phy_page_range_end
+    sll         $t1, $t2, PHY_PAGE_ENTRY_SIZE_BITS
+    daddu       $t1, $t1, $t0                           # t1 = book[pagen + len]
+
+    clw         $t8, $t0, 0($idc)                       # book[page].status
+    clw         $t9, $t1, 0($idc)                       # book[pagen + len].status
+
+    bne         $t8, $t9, merge_phy_page_range_end
+    cld         $t3, $t1, REG_SIZE($idc)                # t3 = len2
+
+    beqz        $t3, merge_phy_page_range_end
+
+    daddu       $t2, $t2, $t3
+    sll         $t3, $t3, PHY_PAGE_ENTRY_SIZE_BITS
+    daddu       $t3, $t3, $t1                           # t3 = book[pagen + len + len2]
+
+    csd         $zero, $t1, REG_SIZE($idc)              # book[page + len].len = 0
+    csd         $t2, $t0, REG_SIZE($idc)                # book[page].len += len2
+    csd         $a0, $t3, (2 * REG_SIZE)($idc)          # book[page + len + len2].prev = pagen
+
+merge_phy_page_range_end:
+    creturn
 
 ###################################
 # ptable get_top_level_table(void)
