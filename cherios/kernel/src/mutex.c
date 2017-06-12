@@ -31,31 +31,10 @@
 #include "mutex.h"
 #include "sched.h"
 #include "nanokernel.h"
+#include "spinlock.h"
 
 ex_lvl_t* ex_lvl;
 cause_t* ex_cause;
-
-void spinlock_init(spinlock_t* lock) {
-    lock->lock = 0;
-}
-void spinlock_acquire(spinlock_t* lock) {
-    __asm__ volatile (
-        "start:"
-        "cllb   $t0, %[lock]\n"
-        "check:"
-        "bnez   $t0, start\n"
-        "li     $t0, 1\n"
-        "cscb   $t0, $t0, %[lock]\n"
-        "beqz   $t0, check\n"
-        "cllb   $t0, %[lock]\n"
-    :
-    : [lock]"C"(lock)
-    : "t0"
-    );
-}
-void spinlock_release(spinlock_t* lock) {
-    lock->lock = 0;
-}
 
 void semaphore_init(semaphore_t* sem) {
     spinlock_init(&sem->lock);

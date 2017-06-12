@@ -28,56 +28,38 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_MUTEX_H
-#define CHERIOS_MUTEX_H
-
-#include "stddef.h"
-#include "mips.h"
-#include "nanokernel.h"
-#include "spinlock.h"
+#ifndef CHERIOS_SPINLOCK_H
+#define CHERIOS_SPINLOCK_H
 
 /* TODO align this nicely */
 #define CACHE_LINE_SIZE 64;
 
-/* TODO these are now used so frequently we should make a faster version of critical enter */
+typedef struct spinlock_t{
+    volatile char lock;
+} spinlock_t;
 
-extern ex_lvl_t* ex_lvl;
-extern cause_t* ex_cause;
 
-/* This first one may need to be atomix. The second will be guarded by the first */
-#define FAST_CRITICAL_ENTER (*ex_lvl)++;
-#define FAST_CRITICAL_EXIT (*ex_lvl)--; if(*ex_lvl == 0 && *ex_cause != 0) {*ex_lvl = 1; critical_section_exit();}
+static inline void spinlock_init(spinlock_t* lock) {
+    lock->lock = 0;
+}
+static inline void spinlock_acquire(spinlock_t* lock) {
+    __asm__ volatile (
+    "start:"
+            "cllb   $t0, %[lock]\n"
+            "check:"
+            "bnez   $t0, start\n"
+            "li     $t0, 1\n"
+            "cscb   $t0, $t0, %[lock]\n"
+            "beqz   $t0, check\n"
+            "cllb   $t0, %[lock]\n"
+    :
+    : [lock]"C"(lock)
+    : "t0"
+    );
+}
 
-#define CRITICAL_LOCKED_BEGIN(lock)     \
-    FAST_CRITICAL_ENTER                 \
-    spinlock_acquire(lock);
+static inline void spinlock_release(spinlock_t* lock) {
+    lock->lock = 0;
+}
 
-#define CRITICAL_LOCKED_END(lock)       \
-    spinlock_release(lock);             \
-    FAST_CRITICAL_EXIT
-
-typedef struct semaphore_t {
-    struct act_t* first_waiter;
-    struct act_t* last_waiter;
-    int level;
-    spinlock_t lock;
-} semaphore_t;
-
-typedef struct mutex_t {
-    struct act_t* owner;
-    semaphore_t sem;
-    size_t recursions;
-} mutex_t;
-
-void semaphore_init(semaphore_t* sem);
-void semaphore_signal(semaphore_t* sem);
-void semaphore_wait(semaphore_t* sem, struct act_t* waiter);
-int  semaphore_try_wait(semaphore_t* sem, struct act_t* waiter);
-
-void mutex_init(mutex_t* mu);
-void mutex_release(mutex_t* mu, struct act_t* owner);
-void mutex_acquire(mutex_t* mu, struct act_t* owner);
-int  mutex_try_acquire(mutex_t* mu, struct act_t* owner);
-
-void init_fast_critical_section(void);
-#endif //CHERIOS_MUTEX_H
+#endif //CHERIOS_SPINLOCK_H
