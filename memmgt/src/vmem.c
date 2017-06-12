@@ -29,6 +29,7 @@
  */
 
 
+#include <nanokernel.h>
 #include "vmem.h"
 #include "stdio.h"
 
@@ -108,19 +109,24 @@ size_t get_free_page() {
     return find_page_type(1, page_unused);
 }
 
-ptable_t memmget_create_table(ptable_t parent, register_t index) {
-    size_t page = get_free_page();
+ptable_t memmgt_create_table(ptable_t parent, register_t index) {
+    size_t page = find_page_type(1, page_ptable_free);
+
+    if(page == BOOK_END) page = get_free_page();
+
     if(page == BOOK_END) return NULL;
     ptable_t r = create_table(page, parent, index);
     try_merge(page);
     return  r;
 }
 
-int memget_create_mapping(ptable_t L2_table, register_t index) {
+int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags) {
     size_t page = find_page_type(2, page_unused);
     if(page == BOOK_END) return -1;
 
-    create_mapping(page, L2_table, index);
+    assert(L2_table != NULL);
+
+    create_mapping(page, L2_table, index, flags);
 
     try_merge(page);
     return 0;
@@ -128,7 +134,6 @@ int memget_create_mapping(ptable_t L2_table, register_t index) {
 
 /* TODO commiting per page is a stupid policy. We are doing this for now to make sure everything works */
 void commit_vmem(act_kt activation, size_t addr) {
-    //printf("commiting vaddr %lx:\n", addr);
 
     ptable_t top_table = get_top_level_table();
 
@@ -138,7 +143,8 @@ void commit_vmem(act_kt activation, size_t addr) {
 
     if(l1 == NULL) {
         printf("memmgt: creating a l1 table at index %lx\n", l0_index);
-        memmget_create_table(top_table, l0_index);
+        l1 = memmgt_create_table(top_table, l0_index);
+        assert(l1 != NULL);
     }
 
     size_t l1_index = L1_INDEX(addr);
@@ -147,10 +153,89 @@ void commit_vmem(act_kt activation, size_t addr) {
 
     if(l2 == NULL) {
         printf("memmgt: creating a l2 table at index %lx\n", l1_index);
-        memmget_create_table(top_table, l1_index);
+        l2 = memmgt_create_table(top_table, l1_index);
+        assert(l2 != NULL);
     }
 
-    memget_create_mapping(l2, L2_INDEX(addr));
+    // TODO check not already commited. We may get a few messages.
+    memmgt_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
+}
+
+void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, size_t index, size_t is_last_level) {
+    size_t page_n = parent_ro->entries[index];
+
+    page_n = is_last_level ? (page_n >> PFN_SHIFT) : (PHY_ADDR_TO_PAGEN(page_n));
+
+    break_page_to(page_n, is_last_level ? 2 : 1); // We can't reclaim the page unless we size the record first
+
+    free_mapping(parent_handle, index);
+
+    try_merge(page_n);
+}
+
+int range_is_free(readable_table_t *tbl, size_t start, size_t stop) {
+    for(size_t i = start; i < stop; i++) {
+        if(tbl->entries[i] != VTABLE_ENTRY_USED) return 0;
+    }
+    return 1;
+}
+
+/* Will free a number of mappings, returns how many pages have been freed (might already be free). */
+size_t memmgt_free_mappings(ptable_t table, size_t l0, size_t l1, size_t l2, size_t n, size_t lvl, int* can_free) {
+    if(can_free) *can_free = 0;
+
+    if(table == NULL) {
+        assert(lvl != 0);
+        if(lvl == 1) return (PAGE_TABLE_ENT_PER_TABLE - l2) +
+                            (PAGE_TABLE_ENT_PER_TABLE * (PAGE_TABLE_ENT_PER_TABLE - l1 - 1));
+        if(lvl == 2) return (PAGE_TABLE_ENT_PER_TABLE - l2);
+    }
+
+
+    readable_table_t* RO = get_read_only_table(table);
+
+    size_t ndx = lvl == 0 ? l0 : (lvl == 1 ? l1 : l2);
+
+    int begin_free = can_free && range_is_free(RO, 0, ndx);
+
+    size_t freed = 0;
+    while(n > 0) {
+        if(lvl == 2) {
+            /* Free pages */
+            memmgt_free_mapping(table, RO, ndx, 1);
+            n -=1;
+            freed +=1;
+        } else {
+            int should_free;
+            size_t f = memmgt_free_mappings(get_sub_table(table, ndx), l0, l1, l2, n, lvl+1, &should_free);
+
+            if(should_free) {
+                /* Free tables */
+                memmgt_free_mapping(table, RO, ndx, 0);
+            }
+            n -= f;
+            freed +=f;
+            l2 = 0;
+            l1 = 0;
+        }
+        ndx++;
+    }
+
+    if(begin_free) {
+        *can_free = range_is_free(RO, ndx, PAGE_TABLE_ENT_PER_TABLE);
+    }
+
+    return freed;
+}
+
+/* Will free n pages staring at vaddr_start, also freeing tables as required */
+void memmgt_free_range(size_t vaddr_start, size_t pages) {
+
+    if(pages == 0) return;
+
+    memmgt_free_mappings(get_top_level_table(),
+                         L0_INDEX(vaddr_start), L1_INDEX(vaddr_start), L2_INDEX(vaddr_start),
+                         pages, 0, NULL);
 }
 
 void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out) {

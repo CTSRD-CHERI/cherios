@@ -59,6 +59,9 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
 
+#define VTABLE_LEVELS      3              // Number of table levels
+
+
 /* Size of metadata for reservations. Split into private and user data */
 #define RES_PRIV_SIZE                   (REG_SIZE * 4)
 #define RES_META_SIZE                   (256)
@@ -72,6 +75,9 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 #define PHY_PAGE_SIZE_BITS              (12)
 #define PHY_PAGE_SIZE                   (1 << PHY_PAGE_SIZE_BITS)
 #define TOTAL_PHY_PAGES                 (PHY_MEM_SIZE/PAGE_SIZE)
+
+#define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS) & (TOTAL_PHY_PAGES-1))
+
 
 /* Physical page records */
 #define PHY_PAGE_ENTRY_SIZE_BITS        (REG_SIZE_BITS + 2)
@@ -93,6 +99,9 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 #define L2_BITS                         PAGE_TABLE_BITS_PER_LEVEL
 #define UNTRANSLATED_BITS               (1 + PHY_PAGE_SIZE_BITS) /* +1 for having two PFNs per VPN */
 
+#define VTABLE_ENTRY_USED               (-1)
+
+#define PFN_SHIFT                       6
 /* These bits will eventually be untranslated high bits, but we will check they are equal to a field in the leaf
  * Of the page table. These could be considered a generation count. */
 
@@ -142,11 +151,17 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 /* Allocate a physical page to be page table. */\
     ITEM(create_table, ptable_t, (register_t page_n, ptable_t parent, register_t index),  __VA_ARGS__)\
 /* Map an entry in a leaf page table to a physical page. The adjacent physical page will also be mapped */\
-    ITEM(create_mapping, void, (register_t page_n, ptable_t table, register_t index),  __VA_ARGS__) \
+    ITEM(create_mapping, void, (register_t page_n, ptable_t table, register_t index, register_t flags),  __VA_ARGS__) \
+/* Free a mapping. This will recover the physical page */\
+    ITEM(free_mapping, void, (ptable_t table, register_t index), __VA_ARGS__)   \
+/* Use a reservation to show a virtual range can be remappep */\
+    ITEM(clear_mapping, void, (ptable_t table, register_t vaddr, res_t reservation), __VA_ARGS__)\
 /* Get a handle for the top level page table*/\
     ITEM(get_top_level_table, ptable_t, (void), __VA_ARGS__) \
 /* Get a handle for a sub table from an L0 or L1 table. */\
     ITEM(get_sub_table, ptable_t, (ptable_t table, register_t index), __VA_ARGS__)\
+/* Get a Read-Only cap for the table */\
+    ITEM(get_read_only_table, readable_table_t*, (ptable_t table), __VA_ARGS__)\
 /* Create the reservation for all of virtual memory */\
     ITEM(make_first_reservation, res_t, (void), __VA_ARGS__) \
 /* Get a read only capability to the nano kernels book */\
@@ -173,6 +188,7 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
     ITEM(page_system_owned, 2)                     \
     ITEM(page_mapped, 3)                           \
     ITEM(page_ptable, 4)                           \
+    ITEM(page_ptable_free, 5)                      \
 
 DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
 
@@ -195,6 +211,13 @@ typedef struct {
     size_t	prev; /* start of previous chunk */
     size_t  spare; /* Will probably use this to store a VPN or user data */
 } page_t;
+
+typedef register_t table_entry_t;
+typedef struct {
+    table_entry_t entries[PAGE_TABLE_ENT_PER_TABLE];
+} readable_table_t;
+
+_Static_assert(sizeof(table_entry_t) == PAGE_TABLE_ENT_SIZE, "Used by nano kernel");
 
 /* This is how big the structure is in the nano kernel */
 _Static_assert(sizeof(page_t) == PHY_PAGE_ENTRY_SIZE, "Assumed by nano kernel");

@@ -35,6 +35,14 @@
 #include "nanokernel.h"
 #include "assert.h"
 
+#define TLB_ENTRY_CACHE_ALGORITHM_UNCACHED              (2 << 3)
+#define TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT    (3 << 3)
+#define TLB_ENTRY_VALID                                 2
+#define TLB_ENTRY_DIRTY                                 4
+#define TLB_ENTRY_GLOBAL                                1
+
+#define TLB_FLAGS_DEFAULT                               (TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT |\
+                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY | TLB_ENTRY_GLOBAL)
 typedef struct free_chain_t {
     struct used {
         res_t res;
@@ -63,10 +71,13 @@ size_t find_page_type(size_t required_len, e_page_status required_type);
 size_t get_free_page();
 
 /* Allocates a page table, but finds a physical page for you */
-ptable_t memmget_create_table(ptable_t parent, register_t index);
+ptable_t memmgt_create_table(ptable_t parent, register_t index);
 
 /* Creates a virt->phy mapping but chooses a physical page for you */
-int memget_create_mapping(ptable_t L2_table, register_t index);
+int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags);
+
+/* Will free n pages staring at vaddr_start, also freeing tables as required */
+void memmgt_free_range(size_t vaddr_start, size_t pages);
 
 /* Takes a reservation from the system, i.e. will return a new virtual capability of length */
 void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out);

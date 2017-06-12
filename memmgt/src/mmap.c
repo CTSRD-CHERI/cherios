@@ -40,6 +40,8 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
     /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
      * Types are numerous. Permissions are not. */
 
+    cheri_perms |= CHERI_PERM_SOFT_1;
+
     result->data = NULL;
     result->code = NULL;
 
@@ -127,8 +129,12 @@ int __munmap(void *addr, size_t length) {
 		return -1;
 	}
 
-	// TODO
-	return 0;
+    size_t start = (size_t )addr;
+    size_t pages = length/PHY_PAGE_SIZE;
+
+    memmgt_free_range(start, pages);
+
+    return 1;
 }
 
 void mfree(void *addr) {

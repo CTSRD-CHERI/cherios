@@ -38,14 +38,14 @@ static void init_vmem(void) {
     top_table = get_top_level_table();
     assert(top_table != NULL);
     CHERI_PRINT_CAP(top_table);
-    L1_0 = memmget_create_table(top_table, 0);
+    L1_0 = memmgt_create_table(top_table, 0);
     assert(L1_0 != NULL);
     CHERI_PRINT_CAP(L1_0);
-    L2_0 = memmget_create_table(L1_0, 0);
+    L2_0 = memmgt_create_table(L1_0, 0);
     assert(L2_0 != NULL);
     CHERI_PRINT_CAP(L2_0);
 
-    int res = memget_create_mapping(L2_0, 0);
+    int res = memmgt_create_mapping(L2_0, 0, TLB_FLAGS_DEFAULT);
     assert(res == 0);
 
     /* Now we get the first reservation which NEEDS virtual mem */

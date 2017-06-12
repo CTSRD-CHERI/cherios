@@ -67,6 +67,8 @@
 
 # leaving 56 bits free
 .set TOP_ADDR_SHIFT,                56
+.set TOP_ADDR_BITS,                 8
+
 
 .set VIRT_MEM_START,                0x2000
 .set VIRT_MEM_END,                  PHY_MEM_START_TOP << TOP_ADDR_SHIFT # virt mem ends where phy begins
@@ -289,7 +291,7 @@ nano_kernel_init:
 
     #check a0 < PHY_MEM_SIZE - NANO_SIZE.
     dli         $t0, (PHY_MEM_SIZE - NANO_SIZE)
-    slt         $t0, $a0, $t0
+    sltu        $t0, $a0, $t0
     beq         $t0, $zero, nano_kernel_die
     nop
 
@@ -375,14 +377,14 @@ split_phy_page_range:
 #################################################################
     beqz        $a1, split_phy_end
     dli         $t0, TOTAL_PHY_PAGES                # check index in range
-    slt         $t0, $a0, $t0
+    sltu        $t0, $a0, $t0
     beq         $t0, $zero, split_phy_end               # $a0 >= $t0
     dli         $t0, phy_page_table                     # $t0 = start of book
-    dsll         $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
+    dsll        $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
     daddu       $t0, $t0, $t1                           # $t0 = book + pagen
 
     cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
-    slt         $t3, $a1, $t2
+    sltu        $t3, $a1, $t2
     beq         $t3, $zero, split_phy_end               # $a1 >= $t2
     dsubu       $t3, $t2, $a1                           # $t3 is length of next block
 
@@ -412,7 +414,7 @@ merge_phy_page_range:
 ##############################################
 
     dli         $t0, TOTAL_PHY_PAGES                # check index in range
-    slt         $t0, $a0, $t0
+    sltu        $t0, $a0, $t0
     beq         $t0, $zero, merge_phy_page_range_end    # $a0 >= $t0
     dli         $t0, phy_page_table                     # $t0 = start of book
     dsll        $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
@@ -629,7 +631,7 @@ get_phy_page:
     beqz        $a2, get_phy_page_end
     dli         $t0, TOTAL_PHY_PAGES
     cmove       $c5, $c3
-    slt         $t0, $a0, $t0
+    sltu        $t0, $a0, $t0
     beq         $t0, $zero, get_phy_page_end            # $a0 >= $t0
     dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
@@ -1119,12 +1121,11 @@ good_level: #t2 now contains the type we will seal the next level with
     csetoffset  $c4, $kdc, $t0
     cunseal     $c3, $c3, $c4                           # unseal parent page
 
-    dli         $t0, PAGE_TABLE_ENT_PER_TABLE           # check index in range
-    slt         $t0, $a1, $t0
+    sltiu       $t0, $a1, PAGE_TABLE_ENT_PER_TABLE      # check index in range
     beq         $t0, $zero, create_ptable_er            # $a1 >= $t0
 
     dli         $t0, TOTAL_PHY_PAGES                # check page number in range
-    slt         $t0, $a0, $t0
+    sltu        $t0, $a0, $t0
     beq         $t0, $zero, create_ptable_er            # $a0 >= $t0
 
     dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
@@ -1136,8 +1137,11 @@ good_level: #t2 now contains the type we will seal the next level with
     bnez        $t1, create_ptable_er                   # $t1 must be 1
 
     clw         $t1, $t0, 0($idc)                       # $t1 = state
-    bnez        $t1, create_ptable_er                   # state must be un-used
+    beqz        $t1, 1f                                 # state must be un-used
+    dli         $t7, page_ptable_free                   # or can safely re-use old ptables for new ptables
+    bne         $t1, $t7, create_ptable_er
 
+1:
     dli         $t1, page_ptable
     csw         $t1, $t0, 0($idc)                       # set to nano owned
 
@@ -1152,7 +1156,7 @@ good_level: #t2 now contains the type we will seal the next level with
     nop
 
     csd         $t0, $t1, 0($c3)
-    dli         $t1, PHY_PAGE_SIZE
+    dli         $t1, PAGE_TABLE_SIZE
     csetoffset  $c3, $kdc, $t0
     csetbounds  $c3, $c3, $t1
     csetoffset  $c4, $kdc, $t2
@@ -1172,9 +1176,6 @@ create_ptable_er:
 
 
 # checked untranslated # l0_index # l1_index # l2_index # unchecked untranslated bits
-# TODO these flags should be supplied by the OS. Just sticking em here for now
-.set pfn_flags, 0b101111
-.set pfn_shift, 6
 
 ###########################################################
 # ptable_t get_sub_table(ptable_t table, register_t index)
@@ -1193,14 +1194,14 @@ get_sub_table:
     cunseal     $c3, $c3, $c4                           # unseal parent page
 
 
-    dli         $t0, PAGE_TABLE_ENT_PER_TABLE           # check index in range
-    slt         $t0, $a0, $t0
+    sltiu       $t0, $a0, PAGE_TABLE_ENT_PER_TABLE      # check index in range
     beq         $t0, $zero, get_sub_table_er            # $a0 >= $t0
 
     dsll        $t0, $a0, PAGE_TABLE_ENT_BITS
     csetoffset  $c4, $kdc, $t2
     cld         $t0, $t0, 0($c3)
-    beqz        $t0, get_sub_table_end
+    slti        $t2, $t0, -1
+    beqz        $t2, get_sub_table_end
     cfromptr    $c3, $c3, $zero
 
     csetoffset  $c3, $kdc, $t0
@@ -1216,18 +1217,37 @@ get_sub_table:
     cclearlo    EN2(c3,c4)
     creturn
 
-#####################################################################
-# void create_mapping(register_t page, ptable table, register_t index)
+###########################################################
+# readable_table_t* get_read_only_table(ptable_t table,)
+.global get_read_only_table
+get_read_only_table:
+###########################################################
+    cgettype    $t0, $c3
+    dli         $t1, -VTABLE_TYPE_L0
+    daddu       $t1, $t1, $t0
+
+    sltiu       $t1, $t1, VTABLE_LEVELS
+    beqz        $t1, 1f
+
+    csetoffset  $c4, $kdc, $t0
+    dli         $t1, Perm_Load
+    cunseal     $c3, $c3, $c4                           # Unseal table
+    candperm    $c3, $c3, $t1
+
+1:
+    cclearlo    EN1(c4)
+    creturn
+#########################################################################################
+# void create_mapping(register_t page, ptable table, register_t index, register_t flags)
 .global create_mapping
 create_mapping:
-#####################################################################
+#########################################################################################
 
     dli         $t0, VTABLE_TYPE_L2
     csetoffset  $c4, $kdc, $t0                          # unsealing cap for an L2 table
     cunseal     $c3, $c3, $c4
 
-    dli         $t0, PAGE_TABLE_ENT_PER_TABLE           # check index in range
-    slt         $t0, $a1, $t0
+    sltiu       $t0, $a1, PAGE_TABLE_ENT_PER_TABLE
     beq         $t0, $zero, create_mapping_er           # $a1 >= $t0
 
     dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
@@ -1252,8 +1272,8 @@ create_mapping:
     # TODO add autharising cap
     # TODO add the checked top bits
 
-    dsll        $t1, $a0, pfn_shift
-    ori         $t1, $t1, pfn_flags
+    dsll        $t1, $a0, PFN_SHIFT
+    or          $t1, $t1, $a2
     csd         $t1, $t2, 0($c3)                        # store EntryLo
 create_mapping_er:
     cclearlo    EN2(c3,c4)
@@ -1261,6 +1281,65 @@ create_mapping_er:
 
 
 
+######################################################
+# void free_mapping(ptable_t table, register_t index)
+.global free_mapping
+free_mapping:
+######################################################
+
+    cgettype    $t0, $c3
+    dli         $t1, -VTABLE_TYPE_L0
+    daddu       $t1, $t1, $t0
+
+    sltiu       $t2, $t1, VTABLE_LEVELS
+    daddiu      $t1, $t1, (VTABLE_LEVELS-1)             # t1 zero if last level
+    beqz        $t2, free_er
+
+    csetoffset  $c4, $kdc, $t0
+
+    sltiu       $t0, $a0, PAGE_TABLE_ENT_PER_TABLE
+    beq         $t0, $zero, free_er                     # $a0 >= PAGE_TABLE_ENT_PER_TABLE
+
+    cunseal     $c3, $c3, $c4
+    dsll        $t2, $a1, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
+
+    cld         $t3, $t2, 0($c3)                        # t3 is the PFN/Physical adress of page
+    beqz        $t3, free_er
+    dli         $t0, VTABLE_ENTRY_USED
+    beq         $t0, $t3, free_er
+
+    dli         $t9, 2
+    dli         $a3, 0
+    beqz        $t1, 1f
+    dsrl        $t8, $t3, PFN_SHIFT                     # the last level has a PFN entry for the TLB
+    dli         $a3, page_ptable_free
+    dli         $t9, 1
+    dsll        $t8, $t3, TOP_ADDR_BITS                 # other levels have physical indexs. first zero top.
+    dsrl        $t8, $t8, TOP_ADDR_BITS + PHY_PAGE_SIZE_BITS # then shift down to get a pagen
+    1:
+    # t8 as the physical pagen. t9 has how many pages we will be freeing. a3 the type to set to.
+
+    dsll        $t3, $t8, PHY_PAGE_ENTRY_SIZE_BITS
+    dli         $t1, phy_page_table
+    daddu       $t1, $t3, $t1                           # $t1 is the offset of our phy entry
+
+    cld         $t3, $t1, REG_SIZE($idc)                # $t3 is the length
+    bne         $t3, $t9, free_er
+    nop
+
+    csd         $t0, $t2, 0($c3)                        # store -1 in vtable to mean 'used'
+    csw         $a3, $t1, REG_SIZE($idc)                # store to update phy page status
+
+    # FIXME need to invalidate TLB so old mappings go away
+free_er:
+    cclearlo    EN2(c3, c4)
+    creturn
+
+#############################################################################################
+# void clear_mapping(ptable_t table, register_t vaddr, res_t reservation)
+.global clear_mapping
+clear_mapping:
+#############################################################################################
 
 tlb_table_missing:
     cgetcause $k0
@@ -1327,26 +1406,30 @@ tlb_trampoline: # TODO
     dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                       # scale
     daddu       $k1, $k1, $k0
 
-    dmfc0       $k0, cp0_badvaddr
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L1
-    beqz        $k1, tlb_table_missing
+    slti        $k0, $k1, -1
+    beqz        $k0, tlb_table_missing
 
+    dmfc0       $k0, cp0_badvaddr
     dsll        $k0, $k0, CHECKED_BITS + L0_BITS                                   # clear top bits
     dsrl        $k0, $k0, (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS)   # clear lower bits
     dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
     daddu       $k1, $k1, $k0
 
-    dmfc0       $k0, cp0_badvaddr
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L2
-    beqz        $k1, tlb_table_missing
+    slti        $k0, $k1, -1
+    beqz        $k0, tlb_table_missing
 
+    dmfc0       $k0, cp0_badvaddr
     dsll        $k0, $k0, CHECKED_BITS + L1_BITS + L0_BITS                         # clear top bits
     dsrl        $k0, $k0, (CHECKED_BITS + L1_BITS + L0_BITS + UNTRANSLATED_BITS)   # clear lower bits
     dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
     daddu       $k1, $k1, $k0
 
     cld         $k1, $k1, 0($kdc)                                   # k1 = pfn entry
-    beqz        $k1, tlb_table_missing
+    slti        $k0, $k1, 1
+    bnez        $k0, tlb_table_missing
+    nop
 
     # Setup virtual page mask
     # dli         $k0, (1 << (PHY_PAGE_SIZE_BITS - 12)) - 1
@@ -1354,7 +1437,7 @@ tlb_trampoline: # TODO
 
     dmtc0       $k1, cp0_entrylo0
     # dmtc0       $k0, cp0_pagemask
-    daddiu      $k1, $k1, (1 << pfn_shift)                          # make second maping the next page
+    daddiu      $k1, $k1, (1 << PFN_SHIFT)                          # make second maping the next page
     dmtc0       $k1, cp0_entrylo1
 
     tlbwr                                                           # write tlb entry
