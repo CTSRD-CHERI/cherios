@@ -1,5 +1,5 @@
 include_directories(include)
-include_directories(${CMAKE_SOURCE_DIR}/uart/include)
+include_directories(${DRIVERS_DIR}/uart/include)
 include_directories(${CMAKE_SOURCE_DIR}/elf/include)
 include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
 
@@ -22,7 +22,7 @@ set(COMMON_SRCS
 
 set(BOOT_SRCS
     src/boot/boot.c
-    ${CMAKE_SOURCE_DIR}/uart/src/uart.c
+    ${DRIVERS_DIR}/uart/src/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
 )
@@ -57,9 +57,9 @@ set(INIT_ASM_SRCS
 )
 
 if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND BOOT_SRCS ${CMAKE_SOURCE_DIR}/uart/src/uart_malta.c)
+    list(APPEND BOOT_SRCS ${DRIVERS_DIR}/uart/src/uart_malta.c)
 elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND BOOT_SRCS ${CMAKE_SOURCE_DIR}/uart/src/uart_altera.c)
+    list(APPEND BOOT_SRCS ${DRIVERS_DIR}/uart/src/uart_altera.c)
 else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()

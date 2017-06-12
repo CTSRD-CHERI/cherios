@@ -1,0 +1,3 @@
+add_subdirectory(memmgt)
+add_subdirectory(namespace)
+add_subdirectory(proc_manager)

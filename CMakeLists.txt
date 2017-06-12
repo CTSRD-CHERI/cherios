@@ -323,25 +323,24 @@ function(add_cherios_module _target)
     )
 endfunction()
 
+set(CHERIOS_DIR "${CMAKE_SOURCE_DIR}/cherios")
+set(DRIVERS_DIR "${CHERIOS_DIR}/drivers")
 
 add_subdirectory(libuser)
 
-add_subdirectory(fatfs)
+add_subdirectory(cherios)
+add_subdirectory(boot)
+
+
 add_subdirectory(hello)
-add_subdirectory(memmgt)
-add_subdirectory(namespace)
-add_subdirectory(proc_manager)
+add_subdirectory(zlib)
+add_subdirectory(zlib_test)
+
+
 #add_subdirectory(prga)
-add_subdirectory(sockets)
+#add_subdirectory(sockets)
 #add_subdirectory(test1a)
 #add_subdirectory(test1b)
 #add_subdirectory(test2a)
 #add_subdirectory(test2b)
 #add_subdirectory(test3)
-add_subdirectory(uart)
-add_subdirectory(virtio-blk)
-add_subdirectory(zlib)
-add_subdirectory(zlib_test)
-
-add_subdirectory(kernel)
-add_subdirectory(boot)
