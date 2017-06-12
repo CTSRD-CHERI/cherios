@@ -1341,6 +1341,11 @@ free_er:
 clear_mapping:
 #############################################################################################
 
+
+
+
+
+
 tlb_table_missing:
     cgetcause $k0
     dla $k1, locals_start
@@ -1349,6 +1354,26 @@ tlb_table_missing:
     b context_switch_exception_entry
     dmfc0 $k0, $13
 
+
+get_interface:
+    # TODO have a per context vector to say which functions are allowed
+    dsll        $t0, $a1, CAP_SIZE_BITS
+
+    dla         $k0, locals_start
+    dli         $k1, locals_size
+    csetoffset  $kr1c, $kdc, $k0
+    csetbounds  $kr1c, $kr1c, $k1                        # kr1c will hold a capability to our locals
+
+
+    clc         $c1, $t0, create_context_cap($kr1c)      # load code cap
+
+    dli         $k0, NANO_KERNEL_TYPE
+    csetoffset  $kr2c, $kdc, $k0                         # kr2c holds the sealing capability for our plt.got
+
+    cseal       $c2, $kr1c, $kr2c
+    cseal       $c1, $c1, $kr2c
+
+    eret
 
 .section .trampoline_exc, "ax"
 
@@ -1364,7 +1389,14 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens between nano begin and nano end we should just die.
+        bnez      $a0, 1f
+
         cgetcause $k0
+        andi      $k1, $k0, 0xFF
+        daddiu    $k1, $k1, -(8 << 2) # syscall with a0 = 0 results in getting nano kernel IF
+        bnez      $k1, get_interface
+
+1:
         dla $k1, locals_start
         csetoffset $kr1c, $kdc, $k1
         cld $k1, $zero, exception_level($kr1c)
