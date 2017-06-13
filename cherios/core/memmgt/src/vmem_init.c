@@ -51,14 +51,15 @@ static void init_vmem(void) {
     /* Now we get the first reservation which NEEDS virtual mem */
     res_t first = make_first_reservation();
 
-    chain_start = get_userdata_for_res(first);
+    chain_start = free_chain_start = get_userdata_for_res(first);
 
     chain_start->used.allocated_to = NULL;
-    chain_start->used.prev_res = NULL;
+    chain_start->used.next_free_res = NULL;
     chain_start->used.next_res = NULL;
+    chain_start->used.prev_free_res = NULL;
     chain_start->used.res = first;
 
-    chain_end = chain_start;
+    free_chain_start = chain_start;
 }
 
 static void init_book(void) {

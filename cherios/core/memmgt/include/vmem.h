@@ -46,8 +46,9 @@
 typedef struct free_chain_t {
     struct used {
         res_t res;
-        struct free_chain_t* prev_res;
         struct free_chain_t* next_res;
+        struct free_chain_t* next_free_res;
+        struct free_chain_t* prev_free_res;
         act_kt allocated_to;
     } used;
     _Static_assert(RES_USER_SIZE >= sizeof(struct used), "We need space for our metadata");
@@ -56,7 +57,7 @@ typedef struct free_chain_t {
 
 extern page_t* book;
 extern free_chain_t* chain_start;
-extern free_chain_t* chain_end;
+extern free_chain_t* free_chain_start;
 
 /* Sets page_n to cover a range of len (MUST ALREADY BE A VALID RECORD)*/
 void break_page_to(size_t page_n, size_t len);
@@ -79,8 +80,15 @@ int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags)
 /* Will free n pages staring at vaddr_start, also freeing tables as required */
 void memmgt_free_range(size_t vaddr_start, size_t pages);
 
-/* Takes a reservation from the system, i.e. will return a new virtual capability of length */
-void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out);
+/* Takes a reservation from the chain. */
+void memgt_take_reservation(free_chain_t* chain, act_kt assign_to, cap_pair* out);
+/* creates a parent node in the reservation chain */
+res_t memmgt_parent_reservation(free_chain_t* chain, act_kt assign_to);
+
+/* Finds a free reservation. It will include the addr with_addr unless with_addr is 0. Returns NULL if none can be found */
+free_chain_t* memmgt_find_free_reservation(size_t with_addr, size_t req_length, size_t* out_base, size_t *out_length);
+/* Takes out a reservation and updates metadata */
+free_chain_t* memmgt_split_free_reservation(free_chain_t* chain, size_t length);
 
 void print_book(page_t* book, size_t page_n, size_t times);
 #endif //CHERIOS_VMEM_H

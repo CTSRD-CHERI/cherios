@@ -66,7 +66,8 @@ enum mmap_flags
   map_shared	= 1 << 1,
   map_anonymous	= 1 << 2,
   MAP_CACHED    = 1 << 3,
-  MAP_PHY       = 1 << 4
+  MAP_PHY       = 1 << 4,
+  MAP_RESERVED  = 1 << 5
 };
 #define MAP_PRIVATE map_private
 #define MAP_ANONYMOUS map_anonymous

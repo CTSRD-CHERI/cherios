@@ -34,7 +34,7 @@
 #include "stdio.h"
 
 page_t* book;
-free_chain_t *chain_start, *chain_end;
+free_chain_t *chain_start, *free_chain_start;
 
 static void try_merge(size_t page_n) {
     size_t before = book[page_n].prev;
@@ -238,28 +238,88 @@ void memmgt_free_range(size_t vaddr_start, size_t pages) {
                          pages, 0, NULL);
 }
 
-void memgt_take_reservation(size_t length, act_kt assign_to, cap_pair* out) {
-    /* Have to ask for a length that will keep alignment */
-    size_t aligned_length = length;
-    size_t mis_align = (length & (RES_META_SIZE-1));
-    if(mis_align != 0) {
-        aligned_length = length + RES_META_SIZE - mis_align;
+free_chain_t* memmgt_find_free_reservation(size_t with_addr, size_t req_length, size_t* out_base, size_t *out_length) {
+    free_chain_t* chain = free_chain_start;
+
+    int care_about_addr = with_addr != 0;
+    while(chain != NULL) {
+
+        capability info = rescap_info(chain->used.res);
+
+        size_t base = cheri_getbase(info);
+        size_t length = cheri_getlen(info);
+
+        if(care_about_addr) {
+            if(base <= with_addr && (length-(with_addr-base)) >= req_length) {
+                if(out_base) *out_base = base;
+                if(out_length) *out_length = length;
+                return chain;
+            } else if(base >= with_addr) {
+                return NULL;
+            }
+        } else if(length > req_length) {
+            if(out_base) *out_base = base;
+            if(out_length) *out_length = length;
+            return chain;
+        }
+
+        chain = chain->used.next_free_res;
+
     }
 
-    res_t old = chain_end->used.res;
-    res_t new = rescap_split(old, aligned_length);
-    free_chain_t* chain = (free_chain_t*)get_userdata_for_res(new);
+    assert(0 && "We are either completely out of VMEM or this is broken");
+}
 
-    chain->used.res = new;
-    chain->used.allocated_to = NULL;
-    chain->used.next_res = NULL;
-    chain->used.prev_res = chain_end;
-    chain_end->used.next_res = chain;
-    chain_end->used.allocated_to = assign_to;
+free_chain_t* memmgt_split_free_reservation(free_chain_t* chain, size_t length) {
+    assert((length & (RES_META_SIZE-1)) == 0);
 
-    chain_end = chain;
+    res_t old = chain->used.res;
+    res_t new = rescap_split(old, length);
+    free_chain_t* new_chain = (free_chain_t*)get_userdata_for_res(new);
+
+    new_chain->used.res = new;
+    new_chain->used.allocated_to = chain->used.allocated_to;
+    new_chain->used.next_res = chain->used.next_res;
+    new_chain->used.next_free_res = chain->used.next_free_res;
+
+    chain->used.next_res = new_chain;
+    chain->used.next_free_res = new_chain;
+
+    if(new_chain->used.next_free_res != NULL) {
+        new_chain->used.next_free_res->used.prev_free_res = new_chain;
+    }
+
+    return new_chain;
+}
+
+static void update_chain(free_chain_t* chain, act_kt assign_to) {
+    chain->used.allocated_to = assign_to;
+
+    if(chain->used.prev_free_res != NULL) chain->used.prev_free_res->used.next_free_res = chain->used.next_free_res;
+    if(chain->used.next_free_res != NULL) chain->used.next_free_res->used.prev_free_res = chain->used.prev_free_res;
+
+    if(free_chain_start == chain) {
+        if(chain->used.prev_free_res != NULL) free_chain_start = chain->used.prev_free_res;
+        else free_chain_start = chain->used.next_free_res;
+    }
+
+    chain->used.prev_free_res = NULL;
+    chain->used.next_free_res = NULL;
+
+
+}
+
+void memgt_take_reservation(free_chain_t* chain, act_kt assign_to, cap_pair* out) {
+
+    update_chain(chain, assign_to);
+
+    res_t old = chain->used.res;
 
     rescap_take(old, out);
-    out->code = cheri_setbounds(out->code, length);
-    out->data = cheri_setbounds(out->data, length);
+}
+
+res_t memmgt_parent_reservation(free_chain_t* chain, act_kt assign_to) {
+    update_chain(chain, assign_to);
+
+    return rescap_parent(chain->used.res);
 }

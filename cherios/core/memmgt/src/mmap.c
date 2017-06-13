@@ -40,6 +40,8 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
     /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
      * Types are numerous. Permissions are not. */
 
+    length += (RES_META_SIZE - (length & (RES_META_SIZE-1))) & (RES_META_SIZE-1); // align to meta size
+
     cheri_perms |= CHERI_PERM_SOFT_1;
 
     result->data = NULL;
@@ -60,6 +62,11 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
     length += ((CHERICAP_SIZE - (length & (CHERICAP_SIZE-1))) & (CHERICAP_SIZE-1));
 
     if(flags & MAP_PHY) {
+        if(flags & MAP_RESERVED) {
+            /* No reservation system across physical mem. Might build one later */
+            errno = EINVAL;
+            goto fail;
+        }
         if(base == 0) {
             size_t npages = (length + PAGE_SIZE - 1) / PAGE_SIZE;
             size_t page_index = find_page_type(npages, page_unused);
@@ -97,13 +104,38 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
         if(pair.code != NULL) pair.code = cheri_setbounds(pair.code, length);
 
     } else {
-        if(base == 0) {
-            /* TODO we probably need a reference here */
-            memgt_take_reservation(length, NULL, &pair);
-        } else {
-            printf("I have not finished virtual memory yet - only the first few pages are allocated =(\n");
+        size_t found_base, found_length;
+
+        if(flags & MAP_RESERVED && base != 0) {
+            /* We will create a parent node so required one meta data node worth of extra memory */
+            base -= RES_META_SIZE;
+            length += RES_META_SIZE;
+        }
+
+        free_chain_t* chain = memmgt_find_free_reservation(base, length, &found_base, &found_length);
+        if(chain == NULL) {
             goto fail;
         }
+
+        if(base != 0 && found_base != base) {
+            /* Bring us up to the required base (remembering to accout for a node */
+            chain = memmgt_split_free_reservation(chain, base - found_base - RES_META_SIZE);
+            found_length -= (base -found_base);
+        }
+
+        if(found_length > length) {
+            memmgt_split_free_reservation(chain, length);
+        }
+
+        if(flags & MAP_RESERVED) {
+            // TODO assign to someone
+            res_t res = memmgt_parent_reservation(chain, NULL);
+            result->data = result->code = res;
+            return 0;
+        } else {
+            memgt_take_reservation(chain, NULL, &pair);
+        }
+
     }
 
  ok:
