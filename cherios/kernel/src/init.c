@@ -29,7 +29,7 @@
  */
 
 #include "klib.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 #include "cp0.h"
 #include "uart.h"
 

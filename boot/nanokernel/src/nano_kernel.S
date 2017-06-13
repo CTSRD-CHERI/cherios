@@ -32,7 +32,7 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 .include "asm.S"
 #include "assembly_utils.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 
 # We will lay out our contexts like this
 
@@ -1356,16 +1356,15 @@ tlb_table_missing:
 
 
 get_interface:
-    # TODO have a per context vector to say which functions are allowed
-    dsll        $t0, $a1, CAP_SIZE_BITS
-
     dla         $k0, locals_start
     dli         $k1, locals_size
     csetoffset  $kr1c, $kdc, $k0
     csetbounds  $kr1c, $kr1c, $k1                        # kr1c will hold a capability to our locals
 
+    # TODO have a per context vector to say which functions are allowed
+    dsll        $k1, $a1, CAP_SIZE_BITS
 
-    clc         $c1, $t0, create_context_cap($kr1c)      # load code cap
+    clc         $c1, $k1, create_context_cap($kr1c)      # load code cap
 
     dli         $k0, NANO_KERNEL_TYPE
     csetoffset  $kr2c, $kdc, $k0                         # kr2c holds the sealing capability for our plt.got

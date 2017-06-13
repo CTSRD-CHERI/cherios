@@ -32,7 +32,7 @@
 #define CHERIOS_VMEM_H
 
 #include "sys/mman.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 #include "assert.h"
 
 #define TLB_ENTRY_CACHE_ALGORITHM_UNCACHED              (2 << 3)

@@ -32,7 +32,7 @@
 #include "mutex.h"
 #include "activations.h"
 #include "klib.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 
 /* todo: sleep cpu */
 static void sched_nothing_to_run(void) __dead2;

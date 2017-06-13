@@ -42,7 +42,7 @@
 #include "stdarg.h"
 #include "stdio.h"
 #include "string.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 #include "mman.h"
 
 void register_ns(void * ns_ref);

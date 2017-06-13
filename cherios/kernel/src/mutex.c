@@ -30,7 +30,7 @@
 
 #include "mutex.h"
 #include "sched.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 #include "spinlock.h"
 
 ex_lvl_t* ex_lvl;

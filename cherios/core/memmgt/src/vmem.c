@@ -29,7 +29,7 @@
  */
 
 
-#include <nanokernel.h>
+#include <nano/nanokernel.h>
 #include "vmem.h"
 #include "stdio.h"
 

@@ -33,7 +33,7 @@
 
 #include "stddef.h"
 #include "mips.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 #include "spinlock.h"
 
 /* TODO align this nicely */

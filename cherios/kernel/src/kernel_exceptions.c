@@ -29,7 +29,7 @@
  */
 
 #include <activations.h>
-#include <nanokernel.h>
+#include <nano/nanokernel.h>
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"

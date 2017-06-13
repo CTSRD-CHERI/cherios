@@ -40,7 +40,7 @@
 #include "cheric.h"
 #include "types.h"
 #include "stddef.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 #include "queue.h"
 #include "mutex.h"
 

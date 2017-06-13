@@ -190,6 +190,8 @@ set(C_WARNING_FLAGS
     -Wno-dollar-in-identifier-extension
     -Wno-padded
     -Wno-switch-enum
+    # So sue me
+    -Wno-gnu-zero-variadic-macro-arguments
 
     -Wno-error=cast-align
     -Wno-error=cast-qual
