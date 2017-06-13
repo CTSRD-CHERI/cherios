@@ -141,7 +141,7 @@ set(C_COMPILER_FLAGS
     -mllvm
     -mxmxgot
     -mxgot
-    -O0 # TODO: make this depend on the configuration
+    -O2 # TODO: make this depend on the configuration
     -std=c11
     -DHARDWARE_${HARDWARE}
     -DCONSOLE_${CONSOLE}
