@@ -62,9 +62,9 @@ static msg_nb_t msg_queue_fill(queue_t* queue) {
 }
 
 int msg_push(capability c3, capability c4, capability c5, capability c6,
-			 register_t a0, register_t a1, register_t a2, register_t a3,
-			 register_t v0,
-			 act_t * dest, act_t * src, capability sync_token) {
+	     register_t a0, register_t a1, register_t a2, register_t a3,
+	     register_t v0,
+	     act_t * dest, act_t * src, capability sync_token) {
 
 	FAST_CRITICAL_ENTER
 
@@ -122,7 +122,7 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 	kernel_assert(is_power_2(queue_len));
 	kernel_assert(queue_len != 0);
 
-    spinlock_init(&act->writer_spinlock);
+	spinlock_init(&act->writer_spinlock);
 
 	act->msg_queue = queue;
 	act->queue_mask = queue_len-1;
@@ -164,8 +164,8 @@ static int token_expected(act_t* ccaller, capability token) {
 
 /* This function 'returns' by setting the sync state ret values appropriately */
 void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
-					 register_t a0, register_t a1, register_t a2, register_t a3,
-					 act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret) {
+			 register_t a0, register_t a1, register_t a2, register_t a3,
+			 act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret) {
 
 	target_activation = act_unseal_ref(target_activation);
 	act_t* source_activation = (act_t*) get_idc();
@@ -174,7 +174,7 @@ void kernel_message_send(capability c3, capability c4, capability c5, capability
 
 	if(target_activation->status != status_alive) {
 		KERNEL_ERROR("Trying to CCall revoked activation %s from %s",
-					 target_activation->name, source_activation->name);
+			     target_activation->name, source_activation->name);
 		ret->v0 = (register_t)-1;
 		ret->v1 = (register_t)-1;
 		ret->c3 = NULL;
@@ -188,7 +188,7 @@ void kernel_message_send(capability c3, capability c4, capability c5, capability
 		sync_token = get_and_set_sealed_sync_token(source_activation);
 	}
 
-    CRITICAL_LOCKED_BEGIN(&target_activation->writer_spinlock);
+	CRITICAL_LOCKED_BEGIN(&target_activation->writer_spinlock);
 	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
 
 	if(selector == SYNC_CALL) {
@@ -201,7 +201,7 @@ void kernel_message_send(capability c3, capability c4, capability c5, capability
 		KERNEL_TRACE(__func__, "%s has recieved return message from %s", source_activation->name, target_activation->name);
 		return;
 	} else if(selector == SEND_SWITCH) {
-        source_activation->sched_status = sched_runnable;
+		source_activation->sched_status = sched_runnable;
 		sched_reschedule(target_activation, 0);
 	}
 
@@ -220,8 +220,8 @@ int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* cal
 	act_t * returned_from = (act_t*) get_idc();
 	act_t * returned_to = kernel_unseal(caller, act_sync_ref_type);
 
-    kernel_assert(returned_to != NULL);
-    kernel_assert(returned_to->sync_state.sync_ret != NULL);
+	kernel_assert(returned_to != NULL);
+	kernel_assert(returned_to->sync_state.sync_ret != NULL);
 
 	if(sync_token == NULL) {
 		KERNEL_TRACE(__func__, "%s did not provide a sync token", returned_from->name);

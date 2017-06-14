@@ -100,16 +100,16 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	bzero(&frame, sizeof(struct reg_frame));
 	size_t length = cheri_getlen(cheri_getdefault()) - init_base;
 
-    frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
-    capability pcc =  cheri_setbounds(cheri_setoffset(cheri_getpcc(), init_base), length);
+	frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
+	capability pcc =  cheri_setbounds(cheri_setoffset(cheri_getpcc(), init_base), length);
 
 	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
 
 	/* provide config info to init.  c3 is the conventional register */
 	frame.cf_c3 = info;
 
-    /* init has put its thread locals somewhere sensible (base + 0x100) */
-    frame.mf_user_loc = 0x7000 + init_tls_base;
+	/* init has put its thread locals somewhere sensible (base + 0x100) */
+	frame.mf_user_loc = 0x7000 + init_tls_base;
 
 	act_t * init_act = &kernel_acts[namespace_num_init];
 	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL, NULL);
@@ -121,16 +121,16 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 }
 
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
-							status_e create_in_status, act_control_t *parent, size_t base, res_t res) {
+		     status_e create_in_status, act_control_t *parent, size_t base, res_t res) {
 	(void)parent;
 	KERNEL_TRACE("act", "Registering activation %s", name);
 
 	act_t * act = NULL;
-    cap_pair pr;
+	cap_pair pr;
 
-    try_take_end_of_res(res, sizeof(act_t), &pr);
+	try_take_end_of_res(res, sizeof(act_t), &pr);
 
-    act = (act_t*)pr.data;
+	act = (act_t*)pr.data;
 
 	if(act == NULL) {
 		if(kernel_next_act >= MAX_STATIC_ACTIVATIONS) {
@@ -144,7 +144,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	/* Push C0 to the bottom of the stack so it can be popped when we ccall in */
 	act->user_kernel_stack[(USER_KERNEL_STACK_SIZE / sizeof(capability)) -1] = cheri_getdefault();
 
-    act->stack_guard = 0;
+	act->stack_guard = 0;
 
 	act->image_base = base;
 
@@ -182,10 +182,10 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 *                                                                                                                       *
 * These fields are setup by act_register itself. Although the queue is an argument to the function                      *
 *                                                                                                                       *
-* c21   : self control reference                                                 										*
+* c21   : self control reference                                                                                        *
 * c23   : namespace reference (may be null for init and namespace)                                                      *
 * c24   : kernel interface table                                                                                        *
-* c25   : queue                                                                                                        */
+* c25   : queue                                                                                                         */
 
 	/* set namespace */
 	frame->cf_c21 	= (capability)act_create_sealed_ctrl_ref(act);
@@ -209,7 +209,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 }
 
 act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
-							status_e create_in_status, act_control_t *parent, res_t res) {
+				   status_e create_in_status, act_control_t *parent, res_t res) {
 	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc), res);
 	act->context = create_context(frame);
 	return act_create_sealed_ctrl_ref(act);

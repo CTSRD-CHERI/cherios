@@ -97,7 +97,7 @@ init_elem_t init_list[] = {
    *
    */
 	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
-    B_DENTRY(m_proc,     "proc.elf", 0, 1)
+	B_DENTRY(m_proc,	"proc.elf",		0,	1)
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
@@ -171,11 +171,11 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             return &memmgt_init;
 
         case m_fs:{}
-        //TODO get this from memmgt.
-            cap_pair pair;
-			mmap_new(FS_PHY_BASE, FS_PHY_SIZE,
-                            CHERI_PERM_ALL & ~CHERI_PERM_EXECUTE,
-                            MAP_ANONYMOUS | MAP_SHARED | MAP_PHY, &pair);
+	    //TODO get this from memmgt.
+	    cap_pair pair;
+	    mmap_new(FS_PHY_BASE, FS_PHY_SIZE,
+		     CHERI_PERM_ALL & ~CHERI_PERM_EXECUTE,
+		     MAP_ANONYMOUS | MAP_SHARED | MAP_PHY, &pair);
             return pair.data;
         case m_proc:
             return &remaining_pool;
@@ -224,7 +224,6 @@ static void load_modules(init_info_t * init_info) {
     namebe->ctrl =
             simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info));
 
-
     namespace_init(syscall_act_ctrl_get_ref(namebe->ctrl));
 
     /* Proc */
@@ -246,7 +245,8 @@ static void load_modules(init_info_t * init_info) {
     printf("Waiting for proc manager to register \n");
     while(namespace_get_ref(namespace_num_proc_manager) == NULL) {
         nssleep(3);
-    }printf("proc manager registered \n");
+    }
+    printf("proc manager registered \n");
 
     /* Memmgt */
 
@@ -273,29 +273,29 @@ static void load_modules(init_info_t * init_info) {
 
     /* Now load the rest */
 
-	for(; i<init_list_len; i++) {
-		int cnt;
-        init_elem_t * be = init_list + i;
+    for(; i<init_list_len; i++) {
+	    int cnt;
+	    init_elem_t * be = init_list + i;
 
-		if(be->cond == 0)
-			continue;
+	    if(be->cond == 0)
+		    continue;
 
-		if(be->type == m_fence) {
-			/* nssleep(3); */
-			continue;
-		}
+	    if(be->type == m_fence) {
+		    /* nssleep(3); */
+		    continue;
+	    }
 
-        void *carg = get_act_cap(be->type, init_info);
-        capability  addr = load_check(be->name);
+	    void *carg = get_act_cap(be->type, init_info);
+	    capability  addr = load_check(be->name);
 
-        desc.arg = be->arg;
-        desc.carg = carg;
-        desc.stack_args = NULL;
-        desc.stack_args_size = 0;
-        /* This version allows the process to spawn new threads */
-        be->ctrl = thread_start_process(thread_create_process(be->name, addr), &desc);
+	    desc.arg = be->arg;
+	    desc.carg = carg;
+	    desc.stack_args = NULL;
+	    desc.stack_args_size = 0;
+	    /* This version allows the process to spawn new threads */
+	    be->ctrl = thread_start_process(thread_create_process(be->name, addr), &desc);
 
-		printf("Module ready: %s\n", be->name);
+	    printf("Module ready: %s\n", be->name);
 	}
 }
 
@@ -304,13 +304,13 @@ static capability pool[POOL_SIZE/sizeof(capability)];
 int main(init_info_t * init_info) {
 	stats_init();
 
-    env.free = &tmp_free;
-    env.alloc = &tmp_alloc;
-    env.printf = &printf;
-    env.vprintf = &printf;
-    env.memcpy = &memcpy;
+	env.free = &tmp_free;
+	env.alloc = &tmp_alloc;
+	env.printf = &printf;
+	env.vprintf = &printf;
+	env.memcpy = &memcpy;
 
-    printf("Init loaded\n");
+	printf("Init loaded\n");
 
 	/* Initialize the memory pool. */
 	init_tmp_alloc((cap_pair){.data = pool, .code = rederive_perms(pool, cheri_getpcc())});
@@ -322,14 +322,14 @@ int main(init_info_t * init_info) {
 	/* Load modules */
 	load_modules(init_info);
 
-    printf("All modules loaded! waiting for finish...\n");
+	printf("All modules loaded! waiting for finish...\n");
 
 	while(acts_alive(init_list, init_list_len)) {
-        nssleep(10);
+		nssleep(10);
 	}
 
 	printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
 	stats_display();
 
-    syscall_shutdown(REBOOT);
+	syscall_shutdown(REBOOT);
 }

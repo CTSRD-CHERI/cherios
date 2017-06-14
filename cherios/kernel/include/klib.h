@@ -107,18 +107,18 @@ void	kernel_freeze(void) __dead2;
 int	try_gc(void * p, void * pool);
 
 int msg_push(capability c3, capability c4, capability c5, capability c6,
-			 register_t a0, register_t a1, register_t a2, register_t a3,
-			 register_t v0,
-			 act_t * dest, act_t * src, capability sync_token);
+	     register_t a0, register_t a1, register_t a2, register_t a3,
+	     register_t v0,
+	     act_t * dest, act_t * src, capability sync_token);
 void	msg_queue_init(act_t* act, queue_t * queue);
 int	msg_queue_empty(act_t* act);
 
 context_t	act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base);
 void	act_wait(act_t* act, act_t* next_hint);
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
-					 status_e create_in_status, act_control_t *parent, size_t base, res_t res);
+		     status_e create_in_status, act_control_t *parent, size_t base, res_t res);
 act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
-								   status_e create_in_status, act_control_t *parent, res_t res);
+				    status_e create_in_status, act_control_t *parent, res_t res);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);
 

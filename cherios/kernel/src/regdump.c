@@ -115,7 +115,7 @@ static inline void print_frame(int num, capability ra, char * sp) {
     }
 
     size_t correct = correct_base(base, ra);
-	printf("%2d| [0x%016lx] in %16s (sp=%p)\n", num, correct, name, (void*)sp);
+    printf("%2d| [0x%016lx] in %16s (sp=%p)\n", num, correct, name, (void*)sp);
 }
 
 int check_cap(capability cap) {
@@ -146,7 +146,7 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 	uint32_t daddiu_form_val  = 0b0110011110111101U << 16U;
 	uint32_t csc_form_val	  = 0b111110100010101111101U << 11U;
 	uint32_t daddiu_i_mask 	  = (1 << 16) - 1;
-	uint32_t csc_i_mask		  = (1 << 11) - 1;
+	uint32_t csc_i_mask	  = (1 << 11) - 1;
 
 	// FIXME assumes a function prolog with daddiu. Not true for leaf functions
 
@@ -175,15 +175,15 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 
 
 		if((i == 1) && (offset == 0)) {
-            return_address = r17;
-        } else {
-            if(check_cap(ra_ptr)) {
-                printf("***bad frame***\n");
-                return;
-            }
+			return_address = r17;
+		} else {
+			if(check_cap(ra_ptr)) {
+				printf("***bad frame***\n");
+				return;
+			}
 
-            return_address = *ra_ptr;
-        }
+			return_address = *ra_ptr;
+		}
 
 		// Offset by 2 instructions for the cjal + nop
 		return_address = (capability)((uint32_t*)return_address-2);
@@ -242,17 +242,17 @@ static inline void dump_tlb() {
 
         printf("|%4lx%sB*2|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|\n",
                pm_sz_k,is_m? "M" : "K", vpn, asid, pfn0, c0, d0, v0, g0,
-            pfn1, c1, d1, v1, g1);
+	       pfn1, c1, d1, v1, g1);
     }
 
     printf("\n\n");
 }
 
 void regdump(int reg_num) {
-    // Note, dumping will not be possible when we enforce things properly
-    // For now we use the obtain super powers to make it possible.
-    capability all_powerfull = obtain_super_powers(); // Super magic wow!
-    set_sealing_cap(all_powerfull);
+	// Note, dumping will not be possible when we enforce things properly
+	// For now we use the obtain super powers to make it possible.
+	capability all_powerfull = obtain_super_powers(); // Super magic wow!
+	set_sealing_cap(all_powerfull);
 
 	int creg = 0;
 	printf("Regdump:\n");
@@ -260,7 +260,7 @@ void regdump(int reg_num) {
 	reg_frame_t* frame = kernel_unseal_any(kernel_curr_act->context);
 	CHERI_PRINT_CAP(frame);
 
-    dump_tlb();
+	dump_tlb();
 
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
 
@@ -304,7 +304,7 @@ void regdump(int reg_num) {
 		act_t* act = &kernel_acts[i];
 		printf("%16s: %lx\n", act->name, act->image_base);
 	}
-    printf("%16s: %lx\n", "nano", MIPS_KSEG0);
+	printf("%16s: %lx\n", "nano", MIPS_KSEG0);
 
 	printf("\nAttempting backtrace:\n\n");
 	char * stack_pointer = (char*)frame->cf_c11 + frame->mf_sp;

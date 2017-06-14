@@ -66,7 +66,7 @@ typedef struct act_t
 
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */
-    struct spinlock_t writer_spinlock;
+	struct spinlock_t writer_spinlock;
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
 					   which has write access to queue) */
 	/* Used by the scheduler to beat races without having to turn off premption */
@@ -74,12 +74,12 @@ typedef struct act_t
 	/* Scheduling related */
 	sched_status_e sched_status;	/* Current status */
 
-	context_t context;	/* Space to put saved context for restore */
+	context_t context;		/* Space to put saved context for restore */
 
 	/* CCall related */
 	struct sync_state {
 		ret_t* sync_ret;
-		sync_t sync_token;		/* Helper for the synchronous CCall mecanism */
+		sync_t sync_token;	/* Helper for the synchronous CCall mecanism */
 		int sync_condition;
 	} sync_state;
 

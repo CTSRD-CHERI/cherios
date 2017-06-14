@@ -188,8 +188,8 @@ static act_t * sched_picknext(void) {
 
 void sched_reschedule(act_t *hint, int in_exception_handler) {
 	KERNEL_TRACE("sched", "being asked to schedule someone else. in_exception_handler=%d. have %lu choices.",
-				 in_exception_handler,
-				 act_queue_end);
+		     in_exception_handler,
+		     act_queue_end);
 
 	if(hint != NULL) {
 		KERNEL_TRACE("sched", "hint is %s", hint->name);
@@ -203,9 +203,9 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 		sched_nothing_to_run();
 	} else {
 
-        if(!in_exception_handler) {
-            FAST_CRITICAL_ENTER
-        }
+		if(!in_exception_handler) {
+			FAST_CRITICAL_ENTER;
+		}
 
 		if(hint != kernel_curr_act) {
 
@@ -225,7 +225,7 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 				context_switch(to->context, &from->context);
 			}
 		} else {
-            FAST_CRITICAL_EXIT
-        }
+			FAST_CRITICAL_EXIT;
+		}
 	}
 }

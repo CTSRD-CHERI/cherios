@@ -76,7 +76,7 @@ act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl) {
 status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl);
 status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
-    KERNEL_TRACE("get status", "Level: %ld. Cause: %lx", *ex_lvl, *ex_cause);
+	KERNEL_TRACE("get status", "Level: %ld. Cause: %lx", *ex_lvl, *ex_cause);
 	return act_get_status(ctrl);
 }
 
