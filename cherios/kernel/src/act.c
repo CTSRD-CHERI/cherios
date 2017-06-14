@@ -194,7 +194,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	frame->cf_c25	= (capability)queue;
 
 	/* set queue */
-	msg_queue_init(act, queue);
+	kmsg_queue_init(act, queue);
 
 	/* set expected sequence to not expecting */
 	act->sync_state.sync_token = 0;

@@ -104,7 +104,7 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 	return 0;
 }
 
-int msg_queue_empty(act_t * act) {
+int kmsg_queue_empty(act_t * act) {
 	queue_t * queue = act->msg_queue;
 	if(empty(queue)) {
 		return 1;
@@ -112,7 +112,7 @@ int msg_queue_empty(act_t * act) {
 	return 0;
 }
 
-void msg_queue_init(act_t * act, queue_t * queue) {
+void kmsg_queue_init(act_t * act, queue_t * queue) {
 	size_t total_length_bytes = cheri_getlen(queue);
 
 	kernel_assert(total_length_bytes > sizeof(queue_t));
