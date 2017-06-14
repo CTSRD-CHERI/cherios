@@ -1,5 +1,7 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -64,7 +66,24 @@ void kernel_wait(void) {
 
 act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res);
 act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res) {
-	return act_register_create(frame, queue, name, status_alive, NULL, res);
+	return act_register_create(frame, queue, name, status_alive,
+				   kernel_curr_act, kernel_curr_act->memgt_act,
+				   res);
+}
+
+act_control_t * kernel_syscall_act_register_explicit(reg_frame_t *frame, char *name, queue_t *queue,
+						     act_t *memgt_ctrl_ref, res_t res);
+act_control_t * kernel_syscall_act_register_explicit(reg_frame_t *frame, char *name, queue_t *queue,
+						     act_t *memgt_ctrl_ref, res_t res) {
+	/*
+	 * TODO: check validity and seal of memgt_ref to ensure it is
+	 * indeed an activation. If not, return NULL before performing
+	 * any side-effects.
+	 */
+	act_control_t *memgt_act = (act_control_t *)act_unseal_ctrl_ref(memgt_ctrl_ref);
+	return act_register_create(frame, queue, name, status_alive,
+				   kernel_curr_act, memgt_act,
+				   res);
 }
 
 act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl);
@@ -84,6 +103,13 @@ sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl);
 sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return ctrl->sched_status;
+}
+
+int kernel_syscall_act_ctrl_set_tlb_handler(act_control_t* ctrl, act_control_t* tlb_ctrl) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
+	tlb_ctrl = act_unseal_ctrl_ref(tlb_ctrl);
+	ctrl->memgt_act = tlb_ctrl;
+	return -1;
 }
 
 int kernel_syscall_act_revoke(act_control_t* ctrl);
@@ -170,9 +196,11 @@ DADT(message_reply)
 DADT(sleep)
 DADT(wait)
 DADT(syscall_act_register)
+DADT(syscall_act_register_explicit)
 DADT(syscall_act_ctrl_get_ref)
 DADT(syscall_act_ctrl_get_status)
 DADT(syscall_act_ctrl_get_sched_status)
+DADT(syscall_act_ctrl_set_tlb_handler)
 DADT(syscall_act_revoke)
 DADT(syscall_act_terminate)
 DADT(syscall_puts)

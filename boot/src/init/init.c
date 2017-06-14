@@ -222,9 +222,10 @@ static void load_modules(init_info_t * init_info) {
 
     /* Namespace */
     namebe->ctrl =
-            simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info));
+            simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info), NULL);
 
-    namespace_init(syscall_act_ctrl_get_ref(namebe->ctrl));
+    act_kt namespace_ref = syscall_act_ctrl_get_ref(namebe->ctrl);
+    namespace_init(namespace_ref);
 
     /* Proc */
 
@@ -235,7 +236,7 @@ static void load_modules(init_info_t * init_info) {
     capability memmgt_file = load_check(memgtbe->name);
 
     procbe->ctrl =
-            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info));
+            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info), namespace_ref);
 
     /* FIXME technically a bit of a race. This global will be read by proc so it needs to be set before context switch */
 
@@ -248,7 +249,7 @@ static void load_modules(init_info_t * init_info) {
     }
     printf("proc manager registered \n");
 
-    /* Memmgt */
+    /* Memmgt: we depend on this being the first process started by proc manager */
 
     startup_desc_t desc;
     desc.arg = memgtbe->arg;
@@ -266,7 +267,12 @@ static void load_modules(init_info_t * init_info) {
     }
     printf("memory manager registered \n");
 
-    /* We no longer have our pool. But now we can use virtual memory */
+    /* Set the TLB miss handler for proc mgr. */
+    syscall_act_ctrl_set_tlb_handler(procbe->ctrl, memgtbe->ctrl);
+
+    /* We no longer have our pool. Set up our own TLB miss handler, so
+       we can use virtual memory. */
+    syscall_act_ctrl_set_tlb_handler(act_self_ctrl, memgtbe->ctrl);
 
     env.alloc = &mmap_based_alloc;
     env.free = &mmap_based_free;

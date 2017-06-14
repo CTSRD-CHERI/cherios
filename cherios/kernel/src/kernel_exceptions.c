@@ -1,5 +1,7 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -87,7 +89,7 @@ static void kernel_exception_trap(void) {
 static void kernel_exception_unknown(register_t excode) __dead2;
 static void kernel_exception_unknown(register_t excode) {
 	exception_printf(KRED"Unknown exception type '%ld' in  %s"KRST"\n",
-	       excode, kernel_curr_act->name);
+			 excode, kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();
 }
@@ -95,17 +97,17 @@ static void kernel_exception_unknown(register_t excode) {
 
 static void kernel_exception_tlb(register_t badvaddr);
 static void kernel_exception_tlb(register_t badvaddr) {
-	if(memgt_ref == NULL) {
-		exception_printf(KRED"Virtual memory exception before memmgt created\n"KRST);
-	}
-	if(kernel_curr_act == memgt_ref) {
-		exception_printf(KRED"Virtual memory exception in memmgt is not allowed\n"KRST);
+	act_t *memgt_act = kernel_curr_act->memgt_act;
+	if(memgt_act == NULL) {
+		exception_printf(KRED"No page fault handler registered for activation \"%s\"\n"KRST,
+				 kernel_curr_act->name);
 		regdump(-1);
 		kernel_freeze();
 	}
 
-	msg_push(act_create_sealed_ref(kernel_curr_act), NULL, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
-	sched_reschedule(memgt_ref, 1);
+	msg_push(act_create_sealed_ref(kernel_curr_act), NULL, NULL, NULL, badvaddr, 0, 0, 0, 2,
+		 memgt_act, kernel_curr_act, NULL);
+	sched_reschedule(memgt_act, 1);
 }
 /*
  * Exception handler demux to various more specific exception

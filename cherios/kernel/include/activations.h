@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -89,6 +90,8 @@ typedef struct act_t
 	char name[ACT_NAME_MAX_LEN];	/* Activation name (for debuging) */
 #endif
 
+	/* Service context */
+	struct act_control_t *memgt_act;
 } act_t;
 
 /* Assumed by assembly */
@@ -108,8 +111,6 @@ extern aid_t 		kernel_next_act;
 
 /* The currently scheduled activation */
 extern act_t* 		kernel_curr_act;
-
-extern act_t* memgt_ref;
 
 #endif // __ASSEMBLY__
 

@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -53,8 +54,6 @@ act_t * 			kernel_curr_act;
 // TODO: Put these somewhere sensible;
 static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
-static act_t* ns_ref = NULL;
-act_t* memgt_ref = NULL;
 
 static kernel_if_t* get_if() {
 	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
@@ -89,7 +88,9 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 
 	// Register the kernel (exception) activation
 	act_t * kernel_act = &kernel_acts[0];
-	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(cheri_getpcc()), NULL);
+	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated,
+		     NULL, NULL,
+		     cheri_getbase(cheri_getpcc()), NULL);
 	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
 
@@ -112,7 +113,9 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	frame.mf_user_loc = 0x7000 + init_tls_base;
 
 	act_t * init_act = &kernel_acts[namespace_num_init];
-	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL, NULL);
+	act_register_create(&frame, &init_queue.queue, "init", status_alive,
+			    NULL, NULL,
+			    NULL);
 
 	/* The boot activation should be the current activation */
 	sched_schedule(init_act);
@@ -120,8 +123,10 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	return init_act->context;
 }
 
-act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
-		     status_e create_in_status, act_control_t *parent, size_t base, res_t res) {
+act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, status_e create_in_status,
+		     act_control_t *parent, act_t *memgt_act,
+		     size_t base, res_t res) {
+
 	(void)parent;
 	KERNEL_TRACE("act", "Registering activation %s", name);
 
@@ -147,15 +152,6 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	act->stack_guard = 0;
 
 	act->image_base = base;
-
-	//TODO bit of a hack. the kernel needs to know what namespace service to use
-	if(kernel_next_act-1 == namespace_num_namespace) {
-		KERNEL_TRACE("act", "found namespace");
-		ns_ref = act_create_sealed_ref(act);
-	}
-	if(kernel_next_act-1 == namespace_num_memmgt) {
-		memgt_ref = act;
-	}
 
 #ifndef __LITE__
 	/* set name */
@@ -183,15 +179,16 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 * These fields are setup by act_register itself. Although the queue is an argument to the function                      *
 *                                                                                                                       *
 * c21   : self control reference                                                                                        *
-* c23   : namespace reference (may be null for init and namespace)                                                      *
 * c24   : kernel interface table                                                                                        *
 * c25   : queue                                                                                                         */
 
-	/* set namespace */
+	/* fulfill abi */
 	frame->cf_c21 	= (capability)act_create_sealed_ctrl_ref(act);
-	frame->cf_c23	= (capability)ns_ref;
 	frame->cf_c24	= (capability)get_if();
 	frame->cf_c25	= (capability)queue;
+
+	/* set service context */
+	act->memgt_act  = memgt_act;
 
 	/* set queue */
 	kmsg_queue_init(act, queue);
@@ -208,9 +205,13 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	return act;
 }
 
-act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
-				   status_e create_in_status, act_control_t *parent, res_t res) {
-	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc), res);
+act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name, status_e create_in_status,
+				   act_control_t *parent, act_t *memgt_act,
+				   res_t res) {
+	act_t* act = act_register(frame, queue, name, create_in_status,
+				  parent, memgt_act,
+				  (size_t)cheri_getbase(frame->cf_pcc), res);
+	if (!act) return NULL;
 	act->context = create_context(frame);
 	return act_create_sealed_ctrl_ref(act);
 }

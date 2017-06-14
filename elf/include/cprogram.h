@@ -35,9 +35,9 @@
 #include "elf.h"
 #include "queue.h"
 
-act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg);
+act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, act_kt namespace);
 
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
-                     capability pcc, char* stack_args, size_t stack_args_size);
+			 capability pcc, char* stack_args, size_t stack_args_size, act_kt namespace);
 
 #endif //CHERIOS_CPROGRAM_H

@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -45,21 +46,24 @@
 * These fields are setup by the caller of act_register                                                                  *
 *                                                                                                                       *
 * a0    : user GP argument (goes to main)                                                                               *
-* c3    : user Cap argument (goes to main)                                                                              * *
+* c3    : user Cap argument (goes to main)                                                                              *
 *                                                                                                                       *
 * These fields are setup by act_register itself. Although the queue is an argument to the function                      *
 *                                                                                                                       *
-* c21   : self control reference
+* c21   : self control reference                                                                                        *
 * c22   : process reference                                                                                             *
 * c23   : namespace reference (may be null for init and namespace)                                                      *
 * c24   : kernel interface table                                                                                        *
-* c25   : queue                                                                                                        */
+* c25   : queue                                                                                                         */
 
 
 process_t loaded_processes[MAX_PROCS];
 size_t processes_end = 0;
+size_t num_activations = 0;
 
 Elf_Env env;
+
+static act_control_kt default_memgt_ctrl_ref;
 
 static image* find_process(const char *name) {
 	for(size_t i = 0; i < processes_end; i++) {
@@ -86,27 +90,46 @@ process_t* unseal_proc(process_t* process) {
 
 static act_control_kt create_activation_for_image(image* im, const char* name, register_t arg, capability carg, capability pcc,
                                                   char* stack_args, size_t stack_args_size, process_t * process) {
-    reg_frame_t frame;
-    memset(&frame, 0, sizeof(reg_frame_t));
+	reg_frame_t frame;
+	memset(&frame, 0, sizeof(reg_frame_t));
 
-    queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size);
+	/* TODO: we should add an API to allow a custom namespace.  For now, we just pass our own. */
+	queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size, namespace_ref);
 
-    frame.cf_c22 = seal_proc_for_user(process);
+	frame.cf_c22 = seal_proc_for_user(process);
 
-    return syscall_act_register(&frame, name, queue, get_res_pool());
+	act_control_kt act;
+	/* If we have a default memgt use an explicit registration, otherwise
+	 * use the implicit one; in the implicit case, the created activation
+	 * will inherit a null memgt from us.
+	 */
+	if (num_activations > 0) {
+		act = syscall_act_register_explicit(&frame, name, queue, default_memgt_ctrl_ref, get_res_pool());
+	} else {
+		act = syscall_act_register(&frame, name, queue, get_res_pool());
+	}
+
+	/* If this is the first activation to be created, by convention this
+	 * will be the default memory-manager/page-fault-handler.
+	 */
+	if (num_activations == 0)
+		default_memgt_ctrl_ref = act;
+	num_activations++;
+
+	return act;
 }
 
 act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
-							 char* stack_args, size_t stack_args_size) {
+			     char* stack_args, size_t stack_args_size) {
 
 	assert(process->n_threads != MAX_THREADS);
 
-    reg_frame_t frame;
+	reg_frame_t frame;
 
 	create_image(&env, &process->im, &process->im, storage_thread);
 
 	act_control_kt ctrl = create_activation_for_image(&process->im, name, arg, carg, pcc,
-													  stack_args, stack_args_size, process);
+							  stack_args, stack_args_size, process);
 
 	process->threads[process->n_threads++] = ctrl;
 	return ctrl;
@@ -117,7 +140,7 @@ process_t* create_process(const char* name, capability file) {
 	process_t* proc;
 
 	/* We can save some work by just copying an already loaded image. Later on we will allow some sharing, e.g. of
-    * const data / text */
+	 * const data / text */
 	image* old_im = find_process(name);
 
 	proc = alloc_process(name);
@@ -147,10 +170,10 @@ act_control_kt start_process(process_t* proc, register_t arg, capability carg, c
 
 	void * pcc = cheri_setoffset(prgmp.code, (proc->im).entry);
 	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-							  | CHERI_PERM_LOAD_CAP));
+				  | CHERI_PERM_LOAD_CAP));
 
 	act_control_kt ctrl = create_activation_for_image(&proc->im, proc->name, arg, carg, pcc,
-													  stack_args, stack_args_size, proc);
+							  stack_args, stack_args_size, proc);
 
 	proc->threads[proc->n_threads++] = ctrl;
 	return ctrl;

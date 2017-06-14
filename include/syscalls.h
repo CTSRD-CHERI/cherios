@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -48,9 +49,11 @@
         ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \
         ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
         ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, res_t res), __VA_ARGS__)\
-        ITEM(syscall_act_ctrl_get_ref, act_kt, (act_control_kt ctrl), __VA_ARGS__)                                                          \
+        ITEM(syscall_act_register_explicit, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, act_kt *memgt_ref, res_t res), __VA_ARGS__) \
+        ITEM(syscall_act_ctrl_get_ref, act_kt, (act_control_kt ctrl), __VA_ARGS__)                                           \
         ITEM(syscall_act_ctrl_get_status, status_e, (act_control_kt ctrl), __VA_ARGS__)                                      \
         ITEM(syscall_act_ctrl_get_sched_status, sched_status_e, (act_control_kt ctrl), __VA_ARGS__)                          \
+        ITEM(syscall_act_ctrl_set_tlb_handler, int, (act_control_kt ctrl, act_control_kt tlb_ctrl), __VA_ARGS__)             \
         ITEM(syscall_act_revoke, int, (act_control_kt ctrl), __VA_ARGS__)                                                    \
         ITEM(syscall_act_terminate, int, (act_control_kt ctrl), __VA_ARGS__)                                                 \
         ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)                                                             \

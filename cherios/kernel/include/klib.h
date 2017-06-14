@@ -2,6 +2,7 @@
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -115,10 +116,12 @@ int	kmsg_queue_empty(act_t* act);
 
 context_t	act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base);
 void	act_wait(act_t* act, act_t* next_hint);
-act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
-		     status_e create_in_status, act_control_t *parent, size_t base, res_t res);
-act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
-				    status_e create_in_status, act_control_t *parent, res_t res);
+act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name, status_e create_in_status,
+		     act_control_t *parent, act_t *memgt_ref,
+		     size_t base, res_t res);
+act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const char *name, status_e create_in_status,
+				    act_control_t *parent, act_t *memgt_ref,
+				    res_t res);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);
 
