@@ -33,6 +33,7 @@
 
 #include "string_enums.h"
 #include "cheriplt.h"
+#include "nano/nanotypes.h"
 
 // FIXME as my understanding of how to use ccall has evolved I realise this has been done incorrectly
 // FIXME the data capability for a ccall should contain c0/a stack/a capability to unseal any arguments
@@ -46,7 +47,7 @@
         ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, capability sync_token), __VA_ARGS__)          \
         ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \
         ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
-        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue), __VA_ARGS__)   \
+        ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, res_t res), __VA_ARGS__)\
         ITEM(syscall_act_ctrl_get_ref, act_kt, (act_control_kt ctrl), __VA_ARGS__)                                                          \
         ITEM(syscall_act_ctrl_get_status, status_e, (act_control_kt ctrl), __VA_ARGS__)                                      \
         ITEM(syscall_act_ctrl_get_sched_status, sched_status_e, (act_control_kt ctrl), __VA_ARGS__)                          \

@@ -31,147 +31,45 @@
 #ifndef CHERIOS_NANOKERNEL_H
 #define CHERIOS_NANOKERNEL_H
 
-#include "string_enums.h"
 #include "nano_if_list.h"
+#include "nanotypes.h"
 
 #ifndef __ASSEMBLY__
 
 #include "cheric.h"
 #include "cheriplt.h"
-#include "mman.h"
-
-#define REG_SIZE        sizeof(register_t)
-#define REG_SIZE_BITS   3
-
-_Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
-
-#else // __ASSEMBLY__
-
-#endif
-
-// FIXME we need to choose appropriate types and remove their accessibility from the rest of the system
-
-/* The types used for nano kernel objects. */
-#define CONTEXT_TYPE       0x5555         // The type of contexts
-#define NANO_KERNEL_TYPE   0x6666         // The type of sealed local data
-#define RES_TYPE           0x7777         // The type of a reservation handle
-#define RES_VIEW_TYPE      0x7778         // The type of a sealed capability covering the range of a reservation
-#define VTABLE_TYPE_L0     0x8880         // The type of the top level page table
-#define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
-#define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
-
-#define VTABLE_LEVELS      3              // Number of table levels
-
-
-/* Size of metadata for reservations. Split into private and user data */
-#define RES_PRIV_SIZE                   (REG_SIZE * 4)
-#define RES_META_SIZE                   (256)
-#define RES_USER_SIZE                   (RES_META_SIZE - RES_PRIV_SIZE)
-
-/* Page sizes etc */
-#define PHY_MEM_SIZE                    (1L << 32)
-
-
-/* TODO: Would like to increase this but QEMU does not seem to support a page pask not 0 */
-#define PHY_PAGE_SIZE_BITS              (12)
-#define PHY_PAGE_SIZE                   (1 << PHY_PAGE_SIZE_BITS)
-#define TOTAL_PHY_PAGES                 (PHY_MEM_SIZE/PAGE_SIZE)
-
-#define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS) & (TOTAL_PHY_PAGES-1))
-
-
-/* Physical page records */
-#define PHY_PAGE_ENTRY_SIZE_BITS        (REG_SIZE_BITS + 2)
-#define PHY_PAGE_ENTRY_SIZE             (1L << PHY_PAGE_ENTRY_SIZE_BITS)
-
-/* Virtual page table records */
-
-/* In this version we are using one physical page for each page table at each level */
-
-#define PAGE_TABLE_BITS                 PHY_PAGE_SIZE_BITS
-#define PAGE_TABLE_SIZE                 PHY_PAGE_SIZE
-#define PAGE_TABLE_ENT_SIZE             REG_SIZE
-#define PAGE_TABLE_ENT_BITS             REG_SIZE_BITS
-#define PAGE_TABLE_ENT_PER_TABLE        (PAGE_TABLE_SIZE / PAGE_TABLE_ENT_SIZE)
-#define PAGE_TABLE_BITS_PER_LEVEL       (PAGE_TABLE_BITS - PAGE_TABLE_ENT_BITS)
-
-#define L0_BITS                         PAGE_TABLE_BITS_PER_LEVEL
-#define L1_BITS                         PAGE_TABLE_BITS_PER_LEVEL
-#define L2_BITS                         PAGE_TABLE_BITS_PER_LEVEL
-#define UNTRANSLATED_BITS               (1 + PHY_PAGE_SIZE_BITS) /* +1 for having two PFNs per VPN */
-
-#define VTABLE_ENTRY_USED               (-1)
-
-#define PFN_SHIFT                       6
-/* These bits will eventually be untranslated high bits, but we will check they are equal to a field in the leaf
- * Of the page table. These could be considered a generation count. */
-
-#define CHECKED_BITS                    (63 - L0_BITS - L1_BITS - L2_BITS - UNTRANSLATED_BITS)
-
-
-#define L0_INDEX(addr)          ((addr << CHECKED_BITS) >> (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
-#define L1_INDEX(addr)          ((addr << CHECKED_BITS + L0_BITS) >> (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS))
-#define L2_INDEX(addr)          ((addr << CHECKED_BITS + L0_BITS + L1_BITS) >> (CHECKED_BITS + L0_BITS + L1_BITS + UNTRANSLATED_BITS))
-#define PAGE_INDEX(addr)        (addr & (PHY_PAGE_SIZE - 1))
-#define GENERATION_COUNT(addr)  (addr >> (L0_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
-
-#define PAGE_SIZE                 (PHY_PAGE_SIZE)
-
-
-#define NANO_KERNEL_PAGE_STATUS_ENUM_LIST(ITEM)    \
-    ITEM(page_unused, 0)                           \
-    ITEM(page_nano_owned, 1)                       \
-    ITEM(page_system_owned, 2)                     \
-    ITEM(page_mapped, 3)                           \
-    ITEM(page_ptable, 4)                           \
-    ITEM(page_ptable_free, 5)                      \
-
-DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
-
-#ifndef __ASSEMBLY__
-
-#define BOOK_END                        ((size_t)(TOTAL_PHY_PAGES))
-
-typedef capability context_t;
-typedef capability res_t;
-
-typedef capability ptable_t;
-
-//TODO make this dynamic
-
-/* WARN: these structures are used in assembly */
-
-typedef struct {
-    e_page_status	status;
-    size_t	len; /* number of pages in this chunk */
-    size_t	prev; /* start of previous chunk */
-    size_t  spare; /* Will probably use this to store a VPN or user data */
-} page_t;
-
-typedef register_t table_entry_t;
-typedef struct {
-    table_entry_t entries[PAGE_TABLE_ENT_PER_TABLE];
-} readable_table_t;
-
-_Static_assert(sizeof(table_entry_t) == PAGE_TABLE_ENT_SIZE, "Used by nano kernel");
-
-/* This is how big the structure is in the nano kernel */
-_Static_assert(sizeof(page_t) == PHY_PAGE_ENTRY_SIZE, "Assumed by nano kernel");
-
-typedef struct {
-    context_t victim_context;
-    register_t cause;
-    register_t ccause;
-    register_t badvaddr;
-} exection_cause_t;
-
-typedef register_t ex_lvl_t;
-typedef register_t cause_t;
-
+#include "types.h"
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 #define ALLOCATE_PLT_NANO PLT_ALLOCATE(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
+
+/* Safe (assuming the nano kernel performs relevent locking n the presence of a race */
+static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out) {
+    out->data = out->code = NULL;
+    if(res != NULL) {
+
+        capability nfo = rescap_info(res);
+
+        if(nfo != NULL) {
+            size_t length = cheri_getlen(nfo);
+
+            if(length > required + RES_META_SIZE) {
+                res = rescap_split(res, length - (required + RES_META_SIZE));
+            }
+            if(res != NULL && length >= required) {
+                rescap_take(res, out);
+
+                if(out->data != NULL) {
+                    if(cheri_getlen(out->data) < required) {
+                        out->data = out->code = NULL;
+                    }
+                }
+            }
+        }
+    }
+}
+
 
 /* Try to ask memgt instead of using this */
 static inline capability get_phy_cap(page_t* book, size_t address, size_t size, int cached) {

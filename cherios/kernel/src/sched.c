@@ -41,7 +41,9 @@ static void sched_nothing_to_run(void) {
 	kernel_freeze();
 }
 
-static act_t * act_queue[MAX_ACTIVATIONS];
+#define SCHED_QUEUE_LENGTH 0x10
+
+static act_t * act_queue[SCHED_QUEUE_LENGTH];
 static size_t   act_queue_current = 0;
 static size_t   act_queue_end = 0;
 
@@ -52,7 +54,7 @@ void sched_init() {
 }
 
 static void add_act_to_queue(act_t * act) {
-	kernel_assert(act_queue_end != MAX_ACTIVATIONS);
+	kernel_assert(act_queue_end != SCHED_QUEUE_LENGTH);
 	CRITICAL_LOCKED_BEGIN(&queue_lock);
 	act_queue[act_queue_end++] = act;
 	CRITICAL_LOCKED_END(&queue_lock);

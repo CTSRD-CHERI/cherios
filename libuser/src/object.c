@@ -37,8 +37,9 @@
 #include "syscalls.h"
 #include "string.h"
 #include "stdio.h"
+#include "nano/nanokernel.h"
+#include "mman.h"
 
-/* TODO these should be thread local */
 __thread act_control_kt act_self_ctrl = NULL;
 __thread act_kt act_self_ref  = NULL;
 __thread queue_t * act_self_queue = NULL;
@@ -46,6 +47,8 @@ __thread queue_t * act_self_queue = NULL;
 kernel_if_t kernel_if;
 
 ALLOCATE_PLT_SYSCALLS
+
+res_t res_pool;
 
 void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c) {
 
@@ -65,6 +68,31 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 	act_self_queue = queue;
 
     sync_state = (sync_state_t){.sync_caller = NULL, .sync_token = NULL};
+}
+
+res_t get_res_pool(void) {
+    if(res_pool == NULL) {
+        cap_pair pr;
+
+        if(try_init_memmgt_ref() == NULL) return NULL;
+
+        mmap_new(0, 0x8000, 0, MAP_PRIVATE | MAP_ANONYMOUS | MAP_RESERVED, &pr);
+        res_pool = pr.data;
+
+        if(pr.data == NULL) return NULL;
+    }
+
+    return res_pool;
+}
+
+res_t grab_res_from_pool(size_t length) {
+    res_t old = get_res_pool();
+
+    if(old == NULL) return old;
+
+	res_t new = rescap_split_sys(old, length);
+	res_pool = new;
+	return old;
 }
 
 void ctor_null(void) {

@@ -93,7 +93,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
     frame.cf_c22 = seal_proc_for_user(process);
 
-    return syscall_act_register(&frame, name, queue);
+    return syscall_act_register(&frame, name, queue, get_res_pool());
 }
 
 act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,

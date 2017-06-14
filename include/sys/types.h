@@ -62,6 +62,11 @@ typedef struct
     register_t v1;
 }  ret_t;
 
+typedef struct cap_pair {
+    capability code;
+    capability data;
+} cap_pair;
+
 typedef capability act_kt;
 typedef capability act_control_kt;
 typedef capability act_reply_kt;

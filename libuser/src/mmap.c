@@ -35,13 +35,18 @@
 #include "stdio.h"
 #include "assert.h"
 
-static act_kt memmgt_ref = NULL;
+act_kt memmgt_ref = NULL;
+
+act_kt try_init_memmgt_ref(void) {
+    if(memmgt_ref == NULL) {
+        memmgt_ref = namespace_get_ref(namespace_num_memmgt);
+    }
+    return memmgt_ref;
+}
 
 static int _mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result) {
-	if(memmgt_ref == NULL) {
-		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
-		assert(memmgt_ref != NULL);
-	}
+	if(memmgt_ref == NULL) try_init_memmgt_ref();
+	assert(memmgt_ref != NULL);
 	return (int)message_send(base, length, cheri_perms, flags, result, NULL, NULL, NULL, memmgt_ref, SYNC_CALL, 0);
 }
 

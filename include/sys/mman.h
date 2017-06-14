@@ -35,11 +35,6 @@
 #include "errno.h"
 #include "types.h"
 
-typedef struct cap_pair {
-    capability code;
-    capability data;
-} cap_pair;
-
 #define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
 
 void *  mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);

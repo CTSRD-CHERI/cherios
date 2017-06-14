@@ -46,7 +46,7 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
 
     queue_t* queue = setup_c_program(env, &frame, &im, arg, carg, pcc , NULL, 0);
 
-    return syscall_act_register(&frame, name, queue);
+    return syscall_act_register(&frame, name, queue, NULL);
 }
 
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,

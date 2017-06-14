@@ -1369,9 +1369,12 @@ get_interface:
     dli         $k0, NANO_KERNEL_TYPE
     csetoffset  $kr2c, $kdc, $k0                         # kr2c holds the sealing capability for our plt.got
 
+    li          $k0, 4
     cseal       $c2, $kr1c, $kr2c
-    cseal       $c1, $c1, $kr2c
+    cincoffset  $epcc, $epcc, $k0
 
+    cgetoffset $k1, $epcc                                # counters an eret bug
+    dmtc0      $k1, $14
     eret
 
 .section .trampoline_exc, "ax"
@@ -1389,12 +1392,11 @@ kernel_exception_trampoline:
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens between nano begin and nano end we should just die.
         bnez      $a0, 1f
-
-        cgetcause $k0
+        dmfc0     $k0, $13
         andi      $k1, $k0, 0xFF
         daddiu    $k1, $k1, -(8 << 2) # syscall with a0 = 0 results in getting nano kernel IF
-        bnez      $k1, get_interface
-
+        beqz      $k1, get_interface
+        cgetcause $k0
 1:
         dla $k1, locals_start
         csetoffset $kr1c, $kdc, $k1

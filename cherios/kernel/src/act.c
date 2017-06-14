@@ -38,12 +38,13 @@
 #include "ccall_trampoline.h"
 #include "nano/nanokernel.h"
 #include "queue.h"
+#include "nano/nanokernel.h"
 
 /*
  * Routines to handle activations
  */
 
-act_t				kernel_acts[MAX_ACTIVATIONS]  __sealable;
+act_t				kernel_acts[MAX_STATIC_ACTIVATIONS]  __sealable;
 aid_t				kernel_next_act;
 
 /* Really belongs to the sched, we will eventually seperate out the activation manager */
@@ -88,7 +89,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 
 	// Register the kernel (exception) activation
 	act_t * kernel_act = &kernel_acts[0];
-	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(cheri_getpcc()));
+	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(cheri_getpcc()), NULL);
 	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
 
@@ -111,7 +112,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
     frame.mf_user_loc = 0x7000 + init_tls_base;
 
 	act_t * init_act = &kernel_acts[namespace_num_init];
-	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL);
+	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL, NULL);
 
 	/* The boot activation should be the current activation */
 	sched_schedule(init_act);
@@ -120,14 +121,25 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 }
 
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
-							status_e create_in_status, act_control_t *parent, size_t base) {
+							status_e create_in_status, act_control_t *parent, size_t base, res_t res) {
 	(void)parent;
 	KERNEL_TRACE("act", "Registering activation %s", name);
-	if(kernel_next_act >= MAX_ACTIVATIONS) {
-		kernel_panic("no act slot");
-	}
 
-	act_t * act = kernel_acts + kernel_next_act;
+	act_t * act = NULL;
+    cap_pair pr;
+
+    try_take_end_of_res(res, sizeof(act_t), &pr);
+
+    act = (act_t*)pr.data;
+
+	if(act == NULL) {
+		if(kernel_next_act >= MAX_STATIC_ACTIVATIONS) {
+			kernel_panic("no act slot");
+		}
+		act = kernel_acts + kernel_next_act;
+		/*update next_act */
+		kernel_next_act++;
+	}
 
 	/* Push C0 to the bottom of the stack so it can be popped when we ccall in */
 	act->user_kernel_stack[(USER_KERNEL_STACK_SIZE / sizeof(capability)) -1] = cheri_getdefault();
@@ -137,11 +149,11 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	act->image_base = base;
 
 	//TODO bit of a hack. the kernel needs to know what namespace service to use
-	if(kernel_next_act == namespace_num_namespace) {
+	if(kernel_next_act-1 == namespace_num_namespace) {
 		KERNEL_TRACE("act", "found namespace");
 		ns_ref = act_create_sealed_ref(act);
 	}
-	if(kernel_next_act == namespace_num_memmgt) {
+	if(kernel_next_act-1 == namespace_num_memmgt) {
 		memgt_ref = act;
 	}
 
@@ -191,16 +203,14 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	/* set scheduling status */
 	sched_create(act);
 
-	/*update next_act */
-	kernel_next_act++;
 	KERNEL_TRACE("register", "image base of %s is %lx", act->name, act->image_base);
 	KERNEL_TRACE("act", "%s OK! ", __func__);
 	return act;
 }
 
 act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
-							status_e create_in_status, act_control_t *parent) {
-	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc));
+							status_e create_in_status, act_control_t *parent, res_t res) {
+	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc), res);
 	act->context = create_context(frame);
 	return act_create_sealed_ctrl_ref(act);
 }

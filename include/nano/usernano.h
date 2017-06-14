@@ -46,7 +46,7 @@ __asm__ (                                           \
 :   [i]"i"(n)                                       \
 : "a0", "a1", "$c1", "$c2");                        \
                                                     \
-Call ## _inst(CONTEXT(_foo_c1, _foo_c2) MAKE_ARG_LIST_APPEND(raw_sig));       \
+return Call ## _inst(CONTEXT(_foo_c1, _foo_c2) MAKE_ARG_LIST_APPEND(raw_sig));       \
 }while(0);
 
 MAKE_CTR(NANO_CTR)
