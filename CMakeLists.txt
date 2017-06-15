@@ -338,7 +338,7 @@ add_subdirectory(hello)
 add_subdirectory(zlib)
 add_subdirectory(zlib_test)
 
-
+add_subdirectory(churn)
 #add_subdirectory(prga)
 #add_subdirectory(sockets)
 #add_subdirectory(test1a)

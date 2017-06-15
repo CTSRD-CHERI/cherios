@@ -35,6 +35,8 @@
 #include "nano/nanokernel.h"
 #include "assert.h"
 
+#define CHAIN_FREED  ((act_kt)-1)
+
 #define TLB_ENTRY_CACHE_ALGORITHM_UNCACHED              (2 << 3)
 #define TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT    (3 << 3)
 #define TLB_ENTRY_VALID                                 2

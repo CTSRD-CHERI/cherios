@@ -260,8 +260,6 @@ free_chain_t* memmgt_find_res_for_addr(size_t vaddr) {
     assert(0 && "Chain structure broken");
 }
 
-#define CHAIN_FREED  ((act_kt)-1)
-
 static int chain_is_free(free_chain_t* chain) {
     if(chain == NULL) return 0;
     return chain->used.allocated_to == CHAIN_FREED;

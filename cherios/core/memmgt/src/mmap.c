@@ -41,6 +41,10 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
     /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
      * Types are numerous. Permissions are not. */
 
+    /* FIXME: */
+    /* Currently all belongs to itself */
+    act_kt assigned_to = act_self_ref;
+
     length = align_up_to(length, RES_META_SIZE);
 
     cheri_perms |= CHERI_PERM_SOFT_1;
@@ -130,11 +134,11 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
 
         if(flags & MAP_RESERVED) {
             // TODO assign to someone
-            res_t res = memmgt_parent_reservation(chain, NULL);
+            res_t res = memmgt_parent_reservation(chain, assigned_to);
             result->data = result->code = res;
             return 0;
         } else {
-            memgt_take_reservation(chain, NULL, &pair);
+            memgt_take_reservation(chain, assigned_to, &pair);
         }
 
     }
@@ -166,6 +170,11 @@ int __munmap(void *addr, size_t length) {
 	}
 
     free_chain_t* chain = memmgt_find_res_for_addr(cheri_getbase(addr));
+
+    if(chain->used.allocated_to == CHAIN_FREED || chain->used.allocated_to == NULL) {
+        printf("Unmapped something already free or not allocated. \n");
+        return -1;
+    }
 
     memmgt_free_res(chain);
 
