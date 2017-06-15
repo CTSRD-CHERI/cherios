@@ -53,14 +53,15 @@ void sched_init() {
 	spinlock_init(&queue_lock);
 }
 
-static void add_act_to_queue(act_t * act) {
+static void add_act_to_queue(act_t * act, sched_status_e set_to) {
 	kernel_assert(act_queue_end != SCHED_QUEUE_LENGTH);
 	CRITICAL_LOCKED_BEGIN(&queue_lock);
 	act_queue[act_queue_end++] = act;
+	act->sched_status = set_to;
 	CRITICAL_LOCKED_END(&queue_lock);
 }
 
-static void delete_act_from_queue(act_t * act) {
+static void delete_act_from_queue(act_t * act, sched_status_e set_to) {
     size_t index;
 	restart: index = 0;
 	if (act_queue[act_queue_current] == act) {
@@ -83,6 +84,7 @@ static void delete_act_from_queue(act_t * act) {
 	}
 	act_queue_end--;
 	act_queue[index] = act_queue[act_queue_end];
+	act->sched_status = set_to;
 	CRITICAL_LOCKED_END(&queue_lock);
 }
 
@@ -90,8 +92,7 @@ void sched_create(act_t * act) {
 	KERNEL_TRACE("sched", "create %s", act->name);
 	if(act->status == status_alive) {
 		KERNEL_TRACE("sched", "add %s", act->name);
-		add_act_to_queue(act);
-		act->sched_status = sched_runnable;
+		add_act_to_queue(act, sched_runnable);
 	} else {
 		act->sched_status = sched_terminated;
 	}
@@ -99,11 +100,15 @@ void sched_create(act_t * act) {
 
 void sched_delete(act_t * act) {
 	KERNEL_TRACE("sched", "delete %s", act->name);
+	int deleted_self = act->sched_status == sched_running;
+
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
-		delete_act_from_queue(act);
+		delete_act_from_queue(act, sched_terminated);
 	}
+
 	act->status = status_terminated;
-	if(act->sched_status == sched_running) {
+
+	if(deleted_self) {
 		sched_reschedule(NULL, 0);
 	} else {
 		act->sched_status = sched_terminated;
@@ -113,23 +118,20 @@ void sched_delete(act_t * act) {
 void sched_receives_sem_signal(act_t * act) {
 	kernel_assert(act->sched_status == sched_sem);
 	KERNEL_TRACE("sched", "now unblocked on sempahore%s", act->name);
-	add_act_to_queue(act);
-	act->sched_status = sched_runnable;
+	add_act_to_queue(act, sched_runnable);
 }
 
 void sched_receives_msg(act_t * act) {
 	if(act->sched_status == sched_waiting) {
 		KERNEL_TRACE("sched", "now unblocked %s", act->name);
-		act->sched_status = sched_runnable;
-		add_act_to_queue(act);
+		add_act_to_queue(act, sched_runnable);
 	}
 }
 
 void sched_recieve_ret(act_t * act) {
 	kernel_assert(act->sched_status == sched_sync_block);
 	KERNEL_TRACE("sched", "now unblocked %s", act->name);
-	add_act_to_queue(act);
-	act->sched_status = sched_runnable;
+	add_act_to_queue(act, sched_runnable);
 }
 
 void sched_block_until_msg(act_t * act, act_t * next_hint) {
@@ -152,10 +154,10 @@ void sched_block(act_t *act, sched_status_e status) {
 	kernel_assert((status == sched_sync_block) || (status == sched_waiting) || (status == sched_sem));
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
-		delete_act_from_queue(act);
+		delete_act_from_queue(act, status);
+	} else {
+		act->sched_status = status;
 	}
-
-    act->sched_status = status;
 }
 
 static void sched_deschedule(act_t * act) {
@@ -182,7 +184,11 @@ static act_t * sched_picknext(void) {
 	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
 		KERNEL_TRACE("sched", "%s should not be waiting", next->name);
 	}
-	kernel_assert(next->sched_status == sched_runnable || next->sched_status == sched_running);
+	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
+		kernel_printf("Activation %s is in the queue and is not runnable\n", next->name);
+		kernel_assert(0);
+	}
+
 	return next;
 }
 

@@ -32,33 +32,43 @@
 #include "mman.h"
 #include "string.h"
 #include "assert.h"
+#include "stdio.h"
 
 #define BLOCK_SIZE  0x10000
 #define WINDOW_SIZE 100
-#define N           0x100000
+#define N           2000 // set to 0 for good times
 
 int main(register_t arg, capability carg) {
 
+    printf("Churn Hello World!\n");
     cap_pair pr;
 
     capability maps[WINDOW_SIZE];
 
     bzero(maps, sizeof(maps));
 
+    printf("Oh boy here I go mmapping again!\n");
+
     for(size_t i = 0; i < N; i++) {
         size_t ndx = (i % WINDOW_SIZE);
 
         if(i + WINDOW_SIZE < N) {
-            mmap_new(0, BLOCK_SIZE, CHERI_PERM_ALL, MAP_ANONYMOUS | MAP_PRIVATE, &pr);
+            if( mmap_new(0, BLOCK_SIZE, CHERI_PERM_ALL, MAP_ANONYMOUS | MAP_PRIVATE, &pr) != 0) {
+                printf("mmap failed\n");
+                return -1;
+            }
         }
 
         capability  old = maps[ndx];
         maps[ndx] = pr.data;
 
-        assert(pr.data != NULL);
-
         if(old != NULL) {
-            munmap(old, 0);
+            if(munmap(old, 0) != 0) {
+                printf("munmap failed\n");
+                return -1;
+            }
         }
     }
+
+    printf("Churn test done \n");
 }

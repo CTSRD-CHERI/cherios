@@ -84,6 +84,8 @@
 #define L2_BITS                         PAGE_TABLE_BITS_PER_LEVEL
 #define UNTRANSLATED_BITS               (1 + PHY_PAGE_SIZE_BITS) /* +1 for having two PFNs per VPN */
 
+#define UNTRANSLATED_PAGE_SIZE          (1 << UNTRANSLATED_BITS)
+
 #define VTABLE_ENTRY_USED               (-1)
 
 #define PFN_SHIFT                       6

@@ -29,6 +29,7 @@
  */
 
 
+#include <nano/nanotypes.h>
 #include "nano/nanokernel.h"
 #include "vmem.h"
 #include "stdio.h"
@@ -65,8 +66,14 @@ void print_book(page_t* book, size_t page_n, size_t times) {
 }
 
 void break_page_to(size_t page_n, size_t len) {
-    assert(book[page_n].len > len && len != 0);
-    split_phy_page_range(page_n, len);
+    if(book[page_n].len == len) return;
+
+    if(book[page_n].len > len && len != 0) {
+        split_phy_page_range(page_n, len);
+    } else {
+        printf("len is %lx. Tried to split to %lx\n", book[page_n].len, len);
+        assert(0);
+    }
 }
 
 size_t get_valid_page_entry(size_t page_n) {
@@ -159,13 +166,28 @@ void memgt_commit_vmem(act_kt activation, size_t addr) {
     }
 
     // TODO check not already commited. We may get a few messages.
-    memmgt_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
+
+    readable_table_t* ro =  get_read_only_table(l2);
+
+    size_t ndx = L2_INDEX(addr);
+
+    if(ro->entries[ndx] != NULL) {
+        if(ro->entries[ndx] == VTABLE_ENTRY_USED) {
+            panic("Someone tried to use a virtual address that was already freed!\n");
+        }
+        printf("spurious commit!\n");
+    }
+    else memmgt_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
 }
 
 void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, size_t index, size_t is_last_level) {
+    assert(index < PAGE_TABLE_ENT_PER_TABLE);
+
     size_t page_n = parent_ro->entries[index];
 
     page_n = is_last_level ? (page_n >> PFN_SHIFT) : (PHY_ADDR_TO_PAGEN(page_n));
+
+    page_n = get_valid_page_entry(page_n);
 
     break_page_to(page_n, is_last_level ? 2 : 1); // We can't reclaim the page unless we size the record first
 
@@ -200,7 +222,7 @@ size_t memmgt_free_mappings(ptable_t table, size_t l0, size_t l1, size_t l2, siz
     int begin_free = can_free && range_is_free(RO, 0, ndx);
 
     size_t freed = 0;
-    while(n > 0) {
+    while(n > 0 && ndx < PAGE_TABLE_ENT_PER_TABLE) {
         if(lvl == 2) {
             /* Free pages */
             memmgt_free_mapping(table, RO, ndx, 1);
@@ -261,7 +283,10 @@ free_chain_t* memmgt_find_res_for_addr(size_t vaddr) {
 }
 
 static int chain_is_free(free_chain_t* chain) {
-    if(chain == NULL) return 0;
+    if(chain == NULL) {
+        printf("prev null?\n");
+        return 0;
+    }
     return chain->used.allocated_to == CHAIN_FREED;
 }
 
@@ -285,42 +310,50 @@ free_chain_t* memmgt_free_res(free_chain_t* chain) {
     free_chain_t* pr = chain->used.prev_res;
     free_chain_t* nx = chain->used.next_res;
 
+    assert((chain->used.res) != NULL);
     capability mid_nfo = rescap_info(chain->used.res);
 
-    size_t true_base = cheri_getbase(mid_nfo) - RES_META_SIZE;
-    size_t true_bound = true_base + RES_META_SIZE + cheri_getlen(mid_nfo);
+    size_t true_base = cheri_getbase(mid_nfo);
+    size_t true_bound = true_base + cheri_getlen(mid_nfo);
 
-    size_t aligned_base = align_up_to(true_base, PAGE_SIZE);
-    size_t aligned_bound = align_down_to(true_bound, PAGE_SIZE);
+    size_t aligned_base;
+    size_t aligned_bound = align_down_to(true_bound, UNTRANSLATED_PAGE_SIZE);;
 
     if(chain_is_free(pr)) {
 
+        true_base -= RES_META_SIZE; // If we merge this reservation we will gain back metadata
+        aligned_base = align_up_to(true_base, UNTRANSLATED_PAGE_SIZE);
+
         /* Merging might have gained us a page back */
         if(aligned_base != true_base) {
+            assert(pr->used.res != NULL);
             capability pr_nfo = rescap_info(pr->used.res);
-            size_t pr_base = align_up_to(cheri_getbase(pr_nfo) - RES_META_SIZE, PAGE_SIZE);
-            if(pr_base != aligned_base) aligned_base-= PAGE_SIZE;
+            size_t pr_base = align_up_to(cheri_getbase(pr_nfo), UNTRANSLATED_PAGE_SIZE);
+            if(pr_base != aligned_base) aligned_base-= UNTRANSLATED_PAGE_SIZE;
         }
 
         memmgt_merge_res(pr, chain);
         chain = pr;
+    } else {
+        aligned_base = align_up_to(true_base, UNTRANSLATED_PAGE_SIZE);
     }
 
     if(chain_is_free(nx)) {
 
         if(true_bound != aligned_bound) {
+            assert(nx->used.next_res != NULL);
             capability  nx_nfo = rescap_info(nx->used.next_res);
             size_t nx_len = RES_META_SIZE + cheri_getlen(nx_nfo);
-            if(nx_len >= (true_bound-aligned_bound)) aligned_bound+=PAGE_SIZE;
+            if(nx_len >= (true_bound-aligned_bound)) aligned_bound+=UNTRANSLATED_PAGE_SIZE;
         }
         memmgt_merge_res(chain, nx);
     }
 
-    size_t pages_to_free = (true_bound-true_base) >> PHY_PAGE_SIZE_BITS;
+    size_t pages_to_free = (aligned_bound-aligned_base) >> UNTRANSLATED_BITS;
 
-    printf("Finished freeing reservation over %lx to %lx. Will now free %lx pages\n", true_base, true_bound, pages_to_free);
-
-    if(pages_to_free != 0) memmgt_free_range(aligned_base, pages_to_free);
+    if(pages_to_free != 0) {
+        memmgt_free_range(aligned_base, pages_to_free);
+    }
 
     return chain;
 }
@@ -370,6 +403,8 @@ free_chain_t* memmgt_split_free_reservation(free_chain_t* chain, size_t length) 
     new_chain->used.allocated_to = chain->used.allocated_to;
     new_chain->used.next_res = chain->used.next_res;
     new_chain->used.next_free_res = chain->used.next_free_res;
+    new_chain->used.prev_res = chain;
+    new_chain->used.prev_free_res = chain;
 
     chain->used.next_res = new_chain;
     chain->used.next_free_res = new_chain;
