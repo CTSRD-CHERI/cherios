@@ -59,6 +59,10 @@ typedef struct act_t
 
 	register_t stack_guard;
 	/* Activation related */
+
+	struct act_t* list_next;
+	struct act_t* list_prev;
+
 	status_e status;		/* Activation status flags */
 
 	/* Debug related */

@@ -123,11 +123,6 @@ int kernel_syscall_interrupt_enable(int number) {
 	return kernel_interrupt_enable(number, (act_control_t *)get_idc());
 }
 
-int kernel_syscall_gc(capability p, capability pool);
-int kernel_syscall_gc(capability p, capability pool) {
-	return try_gc(p , pool);
-}
-
 void kernel_syscall_shutdown(shutdown_t mode);
 void kernel_syscall_shutdown(shutdown_t mode) {
     // Mode if we want restart/shotdown etc
@@ -179,7 +174,6 @@ DADT(syscall_puts)
 DADT(syscall_panic)
 DADT(syscall_interrupt_register)
 DADT(syscall_interrupt_enable)
-DADT(syscall_gc)
 DADT(syscall_shutdown)
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {

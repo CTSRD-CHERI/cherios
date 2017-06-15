@@ -104,8 +104,6 @@ void	kernel_vtrace(const char *context, const char *fmt, va_list ap);
 void	hw_reboot(void) __dead2;
 void	kernel_freeze(void) __dead2;
 
-int	try_gc(void * p, void * pool);
-
 int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t a0, register_t a1, register_t a2, register_t a3,
 			 register_t v0,

@@ -4,7 +4,6 @@ set(SRCS
     src/init.S
     src/main.c
     src/mmap.c
-    src/release.c
     src/vmem.c
     src/vmem_init.c
 )

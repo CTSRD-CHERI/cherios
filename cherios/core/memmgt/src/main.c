@@ -60,9 +60,6 @@ static void worker_start(register_t arg, capability carg) {
 
 	minit();
 
-	/* init release mecanism */
-	release_init();
-
 	syscall_puts("memmgt: Going into daemon mode\n");
 
 	/* This thread handles everything else */

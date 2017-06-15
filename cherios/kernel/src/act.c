@@ -54,6 +54,9 @@ act_t * 			kernel_curr_act;
 static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
 static act_t* ns_ref = NULL;
+
+act_t* act_list_start;
+
 act_t* memgt_ref = NULL;
 
 static kernel_if_t* get_if() {

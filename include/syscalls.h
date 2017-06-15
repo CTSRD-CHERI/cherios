@@ -57,7 +57,6 @@
         ITEM(syscall_panic, void, (void), __VA_ARGS__)                                                                       \
         ITEM(syscall_interrupt_register, int, (int number), __VA_ARGS__)                                                     \
         ITEM(syscall_interrupt_enable, int, (int number), __VA_ARGS__)                                                       \
-        ITEM(syscall_gc,int, (capability p, capability pool), __VA_ARGS__)                                                   \
         ITEM(syscall_shutdown, void, (shutdown_t), __VA_ARGS__)                                                              \
 
 

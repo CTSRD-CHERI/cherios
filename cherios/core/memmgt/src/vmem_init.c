@@ -57,6 +57,7 @@ static void init_vmem(void) {
     chain_start->used.next_free_res = NULL;
     chain_start->used.next_res = NULL;
     chain_start->used.prev_free_res = NULL;
+    chain_start->used.next_res = NULL;
     chain_start->used.res = first;
 
     free_chain_start = chain_start;

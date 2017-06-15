@@ -109,6 +109,14 @@
     ITEM(page_ptable, 4)                           \
     ITEM(page_ptable_free, 5)                      \
 
+#define NANO_KERNEL_RES_STATUS_ENUM_LIST(ITEM) \
+    ITEM(res_open,          0)                  \
+    ITEM(res_taken,         1)                  \
+    ITEM(res_merged,        2)                  \
+    ITEM(res_collecting,    3)
+
+DECLARE_ENUM(e_res_status, NANO_KERNEL_RES_STATUS_ENUM_LIST)
+
 DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
 
 

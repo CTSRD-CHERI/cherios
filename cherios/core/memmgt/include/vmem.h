@@ -47,6 +47,7 @@ typedef struct free_chain_t {
     struct used {
         res_t res;
         struct free_chain_t* next_res;
+        struct free_chain_t* prev_res;
         struct free_chain_t* next_free_res;
         struct free_chain_t* prev_free_res;
         act_kt allocated_to;
@@ -89,6 +90,12 @@ res_t memmgt_parent_reservation(free_chain_t* chain, act_kt assign_to);
 free_chain_t* memmgt_find_free_reservation(size_t with_addr, size_t req_length, size_t* out_base, size_t *out_length);
 /* Takes out a reservation and updates metadata */
 free_chain_t* memmgt_split_free_reservation(free_chain_t* chain, size_t length);
+
+/* Frees the reservation, tries to merge with adjacent reservations, and frees any vpages / vtables as needed */
+free_chain_t* memmgt_free_res(free_chain_t* chain);
+
+/* Given a address that mmap gave out will recover the reservation it came from */
+free_chain_t* memmgt_find_res_for_addr(size_t vaddr);
 
 void print_book(page_t* book, size_t page_n, size_t times);
 #endif //CHERIOS_VMEM_H

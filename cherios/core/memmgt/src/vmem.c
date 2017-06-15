@@ -29,9 +29,10 @@
  */
 
 
-#include <nano/nanokernel.h>
+#include "nano/nanokernel.h"
 #include "vmem.h"
 #include "stdio.h"
+#include "math.h"
 
 page_t* book;
 free_chain_t *chain_start, *free_chain_start;
@@ -238,6 +239,96 @@ void memmgt_free_range(size_t vaddr_start, size_t pages) {
                          pages, 0, NULL);
 }
 
+free_chain_t* memmgt_find_res_for_addr(size_t vaddr) {
+    free_chain_t* chain = chain_start;
+
+    do {
+        capability nfo = rescap_info(chain->used.res);
+
+        assert(nfo != NULL);
+
+        size_t base = cheri_getbase(nfo);
+        size_t length = cheri_getlen(nfo);
+
+        if(base <= vaddr && base+length > vaddr) {
+            return chain;
+        }
+
+        chain = chain->used.next_res;
+    } while(chain != NULL);
+
+    assert(0 && "Chain structure broken");
+}
+
+#define CHAIN_FREED  ((act_kt)-1)
+
+static int chain_is_free(free_chain_t* chain) {
+    if(chain == NULL) return 0;
+    return chain->used.allocated_to == CHAIN_FREED;
+}
+
+static void memmgt_merge_res(free_chain_t* a, free_chain_t* b) {
+    res_t res_a = a->used.res;
+    res_t res_b = b->used.res;
+
+    rescap_merge(res_a, res_b);
+
+    // b is no longer valid for pretty much anything - remove it from the chain
+
+    free_chain_t* next = b->used.next_res;
+
+    a->used.next_res = next;
+    if(next != NULL) next->used.prev_res = a;
+}
+
+free_chain_t* memmgt_free_res(free_chain_t* chain) {
+    chain->used.allocated_to = CHAIN_FREED;
+
+    free_chain_t* pr = chain->used.prev_res;
+    free_chain_t* nx = chain->used.next_res;
+
+    capability mid_nfo = rescap_info(chain->used.res);
+
+    size_t true_base = cheri_getbase(mid_nfo) - RES_META_SIZE;
+    size_t true_bound = true_base + RES_META_SIZE + cheri_getlen(mid_nfo);
+
+    size_t aligned_base = align_up_to(true_base, PAGE_SIZE);
+    size_t aligned_bound = align_down_to(true_bound, PAGE_SIZE);
+
+    if(chain_is_free(pr)) {
+
+        /* Merging might have gained us a page back */
+        if(aligned_base != true_base) {
+            capability pr_nfo = rescap_info(pr->used.res);
+            size_t pr_base = align_up_to(cheri_getbase(pr_nfo) - RES_META_SIZE, PAGE_SIZE);
+            if(pr_base != aligned_base) aligned_base-= PAGE_SIZE;
+        }
+
+        memmgt_merge_res(pr, chain);
+        chain = pr;
+    }
+
+    if(chain_is_free(nx)) {
+
+        if(true_bound != aligned_bound) {
+            capability  nx_nfo = rescap_info(nx->used.next_res);
+            size_t nx_len = RES_META_SIZE + cheri_getlen(nx_nfo);
+            if(nx_len >= (true_bound-aligned_bound)) aligned_bound+=PAGE_SIZE;
+        }
+        memmgt_merge_res(chain, nx);
+    }
+
+    size_t pages_to_free = (true_bound-true_base) >> PHY_PAGE_SIZE_BITS;
+
+    printf("Finished freeing reservation over %lx to %lx. Will now free %lx pages\n", true_base, true_bound, pages_to_free);
+
+    if(pages_to_free != 0) memmgt_free_range(aligned_base, pages_to_free);
+
+    return chain;
+}
+
+
+
 free_chain_t* memmgt_find_free_reservation(size_t with_addr, size_t req_length, size_t* out_base, size_t *out_length) {
     free_chain_t* chain = free_chain_start;
 
@@ -289,6 +380,10 @@ free_chain_t* memmgt_split_free_reservation(free_chain_t* chain, size_t length) 
         new_chain->used.next_free_res->used.prev_free_res = new_chain;
     }
 
+    if(new_chain->used.next_res != NULL) {
+        new_chain->used.next_res->used.prev_res = new_chain;
+    }
+
     return new_chain;
 }
 
@@ -305,8 +400,6 @@ static void update_chain(free_chain_t* chain, act_kt assign_to) {
 
     chain->used.prev_free_res = NULL;
     chain->used.next_free_res = NULL;
-
-
 }
 
 void memgt_take_reservation(free_chain_t* chain, act_kt assign_to, cap_pair* out) {

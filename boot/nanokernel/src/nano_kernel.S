@@ -850,7 +850,7 @@ rescap_take:
     cld         $t0, $zero, 0($c3)          # get state
     csetbounds  $c4, $c4, $zero             # clear our sealing cap
     bnez        $t0, take_er                # error if not open
-    dli         $t0, 1
+    dli         $t0, rescap_taken
 
     cgetlen     $t1, $c3
     csd         $t0, $zero, 0($c3)          # set to taken
@@ -881,16 +881,28 @@ rescap_info:
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
     cld         $t0, $zero, 0($c3)          # get state
-    clc         $c3, $zero, RES_META_SIZE($c3) # load return capability from struct
     dli         $t1, RES_VIEW_TYPE
+    bnez        $t0, info_not_open          # can also get info for open reservation
     csetoffset  $c4, $kdc, $t1              # create sealing cap
-    cseal       $c3, $c3, $c4
-    bnez        $t0, info_er                # error if not open
-    cfromptr    $c4, $c4, $zero             # clear our sealing cap
 
+    b           info_end
+    clc         $c3, $zero, RES_META_SIZE($c3) # load return capability from struct
+
+info_not_open:
+    dli         $t1, res_taken
+    bne         $t0, $t1, info_er
+    dli         $t1, RES_META_SIZE
+    cld         $t2, $zero, REG_SIZE($c3)       # get length
+    cincoffset  $c3, $c3, $t1
+    csetbounds  $c3, $c3, $t2
+
+info_end:
+    cseal       $c3, $c3, $c4
+    cfromptr    $c4, $c4, $zero             # clear our sealing cap
     creturn
+
 info_er:
-    cfromptr    $c3, $c3, $zero
+    cclearlo    EN2(c3,c4)
     creturn
 
 ##################################
@@ -903,12 +915,12 @@ rescap_collect:
     cunseal     $c3, $c3, $c4               # unseal res
 
     cld         $t0, $zero, 0($c3)
-    dli         $t1, 1
+    dli         $t1, res_taken
     bne         $t0, $t1, collect_er        # check this reservation is taken
 
     cld         $t0, $zero, collection_state($idc)
     bnez        $t0, collect_er             # check we are not already collecting
-    dli         $t2, 3
+    dli         $t2, res_collecting
 
     # We are now collecting. No errors from now on.
 
@@ -987,7 +999,7 @@ collect_er:
 
 ###################################################
 # res_t  rescap_split(capability res, size_t size)
-.global rescap_split
+.global rescap_split ##FIXME check size
 rescap_split:
 ###################################################
     dli         $t0, RES_TYPE
@@ -1034,7 +1046,7 @@ rescap_merge:
     csetoffset  $c5, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c5
     cunseal     $c4, $c4, $c5               # unseal both arguments
-    dli         $t0, 1
+    dli         $t0, res_taken
 
     cld         $t1, $zero, 0($c3)
     bne         $t0, $t1, merge_er          # check first is taken
@@ -1054,7 +1066,7 @@ rescap_merge:
     bnez        $t2, merge_er
 
     addu        $t0, $t0, $t1               # this is the total new length
-    li          $t1, 2
+    li          $t1, res_merged
     csd         $t0, $zero, REG_SIZE($c3)   # store back in the field of the lower address reservation a new length.
     csd         $t1, $zero, 0($c4)          # set higher address reservation to merged
     cseal       $c3, $c3, $c5               # although the caller can just use the first argument, its nice to return it
@@ -1083,7 +1095,7 @@ rescap_parent:
 
     clc         $c5, $zero, RES_META_SIZE($c3)   # get capability that ranges over open space
     cgetlen     $t1, $c5                    # get length for parent
-    dli         $t2, 1
+    dli         $t2, res_taken
     csd         $t1, $zero, REG_SIZE($c3)   # set length field for parent
     csd         $t2, $zero, 0($c3)          # set state field for parent
     csd         $zero, $zero, 0($c5)        # set state for child

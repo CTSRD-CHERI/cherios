@@ -34,13 +34,14 @@
 #include "types.h"
 #include "utils.h"
 #include "vmem.h"
+#include "math.h"
 
 /* fd and offset are currently unused and discarded in userspace */
 int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result) {
     /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
      * Types are numerous. Permissions are not. */
 
-    length += (RES_META_SIZE - (length & (RES_META_SIZE-1))) & (RES_META_SIZE-1); // align to meta size
+    length = align_up_to(length, RES_META_SIZE);
 
     cheri_perms |= CHERI_PERM_SOFT_1;
 
@@ -155,18 +156,20 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
 
 
 int __munmap(void *addr, size_t length) {
+
+    //FIXME I don't understand the length field. Im just going to have one munmap for every mmap. Screw partial dealloc.
+
 	if(!(cheri_getperm(addr) & CHERI_PERM_SOFT_1)) {
 		errno = EINVAL;
 		printf(KRED"BAD MUNMAP\n");
 		return -1;
 	}
 
-    size_t start = (size_t )addr;
-    size_t pages = length/PHY_PAGE_SIZE;
+    free_chain_t* chain = memmgt_find_res_for_addr(cheri_getbase(addr));
 
-    memmgt_free_range(start, pages);
+    memmgt_free_res(chain);
 
-    return 1;
+    return 0;
 }
 
 void mfree(void *addr) {
