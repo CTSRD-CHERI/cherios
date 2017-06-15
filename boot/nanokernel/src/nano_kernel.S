@@ -850,21 +850,22 @@ rescap_take:
     cld         $t0, $zero, 0($c3)          # get state
     csetbounds  $c4, $c4, $zero             # clear our sealing cap
     bnez        $t0, take_er                # error if not open
-    dli         $t0, rescap_taken
+    dli         $t0, res_taken
 
-    cgetlen     $t1, $c3
+    clc         $c6, $zero, RES_META_SIZE($c3)   # load return capability from struct
+    cgetlen     $t1, $c6
     csd         $t0, $zero, 0($c3)          # set to taken
     csd         $t1, $zero, REG_SIZE($c3)   # set length (needed for merge)
-    clc         $c3, $zero, RES_META_SIZE($c3)   # load return capability from struct
 
-    cgetbase    $t0, $c3                    # We must rederive a cap to have the execute bit
-    cgetlen     $t1, $c3
+
+    cgetbase    $t0, $c6                    # We must rederive a cap to have the execute bit
+    cgetlen     $t1, $c6
     csetoffset  $c4, $kcc, $t0
     dli         $t2, DEF_DATA_PERMS
     csetbounds  $c4, $c4, $t1
     candperm    $c4, $c4, $t2
 
-    csc         $c3, $zero, CAP_SIZE($c5)
+    csc         $c6, $zero, CAP_SIZE($c5)
     csc         $c4, $zero, 0($c5)
     creturn
 take_er:

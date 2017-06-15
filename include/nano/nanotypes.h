@@ -90,7 +90,7 @@
 /* These bits will eventually be untranslated high bits, but we will check they are equal to a field in the leaf
  * Of the page table. These could be considered a generation count. */
 
-#define CHECKED_BITS                    (63 - L0_BITS - L1_BITS - L2_BITS - UNTRANSLATED_BITS)
+#define CHECKED_BITS                    (64 - L0_BITS - L1_BITS - L2_BITS - UNTRANSLATED_BITS)
 
 
 #define L0_INDEX(addr)          ((addr << CHECKED_BITS) >> (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
