@@ -154,7 +154,7 @@ void memgt_commit_vmem(act_kt activation, size_t addr) {
 
     if(l2 == NULL) {
         printf("memmgt: creating a l2 table at index %lx\n", l1_index);
-        l2 = memmgt_create_table(top_table, l1_index);
+        l2 = memmgt_create_table(l1, l1_index);
         assert(l2 != NULL);
     }
 
