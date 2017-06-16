@@ -202,9 +202,11 @@ void kernel_message_send(capability c3, capability c4, capability c5, capability
 		return;
 	} else if(selector == SEND_SWITCH) {
         source_activation->sched_status = sched_runnable;
+		CRITICAL_LOCKED_END(&target_activation->writer_spinlock);
 		sched_reschedule(target_activation, 0);
 	}
 
+	CRITICAL_LOCKED_END(&target_activation->writer_spinlock);
 	ret->v0 = 0;
 	ret->v1 = 0;
 	ret->c3 = NULL;
