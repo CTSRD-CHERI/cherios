@@ -38,6 +38,11 @@
 static void sched_nothing_to_run(void) __dead2;
 static void sched_nothing_to_run(void) {
 	KERNEL_ERROR("No activation to schedule");
+
+    for(act_t* act = act_list_start; act != NULL; act = act->list_next) {
+        kernel_printf("%20s : status %d\n", act->name, act->sched_status);
+    }
+
 	kernel_freeze();
 }
 

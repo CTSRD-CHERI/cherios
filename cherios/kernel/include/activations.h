@@ -104,14 +104,16 @@ _Static_assert(offsetof(act_t, stack_guard) == USER_KERNEL_STACK_SIZE,
 /* Control references are just references with a different type */
 typedef act_t act_control_t;
 
-//FIXME scrap these, the kernel should not allocate memory.
-/* global array of all activations */
+/* global array of all STATICICALLY ALLOCATED activations. Use the linked list to find them all */
 extern act_t		kernel_acts[];
 /* The index of the next activation to put in the above array. NOT to do with scheduling.*/
 extern aid_t 		kernel_next_act;
 
 /* The currently scheduled activation */
 extern act_t* 		kernel_curr_act;
+
+extern act_t*		act_list_start;
+extern act_t*		act_list_end;
 
 extern act_t* memgt_ref;
 

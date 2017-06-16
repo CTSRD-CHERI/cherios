@@ -56,6 +56,7 @@ static kernel_if_t internel_if;
 static act_t* ns_ref = NULL;
 
 act_t* act_list_start;
+act_t* act_list_end;
 
 act_t* memgt_ref = NULL;
 
@@ -143,6 +144,19 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 		/*update next_act */
 		kernel_next_act++;
 	}
+
+	if(act_list_start == NULL) {
+		act_list_start = act;
+		act_list_end = act;
+		act->list_prev = NULL;
+	} else {
+		act_list_end->list_next = act;
+		act->list_prev = act_list_end;
+
+		act_list_end = act;
+	}
+
+	act->list_next = NULL;
 
 	/* Push C0 to the bottom of the stack so it can be popped when we ccall in */
 	act->user_kernel_stack[(USER_KERNEL_STACK_SIZE / sizeof(capability)) -1] = cheri_getdefault();
