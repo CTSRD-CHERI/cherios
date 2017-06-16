@@ -34,7 +34,7 @@
 //#define __TRACE__
 //#define __LITE__
 
-#define MAX_STATIC_ACTIVATIONS 6 // kernel + init + namespace + proc + memgt + memmgt worker. Then we need reservations.
+#define MAX_STATIC_ACTIVATIONS 7 // kernel + init + namespace + proc + memgt + memmgt worker *2. Then we need reservations.
 
 //#define	TIMER_INTERVAL		400000
 //#define	TIMER_INTERVAL_MIN	30000

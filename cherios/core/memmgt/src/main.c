@@ -66,6 +66,91 @@ static void worker_start(register_t arg, capability carg) {
 	msg_enable = 1; /* Go in waiting state instead of exiting */
 }
 
+static size_t get_addr_lo(void) {
+    size_t ret;
+    __asm__ ("dmfc0 %[ret], $30, 2\n":[ret]"=r"(ret));
+    return ret;
+};
+static size_t get_addr_hi(void) {
+    size_t ret;
+    __asm__ ("dmfc0 %[ret], $30, 3\n":[ret]"=r"(ret));
+    return ret;
+};
+static void set_addr_lo(size_t val) {
+    __asm__ ("dmtc0 %[val], $30, 2\n"::[val]"r"(val));
+};
+static void set_addr_hi(size_t val) {
+    __asm__ ("dmtc0 %[val], $30, 3\n"::[val]"r"(val));
+};
+
+static void revoke_cap(capability c) {
+	size_t base = cheri_getbase(c);
+	size_t bound = base + cheri_getlen(c);
+	set_addr_lo(base);
+	set_addr_hi(bound);
+}
+
+static void clear_revoke(void) {
+	set_addr_hi(0);
+	set_addr_lo(0);
+}
+
+static void revoke_worker_start(register_t arg, capability carg) {
+	printf("Revoker hello world!\n");
+
+    capability c0 = obtain_super_powers();
+
+    /* First some sanity checks: */
+
+	size_t tst = 0xbeef;
+
+	set_addr_hi(tst);
+	size_t res = get_addr_hi();
+	set_addr_hi(0);
+	assert(tst == res);
+
+	set_addr_lo(tst);
+	res = get_addr_lo();
+	set_addr_lo(0);
+	assert(tst == res);
+
+	volatile capability stack_place;
+
+	capability stack_place_2;
+
+	volatile capability* ptr = &stack_place;
+	capability* val = &stack_place_2;
+
+	/* We will ban val, write it to ptr, then see what happens */
+
+	CHERI_PRINT_CAP(val);
+
+	assert(cheri_gettag(val) == 1);
+
+	revoke_cap(val);
+
+
+	stack_place = val;
+	val = stack_place;
+
+	clear_revoke();
+
+	assert(cheri_gettag(val) == 0);
+
+	val = &stack_place_2;
+
+	assert(cheri_gettag(val) == 1);
+
+	stack_place = val;
+	val = stack_place;
+
+	assert(cheri_gettag(val) == 1);
+
+	msg_enable = 0;
+
+	printf("Revoke test passed\n");
+}
+
 int main(memmgt_init_t* mem_init) {
 	/* So we can call nano kernel functions. This would normally be done by the linker */
 	init_nano_kernel_if_t(mem_init->nano_if, mem_init->nano_default_cap);
@@ -77,6 +162,13 @@ int main(memmgt_init_t* mem_init) {
  	 * receiving mode immediately to handle TLB misses . */
 
 	thread_new("memgt_worker", 0, mem_init, &worker_start);
+
+	/* We also have a worker to do any revocation as the nano kernel will keep the
+	 * calling context busy and we need to be responsive */
+
+	printf("spawning revoke\n");
+
+	thread_new("memmgt_revoke", 0, 0, &revoke_worker_start);
 
 	/* This thread handles only commit_vmem */
 	msg_enable = 1;

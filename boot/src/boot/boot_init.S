@@ -66,6 +66,11 @@ start:
 
     mtc0		$t0, $12
 
+    # Set collect_hi and collect_lo
+
+    dmtc0  $zero, $30, 2
+    dmtc0  $zero, $30, 3
+
     .set N_TLB_ENTS, 32
     # Setup the TLB so it won't break on first miss
     dli     $t1, N_TLB_ENTS
