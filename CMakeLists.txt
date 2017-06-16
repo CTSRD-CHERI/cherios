@@ -331,7 +331,6 @@ set(DRIVERS_DIR "${CHERIOS_DIR}/drivers")
 add_subdirectory(libuser)
 
 add_subdirectory(cherios)
-add_subdirectory(boot)
 
 
 add_subdirectory(hello)
@@ -346,3 +345,5 @@ add_subdirectory(churn)
 #add_subdirectory(test2a)
 #add_subdirectory(test2b)
 #add_subdirectory(test3)
+
+add_subdirectory(boot)
