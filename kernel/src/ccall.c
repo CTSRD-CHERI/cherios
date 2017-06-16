@@ -121,7 +121,7 @@ void kernel_ccall(register_t ccall_selector) {
 void kernel_creturn(void) {
   	KERNEL_TRACE(__func__, "in %s", kernel_acts[kernel_curr_act].name);
 
-	uint64_t sync_token = kernel_exception_framep_ptr->mf_t2;
+	uint64_t sync_token = kernel_exception_framep_ptr->mf_t0;
 	if(sync_token == 0) {
 		/* Used by asynchronous primitives */
 		//act_wait(kernel_curr_act, 0);

@@ -174,9 +174,3 @@ void act_wait(int act, aid_t next_hint) {
 	}
 	sched_reschedule(next_hint);
 }
-
-/*
-void * act_seal_identifier(void * identifier) {
-	return kernel_seal(cheri_andperm(identifier, 0b111100011111101), kernel_curr_act);
-}
- */

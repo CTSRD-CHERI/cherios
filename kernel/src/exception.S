@@ -77,51 +77,42 @@ kernel_exception_trampoline_end:
 		.ent kernel_cp2_exception_handler
 kernel_cp2_exception_handler:
 
-		#
-		# Since we are still running with user capabilities in most
-		# capability registers, we must access all kernel data
-		# relative to KDC.  First save and clear CP2 context, then
-		# move on to general-purpose registers.
-		#
         dla	$k0, kernel_exception_framep_ptr
         ld  $k0, 0($k0)
-#cgetdefault $kr1c
-#csetoffset $kr1c, $kr1c, $k0
-#dla	$k0, 32*CAP_SIZE + 32*REG_SIZE #Should be enough
-#csetbounds $kr1c, $kr1c, $k0
-
-		# Notice correspondence to the layout of struct reg_frame.
-		# Notice also that KCC and KDC are not preserved.
-		#
-#cgetdefault	$kr2c
-		# Expands to a list of the form
-		# csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-        #foreachi csave, 0, $kr1c,					\
-		#	$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-		#	$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-		#	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
 
 		#
 		# Context switch save; step all over k0 and k1 as is usual
 		# for MIPS exception handlers.  Notice correspondence to the
 		# layout of struct reg_frame.
 		#
-		# Expands to a list of the form
-		# csd	$greg, $0, offset*REG_SIZE($kr1c)
-		foreachi gsave, 0, $k0,					\
-			$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
-			$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
-			$s7, $t8, $t9, $gp, $sp, $fp, $ra
+        sd $at, 0*REG_SIZE($k0)
+        sd $v0, 1*REG_SIZE($k0)
+        sd $v1, 2*REG_SIZE($k0)
+        sd $a0, 3*REG_SIZE($k0)
+        sd $a1, 4*REG_SIZE($k0)
+        sd $a2, 5*REG_SIZE($k0)
+        sd $a3, 6*REG_SIZE($k0)
+        sd $t0, 7*REG_SIZE($k0)
+        sd $t1, 8*REG_SIZE($k0)
+        sd $s0, 9*REG_SIZE($k0)
+        sd $s1, 10*REG_SIZE($k0)
+        sd $s2, 11*REG_SIZE($k0)
+        sd $s3, 12*REG_SIZE($k0)
+        sd $s4, 13*REG_SIZE($k0)
+        sd $t9, 14*REG_SIZE($k0)
+        sd $gp, 15*REG_SIZE($k0)
+        sd $sp, 16*REG_SIZE($k0)
+        sd $fp, 17*REG_SIZE($k0)
+        sd $ra, 18*REG_SIZE($k0)
 		mfhi	$k1
-		sd	$k1, 29*REG_SIZE($k0)
+		sd	$k1, 19*REG_SIZE($k0)
 		mflo	$k1
-		sd	$k1, 30*REG_SIZE($k0)
+		sd	$k1, 20*REG_SIZE($k0)
 		dmfc0	$k1, $14		# EPC
-		sd	$k1, 31*REG_SIZE($k0)
+		sd	$k1, 21*REG_SIZE($k0)
 
 		# Set up exception stack
-		dla		$t1, __stop_exception_stack
-		move		$sp, $t1
+		dla		$sp, __stop_exception_stack
 
 		#
 		# Restore the kernel's C0 after returning from the user
@@ -148,32 +139,31 @@ kernel_cp2_exception_handler:
 
 		# Expands to a list of the form
 		# cld	$greg, $0, offset*REG_SIZE($kr1c)
-		foreachi grestore, 0, $k0,					\
-			$at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7,	\
-			$t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6,	\
-			$s7, $t8, $t9, $gp, $sp, $fp, $ra
-		ld	$k1, 29*REG_SIZE($k0)
+        ld $at, 0*REG_SIZE($k0)
+        ld $v0, 1*REG_SIZE($k0)
+        ld $v1, 2*REG_SIZE($k0)
+        ld $a0, 3*REG_SIZE($k0)
+        ld $a1, 4*REG_SIZE($k0)
+        ld $a2, 5*REG_SIZE($k0)
+        ld $a3, 6*REG_SIZE($k0)
+        ld $t0, 7*REG_SIZE($k0)
+        ld $t1, 8*REG_SIZE($k0)
+        ld $s0, 9*REG_SIZE($k0)
+        ld $s1, 10*REG_SIZE($k0)
+        ld $s2, 11*REG_SIZE($k0)
+        ld $s3, 12*REG_SIZE($k0)
+        ld $s4, 13*REG_SIZE($k0)
+        ld $t9, 14*REG_SIZE($k0)
+        ld $gp, 15*REG_SIZE($k0)
+        ld $sp, 16*REG_SIZE($k0)
+        ld $fp, 17*REG_SIZE($k0)
+        ld $ra, 18*REG_SIZE($k0)
+		ld	$k1, 19*REG_SIZE($k0)
 		mthi	$k1
-		ld	$k1, 30*REG_SIZE($k0)
+		ld	$k1, 20*REG_SIZE($k0)
 		mtlo	$k1
-		ld	$k1, 31*REG_SIZE($k0)
+		ld	$k1, 21*REG_SIZE($k0)
 		dmtc0	$k1, $14		# EPC
-
-		#
-		# Restore the capability exception frame -- after
-		# general-purpose registers, since the above code is done
-		# relative to $c0.  Note that, after this point, no further
-		# memory access can be done using MIPS load and store
-		# instructions.
-		# Notice correspondence to the layout of struct reg_frame.
-		#
-		# Expands to a list of the form
-		# clc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE($kr1c)
-        #foreachi crestore, 0, $kr1c,					\
-		#	$kr2c, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9,	\
-		#	$c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	\
-		#	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $c31
-		#csetdefault	$kr2c
 
 		#
 		# On general principle, flush the contents of $k0 and $k1
@@ -183,7 +173,6 @@ kernel_cp2_exception_handler:
 		move	$k1, $zero
 
 		eret
-        nop
 
 kernel_cp2_exception_handler_end:
 		.size kernel_cp2_exception_handler, kernel_cp2_exception_handler_end - kernel_cp2_exception_handler

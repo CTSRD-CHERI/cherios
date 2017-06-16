@@ -43,10 +43,7 @@
 	.ent start_common
 start_common:
 	# Save arguments
-	move		$s0, $a0
-	move		$s1, $a1
-	move		$s2, $a2
-	move		$s3, $a3
+	move		$s0, $a3
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -71,19 +68,14 @@ start_common:
     nop
 
 	# Call object init.
-	move		$a0, $s3
-	move		$a1, $s5
-	move		$a2, $s6
-	move		$a3, $s7 # careful, s8 is used to remember pc for PIC
+	move		$a0, $s0
+	move		$a1, $s1
+	move		$a2, $s2
+	move		$a3, $s3 # careful, s8 is used to remember pc for PIC
     dla     $t9, libuser_init
     dadd    $t9, $s4, $t9
     jalr    $t9
     nop
-
-	# Restore arguments
-	move		$a0, $s0
-	move		$a1, $s1
-	move		$a2, $s2
 
 	# Call main().
     dla     $t9, main

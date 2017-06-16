@@ -51,6 +51,11 @@
 	.global msg_entry
 	.ent msg_entry
 msg_entry:
+	#Save sync_token
+	dla		$t9, sync_token
+	dadd    $t9, $s4, $t9
+	sd		$t0, 0($t1)
+
 	bltz		$v0, control
 	nop
 
@@ -75,11 +80,6 @@ call:
 	sub		$t1, $t1, $v0
 	blez		$t1, overflow
 	nop
-
-	#Save sync_token
-	dla		$t1, sync_token
-	dadd    $t1, $s4, $t1
-	sd		$t2, 0($t1)
 
 	sll		$v0, $v0, REG_SIZE_BITS
 	add		$t0, $t0, $v0
@@ -106,7 +106,7 @@ end:
 	#Restore sync_token
 	dla		$t1, sync_token
 	dadd    $t1, $s4, $t1
-	ld		$t2, 0($t1)
+	ld		$t0, 0($t1)
 #jr  $ra
     li $v1, 1010
     syscall

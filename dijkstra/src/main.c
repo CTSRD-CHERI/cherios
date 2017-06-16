@@ -243,7 +243,7 @@ void dijkstra(int chStart, int chEnd)
 
 int main() {
   stats_init();
-  int i_l,j,k;
+  int i_l,j;
   
   /* make a fully connected matrix */
   //for (i=0;i<NUM_NODES;i++) {

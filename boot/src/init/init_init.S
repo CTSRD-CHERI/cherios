@@ -44,10 +44,10 @@
 	.ent start
 start:
     
-    dla $t2, __init_fs_start
-    sd  $t0, 0($t2)
-    dla $t2, __init_fs_stop
-    sd  $t1, 0($t2)
+    dla $t9, __init_fs_start
+    sd  $t0, 0($t9)
+    dla $t9, __init_fs_stop
+    sd  $t1, 0($t9)
 
 	# Jump to write-free $pcc.
 	dla		$t0, cherios_init_jump_target

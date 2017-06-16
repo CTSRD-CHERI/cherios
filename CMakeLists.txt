@@ -83,7 +83,7 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # CMake will try to link ctr1.o into the executable and this might not exist
 # We don't need it as we are building in a freestanding environment here anyway
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
-set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs"
+set(CMAKE_EXE_LINKER_FLAGS "-nostartfiles -nodefaultlibs -fuse-ld=lld"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 enable_language(C)
@@ -119,9 +119,8 @@ endif()
 include_directories(include)
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
-    -mcpu=mips4
+    -mcpu=cheri128
     -mabi=n64
-    -cheri-linker
     -fPIC
     -integrated-as
     -msoft-float
@@ -250,7 +249,7 @@ function(add_cherios_module _target)
   # Tell the compiler to use the specified linker script
   target_link_libraries(${_target}
     "-L${CMAKE_SOURCE_DIR}/ldscripts"
-    "-T${add_exe_LINKER_SCRIPT}"
+    "-T${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}"
     )
   target_link_libraries(${_target}
     )
@@ -284,11 +283,6 @@ add_subdirectory(memmgt)
 add_subdirectory(namespace)
 #add_subdirectory(prga)
 #add_subdirectory(sockets)
-#add_subdirectory(test1a)
-#add_subdirectory(test1b)
-#add_subdirectory(test2a)
-#add_subdirectory(test2b)
-#add_subdirectory(test3)
 #add_subdirectory(uart)
 #add_subdirectory(virtio-blk)
 #add_subdirectory(zlib)

@@ -71,11 +71,11 @@ static void * init_act_create(const char * name, void * c0, void *pcbase, void *
 	/* set c0 */
 
 	/* set cap */
-	frame.mf_s5	= (register_t)act_cap;
+	frame.mf_s1	= (register_t)act_cap;
 
 	/* set namespace */
-	frame.mf_s6	= (register_t)ns_ref;
-	frame.mf_s7	= (register_t)ns_id;
+	frame.mf_s2	= (register_t)ns_ref;
+	frame.mf_s3	= (register_t)ns_id;
 
     /* remember pc for PIC */
 	frame.mf_s4	= (register_t)pcbase;

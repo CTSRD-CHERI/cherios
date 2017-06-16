@@ -39,25 +39,3 @@
 .set noreorder
 .set nobopt
 .set noat
-
-#
-# A few useful macros
-#
-
-# Saves general-purpose register 'greg' to offset 'offset' of frame 'frame'
-.macro gsave greg, offset, frame
-	sd	\greg, (\offset*REG_SIZE)(\frame)
-.endm
-
-# Restores general-purpose register 'greg' to offset 'offset' of frame 'frame'
-.macro grestore greg, offset, frame
-	ld	\greg, (\offset*REG_SIZE)(\frame)
-.endm
-
-# Calls 'macro elem, index, global' for each 'elem' of the input list
-.macro foreachi macro, index, global, head, tail:vararg
-	\macro \head, \index, \global
-	.ifnb  \tail
-	foreachi \macro, "(\index+1)", \global, \tail
-	.endif
-.endm

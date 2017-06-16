@@ -49,17 +49,6 @@ static int validate_idx(int nb) {
 	return 1;
 }
 
-static int validate_act_caps(void * act_reference, void * act_default_id) {
-	//if(cheri_gettag(act_reference) == 0) { return 0; }
-	//if(cheri_gettag(act_default_id) == 0) { return 0; }
-	//if(cheri_getsealed(act_reference) == 0) { return 0; }
-	//if(cheri_getsealed(act_default_id) == 0) { return 0; }
-	//if(cheri_gettype(act_reference) !=
-	//   cheri_gettype(act_default_id)) { return 0; }
-	///* todo: check otype range and permissions */
-	return 1;
-}
-
 /* Get reference for service 'n' */
 void * ns_get_reference(int nb) {
 	if(!validate_idx(nb))
@@ -95,7 +84,7 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id)
 }
 
 int ns_register(int nb, void * act_reference, void * act_default_id) {
-	if(!validate_idx(nb) || !validate_act_caps(act_reference, act_default_id))
+	if(!validate_idx(nb))
 		return -1;
 
 	return ns_register_core(nb, act_reference, act_default_id);

@@ -404,10 +404,10 @@ typedef struct reg_frame {
 	 */
 	/* No need to preserve $zero. */
 	register_t	mf_at, mf_v0, mf_v1;
-	register_t	mf_a0, mf_a1, mf_a2, mf_a3, mf_a4, mf_a5, mf_a6, mf_a7;
-	register_t	mf_t0, mf_t1, mf_t2, mf_t3;
-	register_t	mf_s0, mf_s1, mf_s2, mf_s3, mf_s4, mf_s5, mf_s6, mf_s7;
-	register_t	mf_t8, mf_t9;
+	register_t	mf_a0, mf_a1, mf_a2, mf_a3;
+	register_t	mf_t0, mf_t1;
+	register_t	mf_s0, mf_s1, mf_s2, mf_s3, mf_s4;
+	register_t	mf_t9;
 	/* No need to preserve $k0, $k1. */
 	register_t	mf_gp, mf_sp, mf_fp, mf_ra;
 

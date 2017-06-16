@@ -76,46 +76,25 @@ static void regdump_c(const char * str_cap, int hl, const void * cap) {
  */
 
 void regdump(int reg_num) {
-	int creg = 0;
-
 	printf("Regdump:\n");
 
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
 
 	REG_DUMP_M(a0); REG_DUMP_M(a1); REG_DUMP_M(a2); REG_DUMP_M(a3); printf("\n");
-	REG_DUMP_M(a4); REG_DUMP_M(a5); REG_DUMP_M(a6); REG_DUMP_M(a7); printf("\n");
 
-	REG_DUMP_M(t0); REG_DUMP_M(t1); REG_DUMP_M(t2); REG_DUMP_M(t3); printf("\n");
+	REG_DUMP_M(t0); REG_DUMP_M(t1); printf("\n");
 
 	REG_DUMP_M(s0); REG_DUMP_M(s1); REG_DUMP_M(s2); REG_DUMP_M(s3); printf("\n");
-	REG_DUMP_M(s4); REG_DUMP_M(s5); REG_DUMP_M(s6); REG_DUMP_M(s7); printf("\n");
 
-	REG_DUMP_M(t8); REG_DUMP_M(t9); printf("\n");
+	REG_DUMP_M(t9); printf("\n");
 
 	REG_DUMP_M(gp); REG_DUMP_M(sp); REG_DUMP_M(fp); REG_DUMP_M(ra); printf("\n");
 
 	REG_DUMP_M(hi); REG_DUMP_M(lo); printf("\n");
 
-	REG_DUMP_M(pc); printf("\n"); /* does not seem in sync with pcc */
+	REG_DUMP_M(pc); printf("\n");
 
 	printf("\n");
-
-	REG_DUMP_C(c0); printf("\n");
-
-	REG_DUMP_C(c1); REG_DUMP_C(c2); printf("\n");
-
-	REG_DUMP_C(c3); REG_DUMP_C(c4); REG_DUMP_C(c5); REG_DUMP_C(c6);  printf("\n");
-	REG_DUMP_C(c7); REG_DUMP_C(c8); REG_DUMP_C(c9); REG_DUMP_C(c10); printf("\n");
-
-	REG_DUMP_C(c11); REG_DUMP_C(c12); REG_DUMP_C(c13);
-	REG_DUMP_C(c14); REG_DUMP_C(c15); printf("\n");
-
-	REG_DUMP_C(c16); REG_DUMP_C(c17); printf("\n");
-
-	REG_DUMP_C(c18); REG_DUMP_C(c19); REG_DUMP_C(c20); REG_DUMP_C(c21); printf("\n");
-	REG_DUMP_C(c22); REG_DUMP_C(c23); REG_DUMP_C(c24); REG_DUMP_C(c25); printf("\n");
-
-	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
 }
 
 #else

@@ -106,7 +106,7 @@ int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
 		ERROR("Bad e_version");
 		return 0;
 	}
-	if(hdr->e_flags != 0x30000007) {
+	if(hdr->e_flags != 0x30000007 && hdr->e_flags != 0x30C10007 && hdr->e_flags != 0x30C20007) {
 		ERRORM("Bad e_flags: %X", hdr->e_flags);
 		return 0;
 	}
@@ -162,6 +162,10 @@ void *elf_loader_mem(Elf_Env *env, void *p, size_t *minaddr, size_t *maxaddr, si
 			TRACE("lowaddr:%lx allocsize:%lx bound:%lx", lowaddr, allocsize, bound);
 		} else if(seg->p_type == 0x6474E551) {
 			/* GNU Stack */
+		} else if(seg->p_type == 0x6) {
+			/* PT_PHDR */
+		} else if(seg->p_type == 0x6474E552) {
+			/* RELRO */
 		} else {
 			ERROR("Unknown section");
 			return NULL;
