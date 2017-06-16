@@ -8,6 +8,7 @@
 #define CRC32_ITER 2
 #define STRINGSEARCH_ITER 100
 #define BITCOUNT_ITER 1
+#define ADPCM_ITER 10
 #define DIJKSTRA_ITER 1
 
 #endif
