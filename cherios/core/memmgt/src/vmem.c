@@ -265,7 +265,9 @@ free_chain_t* memmgt_find_res_for_addr(size_t vaddr) {
     free_chain_t* chain = chain_start;
 
     do {
-        capability nfo = rescap_info(chain->used.res);
+        capability foo = chain->used.res;
+        assert(foo != NULL);
+        capability nfo = rescap_info(foo);
 
         assert(nfo != NULL);
 
@@ -310,8 +312,9 @@ free_chain_t* memmgt_free_res(free_chain_t* chain) {
     free_chain_t* pr = chain->used.prev_res;
     free_chain_t* nx = chain->used.next_res;
 
-    assert((chain->used.res) != NULL);
-    capability mid_nfo = rescap_info(chain->used.res);
+    capability foo = (chain->used.res);
+    assert(foo != NULL);
+    capability mid_nfo = rescap_info(foo);
 
     size_t true_base = cheri_getbase(mid_nfo);
     size_t true_bound = true_base + cheri_getlen(mid_nfo);
@@ -326,8 +329,9 @@ free_chain_t* memmgt_free_res(free_chain_t* chain) {
 
         /* Merging might have gained us a page back */
         if(aligned_base != true_base) {
-            assert(pr->used.res != NULL);
-            capability pr_nfo = rescap_info(pr->used.res);
+            capability foo = pr->used.res;
+            assert(foo != NULL);
+            capability pr_nfo = rescap_info(foo);
             size_t pr_base = align_up_to(cheri_getbase(pr_nfo), UNTRANSLATED_PAGE_SIZE);
             if(pr_base != aligned_base) aligned_base-= UNTRANSLATED_PAGE_SIZE;
         }
@@ -341,8 +345,9 @@ free_chain_t* memmgt_free_res(free_chain_t* chain) {
     if(chain_is_free(nx)) {
 
         if(true_bound != aligned_bound) {
-            assert(nx->used.next_res != NULL);
-            capability  nx_nfo = rescap_info(nx->used.next_res);
+            capability foo = nx->used.next_res;
+            assert(foo != NULL);
+            capability  nx_nfo = rescap_info(foo);
             size_t nx_len = RES_META_SIZE + cheri_getlen(nx_nfo);
             if(nx_len >= (true_bound-aligned_bound)) aligned_bound+=UNTRANSLATED_PAGE_SIZE;
         }
@@ -365,8 +370,9 @@ free_chain_t* memmgt_find_free_reservation(size_t with_addr, size_t req_length, 
 
     int care_about_addr = with_addr != 0;
     while(chain != NULL) {
-
-        capability info = rescap_info(chain->used.res);
+        capability foo = chain->used.res;
+        assert(foo != NULL);
+        capability info = rescap_info(foo);
 
         size_t base = cheri_getbase(info);
         size_t length = cheri_getlen(info);
