@@ -88,6 +88,11 @@
 .type act_self_ctrl, "tls_object"
 
 msg_entry:
+
+# Standard function prolog so regdump stops here nicely
+    daddiu      $sp, $sp, -0x20
+    csc         $c17, $sp, 0($c11)
+
     cgetdefault	def_cap
 
     rdhwr       $t1, $29

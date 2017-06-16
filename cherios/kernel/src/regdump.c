@@ -156,19 +156,25 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 		//scan backwards for daddiu
 		int16_t stack_size = 0;
 		int16_t offset = 0;
-		for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
-			if(check_cap(instr)) {
-				printf("***bad frame***\n");
-				return;
+
+		if(((size_t)return_address & 0xffffffff80000000) != 0xffffffff80000000) {
+			for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
+				if(check_cap(instr)) {
+					printf("***bad frame***\n");
+					return;
+				}
+				uint32_t val = *instr;
+				if((val & daddiu_form_mask) == daddiu_form_val) {
+					stack_size = (int16_t)(val & daddiu_i_mask);
+					break;
+				}
+				if((val & csc_form_mask) == csc_form_val) {
+					offset = (int16_t)((val & csc_i_mask) << 4);
+				}
 			}
-			uint32_t val = *instr;
-			if((val & daddiu_form_mask) == daddiu_form_val) {
-				stack_size = (int16_t)(val & daddiu_i_mask);
-				break;
-			}
-			if((val & csc_form_mask) == csc_form_val) {
-				offset = (int16_t)((val & csc_i_mask) << 4);
-			}
+		} else if(i != 1) {
+			printf("***address in nano kernel***\n");
+			return;
 		}
 
 		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
