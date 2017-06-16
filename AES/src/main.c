@@ -109,7 +109,7 @@ void fillrand(byte *buf, int len)
 }    
 
 uint64_t encfile(byte *fin, byte *fout, aes *ctx, uint64_t length) {   
-    byte            inbuf[16], outbuf[16];
+    byte            inbuf[16] __attribute__((aligned(REG_SIZE))), outbuf[16] __attribute__((aligned(REG_SIZE)));
     uint64_t   i=0, l=0;
     uint64_t readbytes = 0, writebytes = 0;
 
@@ -167,7 +167,7 @@ uint64_t encfile(byte *fin, byte *fout, aes *ctx, uint64_t length) {
 }
 
 int decfile(byte *fin, byte *fout, aes *ctx, uint64_t length) {
-    byte    inbuf1[16], inbuf2[16], outbuf[16], *bp1, *bp2, *tp;
+    byte    inbuf1[16] __attribute__((aligned(REG_SIZE))), inbuf2[16] __attribute__((aligned(REG_SIZE))), outbuf[16] __attribute__((aligned(REG_SIZE))), *bp1, *bp2, *tp;
     uint64_t i, l, flen;
     uint64_t readbytes = 0, writebytes = 0;
 
@@ -234,7 +234,7 @@ int decfile(byte *fin, byte *fout, aes *ctx, uint64_t length) {
 int
 main_aes(byte *in, byte *out, int64_t length, char *givenKey) {   
     char    *cp, ch;
-    byte key[32];
+    byte key[32] __attribute__((aligned(REG_SIZE)));
     int     i=0, by=0, key_len=0, err = 0;
     aes     ctx[1];
 

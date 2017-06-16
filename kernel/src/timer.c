@@ -65,11 +65,6 @@ void kernel_timer(void)
 	 * tick, better to defer.
 	 */
 	/* count register is 32 bits */
-	register_t next_timer = TMOD(kernel_last_timer + TIMER_INTERVAL);
-	while (next_timer < TMOD(cp0_count_get() + TIMER_INTERVAL_MIN)) {
-		next_timer = TMOD(next_timer + TIMER_INTERVAL);
-	}
-	cp0_compare_set(next_timer);		/* Clears pending interrupt. */
-
-	kernel_last_timer = next_timer;
+    kernel_last_timer = TMOD(cp0_count_get() + TIMER_INTERVAL + 1);
+    cp0_compare_set(kernel_last_timer); //Also clears pending interrupt.
 }

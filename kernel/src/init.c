@@ -90,7 +90,7 @@ int cherios_main(int argc, void *p) {
 
 	install_exception_vectors();
 	act_init(&boot_info);
-	//kernel_interrupts_init(1);
+	kernel_interrupts_init(1);
 
 	KERNEL_TRACE("init", "init done");
 

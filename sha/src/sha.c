@@ -6,6 +6,7 @@
 /* NIST's proposed modification to SHA of 7/11/94 may be */
 /* activated by defining USE_MODIFIED_SHA */
 
+#include<mips.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -191,7 +192,7 @@ void sha_final(SHA_INFO *sha_info)
 void sha_stream(SHA_INFO *sha_info, char *fin, size_t fin_size)
 {
     size_t readbyte = 0;
-    BYTE data[BLOCK_SIZE];
+    BYTE data[BLOCK_SIZE] __attribute__((aligned(REG_SIZE)));
 
     sha_init(sha_info);
     //while ((i = fread(data, 1, BLOCK_SIZE, fin)) > 0) {

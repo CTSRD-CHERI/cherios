@@ -1,3 +1,4 @@
+#include<mips.h>
 #include <stdio.h>
 #include<stdlib.h>
 #include<statcounters.h>
@@ -9,16 +10,16 @@ struct _NODE
 {
   int iDist;
   int iPrev;
-};
+}__attribute__((aligned(REG_SIZE)));
 typedef struct _NODE NODE;
 
 struct _QITEM
 {
   int iNode;
   int iDist;
-  int iPrev;
   struct _QITEM *qNext;
-};
+  int iPrev;
+}__attribute__((aligned(REG_SIZE)));
 typedef struct _QITEM QITEM;
 
 QITEM *qHead = NULL;

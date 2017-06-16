@@ -38,8 +38,8 @@
 
 //#define	TIMER_INTERVAL		400000
 //#define	TIMER_INTERVAL_MIN	30000
-#define	TIMER_INTERVAL		40000000
-#define	TIMER_INTERVAL_MIN	20000000
+#define	TIMER_INTERVAL		10000000
+#define	TIMER_INTERVAL_MIN	5000000
 
 extern void	__start_bss;
 extern void	__stop_bss;

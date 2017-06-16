@@ -38,6 +38,8 @@
 #define	__aligned__(x)	__attribute__ ((aligned(x)))
 #define	__packed__	__attribute__ ((packed))
 
+#define REG_SIZE 8
+
 /*
  * 64-bit MIPS types.
  */
