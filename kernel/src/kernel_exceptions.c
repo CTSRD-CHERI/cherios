@@ -43,7 +43,7 @@
 #endif
 
 static void kernel_exception_data(register_t excode) {
-	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s-%d\n",
+	exception_printf(KRED"Data abort type %d, BadVAddr:0x%lx in %s-%d"KRST"\n",
 			 excode, cp0_badvaddr_get(),
 			 kernel_acts[kernel_curr_act].name, kernel_curr_act);
 	regdump(-1);

@@ -54,7 +54,7 @@ msg_entry:
 	#Save sync_token
 	dla		$t9, sync_token
 	dadd    $t9, $s4, $t9
-	sd		$t0, 0($t1)
+	sd		$t0, 0($t9)
 
 	bltz		$v0, control
 	nop
@@ -84,6 +84,7 @@ call:
 	sll		$v0, $v0, REG_SIZE_BITS
 	add		$t0, $t0, $v0
 	ld		$t9, 0($t0)
+    dadd    $t9, $s4, $t9
 	jalr    $t9
 	nop
 #b		end
