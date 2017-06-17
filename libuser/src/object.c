@@ -38,6 +38,9 @@ void * act_self_ctrl = NULL;
 void * act_self_ref  = NULL;
 void * act_self_id   = NULL;
 void * act_self_cap   = NULL;
+void * act_self_msg   = NULL;
+void * act_self_stack   = NULL;
+void * act_self_base   = NULL;
 
 void object_init(void * self_ctrl, void* self_cap) {
 	assert(self_ctrl != NULL);

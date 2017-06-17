@@ -45,6 +45,18 @@ start_common:
 	# Save arguments
 	move		$s0, $a3
 
+    # save the msg jump address and stack pointer and the pic base
+    dla     $t0, act_self_msg
+    dadd    $t0, $s4, $t0
+    dla     $t1, msg_entry_dcall
+    sd      $t1, 0($t0)
+    dla     $t0, act_self_stack
+    dadd    $t0, $s4, $t0
+    sd      $sp, 0($t0)
+    dla     $t0, act_self_base
+    dadd    $t0, $s4, $t0
+    sd      $s4, 0($t0)
+
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.

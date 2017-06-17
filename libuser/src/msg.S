@@ -122,3 +122,82 @@ end:
 msg_entry_end:
 	.end msg_entry
 	.size msg_entry, msg_entry_end - msg_entry
+
+	.text
+	.global msg_entry_dcall
+	.ent msg_entry_dcall
+msg_entry_dcall:
+    dla     $t1, act_self_stack
+    dadd    $t1, $s4, $t1
+    ld      $sp, 0($t1)
+
+    li $t0, MUTEX_ADDR
+    dadd    $t0, $s4, $t0
+mutex_loop_dcall:
+    # mutex to prevent module from receiving another message while still
+    # processing the previous one
+    ll  $t1, 0($t0)
+    bne $t1, $0, locked_dcall
+    li  $t9, 1
+    sc  $t9, 0($t0)
+    beq $t9, $0, locked_dcall
+    nop
+
+	bltz		$v0, control_dcall
+    daddiu  $sp, $sp, -CAP_SIZE
+
+	dla		$t0, msg_methods
+	dadd    $t0, $s4, $t0
+	dla		$t1, msg_methods_nb
+	dadd    $t1, $s4, $t1
+    b   call_dcall
+	nop
+
+control_dcall:
+	dla		$t0, ctrl_methods
+	dadd    $t0, $s4, $t0
+	dla		$t1, ctrl_methods_nb
+    dadd    $t1, $s4, $t1
+	sub		$v0, $0, $v0
+call_dcall:
+	ld		$t1, 0($t1)
+	sub		$t1, $t1, $v0
+	blez		$t1, overflow_dcall
+	nop
+
+    daddiu  $sp, $sp, -8
+    sd  $ra, 0($sp)
+	sll		$v0, $v0, REG_SIZE_BITS
+	add		$t0, $t0, $v0
+	ld		$t9, 0($t0)
+    dadd    $t9, $s4, $t9
+	jalr    $t9
+	nop
+    ld  $ra, 0($sp)
+    b   end_dcall
+	nop
+
+overflow_dcall:
+	move		$v0, $0
+    b   end_dcall
+	move		$v1, $0
+
+end_dcall:
+    # release lock
+    li $t0, MUTEX_ADDR
+    dadd    $t0, $s4, $t0
+    sw  $0, 0($t0)
+    jr      $ra
+    daddiu  $sp, $sp, 8
+
+locked_dcall:
+    li  $v1, 13
+    move    $a3, $a0
+    li  $a0, 0
+    syscall
+    b   mutex_loop_dcall
+    move    $a0, $a3
+
+msg_entry_dcall_end:
+	.end msg_entry_dcall
+	.size msg_entry_dcall, msg_entry_dcall_end - msg_entry_dcall
