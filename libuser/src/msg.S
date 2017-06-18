@@ -126,23 +126,23 @@ msg_entry_end:
 	.global msg_entry_dcall
 	.ent msg_entry_dcall
 msg_entry_dcall:
+    li $t9, MUTEX_ADDR
+    dadd    $t9, $s4, $t9
+mutex_loop_dcall:
+    # mutex to prevent module from receiving another message while still
+    # processing the previous one
+    ll  $t1, 0($t9)
+    bne $t1, $0, locked_dcall
+    li  $t1, 1
+    sc  $t1, 0($t9)
+    beq $t1, $0, locked_dcall
+    nop
+
     dla     $t1, act_self_stack
     dadd    $t1, $s4, $t1
     ld      $sp, 0($t1)
     daddiu  $sp, $sp, -16
     sd      $t0, 8($sp) # store the caller's base here
-
-    li $t0, MUTEX_ADDR
-    dadd    $t0, $s4, $t0
-mutex_loop_dcall:
-    # mutex to prevent module from receiving another message while still
-    # processing the previous one
-    ll  $t1, 0($t0)
-    bne $t1, $0, locked_dcall
-    li  $t9, 1
-    sc  $t9, 0($t0)
-    beq $t9, $0, locked_dcall
-    nop
 
 	bltz		$v0, control_dcall
 
