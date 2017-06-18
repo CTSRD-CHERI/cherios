@@ -80,7 +80,7 @@ void init_alloc_enable_system(void * c_memmgt) {
 
 void *init_alloc(size_t s) {
 	if(system_alloc == 1) {
-		void * p = calloc(1, s);
+		void * p = calloc_core(1, s);
 		if(p == NULL) {
 			return NULL;
 		}
@@ -91,7 +91,7 @@ void *init_alloc(size_t s) {
 
 void init_free(void * p) {
 	if(system_alloc == 1) {
-        free(p);
+        free_core(p);
 	}
 	/* init alloc has no free */
 }

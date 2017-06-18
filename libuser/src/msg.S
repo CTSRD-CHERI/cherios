@@ -33,17 +33,8 @@
 .set nobopt
 .set noat
 
-#.ifeq _MIPS_SZCAP-256
-#.set CAP_SIZE_BITS, 5
-#.else
-#.ifeq _MIPS_SZCAP-128
-#.set CAP_SIZE_BITS, 4
-#.else
-#.error "Unknown cap size"
-#.endif
-#.endif
-
 .set REG_SIZE_BITS, 3
+.set MUTEX_ADDR, 0x100
 
 # Dispatch CCalls
 
@@ -51,6 +42,18 @@
 	.global msg_entry
 	.ent msg_entry
 msg_entry:
+    li $t9, MUTEX_ADDR
+    dadd    $t9, $s4, $t9
+mutex_loop:
+    # mutex to prevent module from receiving another message while still
+    # processing the previous one
+    ll  $t1, 0($t9)
+    bne $t1, $0, locked
+    li  $t1, 1
+    sc  $t1, 0($t9)
+    beq $t1, $0, locked
+    nop
+
 	#Save sync_token
 	dla		$t9, sync_token
 	dadd    $t9, $s4, $t9
@@ -63,10 +66,7 @@ msg_entry:
 	dadd    $t0, $s4, $t0
 	dla		$t1, msg_methods_nb
 	dadd    $t1, $s4, $t1
-#b		call
-    dla $t9, call
-    dadd    $t9, $s4, $t9
-    jr  $t9
+	b		call
 	nop
 
 control:
@@ -87,38 +87,37 @@ call:
     dadd    $t9, $s4, $t9
 	jalr    $t9
 	nop
-#b		end
-    dla $t9, end
-    dadd    $t9, $s4, $t9
-    jr  $t9
+	b		end
 	nop
 
 overflow:
 	move		$v0, $0
+	b		end
 	move		$v1, $0
-#	cfromptr	$c3, $c3, $0
-#b		end
-    dla $t9, end
-    dadd    $t9, $s4, $t9
-    jr  $t9
-	nop
 
 end:
 	#Restore sync_token
 	dla		$t1, sync_token
 	dadd    $t1, $s4, $t1
 	ld		$t0, 0($t1)
-#jr  $ra
+    li $t1, MUTEX_ADDR
+    dadd    $t1, $s4, $t1
+    sw  $0, 0($t1)
     li $v1, 1010
     syscall
-    nop
 
 	#We are scheduled again: new message
-#b msg_entry
-    dla $t9, msg_entry
-    dadd    $t9, $s4, $t9
-    jr  $t9
+	b msg_entry
 	nop
+
+locked:
+    li  $v1, 13
+    move    $s0, $a0
+    li  $a0, 0
+    syscall
+    b   mutex_loop
+    move    $a0, $s0
+
 msg_entry_end:
 	.end msg_entry
 	.size msg_entry, msg_entry_end - msg_entry
@@ -131,7 +130,7 @@ msg_entry_dcall:
     dadd    $t1, $s4, $t1
     ld      $sp, 0($t1)
     daddiu  $sp, $sp, -16
-    sd      $t0, 8($sp)
+    sd      $t0, 8($sp) # store the caller's base here
 
     li $t0, MUTEX_ADDR
     dadd    $t0, $s4, $t0
@@ -146,7 +145,6 @@ mutex_loop_dcall:
     nop
 
 	bltz		$v0, control_dcall
-    daddiu  $sp, $sp, -CAP_SIZE
 
 	dla		$t0, msg_methods
 	dadd    $t0, $s4, $t0

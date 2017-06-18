@@ -41,23 +41,26 @@
     .ent dcall_4
 dcall_4:
     daddiu  $sp, $sp, -8
+    dla     $t0, act_self_temp_stack
+    dadd    $t0, $s4, $t0
+    sd      $sp, 0($t0)
     sd      $ra, 0($sp)
     move    $v0, $a0
     move    $a0, $a1
     move    $a1, $a2
     move    $a2, $a3
-    ld      $a3, 0($sp)
+    ld      $a3, 8($sp)
     move    $t0, $s4
-    ld      $t9, 8($sp)
+    ld      $t9, 16($sp)
     jalr    $t9
-    ld      $s4, 16($sp)
+    ld      $s4, 24($sp)
     # return here
-    dla     $t0, act_self_stack
+    dla     $t0, act_self_temp_stack
     dadd    $t0, $s4, $t0
     ld      $sp, 0($t0)
     ld      $ra, 0($sp)
     jr      $ra
-    nop
+    daddiu  $sp, $sp, 8
 
 dcall_4_end:
     .size dcall_4, dcall_4_end - dcall_4

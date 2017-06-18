@@ -40,6 +40,7 @@ void * act_self_id   = NULL;
 void * act_self_cap   = NULL;
 void * act_self_msg   = NULL;
 void * act_self_stack   = NULL;
+void * act_self_temp_stack   = NULL;
 void * act_self_base   = NULL;
 
 void object_init(void * self_ctrl, void* self_cap, void *self_entry, void *self_stack, void *self_base) {

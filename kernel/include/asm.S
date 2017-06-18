@@ -28,11 +28,6 @@
 # SUCH DAMAGE.
 #
 
-.ifdef MIPS_SZCAP
-.set CAP_SIZE, (MIPS_SZCAP/8)
-.else
-.set CAP_SIZE, 0
-.endif
 .set REG_SIZE, (64/8)
 .set MIPS_FRAME_SIZE, (32*REG_SIZE)
 
