@@ -43,19 +43,14 @@
 	.ent start_common
 start_common:
 	# Save arguments
-	move		$s0, $a3
-
-    # save the msg jump address and stack pointer and the pic base
-    dla     $t0, act_self_msg
-    dadd    $t0, $s4, $t0
+	move    $s0, $a3
+    daddiu  $sp, $sp, -24
     dla     $t1, msg_entry_dcall
-    sd      $t1, 0($t0)
-    dla     $t0, act_self_stack
-    dadd    $t0, $s4, $t0
-    sd      $sp, 0($t0)
-    dla     $t0, act_self_base
-    dadd    $t0, $s4, $t0
-    sd      $s4, 0($t0)
+    dadd    $t1, $s4, $t1
+    sd      $t1, 0($sp) # entry
+    daddiu  $t1, $sp, 24
+    sd      $t1, 8($sp) # stack
+    sd      $s4, 16($sp) # base
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -102,7 +97,7 @@ start_common:
     #cld		$t0, $t0, 0($c17)
     ld  $t0, 0($t0)
 	bne		$t0, $zero, to_msg
-	nop
+    daddiu  $sp, $sp, 24
 	dla		$t0, act_self_ctrl
 	dadd		$t0, $s4
     ld  $a0, 0($t0)

@@ -42,13 +42,16 @@ void * act_self_msg   = NULL;
 void * act_self_stack   = NULL;
 void * act_self_base   = NULL;
 
-void object_init(void * self_ctrl, void* self_cap) {
+void object_init(void * self_ctrl, void* self_cap, void *self_entry, void *self_stack, void *self_base) {
 	assert(self_ctrl != NULL);
 	act_self_ctrl = self_ctrl;
 	act_self_ref  = act_ctrl_get_ref(self_ctrl);
 	act_self_id   = act_ctrl_get_id(self_ctrl);
 
 	act_self_cap = self_cap;
+    act_self_msg = self_entry;
+    act_self_stack = self_stack;
+    act_self_base = self_base;
 }
 
 void * act_get_cap(void) {

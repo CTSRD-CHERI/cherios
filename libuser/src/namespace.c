@@ -44,6 +44,10 @@ int namespace_register(int nb, void *ref, void *id) {
 	return ccall_4(namespace_ref, namespace_id, 0, nb, (register_t)ref, (register_t)id, 0);
 }
 
+int namespace_dcall_register(int nb, void *entry, void *base) {
+	return ccall_4(namespace_ref, namespace_id, 3, nb, (register_t)entry, (register_t)base, 0);
+}
+
 void * namespace_get_ref(int nb) {
 	return (void *)ccall_4(namespace_ref, namespace_id, 1, nb, 0, 0, 0);
 }
@@ -53,9 +57,9 @@ void * namespace_get_id(int nb) {
 }
 
 void * namespace_get_entry(int nb) {
-	return (void *)ccall_4(namespace_ref, namespace_id, 3, nb, 0, 0, 0);
+	return (void *)ccall_4(namespace_ref, namespace_id, 4, nb, 0, 0, 0);
 }
 
 void * namespace_get_base(int nb) {
-	return (void *)ccall_4(namespace_ref, namespace_id, 4, nb, 0, 0, 0);
+	return (void *)ccall_4(namespace_ref, namespace_id, 5, nb, 0, 0, 0);
 }

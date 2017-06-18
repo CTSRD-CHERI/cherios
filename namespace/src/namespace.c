@@ -92,7 +92,7 @@ void * ns_get_base(int nb) {
 }
 
 /* Register a module a service 'nb' */
-static int ns_register_core(int nb, void * act_reference, void * act_default_id, void *act_entry, void *act_base) {
+static int ns_register_core(int nb, void * act_reference, void * act_default_id) {
 	if(bind[nb].act_reference != NULL) {
 		printf(KWHT"%s: port already in use"KRST"\n", __func__);
 		return -1;
@@ -100,15 +100,34 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id,
 
 	bind[nb].act_reference  = act_reference;
 	bind[nb].act_default_id = act_default_id;
-	bind[nb].act_entry = act_entry;
-	bind[nb].act_base = act_base;
 	printf(KWHT"%s: registered at port %d"KRST"\n", __func__, nb);
 	return 0;
 }
 
-int ns_register(int nb, void * act_reference, void * act_default_id, void *act_entry, void *act_base) {
+int ns_register(int nb, void * act_reference, void * act_default_id) {
 	if(!validate_idx(nb))
 		return -1;
 
-	return ns_register_core(nb, act_reference, act_default_id, act_entry, act_base);
+	return ns_register_core(nb, act_reference, act_default_id);
+}
+
+/* Register a module a service 'nb' for direct jump */
+static int ns_dcall_register_core(int nb, void *entry, void *base) {
+	if(bind[nb].act_entry != NULL) {
+		printf(KWHT"%s: port already in use"KRST"\n", __func__);
+		return -1;
+	}
+
+	bind[nb].act_entry  = entry;
+	bind[nb].act_base = base;
+	printf(KWHT"%s: registered DCALL at port %d"KRST"\n", __func__, nb);
+	printf(KWHT"entry %p, base %p"KRST"\n", entry, base);
+	return 0;
+}
+
+int ns_dcall_register(int nb, void *entry, void *base) {
+	if(!validate_idx(nb))
+		return -1;
+
+	return ns_dcall_register_core(nb, entry, base);
 }

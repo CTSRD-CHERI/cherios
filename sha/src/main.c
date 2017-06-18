@@ -16,9 +16,14 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 int main()
 {
     printf("SHA Hello World.\n");
-    int ret = namespace_register(6, act_self_ref, act_self_id, act_self_msg, act_self_base);
+    int ret = namespace_register(6, act_self_ref, act_self_id);
     if(ret!=0) {
         printf("SHA: register failed\n");
+        return -1;
+    }
+    ret = namespace_dcall_register(6, act_self_msg, act_self_base);
+    if(ret!=0) {
+        printf("SHA: DCALL register failed\n");
         return -1;
     }
     printf("SHA: register OK\n");

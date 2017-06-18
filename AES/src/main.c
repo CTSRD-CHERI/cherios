@@ -288,9 +288,14 @@ exit:
 
 int main() {
     printf("AES Hello World.\n");
-    int ret = namespace_register(5, act_self_ref, act_self_id, act_self_msg, act_self_base);
+    int ret = namespace_register(5, act_self_ref, act_self_id);
     if(ret!=0) {
         printf("AES: register failed\n");
+        return -1;
+    }
+    ret = namespace_dcall_register(5, act_self_msg, act_self_base);
+    if(ret!=0) {
+        printf("AES: DCALL register failed\n");
         return -1;
     }
     printf("AES: register OK\n");

@@ -47,7 +47,7 @@ int	act_ctrl_terminate(void * ctrl);
 void *	act_get_cap(void);
 void *	act_seal_id(void * id);
 
-void	object_init(void * self_ctrl, void * self_cap);
+void	object_init(void * self_ctrl, void * self_cap, void *self_entry, void *self_stack, void *self_base);
 
 void	ctor_null(void);
 void	dtor_null(void);

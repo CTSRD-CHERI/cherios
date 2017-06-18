@@ -32,7 +32,8 @@
 
 void	ns_init(void);
 
-int	ns_register(int nb, void * act_reference, void * act_default_id, void *act_entry, void *act_base);
+int	ns_register(int nb, void * act_reference, void * act_default_id);
+int	ns_dcall_register(int nb, void *act_entry, void *act_base);
 void *	ns_get_reference(int nb);
 void *	ns_get_identifier(int nb);
 void *	ns_get_entry(int nb);
