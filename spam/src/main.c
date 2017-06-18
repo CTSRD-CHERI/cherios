@@ -6,6 +6,7 @@
 #include<assert.h>
 #include<sha_info.h>
 #include<statcounters.h>
+#include<mibench_iter.h>
 
 #define EACH_BLOCK_SIZE 256
 
@@ -13,7 +14,6 @@ extern char __AES_start, __AES_end;
 
 int
 main() {
-    stats_init();
     for(int i=0; i<8; i++) {
         printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n");
     }
@@ -42,22 +42,31 @@ main() {
 
     const char *theKey = "0123456789ABCDEFFEDCBA98765432100123456789ABCDEFFEDCBA9876543210";
 
-    while((remain = len-encdecOffset) > EACH_BLOCK_SIZE) {
-        encret = dcall_4(0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, EACH_BLOCK_SIZE, (register_t)theKey, u_entry, u_base);
-        decret = dcall_4(0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey, u_entry, u_base);
-        encdecOffset += EACH_BLOCK_SIZE;
-        totalDeced += decret;
-    }
-    encret = dcall_4(0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, remain, (register_t)theKey, u_entry, u_base);
-    decret = dcall_4(0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey, u_entry, u_base);
-    totalDeced += decret;
-
+    stats_init();
+	for(int i=0; i<AES_ITER; i++) {
+		encdecOffset = 0;
+		totalDeced = 0;
+		remain = 0;
+		while((remain = len-encdecOffset) > EACH_BLOCK_SIZE) {
+			encret = dcall_4(0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, EACH_BLOCK_SIZE, (register_t)theKey, u_entry, u_base);
+			decret = dcall_4(0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey, u_entry, u_base);
+			encdecOffset += EACH_BLOCK_SIZE;
+			totalDeced += decret;
+		}
+		encret = dcall_4(0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, remain, (register_t)theKey, u_entry, u_base);
+		decret = dcall_4(0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey, u_entry, u_base);
+		totalDeced += decret;
+	}
     printf("Size of the original: %ld, Total bytes decrypted: %ld\n", len, totalDeced);
+    stats_display();
 
     SHA_INFO theinfo;
-    ccall_4(sha_ref, sha_id, 0, (register_t)&theinfo, (register_t)&__AES_start, (size_t)len, 0);
+    stats_init();
+	for(int i=0; i<SHA_ITER; i++) {
+		ccall_4(sha_ref, sha_id, 0, (register_t)&theinfo, (register_t)&__AES_start, (size_t)len, 0);
+	}
     ccall_4(sha_ref, sha_id, 1, (register_t)&theinfo, 0, 0, 0);
-
     stats_display();
+
     return 0;
 }
