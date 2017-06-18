@@ -130,6 +130,8 @@ msg_entry_dcall:
     dla     $t1, act_self_stack
     dadd    $t1, $s4, $t1
     ld      $sp, 0($t1)
+    daddiu  $sp, $sp, -16
+    sd      $t0, 8($sp)
 
     li $t0, MUTEX_ADDR
     dadd    $t0, $s4, $t0
@@ -165,7 +167,6 @@ call_dcall:
 	blez		$t1, overflow_dcall
 	nop
 
-    daddiu  $sp, $sp, -8
     sd  $ra, 0($sp)
 	sll		$v0, $v0, REG_SIZE_BITS
 	add		$t0, $t0, $v0
@@ -187,16 +188,17 @@ end_dcall:
     li $t0, MUTEX_ADDR
     dadd    $t0, $s4, $t0
     sw  $0, 0($t0)
+    ld      $s4, 8($sp)
     jr      $ra
-    daddiu  $sp, $sp, 8
+    daddiu  $sp, $sp, 16
 
 locked_dcall:
     li  $v1, 13
-    move    $a3, $a0
+    move    $s0, $a0
     li  $a0, 0
     syscall
     b   mutex_loop_dcall
-    move    $a0, $a3
+    move    $a0, $s0
 
 msg_entry_dcall_end:
 	.end msg_entry_dcall

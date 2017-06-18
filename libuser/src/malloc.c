@@ -41,7 +41,7 @@ void *malloc(size_t length) {
 		memmgt_ref = namespace_get_ref(3);
 		memmgt_id  = namespace_get_id(3);
 	}
-	return (void *)ccall_r_r(memmgt_ref, memmgt_id, 0,  length);
+	return (void *)ccall_4(memmgt_ref, memmgt_id, 0,  length, 0, 0, 0);
 }
 
 void *calloc(size_t items, size_t length) {
@@ -49,7 +49,7 @@ void *calloc(size_t items, size_t length) {
 		memmgt_ref = namespace_get_ref(3);
 		memmgt_id  = namespace_get_id(3);
 	}
-	return (void *)ccall_rr_r(memmgt_ref, memmgt_id, 1,  items, length);
+	return (void *)ccall_4(memmgt_ref, memmgt_id, 1,  items, length, 0, 0);
 }
 
 void *realloc(void *ptr, size_t length) {
@@ -57,7 +57,7 @@ void *realloc(void *ptr, size_t length) {
 		memmgt_ref = namespace_get_ref(3);
 		memmgt_id  = namespace_get_id(3);
 	}
-	return (void *)ccall_rr_r(memmgt_ref, memmgt_id, 2,  (register_t)ptr, length);
+	return (void *)ccall_4(memmgt_ref, memmgt_id, 2,  (register_t)ptr, length, 0, 0);
 }
 
 void free(void *addr) {
@@ -65,7 +65,7 @@ void free(void *addr) {
 		memmgt_ref = namespace_get_ref(3);
 		memmgt_id  = namespace_get_id(3);
 	}
-	ccall_r_n(memmgt_ref, memmgt_id, 3,  (register_t)addr);
+	ccall_4(memmgt_ref, memmgt_id, 3,  (register_t)addr, 0, 0, 0);
 }
 
 void memmgt_set_act(void * ref, void * id) {

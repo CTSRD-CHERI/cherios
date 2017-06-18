@@ -34,6 +34,8 @@
 typedef struct {
 	void * act_reference;
 	void * act_default_id;
+	void * act_entry;
+	void * act_base;
 } bind_t;
 
 const int bind_len = 0x80;
@@ -69,9 +71,28 @@ void * ns_get_identifier(int nb) {
 	return bind[nb].act_default_id;
 }
 
+/* Get entry address for service 'n' */
+void * ns_get_entry(int nb) {
+	if(!validate_idx(nb))
+		return NULL;
+
+	/* If service not in use, will already return NULL */
+	printf(KWHT"%s: id request for port %d"KRST"\n", __func__, nb);
+	return bind[nb].act_entry;
+}
+
+/* Get base address for service 'n' */
+void * ns_get_base(int nb) {
+	if(!validate_idx(nb))
+		return NULL;
+
+	/* If service not in use, will already return NULL */
+	printf(KWHT"%s: id request for port %d"KRST"\n", __func__, nb);
+	return bind[nb].act_base;
+}
 
 /* Register a module a service 'nb' */
-static int ns_register_core(int nb, void * act_reference, void * act_default_id) {
+static int ns_register_core(int nb, void * act_reference, void * act_default_id, void *act_entry, void *act_base) {
 	if(bind[nb].act_reference != NULL) {
 		printf(KWHT"%s: port already in use"KRST"\n", __func__);
 		return -1;
@@ -79,13 +100,15 @@ static int ns_register_core(int nb, void * act_reference, void * act_default_id)
 
 	bind[nb].act_reference  = act_reference;
 	bind[nb].act_default_id = act_default_id;
+	bind[nb].act_entry = act_entry;
+	bind[nb].act_base = act_base;
 	printf(KWHT"%s: registered at port %d"KRST"\n", __func__, nb);
 	return 0;
 }
 
-int ns_register(int nb, void * act_reference, void * act_default_id) {
+int ns_register(int nb, void * act_reference, void * act_default_id, void *act_entry, void *act_base) {
 	if(!validate_idx(nb))
 		return -1;
 
-	return ns_register_core(nb, act_reference, act_default_id);
+	return ns_register_core(nb, act_reference, act_default_id, act_entry, act_base);
 }

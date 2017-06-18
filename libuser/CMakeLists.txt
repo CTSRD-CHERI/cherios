@@ -10,6 +10,7 @@ set(LIB_SRCS
 set(LIBUSER_ASM_SRCS
     src/init.S
     src/msg.S
+    src/object.S
 )
 
 set(LIBUSER_SRCS

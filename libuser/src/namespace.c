@@ -41,13 +41,21 @@ void namespace_init(void *ns_ref, void *ns_id) {
 }
 
 int namespace_register(int nb, void *ref, void *id) {
-	return ccall_rrr_r(namespace_ref, namespace_id, 0, nb, (register_t)ref, (register_t)id);
+	return ccall_4(namespace_ref, namespace_id, 0, nb, (register_t)ref, (register_t)id, 0);
 }
 
 void * namespace_get_ref(int nb) {
-	return (void *)ccall_r_r(namespace_ref, namespace_id, 1, nb);
+	return (void *)ccall_4(namespace_ref, namespace_id, 1, nb, 0, 0, 0);
 }
 
 void * namespace_get_id(int nb) {
-	return (void *)ccall_r_r(namespace_ref, namespace_id, 2, nb);
+	return (void *)ccall_4(namespace_ref, namespace_id, 2, nb, 0, 0, 0);
+}
+
+void * namespace_get_entry(int nb) {
+	return (void *)ccall_4(namespace_ref, namespace_id, 3, nb, 0, 0, 0);
+}
+
+void * namespace_get_base(int nb) {
+	return (void *)ccall_4(namespace_ref, namespace_id, 4, nb, 0, 0, 0);
 }

@@ -5043,7 +5043,7 @@ main() {
     int count=0, i;
   
     count = MAXARRAY;
-    int ret = namespace_register(10, act_self_ref, act_self_id);
+    int ret = namespace_register(10, act_self_ref, act_self_id, act_self_msg, act_self_base);
     if(ret!=0) {
         printf("QSORT: register failed\n");
         return -1;

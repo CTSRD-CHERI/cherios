@@ -61,19 +61,13 @@ extern long msg_enable;
 
 #define CCALL(selector, ...) ccall_##selector(__VA_ARGS__)
 register_t ccall_1(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2,
-		  register_t rarg3, register_t rarg4);
+        register_t rarg1, register_t rarg2,
+        register_t rarg3, register_t rarg4);
 register_t ccall_2(void * cb, void * cs, int method_nb,
-		  register_t rarg1, register_t rarg2,
-		  register_t rarg3, register_t rarg4);
-
-void ccall_r_n(void * cb, void * cs, int method_nb, register_t rarg1);
-void ccall_rr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2);
-void ccall_rrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3);
-void ccall_rrrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4);
-register_t ccall_n_r(void * cb, void * cs, int method_nb);
-register_t ccall_r_r(void * cb, void * cs, int method_nb, register_t rarg1);
-register_t ccall_rr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2);
-register_t ccall_rrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3);
-register_t ccall_rrrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4); 
+        register_t rarg1, register_t rarg2,
+        register_t rarg3, register_t rarg4);
+register_t ccall_4(void * cb, void * cs, int method_nb,
+        register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4);
+register_t dcall_4(int method_nb, register_t rarg1, register_t rarg2,
+        register_t rarg3, register_t rarg4, void *addr, void *base);
 #endif

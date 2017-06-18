@@ -194,49 +194,10 @@ register_t ccall_2(void * cb, void * cs, int method_nb,
 	return ret;
 }
 
-inline register_t ccall_4(void * cb, void * cs, int method_nb,
+register_t ccall_4(void * cb, void * cs, int method_nb,
 		  register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
 	CCALL_TOP
 		CCALL_INSTR(1004)
 	CCALL_BOTTOM
-	return ret;
-}
-
-
-void ccall_r_n(void * cb, void * cs, int method_nb, register_t rarg1) {
-	CCALLS(cb, cs, method_nb, rarg1, 0, 0, 0);
-}
-void ccall_rr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2) {
-	CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, 0);
-}
-void ccall_rrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3) {
-	CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, 0);
-}
-void ccall_rrrr_n(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
-	CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, rarg4);
-}
-
-register_t ccall_n_r(void * cb, void * cs, int method_nb) {
-	register_t ret = CCALLS(cb, cs, method_nb, 0, 0, 0, 0);
-	return ret;
-}
-
-register_t ccall_r_r(void * cb, void * cs, int method_nb, register_t rarg1) {
-	register_t ret = CCALLS(cb, cs, method_nb, rarg1, 0, 0, 0);
-	return ret;
-}
-
-register_t ccall_rr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2) {
-	register_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, 0, 0);
-	return ret;
-}
-
-register_t ccall_rrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3) {
-	register_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, 0);
-	return ret;
-}
-
-register_t ccall_rrrr_r(void * cb, void * cs, int method_nb, register_t rarg1, register_t rarg2, register_t rarg3, register_t rarg4) {
-	register_t ret = CCALLS(cb, cs, method_nb, rarg1, rarg2, rarg3, rarg4);
 	return ret;
 }

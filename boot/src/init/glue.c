@@ -35,5 +35,5 @@ void glue_memmgt(void * memmgt_ctrl, void* ns_ctrl) {
 	void * memmgt_id = act_ctrl_get_id(memmgt_ctrl);
 	void * ns_ref = act_ctrl_get_ref(ns_ctrl);
 	void * ns_id = act_ctrl_get_id(ns_ctrl);
-	ccall_rr_n(memmgt_ref, memmgt_id, -3, (register_t)ns_ref, (register_t)ns_id);
+	ccall_4(memmgt_ref, memmgt_id, -3, (register_t)ns_ref, (register_t)ns_id, 0, 0);
 }

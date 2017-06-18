@@ -22,6 +22,12 @@ main() {
 	assert(u_ref != NULL);
 	void * u_id  = namespace_get_id(5);
 
+    // get the direct jump address of AES
+	void * u_entry = namespace_get_entry(5);
+	assert(u_entry != NULL);
+	void * u_base  = namespace_get_base(5);
+	assert(u_base != NULL);
+
 	void * sha_ref = namespace_get_ref(6);
 	assert(sha_ref != NULL);
 	void * sha_id  = namespace_get_id(6);
@@ -37,20 +43,20 @@ main() {
     const char *theKey = "0123456789ABCDEFFEDCBA98765432100123456789ABCDEFFEDCBA9876543210";
 
     while((remain = len-encdecOffset) > EACH_BLOCK_SIZE) {
-        encret = ccall_rrrr_r(u_ref, u_id, 0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, EACH_BLOCK_SIZE, (register_t)theKey);
-        decret = ccall_rrrr_r(u_ref, u_id, 0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey);
+        encret = dcall_4(0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, EACH_BLOCK_SIZE, (register_t)theKey, u_entry, u_base);
+        decret = dcall_4(0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey, u_entry, u_base);
         encdecOffset += EACH_BLOCK_SIZE;
         totalDeced += decret;
     }
-    encret = ccall_rrrr_r(u_ref, u_id, 0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, remain, (register_t)theKey);
-    decret = ccall_rrrr_r(u_ref, u_id, 0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey);
+    encret = dcall_4(0, ((size_t)&__AES_start + encdecOffset), (register_t)enc, remain, (register_t)theKey, u_entry, u_base);
+    decret = dcall_4(0, (register_t)enc, (size_t)encdec + totalDeced, -encret, (register_t)theKey, u_entry, u_base);
     totalDeced += decret;
 
     printf("Size of the original: %ld, Total bytes decrypted: %ld\n", len, totalDeced);
 
     SHA_INFO theinfo;
-    ccall_rrr_n(sha_ref, sha_id, 0, (register_t)&theinfo, (register_t)&__AES_start, (size_t)len);
-    ccall_r_n(sha_ref, sha_id, 1, (register_t)&theinfo);
+    ccall_4(sha_ref, sha_id, 0, (register_t)&theinfo, (register_t)&__AES_start, (size_t)len, 0);
+    ccall_4(sha_ref, sha_id, 1, (register_t)&theinfo, 0, 0, 0);
 
     stats_display();
     return 0;
