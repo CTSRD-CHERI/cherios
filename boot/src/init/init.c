@@ -131,10 +131,6 @@ static void load_modules(void) {
 		}
 		be->ctrl = load_module(be->type, be->name, be->arg, NULL);
 		printf(KWHT"Loaded module %s"KRST"\n", be->name);
-        if(strcmp(be->name, "dijkstra.elf") == 0 ) {
-            printf(KWHT"dijkstra finished loading."KRST"\n");
-            stats_display();
-        }
 		switch(init_list[i].type) {
 		case m_memmgt:
 			nssleep(3);
@@ -152,8 +148,6 @@ static void load_modules(void) {
 }
 
 int init_main() {
-  	stats_init();
-
 	printf("Init loaded\n");
 	printf("__init_fs_start: %p, __init_fs_stop: %p\n", (void *)__init_fs_start, (void *)__init_fs_stop);
 

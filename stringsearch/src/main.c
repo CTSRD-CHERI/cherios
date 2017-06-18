@@ -2765,6 +2765,21 @@ main()
     }
     printf("Stringsearch iteration: %d, with %d successes, %d fails.\n", STRINGSEARCH_ITER, foundcnt, nfoundcnt);
         
+	void * u_ref = namespace_get_ref(10);
+	assert(u_ref != NULL);
+	void * u_id  = namespace_get_id(10);
+	//assert(u_id != NULL);
+    int sent_a = 326;
+    int sent_b = -21356;
+    int sent_c = 44;
+    int sent_d = -65536;
+    printf("Stringsearch sent a message to Qsort with args: %d, %d, %d, %d.\n", sent_a, sent_b, sent_c, sent_d);
+    /* Trying so hard to kill qsort */
+    register_t ret;
+	while((ret = ccall_1(u_ref, u_id, 0, sent_a, sent_b, sent_c, sent_d)) == 1) {
+    }
+    printf("Stringsearch send success.\n");
+
     stats_display();
     return 0;
 }

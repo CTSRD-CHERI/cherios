@@ -2,13 +2,21 @@
 #include<stdlib.h>
 #include<string.h>
 #include<misc.h> // for countof();
+#include<object.h>
+#include<namespace.h>
 #include<mibench_iter.h>
 #include<statcounters.h>
 
 #define UNLIMIT
 #define MAXARRAY 5000 /* this number, if too large, will cause a seg. fault!! */
 
-void (*msg_methods[]) = {};
+int qsort_receive(int a, int b, int c, int d) {
+    printf("Qsort received a message! Four args are %d, %d, %d, %d.\n", a, b, c, d);
+    act_ctrl_terminate(act_self_ctrl);
+    return 888;
+}
+
+void (*msg_methods[]) = {qsort_receive};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
@@ -5035,6 +5043,17 @@ main() {
     int count=0, i;
   
     count = MAXARRAY;
+    int ret = namespace_register(10, act_self_ref, act_self_id);
+    if(ret!=0) {
+        printf("QSORT: register failed\n");
+        return -1;
+    }
+    ret = namespace_dcall_register(10, act_self_msg, act_self_base);
+    if(ret!=0) {
+        printf("QSORT: DCALL register failed\n");
+        return -1;
+    }
+    msg_enable = 1;
     printf("\nSorting %d elements.\n\n",count);
     for(i=0; i<QSORT_ITER; i++) {
         qsort(qstring, count, 128 * sizeof(char),compare);
