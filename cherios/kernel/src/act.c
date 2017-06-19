@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -53,7 +54,6 @@ act_t * 			kernel_curr_act;
 // TODO: Put these somewhere sensible;
 static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
-static act_t* ns_ref = NULL;
 
 act_t* act_list_start;
 act_t* act_list_end;
@@ -165,11 +165,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 
 	act->image_base = base;
 
-	//TODO bit of a hack. the kernel needs to know what namespace service to use
-	if(kernel_next_act-1 == namespace_num_namespace) {
-		KERNEL_TRACE("act", "found namespace");
-		ns_ref = act_create_sealed_ref(act);
-	}
+	//TODO bit of a hack. the kernel needs to know what memmgt service to use
 	if(kernel_next_act-1 == namespace_num_memmgt) {
 		memgt_ref = act;
 	}
@@ -196,17 +192,16 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 *                                                                                                                       *
 * a0    : user GP argument (goes to main)                                                                               *
 * c3    : user Cap argument (goes to main)                                                                              *
+* c23   : namespace reference (may be null for init and namespace)                                                      *
 *                                                                                                                       *
 * These fields are setup by act_register itself. Although the queue is an argument to the function                      *
 *                                                                                                                       *
-* c21   : self control reference                                                 										*
-* c23   : namespace reference (may be null for init and namespace)                                                      *
+* c21   : self control reference                                                                                        *
 * c24   : kernel interface table                                                                                        *
-* c25   : queue                                                                                                        */
+* c25   : queue                                                                                                         */
 
 	/* set namespace */
 	frame->cf_c21 	= (capability)act_create_sealed_ctrl_ref(act);
-	frame->cf_c23	= (capability)ns_ref;
 	frame->cf_c24	= (capability)get_if();
 	frame->cf_c25	= (capability)queue;
 

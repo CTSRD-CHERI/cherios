@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2017 SRI International
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -45,15 +46,15 @@
 * These fields are setup by the caller of act_register                                                                  *
 *                                                                                                                       *
 * a0    : user GP argument (goes to main)                                                                               *
-* c3    : user Cap argument (goes to main)                                                                              * *
+* c3    : user Cap argument (goes to main)                                                                              *
+* c23   : namespace reference (may be null for init and namespace)                                                      *
 *                                                                                                                       *
 * These fields are setup by act_register itself. Although the queue is an argument to the function                      *
 *                                                                                                                       *
-* c21   : self control reference
+* c21   : self control reference                                                                                        *
 * c22   : process reference                                                                                             *
-* c23   : namespace reference (may be null for init and namespace)                                                      *
 * c24   : kernel interface table                                                                                        *
-* c25   : queue                                                                                                        */
+* c25   : queue                                                                                                         */
 
 
 process_t loaded_processes[MAX_PROCS];
@@ -89,7 +90,8 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
     reg_frame_t frame;
     memset(&frame, 0, sizeof(reg_frame_t));
 
-    queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size);
+    /* TODO: we should add an API to allow a custom namespace.  For now, we just pass our own. */
+    queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size, namespace_ref);
 
     frame.cf_c22 = seal_proc_for_user(process);
 

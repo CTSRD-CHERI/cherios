@@ -223,10 +223,10 @@ static void load_modules(init_info_t * init_info) {
 
     /* Namespace */
     namebe->ctrl =
-            simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info));
+      simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info), NULL);
 
-
-    namespace_init(syscall_act_ctrl_get_ref(namebe->ctrl));
+    act_kt namespace_ref = syscall_act_ctrl_get_ref(namebe->ctrl);
+    namespace_init(namespace_ref);
 
     /* Proc */
 
@@ -237,7 +237,7 @@ static void load_modules(init_info_t * init_info) {
     capability memmgt_file = load_check(memgtbe->name);
 
     procbe->ctrl =
-            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info));
+      simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info), namespace_ref);
 
     /* FIXME technically a bit of a race. This global will be read by proc so it needs to be set before context switch */
 
