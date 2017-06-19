@@ -144,7 +144,7 @@ void sched_block_until_msg(act_t * act, act_t * next_hint) {
 
 	CRITICAL_LOCKED_BEGIN(&act->writer_spinlock);
 
-	if(msg_queue_empty(act)) {
+	if(kmsg_queue_empty(act)) {
 		sched_block(act, sched_waiting);
 		CRITICAL_LOCKED_END(&act->writer_spinlock);
 		/* Somebody may now send a message. This is ok, we will get back in the queue */
