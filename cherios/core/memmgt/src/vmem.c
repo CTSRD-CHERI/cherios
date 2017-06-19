@@ -143,6 +143,8 @@ int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags)
 /* TODO commiting per page is a stupid policy. We are doing this for now to make sure everything works */
 void memgt_commit_vmem(act_kt activation, size_t addr) {
 
+    assert(worker_id == 0);
+
     ptable_t top_table = get_top_level_table();
 
     size_t l0_index = L0_INDEX(addr);
@@ -454,4 +456,12 @@ res_t memmgt_parent_reservation(free_chain_t* chain, act_kt assign_to) {
     update_chain(chain, assign_to);
 
     return rescap_parent(chain->used.res);
+}
+
+void memmgt_revoke_loop(void) {
+    while(1) {
+        // find a res
+        // revoke a res
+        // update metadata
+    }
 }

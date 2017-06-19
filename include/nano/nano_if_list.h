@@ -56,11 +56,11 @@
     ITEM(rescap_take, void, (res_t, res, cap_pair*, out), __VA_ARGS__)\
 /* Returns a SEALED version of rescap_take, but does not change state. Then get fields using normal ops */\
     ITEM(rescap_info, capability, (res_t, res), __VA_ARGS__)\
-/* Tells the collector to start collecting this reservation. collecting fails if already collecting */\
-    ITEM(rescap_collect, res_t, (res_t, res), __VA_ARGS__)\
+/* Tells the revokeer to start revoking this reservation. revoking fails if already revoking */\
+    ITEM(rescap_revoke, res_t, (res_t, res), __VA_ARGS__)\
 /* Splits an open reservation. The reservation will have size `size'. The remaining space will be returned as a new reservation. */\
     ITEM(rescap_split, res_t, (capability, res, size_t, size), __VA_ARGS__)\
-/* Merges two taken reservations. Cannot merge with collecting. If an open and taken are merged the result is taken*/\
+/* Merges two taken reservations. Cannot merge with revoking. If an open and taken are merged the result is taken*/\
     ITEM(rescap_merge, res_t, (res_t, res1, res_t, res2), __VA_ARGS__)\
 /* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
     ITEM(rescap_parent, res_t, (res_t, res), __VA_ARGS__)\

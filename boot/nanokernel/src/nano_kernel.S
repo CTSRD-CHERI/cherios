@@ -47,7 +47,7 @@
 .set N_CONTEXTS,         64             # We never reallocate these, so its currently a huge limitation
 
 #struct res_t {
-#    enum state{open, taken, merged, collecting}
+#    enum state{open, taken, merged, revoking}
 #    size_t length <- length of reservation (not including meta data). Not set when open.
 #    size_t pid <- an id for the parent node. Checked for merging
 #    padding to size of one cap
@@ -122,7 +122,7 @@ local_reg_var last_bad_vaddr
 
 # Stuff to do with virtual space management
 local_reg_var made_first_res
-local_reg_var collection_state
+local_reg_var revoke_state
 
 # Method table for nano kernel
 NANO_KERNEL_IF_LIST(LOCAL_CAP_VAR_MACRO)
@@ -465,7 +465,7 @@ get_top_level_table:
 .global make_first_reservation
 make_first_reservation:
 #####################################
-    # TODO we should actually collect the initial reservation in case the boot loader made a mistake
+    # TODO we should actually revoke the initial reservation in case the boot loader made a mistake
     # TODO more atomicity
     cld         $t2, $zero, made_first_res($idc)
     bnez        $t2, make_first_er
@@ -906,10 +906,29 @@ info_er:
     cclearlo    EN2(c3,c4)
     creturn
 
+.macro EXTRACT_AND_SCALE_L0 addr, out, scale
+    dsll        \out, \addr, CHECKED_BITS                                             # clear top bits
+    dsrl        \out, \out, (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS)    # clear lower bits
+    dsll        \out, \out, \scale                                                    # scale
+.endm
+
+.macro EXTRACT_AND_SCALE_L1 addr, out, scale
+    dsll        \out, \addr, CHECKED_BITS + L0_BITS                                   # clear top bits
+    dsrl        \out, \out, (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS)    # clear lower bits
+    dsll        \out, \out, \scale                                                    # scale
+.endm
+
+.macro EXTRACT_AND_SCALE_L2 addr, out, scale
+    dsll        \out, \addr, CHECKED_BITS + L1_BITS + L0_BITS                          # clear top bits
+    dsrl        \out, \out, (CHECKED_BITS + L1_BITS + L0_BITS + UNTRANSLATED_BITS)     # clear lower bits
+    dsll        \out, \out, \scale                                                    # scale
+.endm
+
+
 ##################################
-# res_t rescap_collect(res_t res);
-.global rescap_collect
-rescap_collect:
+# res_t rescap_revoke(res_t res);
+.global rescap_revoke
+rescap_revoke:
 ##################################
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
@@ -917,62 +936,150 @@ rescap_collect:
 
     cld         $t0, $zero, 0($c3)
     dli         $t1, res_taken
-    bne         $t0, $t1, collect_er        # check this reservation is taken
+    bne         $t0, $t1, revoke_er        # check this reservation is taken
 
-    cld         $t0, $zero, collection_state($idc)
-    bnez        $t0, collect_er             # check we are not already collecting
-    dli         $t2, res_collecting
+    cld         $t0, $zero, revoke_state($idc)
+    bnez        $t0, revoke_er             # check we are not already revoking
+    dli         $t2, res_revoking
 
-    # We are now collecting. No errors from now on.
+    ctoptr      $a2, $c3, $kdc              #a2 is the base of our revoke
+    cld         $t1, $zero, REG_SIZE($c3)
+    daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of revoke
+    addu        $a3, $a2, $a4               #a3 is the end of our revoke (not inclusive)
 
-    csd         $t1, $zero, collection_state($idc) # Set collection state to 1
-    csd         $t2, $zero, 0($c3)                 # Mark reservation as collecting
+    andi       $t0, $a2, (PHY_PAGE_SIZE-1)
+    bnez        $t0, revoke_er              # base of revocation must be page aligned
+    andi       $t0, $a4, (PHY_PAGE_SIZE-1)
+    bnez        $t0, revoke_er              # size of revocation must be page aligned
 
-    cgetbase    $t0, $c3
-    cgetoffset  $t1, $c3
+    # TODO check vtables (should all be -1, or 0 and then set to -1
+    dli         $t0, top_virt_page
+    cincoffset  $c5, $idc, $t0              # c5 is the top level table
+                                            # c6 is the L1 table. c7 the l2
+
+    # starting points for each level in t0, t1, and t2
+    EXTRACT_AND_SCALE_L0 $a2, $t0, PAGE_TABLE_ENT_BITS
+    EXTRACT_AND_SCALE_L1 $a2, $t1, PAGE_TABLE_ENT_BITS
+    EXTRACT_AND_SCALE_L2 $a2, $t2, PAGE_TABLE_ENT_BITS
+
+    # ending points for each level in t3, t8, t9
+    EXTRACT_AND_SCALE_L0 $a3, $t3, PAGE_TABLE_ENT_BITS
+
+    # a1 has the used flag
+    dli         $a1, VTABLE_ENTRY_USED
+
+    # The following walks through the vtables and checks all entries covered by the reservation are used
+    # or if they are un-used sets them to used. If an L2 mapping is present, we get an error.
+
+    l0_loop_start:
+
+        cld         $a0, $t0, 0($c5)
+        beq         $a0, $a1, l0_loop_footer    # if used everything is ok
+        daddiu      $t0, $t0, REG_SIZE
+        beqz        $a0, 1f                     # if un-used must set to used
+
+        cfromptr    $c6, $kdc, $a0              # otherwise go into inner loop
+        beq         $t0, $t3, l1_loop_start
+        dli         $t8, PAGE_TABLE_ENT_PER_TABLE
+        EXTRACT_AND_SCALE_L1 $a3, $t8, PAGE_TABLE_ENT_BITS  #last loop in l1
+
+        l1_loop_start:
+
+            cld         $a0, $t1, 0($c6)
+            beq         $a0, $a1, l1_loop_footer    # if used everything is ok
+            daddiu      $t1, $t1, REG_SIZE
+            beqz        $a0, 2f                     # if un-used must set to used
+
+            cfromptr    $c7, $kdc, $a0              # otherwise go into inner loop
+            beq         $t1, $t8, l1_loop_start
+            dli         $t9, PAGE_TABLE_ENT_PER_TABLE
+            EXTRACT_AND_SCALE_L2 $a3, $t9, PAGE_TABLE_ENT_BITS  #last loop in l1
+
+            l2_loop_begin:
+
+                cld         $a0, $t2, 0($c7)
+                bne         $a0, $a1, 3f
+                daddiu      $t2, $t2, REG_SIZE
+                beq         $t2, $t9, l2_loop_begin
+                nop
+                b           l1_loop_footer
+                nop
+
+                3:
+                bnez        $a0, revoke_er         # A mapping still exists. Error.
+                nop
+                beq         $t2, $t9, l2_loop_begin
+                csd         $zero, $t2, (-REG_SIZE)($c7)
+
+            l2_loop_end:
+                b           l1_loop_footer
+                nop
+
+        2:
+            csd         $zero, $t1, (-REG_SIZE)($c6)# if un-used set to used
+
+        l1_loop_footer:
+            beq         $t1, $t8, l1_loop_start
+            dli         $t2, 0
+        l1_loop_end:
+            b           l0_loop_footer
+            nop
+
+    1:
+        csd         $zero, $t0, (-REG_SIZE)($c5)# if un-used set to used
+
+    l0_loop_footer:
+        dli         $t1, 0
+        beq         $t0, $t3, l0_loop_start
+        dli         $t2, 0
+    l0_loop_end:
+
+    # We are now revoking. No errors from now on.
+
+    csd         $t1, $zero, revoke_state($idc) # Set revoke state to 1
+    csd         $t2, $zero, 0($c3)                 # Mark reservation as revoking
+
     dli         $a0, PHY_MEM_START          #a0 is the start of memory
     dli         $a1, PHY_MEM_END            #a1 the end
-    addu        $a2, $t0, $t1               #a2 is the base of our collection
-    cld         $t1, $zero, REG_SIZE($c3)
-    daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of collection
-    addu        $a3, $a2, $a4               #a3 is the end of our collection (not inclusive)
-
-    csetoffset  $c3, $kdc, $a2
-    csetbounds  $c3, $c3, $a4
-
-    # csetcollection $c3 # TODO hypothetical new instruction
 
 
-    # FIXME we might trample our own caps with the instruction I plan to add. Will have to be careful.
-    # FIXME the only one that matters is c6, if we get rescheduled at the position indicated bad things can happen
+    # Blocking writing of the capability #
+    li          $t0, DEF_DATA_PERMS
+    dmtc0       $a2, $30, 2
+    dmtc0       $a3, $30, 3
+    dmtc0       $t0, $30, 4                 # only revoke Writable and Executable caps, not sealing caps
+
 
     subu        $a1, $a1, $a0
-    beqz        $a1, collect_loop_end
+    beqz        $a1, revoke_loop_end
     csetoffset  $c5, $kdc, $a0
     dli         $t0, CAP_SIZE
 
-collect_loop_start:  # We will now collect every capability with a2 <= base < a3.
+revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
 
-    clc         $c6, $zero, 0($c5)          # FIXME <- may get detagged by context switch!
-    cbtu        $c6, collect_loop_footer
+    cllc        $c6, $c5                    # Even if untagged we will write back to solve race with context switch
     cgetbase    $t1, $c6
     sltu        $t2, $t1, $a2
-    bnez        $t2, collect_loop_footer
+    bnez        $t2, revoke_loop_footer
     sltu        $t2, $t1, $a3
-    beqz        $t2, collect_loop_footer
-                                            # FIXME: although an adversary would be unable to use this race,
-                                            # FIXME: we may accidentally overwrite a normal programs data if they reuse
-                                            # FIXME: memory in the span of time from when we start collection of this
-                                            # FIXME: location to writing back (i.e. it may contain a valid cap later)
-    ccleartag   $c6, $c6
-    csc         $c6, $zero, 0($c5)
+    beqz        $t2, revoke_loop_footer
 
-collect_loop_footer:
+    ccleartag   $c6, $c6
+    cscc        $t1, $c6, $c5               # Avoid trample of legitimate capability
+    beqz        $t1, revoke_loop_start      # restart on fail
+    nop
+
+revoke_loop_footer:
     subu        $a1, $a1, $t0
-    bnez        $a1, collect_loop_start
+    bnez        $a1, revoke_loop_start
     cincoffset  $c5, $c5, $t0
 
-collect_loop_end:
+revoke_loop_end:
+
+    # Allow any cap writes again #
+    dmtc0       $zero, $30, 4
+    dmtc0       $zero, $30, 3
+    dmtc0       $zero, $30, 2
 
     # Make a new reservation here now
     dli         $t0, RES_META_SIZE
@@ -980,12 +1087,12 @@ collect_loop_end:
     csetbounds  $c3, $c3,  $a4
     sub         $a4, $a4, $t0               #some space for metadata
 
-    # cclearderivesfrom $c3 # TODO hypothetical new instruction
     dli         $t1, DEF_DATA_PERMS
     candperm    $c3, $c3, $t1
 
     cincoffset  $c5, $c3, $t0
     csd         $zero, $zero, 0($c3)        # set state to open
+    csd         $zero, $zero, (2*REG_SIZE)($c3) # set parent to 0
     csetbounds  $c5, $c4, $a4
     cseal       $c3, $c3, $c4               # seal new reservation
     csc         $c5, $zero, 0($c5)          # store the result capability for later
@@ -993,7 +1100,7 @@ collect_loop_end:
     cclearlo    EN3(c4, c5, c6)
     creturn
 
-collect_er:
+revoke_er:
     cclearlo    EN4(c3, c4, c5, c6)
     creturn
 
@@ -1151,8 +1258,8 @@ good_level: #t2 now contains the type we will seal the next level with
 
     clw         $t1, $t0, 0($idc)                       # $t1 = state
     beqz        $t1, 1f                                 # state must be un-used
-    dli         $t7, page_ptable_free                   # or can safely re-use old ptables for new ptables
-    bne         $t1, $t7, create_ptable_er
+    dli         $t8, page_ptable_free                   # or can safely re-use old ptables for new ptables
+    bne         $t1, $t8, create_ptable_er
 
 1:
     dli         $t1, page_ptable
@@ -1447,9 +1554,7 @@ tlb_trampoline: # TODO
     dmfc0       $k0, cp0_badvaddr
     dla         $k1, top_virt_page_label                            # k1 = phy poiter to L0
 
-    dsll        $k0, $k0, CHECKED_BITS                                              # clear top bits
-    dsrl        $k0, $k0, (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS)    # clear lower bits
-    dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                       # scale
+    EXTRACT_AND_SCALE_L0 $k0, $k0, PAGE_TABLE_ENT_BITS
     daddu       $k1, $k1, $k0
 
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L1
@@ -1457,9 +1562,7 @@ tlb_trampoline: # TODO
     beqz        $k0, tlb_table_missing
 
     dmfc0       $k0, cp0_badvaddr
-    dsll        $k0, $k0, CHECKED_BITS + L0_BITS                                   # clear top bits
-    dsrl        $k0, $k0, (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS)   # clear lower bits
-    dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
+    EXTRACT_AND_SCALE_L1 $k0, $k0, PAGE_TABLE_ENT_BITS
     daddu       $k1, $k1, $k0
 
     cld         $k1, $k1, 0($kdc)                                   # k1 = phy pointer to L2
@@ -1467,9 +1570,7 @@ tlb_trampoline: # TODO
     beqz        $k0, tlb_table_missing
 
     dmfc0       $k0, cp0_badvaddr
-    dsll        $k0, $k0, CHECKED_BITS + L1_BITS + L0_BITS                         # clear top bits
-    dsrl        $k0, $k0, (CHECKED_BITS + L1_BITS + L0_BITS + UNTRANSLATED_BITS)   # clear lower bits
-    dsll        $k0, $k0, PAGE_TABLE_ENT_BITS                                      # scale
+    EXTRACT_AND_SCALE_L2 $k0, $k0, PAGE_TABLE_ENT_BITS
     daddu       $k1, $k1, $k0
 
     cld         $k1, $k1, 0($kdc)                                   # k1 = pfn entry

@@ -41,6 +41,8 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
     /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
      * Types are numerous. Permissions are not. */
 
+    assert(worker_id == 1);
+
     /* FIXME: */
     /* Currently all belongs to itself */
     act_kt assigned_to = act_self_ref;
@@ -162,6 +164,8 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
 int __munmap(void *addr, size_t length) {
 
     //FIXME I don't understand the length field. Im just going to have one munmap for every mmap. Screw partial dealloc.
+
+    assert(worker_id == 1);
 
 	if(!(cheri_getperm(addr) & CHERI_PERM_SOFT_1)) {
 		errno = EINVAL;

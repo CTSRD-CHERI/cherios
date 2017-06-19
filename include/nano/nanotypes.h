@@ -52,6 +52,7 @@
 #define RES_META_SIZE                   (256)
 #define RES_USER_SIZE                   (RES_META_SIZE - RES_PRIV_SIZE)
 
+//TODO make this dynamic
 /* Page sizes etc */
 #define PHY_MEM_SIZE                    (1L << 32)
 
@@ -115,7 +116,7 @@
     ITEM(res_open,          0)                  \
     ITEM(res_taken,         1)                  \
     ITEM(res_merged,        2)                  \
-    ITEM(res_collecting,    3)
+    ITEM(res_revoking,      3)
 
 DECLARE_ENUM(e_res_status, NANO_KERNEL_RES_STATUS_ENUM_LIST)
 
@@ -138,9 +139,37 @@ typedef capability res_t;
 
 typedef capability ptable_t;
 
-//TODO make this dynamic
 
 /* WARN: these structures are used in assembly */
+
+
+/* This structure can't actually be read from c, its just here in case you want to better understand how these
+ * are used in the nano kernel. The length field is only set if taken/revoking. Otherwise tmp is used to store
+ * the exact capability that will be returned if the reservation is taken. pid is 'parent id'. Reservations
+ * can only be merged if their pid is the same and are adjacent. */ /*
+struct res_str {
+    struct res_str_priv {
+        struct res_str_used {
+            enum {
+                res_state_open,
+                res_state_taken,
+                res_state_merged,
+                res_state_revoking
+            } state;                                            // 64 bit
+            size_t length;                                      // Length of data, only if state = taken | revoking
+            size_t pid;                                         // Parent ID. pid must match for merge
+        };
+        char padding[RES_PRIV_SIZE - sizeof(struct res_str_used)]; // Un-used
+    } priv;
+    struct res_str_user {
+        char user_defined[RES_USER_SIZE];                       // The result of calling get_userdata_for_res
+    } user;
+    union {
+        capability tmp;                                         // pre-calculated capability that will be returned TODO: Get rid
+        char data[0];                                           // range the reservation covers if state = taken | revoking
+    } data;
+};
+*/
 
 typedef struct {
     e_page_status	status;

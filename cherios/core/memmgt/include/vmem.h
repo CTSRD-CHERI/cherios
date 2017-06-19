@@ -100,4 +100,8 @@ free_chain_t* memmgt_free_res(free_chain_t* chain);
 free_chain_t* memmgt_find_res_for_addr(size_t vaddr);
 
 void print_book(page_t* book, size_t page_n, size_t times);
+
+void memmgt_revoke_loop(void);
+
+extern __thread int worker_id;
 #endif //CHERIOS_VMEM_H

@@ -66,8 +66,9 @@ start:
 
     mtc0		$t0, $12
 
-    # Set collect_hi and collect_lo
+    # Set revoking nothing
 
+    dmtc0  $zero, $30, 4
     dmtc0  $zero, $30, 2
     dmtc0  $zero, $30, 3
 

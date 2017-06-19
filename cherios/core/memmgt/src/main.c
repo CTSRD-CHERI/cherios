@@ -32,6 +32,9 @@
 #include "malloc_heap.h"
 #include "../../boot/include/boot/boot_info.h"
 #include "thread.h"
+#include "vmem.h"
+
+__thread int worker_id = 0;
 
 extern void msg_entry;
 void (*msg_methods[]) = {__mmap, __munmap, memgt_commit_vmem};
@@ -52,6 +55,8 @@ void register_ns(void * ns_ref) {
 static void worker_start(register_t arg, capability carg) {
 
 	memmgt_init_t* mem_init = (memmgt_init_t*)carg;
+
+    worker_id = 1;
 
 	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
 	if(ret!=0) {
@@ -97,58 +102,8 @@ static void clear_revoke(void) {
 
 static void revoke_worker_start(register_t arg, capability carg) {
 	printf("Revoker hello world!\n");
-
-    capability c0 = obtain_super_powers();
-
-    /* First some sanity checks: */
-
-	size_t tst = 0xbeef;
-
-	set_addr_hi(tst);
-	size_t res = get_addr_hi();
-	set_addr_hi(0);
-	assert(tst == res);
-
-	set_addr_lo(tst);
-	res = get_addr_lo();
-	set_addr_lo(0);
-	assert(tst == res);
-
-	volatile capability stack_place;
-
-	capability stack_place_2;
-
-	volatile capability* ptr = &stack_place;
-	capability* val = &stack_place_2;
-
-	/* We will ban val, write it to ptr, then see what happens */
-
-	CHERI_PRINT_CAP(val);
-
-	assert(cheri_gettag(val) == 1);
-
-	revoke_cap(val);
-
-
-	stack_place = val;
-	val = stack_place;
-
-	clear_revoke();
-
-	assert(cheri_gettag(val) == 0);
-
-	val = &stack_place_2;
-
-	assert(cheri_gettag(val) == 1);
-
-	stack_place = val;
-	val = stack_place;
-
-	assert(cheri_gettag(val) == 1);
-
-	msg_enable = 0;
-
-	printf("Revoke test passed\n");
+    worker_id = 2;
+    memmgt_revoke_loop();
 }
 
 int main(memmgt_init_t* mem_init) {
