@@ -123,6 +123,8 @@ local_reg_var last_bad_vaddr
 # Stuff to do with virtual space management
 local_reg_var made_first_res
 local_reg_var revoke_state
+local_reg_var revoke_base
+local_reg_var revoke_bound
 
 # Method table for nano kernel
 NANO_KERNEL_IF_LIST(LOCAL_CAP_VAR_MACRO)
@@ -147,7 +149,7 @@ nano_kernel_start:
 
 # We have no stack, and this sub routine may need to be callable from a couple of places. Set appropriately.
 
-.set zero_page_tmp_1,   $t1
+.set zero_page_tmp_1,   $t8
 .set zero_page_ctmp_1,  $c13
 .set zero_page_arg,     $t0
 .set zero_page_rreg,    $c17
@@ -173,7 +175,7 @@ nano_zero_page:
     bne         zero_page_tmp_1,  zero_page_arg, 1b
     daddiu      zero_page_tmp_1, zero_page_tmp_1, -(UNROLL_FACTOR * CAP_SIZE)
 
-    cjr         zero_page_rreg
+    jr          $ra
 
 #################################################################
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
@@ -370,6 +372,7 @@ get_book:
     candperm   $c3, $c3, $t2
     creturn
 
+# Notes: Locks the page being split, but not the next page (which will have its back ptr updated #
 #################################################################
 # void split_phy_page_range(register_t pagen, register_t new_len)
 .global split_phy_page_range
@@ -383,6 +386,16 @@ split_phy_page_range:
     dsll        $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
     daddu       $t0, $t0, $t1                           # $t0 = book + pagen
 
+    cincoffset  $c3, $idc, $t0                          # c3 is book entry
+    dsll        $t3, $a1, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset  $c4, $c3, $t3                           # c4 is next book entry
+
+    dli         $t8, page_transaction
+1:  cllw        $t9, $c3                                # lock physcial page
+    cscw        $t3, $t8, $c3
+    beqz        $t3, 1b
+    nop
+
     cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
     sltu        $t3, $a1, $t2
     beq         $t3, $zero, split_phy_end               # $a1 >= $t2
@@ -391,22 +404,22 @@ split_phy_page_range:
     csd         $a1, $t0, (REG_SIZE)($idc)              # book[pagen].len = new_len
 
     dsll         $t1, $a1, PHY_PAGE_ENTRY_SIZE_BITS
-    clw         $t2, $t0, 0($idc)                       # $t2 sate of old block
     daddu       $t0, $t0, $t1                           # t0 = book + pagen + new_len
 
-    csw         $t2, $t0, 0($idc)                       # book[new].state = book[pagen].state
+    csw         $t8, $t0, 0($idc)                       # book[new].state = transaction
     csd         $t3, $t0, (REG_SIZE)($idc)              # book[new].len = book[pagen].len - new_len
     csd         $a0, $t0, (REG_SIZE*2)($idc)            # book[new].prev = pagen
+    csw         $t9, $t0, 0($idc)                       # book[new].state = book[pagen].state
 
-    dsll         $t3, $t3, PHY_PAGE_ENTRY_SIZE_BITS
-    daddu       $t0, $t0, $t3                           # $t0 = book + pagen + oldlen
     daddu       $t1, $a0, $a1
-
-    csd         $t1, $t0, (2*REG_SIZE)($idc)            # book[next].prev = pagen + new_len
+    csd         $t1, $zero, (2*REG_SIZE)($c4)           # book[next].prev = pagen + new_len
 
 split_phy_end:
+    csw         $t9, $zero, 0($c3)                      # unlock page
+    cclearlo    EN2(c3,c4)
     creturn
 
+# Notes: Locks pagen and the next page. Not the page after that even though the back pointer is updated #
 ##############################################
 # void merge_phy_page_range(register_t pagen)
 .global merge_phy_page_range
@@ -420,18 +433,28 @@ merge_phy_page_range:
     dsll        $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
     daddu       $t0, $t0, $t1                           # $t0 = book + pagen
 
+    dli         $a2, page_transaction
+    cincoffset  $c3, $idc, $t0                          # c3 is pointer to first page
+1:  cllw        $t8, $c3                                # t8 is state of first page
+    cscw        $t3, $a2, $c3
+    beqz        $t3, 1b
+    nop
+
     cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
-    beqz        $t2, merge_phy_page_range_end
+    beqz        $t2, merge_phy_er_1
     sll         $t1, $t2, PHY_PAGE_ENTRY_SIZE_BITS
     daddu       $t1, $t1, $t0                           # t1 = book[pagen + len]
 
-    clw         $t8, $t0, 0($idc)                       # book[page].status
-    clw         $t9, $t1, 0($idc)                       # book[pagen + len].status
+    cincoffset  $c4, $idc, $t1                          # c3 is pointer to first page
+1:  cllw        $t9, $c4                                # t9 is state of second page
+    cscw        $t3, $a2, $c4
+    beqz        $t3, 1b
+    nop
 
-    bne         $t8, $t9, merge_phy_page_range_end
+    bne         $t8, $t9, merge_phy_er_2
     cld         $t3, $t1, REG_SIZE($idc)                # t3 = len2
 
-    beqz        $t3, merge_phy_page_range_end
+    beqz        $t3, merge_phy_er_2
 
     daddu       $t2, $t2, $t3
     sll         $t3, $t3, PHY_PAGE_ENTRY_SIZE_BITS
@@ -441,7 +464,15 @@ merge_phy_page_range:
     csd         $t2, $t0, REG_SIZE($idc)                # book[page].len += len2
     csd         $a0, $t3, (2 * REG_SIZE)($idc)          # book[page + len + len2].prev = pagen
 
+    b           merge_phy_er_1                          # finish by unlocking first page
+    csw         $zero, $zero, 0($c4)                    # unlock second page
+
+merge_phy_er_2:
+    csw         $t9, $zero, 0($c4)
+merge_phy_er_1:
+    csw         $t8, $zero, 0($c3)
 merge_phy_page_range_end:
+    cclearlo    EN2(c3,c4)
     creturn
 
 ###################################
@@ -836,6 +867,7 @@ get_userdata_for_res:
     cunseal     $c3, $c3, $c4
     cincoffset  $c3, $c3, $t1
     csetbounds  $c3, $c3, $t2
+    cclearlo    EN1(c4)
     creturn
 
 ############################################
@@ -865,8 +897,10 @@ rescap_take:
     csetbounds  $c4, $c4, $t1
     candperm    $c4, $c4, $t2
 
-    csc         $c6, $zero, CAP_SIZE($c5)
+    cmove       $c3, $c6
+    csc         $c3, $zero, CAP_SIZE($c5)
     csc         $c4, $zero, 0($c5)
+    cclearlo    EN2(c5,c6)
     creturn
 take_er:
     cfromptr    $c3, $c3, $zero
@@ -882,9 +916,8 @@ rescap_info:
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
     cld         $t0, $zero, 0($c3)          # get state
-    dli         $t1, RES_VIEW_TYPE
     bnez        $t0, info_not_open          # can also get info for open reservation
-    csetoffset  $c4, $kdc, $t1              # create sealing cap
+    nop
 
     b           info_end
     clc         $c3, $zero, RES_META_SIZE($c3) # load return capability from struct
@@ -898,7 +931,7 @@ info_not_open:
     csetbounds  $c3, $c3, $t2
 
 info_end:
-    cseal       $c3, $c3, $c4
+    ccleartag   $c3, $c3
     cfromptr    $c4, $c4, $zero             # clear our sealing cap
     creturn
 
@@ -925,11 +958,11 @@ info_er:
 .endm
 
 
-##################################
-# res_t rescap_revoke(res_t res);
-.global rescap_revoke
-rescap_revoke:
-##################################
+######################################
+# void rescap_revoke_start(res_t res);
+.global rescap_revoke_start
+rescap_revoke_start:
+######################################
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
@@ -947,15 +980,47 @@ rescap_revoke:
     daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of revoke
     addu        $a3, $a2, $a4               #a3 is the end of our revoke (not inclusive)
 
-    andi       $t0, $a2, (PHY_PAGE_SIZE-1)
+    andi        $t0, $a2, (PHY_PAGE_SIZE-1)
     bnez        $t0, revoke_er              # base of revocation must be page aligned
-    andi       $t0, $a4, (PHY_PAGE_SIZE-1)
+    andi        $t0, $a4, (PHY_PAGE_SIZE-1)
     bnez        $t0, revoke_er              # size of revocation must be page aligned
+
+    li          $t1, 1
+    li          $t2, 3
+    csd         $t1, $zero, revoke_state($idc) # Set revoke state to 1
+    csd         $t2, $zero, 0($c3)                 # Mark reservation as revoking
+
+    csd         $a2, $zero, revoke_base($idc)
+    csd         $a3, $zero, revoke_bound($idc)
+
+    cclearlo    EN4(c3, c4, c5, c6)
+    creturn
+
+
+
+#######################################
+# void rescap_revoke_finish(res_t res);
+.global rescap_revoke_finish
+rescap_revoke_finish:
+#######################################
+
+    cld         $t0, $zero, revoke_state($idc)
+    daddiu      $t0, $t0, -1
+    bnez        $t0, revoke_er
+    li          $t0, 2
+    csd         $t0, $zero, revoke_state($idc)
+
+    cld         $a2, $zero, revoke_base($idc)
+    cld         $a3, $zero, revoke_bound($idc)
+    dsubu       $a4, $a3, $a2
 
     # TODO check vtables (should all be -1, or 0 and then set to -1
     dli         $t0, top_virt_page
     cincoffset  $c5, $idc, $t0              # c5 is the top level table
                                             # c6 is the L1 table. c7 the l2
+
+    # make upper bound INCLUSIVE for easier calculations
+    daddiu      $a3, $a3, (-UNTRANSLATED_PAGE_SIZE)
 
     # starting points for each level in t0, t1, and t2
     EXTRACT_AND_SCALE_L0 $a2, $t0, PAGE_TABLE_ENT_BITS
@@ -964,43 +1029,44 @@ rescap_revoke:
 
     # ending points for each level in t3, t8, t9
     EXTRACT_AND_SCALE_L0 $a3, $t3, PAGE_TABLE_ENT_BITS
-
+    daddiu     $t3, $t3, PAGE_TABLE_ENT_SIZE
     # a1 has the used flag
     dli         $a1, VTABLE_ENTRY_USED
 
-    # The following walks through the vtables and checks all entries covered by the reservation are used
+    # The following walks through the vtables and checks all entries covered by the reservation are used,
     # or if they are un-used sets them to used. If an L2 mapping is present, we get an error.
 
     l0_loop_start:
 
         cld         $a0, $t0, 0($c5)
         beq         $a0, $a1, l0_loop_footer    # if used everything is ok
-        daddiu      $t0, $t0, REG_SIZE
+        daddiu      $t0, $t0, PAGE_TABLE_ENT_SIZE
         beqz        $a0, 1f                     # if un-used must set to used
 
         cfromptr    $c6, $kdc, $a0              # otherwise go into inner loop
-        beq         $t0, $t3, l1_loop_start
-        dli         $t8, PAGE_TABLE_ENT_PER_TABLE
-        EXTRACT_AND_SCALE_L1 $a3, $t8, PAGE_TABLE_ENT_BITS  #last loop in l1
+        bne         $t0, $t3, l1_loop_start
+        dli         $t8, (PAGE_TABLE_ENT_PER_TABLE << PAGE_TABLE_ENT_BITS)
+        EXTRACT_AND_SCALE_L1 $a3, $t8, PAGE_TABLE_ENT_BITS
+        daddiu      $t8, $t8, PAGE_TABLE_ENT_SIZE
 
         l1_loop_start:
 
             cld         $a0, $t1, 0($c6)
             beq         $a0, $a1, l1_loop_footer    # if used everything is ok
-            daddiu      $t1, $t1, REG_SIZE
+            daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
             beqz        $a0, 2f                     # if un-used must set to used
 
             cfromptr    $c7, $kdc, $a0              # otherwise go into inner loop
-            beq         $t1, $t8, l1_loop_start
-            dli         $t9, PAGE_TABLE_ENT_PER_TABLE
-            EXTRACT_AND_SCALE_L2 $a3, $t9, PAGE_TABLE_ENT_BITS  #last loop in l1
-
-            l2_loop_begin:
+            bne         $t1, $t8, l2_loop_start
+            dli         $t9, (PAGE_TABLE_ENT_PER_TABLE << PAGE_TABLE_ENT_BITS)
+            EXTRACT_AND_SCALE_L2 $a3, $t9, PAGE_TABLE_ENT_BITS
+            daddiu      $t9, $t9, PAGE_TABLE_ENT_SIZE
+            l2_loop_start:
 
                 cld         $a0, $t2, 0($c7)
-                bne         $a0, $a1, 3f
-                daddiu      $t2, $t2, REG_SIZE
-                beq         $t2, $t9, l2_loop_begin
+                bne         $a0, $a1, 3f            # if used everything is ok
+                daddiu      $t2, $t2, PAGE_TABLE_ENT_SIZE
+                bne         $t2, $t9, l2_loop_start
                 nop
                 b           l1_loop_footer
                 nop
@@ -1008,55 +1074,75 @@ rescap_revoke:
                 3:
                 bnez        $a0, revoke_er         # A mapping still exists. Error.
                 nop
-                beq         $t2, $t9, l2_loop_begin
-                csd         $zero, $t2, (-REG_SIZE)($c7)
+                bne         $t2, $t9, l2_loop_start
+                csd         $a1, $t2, (-PAGE_TABLE_ENT_SIZE)($c7)
 
             l2_loop_end:
                 b           l1_loop_footer
                 nop
 
         2:
-            csd         $zero, $t1, (-REG_SIZE)($c6)# if un-used set to used
+            bnez        $t2, revoke_er             # check we arn't skipping the start
+            daddiu      $t2, $t0, -PAGE_TABLE_ENT_SIZE
+            dsll        $t2, $t2, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
+            dsll        $a0, $t1, (UNTRANSLATED_BITS + L2_BITS - PAGE_TABLE_ENT_BITS)
+            daddu       $a0, $a0, $t2
+            daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
+            sltu        $a0, $a3, $a0              # when the address is greater than it should be, we have an error
+            bnez        $a0, revoke_er        # the last page must have an explicit entry
+            nop
+
+
+            csd         $a1, $t1, (-PAGE_TABLE_ENT_SIZE)($c6)# if un-used set to used
 
         l1_loop_footer:
-            beq         $t1, $t8, l1_loop_start
+            bne         $t1, $t8, l1_loop_start
             dli         $t2, 0
         l1_loop_end:
             b           l0_loop_footer
             nop
 
     1:
-        csd         $zero, $t0, (-REG_SIZE)($c5)# if un-used set to used
+        dsll        $a0, $t0, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
+        daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
+        sltu        $a0, $a3, $a0              # when the address is greater than it should be, we have an error
+        bnez        $a0, revoke_er        # the last page must have an explicit entry
+        daddu       $a0, $t1, $t2
+        bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
+        nop
+
+        csd         $a1, $t0, (-PAGE_TABLE_ENT_SIZE)($c5) # if un-used set to used
 
     l0_loop_footer:
         dli         $t1, 0
-        beq         $t0, $t3, l0_loop_start
+        bne         $t0, $t3, l0_loop_start
         dli         $t2, 0
     l0_loop_end:
 
-    # We are now revoking. No errors from now on.
+    # Make exclusive again
+    daddiu      $a3, $a3, UNTRANSLATED_PAGE_SIZE
 
-    csd         $t1, $zero, revoke_state($idc) # Set revoke state to 1
-    csd         $t2, $zero, 0($c3)                 # Mark reservation as revoking
+    # We are now revoking. No errors from now on.
 
     dli         $a0, PHY_MEM_START          #a0 is the start of memory
     dli         $a1, PHY_MEM_END            #a1 the end
 
 
     # Blocking writing of the capability #
-    li          $t0, DEF_DATA_PERMS
+    li          $t0, (DEF_DATA_PERMS & ~Perm_Seal)
     dmtc0       $a2, $30, 2
     dmtc0       $a3, $30, 3
     dmtc0       $t0, $30, 4                 # only revoke Writable and Executable caps, not sealing caps
 
 
-    subu        $a1, $a1, $a0
+    dsubu        $a1, $a1, $a0
     beqz        $a1, revoke_loop_end
     csetoffset  $c5, $kdc, $a0
     dli         $t0, CAP_SIZE
 
-revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
 
+
+revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
     cllc        $c6, $c5                    # Even if untagged we will write back to solve race with context switch
     cgetbase    $t1, $c6
     sltu        $t2, $t1, $a2
@@ -1064,7 +1150,7 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
     sltu        $t2, $t1, $a3
     beqz        $t2, revoke_loop_footer
 
-    ccleartag   $c6, $c6
+    nop
     cscc        $t1, $c6, $c5               # Avoid trample of legitimate capability
     beqz        $t1, revoke_loop_start      # restart on fail
     nop
@@ -1081,7 +1167,108 @@ revoke_loop_end:
     dmtc0       $zero, $30, 3
     dmtc0       $zero, $30, 2
 
-    # Make a new reservation here now
+
+    # Mark vtable entries as free
+
+    dli         $t0, top_virt_page
+    cincoffset  $c5, $idc, $t0              # c5 is the top level table
+                                            # c6 is the L1 table. c7 the l2
+
+    # make upper bound INCLUSIVE for easier calculations
+    daddiu      $a3, $a3, (-UNTRANSLATED_PAGE_SIZE)
+
+    # starting points for each level in t0, t1, and t2
+    EXTRACT_AND_SCALE_L0 $a2, $t0, PAGE_TABLE_ENT_BITS
+    EXTRACT_AND_SCALE_L1 $a2, $t1, PAGE_TABLE_ENT_BITS
+    EXTRACT_AND_SCALE_L2 $a2, $t2, PAGE_TABLE_ENT_BITS
+
+    # ending points for each level in t3, t8, t9
+    EXTRACT_AND_SCALE_L0 $a3, $t3, PAGE_TABLE_ENT_BITS
+    daddiu     $t3, $t3, PAGE_TABLE_ENT_BITS
+    # a1 has the used flag
+    dli         $a1, VTABLE_ENTRY_USED
+
+    # Another walk of the the vtables. This time we know they are either used or pointers to sub tables
+    # This will set them to free so new tables can be attached. This is good as the next part of this
+    # will cause a tlb miss
+    clear_loop_l0_start:
+
+        cld         $a0, $t0, 0($c5)
+        bne         $a0, $a1, 1f    # if used set to free, otherwise recurse
+        daddiu      $t0, $t0, PAGE_TABLE_ENT_SIZE
+
+        # Error check edge cases #
+        dsll        $a0, $t0, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
+        daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
+        sltu        $a0, $a3, $a0              # if the address is greater than it should be, we have an error
+        bnez        $a0, revoke_er        # the last page must have an explicit entry
+        daddu       $a0, $t1, $t2
+        bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
+                                               # when t1 and t2 are zero, this is not the first page, or its aligned
+
+        dli         $t1, 0
+        csd         $zero, $t0, (-PAGE_TABLE_ENT_SIZE)($c5)          # set to free
+        bne         $t0, $t3, clear_loop_l0_start
+        dli         $t2, 0
+        b           clear_loop_l0_end
+        nop
+    1:
+        cfromptr    $c6, $kdc, $a0              # l1 table
+        bne         $t0, $t3, clear_loop_l1_start
+        dli         $t8, PAGE_TABLE_ENT_PER_TABLE
+        EXTRACT_AND_SCALE_L1 $a3, $t8, PAGE_TABLE_ENT_BITS
+        daddiu      $t8, $t8, PAGE_TABLE_ENT_BITS
+
+        clear_loop_l1_start:
+
+            cld         $a0, $t1, 0($c6)
+            bne         $a0, $a1, 1f    # if used set to free, otherwise recurse
+            daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
+
+            # Error check edge cases #
+            bnez        $t2, revoke_er             # check we arn't skipping the start
+            daddiu      $t2, $t0, -PAGE_TABLE_ENT_SIZE
+            dsll        $t2, $t2, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
+            dsll        $a0, $t1, (UNTRANSLATED_BITS + L2_BITS - PAGE_TABLE_ENT_BITS)
+            daddu       $a0, $a0, $t2
+            daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
+            sltu        $a0, $a3, $a0              # if the address is greater than it should be, we have an error
+            bnez        $a0, revoke_er        # the last page must have an explicit entry
+            nop
+
+            csd         $zero, $t1, (-PAGE_TABLE_ENT_SIZE)($c6)          # set to free
+        2:  bne         $t1, $t8, clear_loop_l1_start
+            dli         $t2, 0
+            b           clear_loop_l0_start
+            dli         $t1, 0
+        1:
+            cfromptr    $c7, $kdc, $a0              # l2 table
+            bne         $t1, $t8, clear_loop_l2_start
+            dli         $t9, PAGE_TABLE_ENT_PER_TABLE
+            EXTRACT_AND_SCALE_L2 $a3, $t9, PAGE_TABLE_ENT_BITS
+            daddiu      $t9, $t9, PAGE_TABLE_ENT_BITS
+            clear_loop_l2_start:
+                daddiu      $t2, $t2, PAGE_TABLE_ENT_SIZE
+                bne         $t2, $t9, clear_loop_l2_start
+                csd         $zero, $t2, (-PAGE_TABLE_ENT_SIZE)($c7)
+                b           2b
+                nop
+
+            clear_loop_l2_end:
+
+        clear_loop_l1_end:
+
+    clear_loop_l0_end:
+
+
+    # Make exclusive again
+    daddiu      $a3, $a3, UNTRANSLATED_PAGE_SIZE
+
+    # Make a new reservation here now. This will cause a fault but the vtables should be available again #
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+
     dli         $t0, RES_META_SIZE
     csetoffset  $c3, $kdc, $a2
     csetbounds  $c3, $c3,  $a4
@@ -1224,6 +1411,7 @@ parent_er:
 nano_kernel_end:
 .size nano_kernel, nano_kernel_end - nano_kernel_start
 
+# Notes: will lock the physical page, and atomically updates the vtable entry #
 ########################################################################
 # ptable create_table(register_t page, ptable parent, register_t index)
 .global create_table
@@ -1252,46 +1440,63 @@ good_level: #t2 now contains the type we will seal the next level with
     dli         $t1, phy_page_table
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
 
+    li          $t8, page_transaction
+    cincoffset  $c5, $idc, $t0                          # c5 is out physical entry
+2:  cllw        $t9, $c5                                # $t9 = state. Take out transaction lock.
+    cscw        $t1, $t8, $c5
+    beqz        $t1, 2b
+    nop
+
     cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
     daddiu      $t1, $t1, -1
-    bnez        $t1, create_ptable_er                   # $t1 must be 1
+    bnez        $t1, create_ptable_er_restore_state     # $t1 must be 1
+    nop
 
-    clw         $t1, $t0, 0($idc)                       # $t1 = state
-    beqz        $t1, 1f                                 # state must be un-used
+    beqz        $t9, 1f                                 # state must be un-used
     dli         $t8, page_ptable_free                   # or can safely re-use old ptables for new ptables
-    bne         $t1, $t8, create_ptable_er
+    bne         $t9, $t8, create_ptable_er_restore_state
 
 1:
-    dli         $t1, page_ptable
-    csw         $t1, $t0, 0($idc)                       # set to nano owned
 
     dsll        $t0, $a0, PHY_PAGE_SIZE_BITS
     dli         $t1, PHY_MEM_START
     daddu       $t0, $t0, $t1                          # t0 is the address of the new page
     dsll        $t1, $a1, PAGE_TABLE_ENT_BITS          # t1 is index in the parent page to write to
 
-    # Check table not already created/deleted
-    cld         $t3, $t1, 0($c3)
-    bnez        $t3, create_ptable_er
+    move        $t3, $ra
+    jal         nano_zero_page                          # uses t8 and c13
     nop
+    move        $ra, $t3
 
-    csd         $t0, $t1, 0($c3)
-    dli         $t1, PAGE_TABLE_SIZE
+    # Check table not already created/deleted
+    cincoffset  $c6, $c3, $t1                           # c6 is a pointer to vtable entry
+
+3:  clld        $t3, $c6
+    bnez        $t3, create_ptable_er_restore_state
+    nop
+    cscd        $t3, $t0, $c6                           # update vtable entry
+    beqz        $t3, 3b
+
+
+    dli         $t1, page_ptable
+    csw         $t1, $zero, 0($c5)                      # set physical page as a table
+
+    dli         $t1, PAGE_TABLE_SIZE                    # construct return value
     csetoffset  $c3, $kdc, $t0
     csetbounds  $c3, $c3, $t1
     csetoffset  $c4, $kdc, $t2
     cseal       $c3, $c3, $c4
 
-    cmove       $c4, $c17
-    jal         nano_zero_page
-    nop
 
-    cmove       $c17, $c4
-    cclearlo    EN2(c4,c17)
+
+    cclearlo    EN4(c4,c17, c5, c6)
     creturn
 
+create_ptable_er_restore_state:
+    csw         $t9, $zero, 0($c5)
+
 create_ptable_er:
-    cclearlo    EN2(c3,c4)
+    cclearlo    EN5(c3, c17, c4, c5, c7)
     creturn
 
 
@@ -1357,6 +1562,8 @@ get_read_only_table:
 1:
     cclearlo    EN1(c4)
     creturn
+
+# Notes: Locks the physical page, and atomically updates the vtable entry #
 #########################################################################################
 # void create_mapping(register_t page, ptable table, register_t index, register_t flags)
 .global create_mapping
@@ -1373,30 +1580,46 @@ create_mapping:
     dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
+    cincoffset  $c6, $idc, $t0                          # c6 is the phy entry cap
+    dli         $t8, page_transaction
 
-    cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
+2:  cllw        $t9, $c6                                # $t9 is the state of this phy page
+    cscw        $t0, $t8, $c6                           # lock phy entry
+    beqz        $t0, 2b
+    nop
+
+    cld         $t1, $zero, REG_SIZE($c6)               # $t1 = len of record
     daddiu      $t1, $t1, -2
-    bnez        $t1, create_mapping_er                  # $t1 must be 2
+    bnez        $t1, create_mapping_er_restore_phy      # $t1 must be 2
+    nop
 
-    clw         $t1, $t0, 0($idc)                       # $t1 is the state of this phy page
-    bnez        $t1, create_mapping_er                  # must be un-used
+    bnez        $t9, create_mapping_er_restore_phy      # must be un-used
     dsll        $t2, $a1, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
 
-    cld         $t1, $t2, 0($c3)                        # check -virtual- mapping is un-used
-    bnez        $t1, create_mapping_er
+    cincoffset  $c5, $c3, $t2
+    dsll        $a0, $a0, PFN_SHIFT
+    or          $a0, $a0, $a2
+
+1:  clld        $t1, $c5                               # check -virtual- mapping is un-used
+    bnez        $t1, create_mapping_er_restore_phy
+    nop
+    cscd        $t1, $a0, $c5                          # store EntryLo
+    beqz        $t1, 1b
 
     dli         $t1, page_mapped
-    csw         $t1, $t0, 0($idc)                       # set page to be mapped
+    csw         $t1, $zero, 0($c6)                     # set page to be mapped
 
-    # TODO add perms
     # TODO add autharising cap
     # TODO add the checked top bits
 
-    dsll        $t1, $a0, PFN_SHIFT
-    or          $t1, $t1, $a2
-    csd         $t1, $t2, 0($c3)                        # store EntryLo
+    cclearlo    EN4(c3,c4,c5,c6)
+    creturn
+
+create_mapping_er_restore_phy:
+    csw         $t9, $zero, 0($c6)
+
 create_mapping_er:
-    cclearlo    EN2(c3,c4)
+    cclearlo    EN4(c3,c4,c5,c6)
     creturn
 
 
@@ -1412,7 +1635,7 @@ free_mapping:
     daddu       $t1, $t1, $t0
 
     sltiu       $t2, $t1, VTABLE_LEVELS
-    daddiu      $t1, $t1, (VTABLE_LEVELS-1)             # t1 zero if last level
+    daddiu      $t1, $t1, -(VTABLE_LEVELS-1)             # t1 zero if last level
     beqz        $t2, free_er
 
     csetoffset  $c4, $kdc, $t0
@@ -1421,10 +1644,10 @@ free_mapping:
     beq         $t0, $zero, free_er                     # $a0 >= PAGE_TABLE_ENT_PER_TABLE
 
     cunseal     $c3, $c3, $c4
-    dsll        $t2, $a1, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
+    dsll        $t2, $a0, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
 
     cld         $t3, $t2, 0($c3)                        # t3 is the PFN/Physical adress of page
-    beqz        $t3, free_er
+    beqz        $t3, free_to_used                       # if free we can go straight to used w/o updating any physical pages
     dli         $t0, VTABLE_ENTRY_USED
     beq         $t0, $t3, free_er
 
@@ -1447,24 +1670,26 @@ free_mapping:
     bne         $t3, $t9, free_er
     nop
 
-    csd         $t0, $t2, 0($c3)                        # store -1 in vtable to mean 'used'
     csw         $a3, $t1, REG_SIZE($idc)                # store to update phy page status
 
-    # FIXME need to invalidate TLB so old mappings go away
+free_to_used:
+    csd         $t0, $t2, 0($c3)                        # store -1 in vtable to mean 'used'
+
+    # Invalidate TLB - could do this selectively for performance
+
+    .set N_TLB_ENTS, 32
+    dli     $t0, N_TLB_ENTS
+
+1:
+    dmtc0   $t0, $0
+    dmtc0   $t0, $10
+    tlbwi
+    bnez    $t0, 1b
+    daddiu  $t0, -1
+
 free_er:
     cclearlo    EN2(c3, c4)
     creturn
-
-#############################################################################################
-# void clear_mapping(ptable_t table, register_t vaddr, res_t reservation)
-.global clear_mapping
-clear_mapping:
-#############################################################################################
-
-
-
-
-
 
 tlb_table_missing:
     cgetcause $k0

@@ -56,8 +56,10 @@
     ITEM(rescap_take, void, (res_t, res, cap_pair*, out), __VA_ARGS__)\
 /* Returns a SEALED version of rescap_take, but does not change state. Then get fields using normal ops */\
     ITEM(rescap_info, capability, (res_t, res), __VA_ARGS__)\
-/* Tells the revokeer to start revoking this reservation. revoking fails if already revoking */\
-    ITEM(rescap_revoke, res_t, (res_t, res), __VA_ARGS__)\
+/* Tells the revokeer to start revoking this reservation. revoking fails if already revoking. Must be MAPPED */\
+    ITEM(rescap_revoke_start, void, (res_t, res), __VA_ARGS__)\
+/* Tells the revokeer to finish revoking this reservation from before. Must be UNMAPPED. */\
+    ITEM(rescap_revoke_finish, res_t, (void), __VA_ARGS__)\
 /* Splits an open reservation. The reservation will have size `size'. The remaining space will be returned as a new reservation. */\
     ITEM(rescap_split, res_t, (capability, res, size_t, size), __VA_ARGS__)\
 /* Merges two taken reservations. Cannot merge with revoking. If an open and taken are merged the result is taken*/\
@@ -72,8 +74,6 @@
     ITEM(create_mapping, void, (register_t, page_n, ptable_t, table, register_t, index, register_t, flags),  __VA_ARGS__) \
 /* Free a mapping. This will recover the physical page */\
     ITEM(free_mapping, void, (ptable_t, table, register_t, index), __VA_ARGS__)   \
-/* Use a reservation to show a virtual range can be remappep */\
-    ITEM(clear_mapping, void, (ptable_t, table, register_t, vaddr, res_t, reservation), __VA_ARGS__)\
 /* Get a handle for the top level page table*/\
     ITEM(get_top_level_table, ptable_t, (void), __VA_ARGS__) \
 /* Get a handle for a sub table from an L0 or L1 table. */\

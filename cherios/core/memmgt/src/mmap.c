@@ -41,13 +41,14 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
     /* We -might- reserve one of these for a can-free perm. I would prefer to use a sealed cap.
      * Types are numerous. Permissions are not. */
 
+    size_t original_base = base;
+    size_t original_length = length;
+
     assert(worker_id == 1);
 
     /* FIXME: */
     /* Currently all belongs to itself */
     act_kt assigned_to = act_self_ref;
-
-    length = align_up_to(length, RES_META_SIZE);
 
     cheri_perms |= CHERI_PERM_SOFT_1;
 
@@ -65,8 +66,6 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
 	}
 
     cap_pair pair;
-    /* Because people ask for silly lengths, round up to a cap */
-    length += ((CHERICAP_SIZE - (length & (CHERICAP_SIZE-1))) & (CHERICAP_SIZE-1));
 
     if(flags & MAP_PHY) {
         if(flags & MAP_RESERVED) {
@@ -119,6 +118,16 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
             length += RES_META_SIZE;
         }
 
+        /* To keep alignment always look for base that is page aligned plus META_SIZE */
+        if(base != 0) {
+            size_t new_base = align_down_to(base - RES_META_SIZE, UNTRANSLATED_PAGE_SIZE) + RES_META_SIZE;
+            length += (base - new_base);
+            base = new_base;
+        }
+
+        /* Length must to page aligned minus META_SIZE */
+        length = align_up_to(length + RES_META_SIZE, UNTRANSLATED_PAGE_SIZE) - RES_META_SIZE;
+
         free_chain_t* chain = memmgt_find_free_reservation(base, length, &found_base, &found_length);
         if(chain == NULL) {
             goto fail;
@@ -141,6 +150,16 @@ int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* res
             return 0;
         } else {
             memgt_take_reservation(chain, assigned_to, &pair);
+            size_t result_base = cheri_getbase(pair.data);
+
+            if(original_base == 0) {
+                original_base = result_base;
+            }
+
+            /* After all the alignment rubbish we may need to do this */
+            pair.data = cheri_setbounds(cheri_incoffset(pair.data, original_base - result_base), original_length);
+            pair.code = cheri_setbounds(cheri_incoffset(pair.code, original_base - result_base), original_length);
+
         }
 
     }
@@ -175,7 +194,9 @@ int __munmap(void *addr, size_t length) {
 
     free_chain_t* chain = memmgt_find_res_for_addr(cheri_getbase(addr));
 
-    if(chain->used.allocated_to == CHAIN_FREED || chain->used.allocated_to == NULL) {
+    if(chain->used.allocated_to == CHAIN_FREED ||
+            chain->used.allocated_to == NULL ||
+            chain->used.allocated_to == CHAIN_REVOKING) {
         printf("Unmapped something already free or not allocated. \n");
         return -1;
     }

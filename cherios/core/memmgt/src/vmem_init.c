@@ -30,9 +30,10 @@
 
 #include "vmem.h"
 #include "stdio.h"
+#include "math.h"
 
 static void init_vmem(void) {
-    /* This creates anough virtual memory to get started */
+    /* This creates enough virtual memory to get started */
     ptable_t top_table, L1_0, L2_0;
 
     top_table = get_top_level_table();
@@ -47,9 +48,22 @@ static void init_vmem(void) {
 
     int res = memmgt_create_mapping(L2_0, 0, TLB_FLAGS_DEFAULT);
     assert(res == 0);
+    res = memmgt_create_mapping(L2_0, 1, TLB_FLAGS_DEFAULT);
+    assert(res == 0);
 
     /* Now we get the first reservation which NEEDS virtual mem */
     res_t first = make_first_reservation();
+
+    /* Align the reservation to a page boundry (just throw away forever the first few bytes) */
+    capability nfo = rescap_info(first);
+    size_t base = cheri_getbase(nfo);
+    size_t length = cheri_getlen(nfo);
+    size_t realigned_base = align_up_to(base - RES_META_SIZE, UNTRANSLATED_PAGE_SIZE) + RES_META_SIZE;
+
+    if(base != realigned_base) {
+        size_t diff = realigned_base-base;
+        first = rescap_split(first, diff);
+    }
 
     chain_start = free_chain_start = get_userdata_for_res(first);
 

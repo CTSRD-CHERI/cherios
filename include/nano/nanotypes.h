@@ -39,7 +39,6 @@
 #define CONTEXT_TYPE       0x5555         // The type of contexts
 #define NANO_KERNEL_TYPE   0x6666         // The type of sealed local data
 #define RES_TYPE           0x7777         // The type of a reservation handle
-#define RES_VIEW_TYPE      0x7778         // The type of a sealed capability covering the range of a reservation
 #define VTABLE_TYPE_L0     0x8880         // The type of the top level page table
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
@@ -111,6 +110,7 @@
     ITEM(page_mapped, 3)                           \
     ITEM(page_ptable, 4)                           \
     ITEM(page_ptable_free, 5)                      \
+    ITEM(page_transaction, 6)
 
 #define NANO_KERNEL_RES_STATUS_ENUM_LIST(ITEM) \
     ITEM(res_open,          0)                  \
