@@ -653,11 +653,11 @@ get_last_exception:
     csd        $t2, $zero, (CAP_SIZE+(2*REG_SIZE))($c3)
     creturn
 
-###############################################################
-# capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out)
+################################################################################################################
+# capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out, register_t IO)
 .global get_phy_page
 get_phy_page:
-###############################################################
+################################################################################################################
 
     beqz        $a2, get_phy_page_end
     dli         $t0, TOTAL_PHY_PAGES
@@ -672,8 +672,12 @@ get_phy_page:
     bne         $t1, $a2, get_phy_page_end              # $t1 must be npages
     clw         $t1, $t0, 0($idc)                       # $t1 = state
     bnez        $t1, get_phy_page_end                   # state must be un-used
+
     dli         $t1, page_system_owned
-    csw         $t1, $t0, 0($idc)                       # set to system owned
+    dli         $t2, page_io
+    movn        $t1, $t2, $a3
+
+    csw         $t1, $t0, 0($idc)                       # set to system owned / io
 
     bnez        $a1, 1f                                 # 0: uncached. ow: cached
     dli         $t1, PHY_MEM_START_TOP
@@ -687,7 +691,11 @@ get_phy_page:
     csetoffset  $c4, $kcc, $t1
     csetbounds  $c3, $c3, $t0                           # bounds number of pages requested
     csetbounds  $c4, $c4, $t0
+
     dli         $t0, DEF_DATA_PERMS   #t0 is the permission mask
+    dli         $t1, (Perm_Load | Perm_Store)
+    movn        $t0, $t1, $a3
+
     candperm    $c3, $c3, $t0
     candperm    $c4, $c4, $t0
 
@@ -1008,7 +1016,7 @@ rescap_revoke_finish:
     daddiu      $t0, $t0, -1
     bnez        $t0, revoke_er
     li          $t0, 2
-    csd         $t0, $zero, revoke_state($idc)
+    csd         $t0, $zero, revoke_state($idc)  # set revoke state to 2
 
     cld         $a2, $zero, revoke_base($idc)
     cld         $a3, $zero, revoke_bound($idc)
@@ -1139,11 +1147,35 @@ rescap_revoke_finish:
     beqz        $a1, revoke_loop_end
     csetoffset  $c5, $kdc, $a0
     dli         $t0, CAP_SIZE
-
+    dli         $t3, PHY_PAGE_SIZE
+    dli         $t8, 0
 
 
 revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
-    cllc        $c6, $c5                    # Even if untagged we will write back to solve race with context switch
+
+    andi        $t1, $t8, (PHY_PAGE_SIZE-1)
+    bnez        $t1, 1f
+    dsrl        $t1, $t8, (PHY_PAGE_SIZE_BITS - PHY_PAGE_ENTRY_SIZE_BITS)
+    dli         $t2, phy_page_table
+    daddu       $t1, $t1, $t2
+
+    # only bother scanning nano owned, mapped and system owned #
+    clw         $t1, $t1, 0($idc)
+    dli         $t2, page_nano_owned
+    beq         $t1, $t2, 1f
+    dli         $t2, page_system_owned
+    beq         $t1, $t2, 1f
+    dli         $t2, page_mapped
+    beq         $t1, $t2, 1f
+
+    # Otherwise skip this page
+    daddu       $t8, $t8, $t3
+    bne         $t8, $a1, revoke_loop_start
+    cincoffset  $c5, $c5, $t3
+
+    b           revoke_loop_end
+
+1:  cllc        $c6, $c5
     cgetbase    $t1, $c6
     sltu        $t2, $t1, $a2
     bnez        $t2, revoke_loop_footer
@@ -1152,15 +1184,32 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
 
     nop
     cscc        $t1, $c6, $c5               # Avoid trample of legitimate capability
-    beqz        $t1, revoke_loop_start      # restart on fail
+    beqz        $t1, 1b                     # restart on fail
     nop
 
 revoke_loop_footer:
-    subu        $a1, $a1, $t0
-    bnez        $a1, revoke_loop_start
+    daddiu      $t8, $t8, CAP_SIZE
+    bne         $t8, $a1, revoke_loop_start
     cincoffset  $c5, $c5, $t0
 
 revoke_loop_end:
+
+    # with multicore this will require a sync. This will force a switch to ourselves which will clear registers #
+
+    dli         $t1, current_context
+    dli         $t0, CONTEXT_TYPE
+    cincoffset  $c4, $idc, $t1
+    cincoffset  $c5, $kdc, $t0
+    clc         $c3, $zero, current_context($idc)
+    cseal       $c3, $c3, $c5
+
+    cmove       $c13, $c17
+    dla         $t0, revoke_restore
+    b           revoke_restore
+    cgetpccsetoffset    $c17, $t0
+
+revoke_restore:
+    cmove       $c17, $c13
 
     # Allow any cap writes again #
     dmtc0       $zero, $30, 4
@@ -1184,7 +1233,7 @@ revoke_loop_end:
 
     # ending points for each level in t3, t8, t9
     EXTRACT_AND_SCALE_L0 $a3, $t3, PAGE_TABLE_ENT_BITS
-    daddiu     $t3, $t3, PAGE_TABLE_ENT_BITS
+    daddiu     $t3, $t3, PAGE_TABLE_ENT_SIZE
     # a1 has the used flag
     dli         $a1, VTABLE_ENTRY_USED
 
@@ -1217,7 +1266,7 @@ revoke_loop_end:
         bne         $t0, $t3, clear_loop_l1_start
         dli         $t8, PAGE_TABLE_ENT_PER_TABLE
         EXTRACT_AND_SCALE_L1 $a3, $t8, PAGE_TABLE_ENT_BITS
-        daddiu      $t8, $t8, PAGE_TABLE_ENT_BITS
+        daddiu      $t8, $t8, PAGE_TABLE_ENT_SIZE
 
         clear_loop_l1_start:
 
@@ -1239,14 +1288,16 @@ revoke_loop_end:
             csd         $zero, $t1, (-PAGE_TABLE_ENT_SIZE)($c6)          # set to free
         2:  bne         $t1, $t8, clear_loop_l1_start
             dli         $t2, 0
-            b           clear_loop_l0_start
+            bne         $t0, $t3, clear_loop_l0_start
             dli         $t1, 0
+            b           clear_loop_l0_end
+            nop
         1:
             cfromptr    $c7, $kdc, $a0              # l2 table
             bne         $t1, $t8, clear_loop_l2_start
             dli         $t9, PAGE_TABLE_ENT_PER_TABLE
             EXTRACT_AND_SCALE_L2 $a3, $t9, PAGE_TABLE_ENT_BITS
-            daddiu      $t9, $t9, PAGE_TABLE_ENT_BITS
+            daddiu      $t9, $t9, PAGE_TABLE_ENT_SIZE
             clear_loop_l2_start:
                 daddiu      $t2, $t2, PAGE_TABLE_ENT_SIZE
                 bne         $t2, $t9, clear_loop_l2_start
@@ -1267,7 +1318,6 @@ revoke_loop_end:
     # Make a new reservation here now. This will cause a fault but the vtables should be available again #
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
-    cunseal     $c3, $c3, $c4               # unseal res
 
     dli         $t0, RES_META_SIZE
     csetoffset  $c3, $kdc, $a2
@@ -1280,9 +1330,11 @@ revoke_loop_end:
     cincoffset  $c5, $c3, $t0
     csd         $zero, $zero, 0($c3)        # set state to open
     csd         $zero, $zero, (2*REG_SIZE)($c3) # set parent to 0
-    csetbounds  $c5, $c4, $a4
+    csetbounds  $c5, $c5, $a4
     cseal       $c3, $c3, $c4               # seal new reservation
     csc         $c5, $zero, 0($c5)          # store the result capability for later
+
+    csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
     cclearlo    EN3(c4, c5, c6)
     creturn

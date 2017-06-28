@@ -72,7 +72,7 @@ static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out
 
 
 /* Try to ask memgt instead of using this */
-static inline capability get_phy_cap(page_t* book, size_t address, size_t size, int cached) {
+static inline capability get_phy_cap(page_t* book, size_t address, size_t size, int cached, int IO) {
     size_t phy_page = address / PAGE_SIZE;
     size_t phy_offset = address & (PAGE_SIZE - 1);
 
@@ -94,7 +94,7 @@ static inline capability get_phy_cap(page_t* book, size_t address, size_t size, 
     }
 
     cap_pair pair;
-    get_phy_page(phy_page, cached, 1, &pair);
+    get_phy_page(phy_page, cached, 1, &pair, IO);
     capability cap_for_phy = pair.data;
     cap_for_phy = cheri_setoffset(cap_for_phy, phy_offset);
     cap_for_phy = cheri_setbounds(cap_for_phy, size);

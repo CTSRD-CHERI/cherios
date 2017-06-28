@@ -148,6 +148,10 @@ int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags)
 
     assert(book[page].status == page_mapped);
 
+    if(page == 0x741c) {
+        printf("just mapped problem. index: %lx\n", index << UNTRANSLATED_BITS);
+    }
+
     try_merge(page);
     return 0;
 }
@@ -187,8 +191,7 @@ void memgt_commit_vmem(act_kt activation, size_t addr) {
 
     if(ro->entries[ndx] != NULL) {
         if(ro->entries[ndx] == VTABLE_ENTRY_USED) {
-            //panic("Someone tried to use a virtual address that was already freed!\n");
-            printf("worrying commit\n");
+            panic("Someone tried to use a virtual address that was already freed!\n");
         }
         printf("spurious commit!\n");
     }
@@ -651,7 +654,7 @@ void memmgt_revoke_loop(void) {
         size_t base = cheri_getbase(nfo) - RES_META_SIZE;
         size_t len = cheri_getlen(nfo) + RES_META_SIZE;
 
-        printf("*********Revoking from %lx to %lx (%lx pages)\n", base, base+len, len/UNTRANSLATED_PAGE_SIZE);
+        printf("Revoke: Revoking from %lx to %lx (%lx pages)\n", base, base+len, len/UNTRANSLATED_PAGE_SIZE);
 
         assert((base & (UNTRANSLATED_PAGE_SIZE-1)) == 0);
         assert((len & (UNTRANSLATED_PAGE_SIZE-1)) == 0);
@@ -669,17 +672,21 @@ void memmgt_revoke_loop(void) {
 
         //dump_table(get_l2_for_addr(base));
 
-        //HW_TRACE_ON
         res = rescap_revoke_finish();
-        //HW_TRACE_OFF
 
-        printf("************Revoke finished!\n");
+        printf("Revoke: Revoke finished!\n");
 
         assert(res != NULL);
 
         // update metadata
 
+        printf("Revoke: Getting new chain\n");
+
         chain = (free_chain_t*)get_userdata_for_res(res);
+
+        printf("Revoke: Fixing metadata\n");
+
+        assert(chain != NULL);
 
         chain->used.res = res;
 
@@ -706,5 +713,7 @@ void memmgt_revoke_loop(void) {
 
         if(prv) prv->used.next_free_res = chain;
         if(nxt) nxt->used.prev_free_res = chain;
+
+        printf("************Revoke restart\n");
     }
 }

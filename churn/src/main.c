@@ -37,7 +37,7 @@
 
 #define BLOCK_SIZE  0x10000
 #define WINDOW_SIZE 100
-#define N           101    // set to 0 for good times
+#define N           0x1000    // set to 0 for good times
 
 int main(register_t arg, capability carg) {
 
@@ -71,8 +71,7 @@ int main(register_t arg, capability carg) {
         }
     }
 
-    printf("Churn test done. Spinning to allow revoke \n");
+    printf("Churn test done\n");
 
-    while(1){sleep(0);}
     return 0;
 }

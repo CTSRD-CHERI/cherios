@@ -175,7 +175,7 @@ static void * get_act_cap(module_t type, init_info_t* info) {
         //TODO get this from memmgt.
             cap_pair pair;
 			mmap_new(FS_PHY_BASE, FS_PHY_SIZE,
-                            CHERI_PERM_ALL & ~CHERI_PERM_EXECUTE,
+                            CHERI_PERM_LOAD | CHERI_PERM_STORE,
                             MAP_ANONYMOUS | MAP_SHARED | MAP_PHY, &pair);
             return pair.data;
         case m_proc:

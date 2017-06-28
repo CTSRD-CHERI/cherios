@@ -211,7 +211,7 @@ static inline void dump_tlb() {
     printf("|------------------------------------------------------------------------------|\n");
     printf("|        |        EntryHi      |         EntryLO0      |         EntryLO1      |\n");
     printf("|PageSize|---------------------|-----------------------|-----------------------|\n");
-    printf("|        |      VPN     | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
+    printf("|        |  PAGE START  | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
     for(int i = 0; i < 32; i++) {
@@ -228,6 +228,7 @@ static inline void dump_tlb() {
         );
 
         register_t vpn = hi >> 13;
+		vpn <<= UNTRANSLATED_BITS;
         register_t asid = hi & ((1 << 13) - 1);
 
         register_t pfn0 = lo0 >> 6;

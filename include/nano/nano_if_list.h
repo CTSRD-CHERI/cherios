@@ -67,7 +67,8 @@
 /* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
     ITEM(rescap_parent, res_t, (res_t, res), __VA_ARGS__)\
 /* Get a physical page. Can only be done if the page is not nano owned, or mapped to from a virtual address*/\
-    ITEM(get_phy_page, void, (register_t, page_n, int, cached, register_t, npages, cap_pair*, out), __VA_ARGS__)\
+/* If IO the pages won't be scanned for revoke - but can't be used to store capabilities */\
+    ITEM(get_phy_page, void, (register_t, page_n, int, cached, register_t, npages, cap_pair*, out, register_t, IO), __VA_ARGS__)\
 /* Allocate a physical page to be page table. */\
     ITEM(create_table, ptable_t, (register_t, page_n, ptable_t, parent, register_t, index),  __VA_ARGS__)\
 /* Map an entry in a leaf page table to a physical page. The adjacent physical page will also be mapped */\
