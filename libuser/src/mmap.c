@@ -34,6 +34,7 @@
 #include "namespace.h"
 #include "stdio.h"
 #include "assert.h"
+#include "../../cherios/kernel/include/activations.h"
 
 act_kt memmgt_ref = NULL;
 
@@ -120,4 +121,8 @@ int munmap(void *addr, size_t length) {
 
 void mmap_set_act(act_kt ref) {
 	memmgt_ref = ref;
+}
+
+void mdump(void) {
+	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 3);
 }

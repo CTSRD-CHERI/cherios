@@ -40,23 +40,78 @@
 page_t* book;
 free_chain_t *chain_start, *free_chain_start;
 
+static capability memmgt_nfo(free_chain_t* chain) {
+    capability nfo;
+    if(chain->used.allocated_to != CHAIN_REVOKING) {
+        capability res = chain->used.res;
+        assert(res != NULL);
+        nfo = rescap_info(res);
+    } else {
+        nfo = chain->used.res;
+    }
+
+    assert(nfo != NULL);
+    return nfo;
+}
+
+static void check_phy_entry(size_t pagen) {
+    if(pagen != 0) {
+        size_t prv = book[pagen].prev;
+        assert(book[prv].len + prv == pagen);
+    }
+    size_t nxt = pagen + book[pagen].len;
+    assert(nxt <= BOOK_END);
+    assert(book[nxt].prev == pagen);
+}
+
+static void check_book(void) {
+    size_t pagen = 0;
+    size_t ppagen = (size_t)-1;
+
+    while(pagen < BOOK_END) {
+        size_t len = book[pagen].len;
+        size_t prv = book[pagen].prev;
+
+        assert(len != 0);
+
+        if(ppagen != -1) {
+            assert(prv == ppagen);
+        }
+
+        ppagen = pagen;
+        pagen +=len;
+    }
+
+    if(pagen != BOOK_END) {
+        printf("Book ended at %lx instead of %lx\n", pagen, BOOK_END);
+    }
+    assert(pagen == BOOK_END);
+}
+
 static void try_merge(size_t page_n) {
+    assert(page_n < TOTAL_PHY_PAGES);
+
     size_t before = book[page_n].prev;
     size_t after = page_n + book[page_n].len;
 
     if(book[before].status == book[page_n].status) {
         merge_phy_page_range(before);
+        check_phy_entry(before);
+        assert(book[page_n].len == 0);
         page_n = before;
     }
 
     if((after != BOOK_END) && book[page_n].status == book[after].status) {
         merge_phy_page_range(page_n);
+        check_phy_entry(page_n);
+        assert(book[after].len == 0);
     }
 }
 
 void print_book(page_t* book, size_t page_n, size_t times) {
     while(times-- > 0) {
-        printf("page: %lx. state = %d. len = %lx. prev = %lx\n",
+        printf("%p addr: page: %lx. state = %d. len = %lx. prev = %lx\n",
+               &book[page_n],
                page_n,
                book[page_n].status,
                book[page_n].len,
@@ -67,11 +122,51 @@ void print_book(page_t* book, size_t page_n, size_t times) {
 
 }
 
+static void dump_chain(free_chain_t* chain) {
+    capability nfo = memmgt_nfo(chain);
+    act_kt al = chain->used.allocated_to;
+    printf("%12lx to %12lx. State: %s\n",
+    cheri_getbase(nfo)-RES_META_SIZE,
+    cheri_getlen(nfo) + cheri_getbase(nfo),
+    al == NULL ? "available" : (al == CHAIN_FREED ? "freed" : (al == CHAIN_REVOKING ? "revoking" : "allocated")));
+}
+
+static void dump_whole_chain(void) {
+    free_chain_t* chain = chain_start;
+
+    printf("Chain start\n");
+    while(chain != NULL) {
+        dump_chain(chain);
+        chain = chain->used.next_res;
+    }
+    printf("Chain end\n");
+
+    chain = free_chain_start;
+
+    printf("Free Chain start\n");
+    while(chain != NULL) {
+        dump_chain(chain);
+        chain = chain->used.next_free_res;
+    }
+    printf("Chain end\n");
+}
+
+static size_t get_chain_len(void) {
+    free_chain_t* chain = chain_start;
+    size_t size = 0;
+    while(chain != NULL) {
+        size++;
+        chain = chain->used.next_res;
+    }
+    return size;
+}
+
 void break_page_to(size_t page_n, size_t len) {
     if(book[page_n].len == len) return;
 
     if(book[page_n].len > len && len != 0) {
         split_phy_page_range(page_n, len);
+        check_phy_entry(page_n+len);
     } else {
         printf("len is %lx. Tried to split to %lx\n", book[page_n].len, len);
         assert(0);
@@ -132,6 +227,8 @@ ptable_t memmgt_create_table(ptable_t parent, register_t index) {
 
     assert(book[page].status == page_ptable);
 
+    check_phy_entry(page);
+
     try_merge(page);
     return  r;
 }
@@ -148,9 +245,7 @@ int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags)
 
     assert(book[page].status == page_mapped);
 
-    if(page == 0x741c) {
-        printf("just mapped problem. index: %lx\n", index << UNTRANSLATED_BITS);
-    }
+    check_phy_entry(page);
 
     try_merge(page);
     return 0;
@@ -338,17 +433,7 @@ free_chain_t* memmgt_find_res_for_addr(size_t vaddr) {
     free_chain_t* chain = chain_start;
 
     do {
-        capability nfo;
-
-        if(chain->used.allocated_to != CHAIN_REVOKING) {
-            capability foo = chain->used.res;
-            assert(foo != NULL);
-            nfo = rescap_info(foo);
-
-            assert(nfo != NULL);
-        } else {
-            nfo = chain->used.res;
-        }
+        capability nfo = memmgt_nfo(chain);
 
         size_t base = cheri_getbase(nfo);
         size_t length = cheri_getlen(nfo);
@@ -544,13 +629,7 @@ void memgt_take_reservation(free_chain_t* chain, act_kt assign_to, cap_pair* out
 
     if(old == NULL) {
         printf("Tried to take a null rervation. Chain data: %p, %d\n", chain, (int)chain->used.allocated_to);
-        CHERI_PRINT_CAP(chain->used.prev_res);
-        CHERI_PRINT_CAP(chain->used.next_res);
-        CHERI_PRINT_CAP(chain->used.prev_free_res);
-        CHERI_PRINT_CAP(chain->used.next_free_res);
-        CHERI_PRINT_CAP(chain->used.res);
-        CHERI_PRINT_CAP(chain);
-        CHERI_PRINT_CAP(old);
+        dump_chain(chain);
     }
 
     assert(old != NULL);
@@ -603,6 +682,9 @@ static void replace_chain_link(free_chain_t* chain, free_chain_t* free_node) {
     if(nxt) nxt->used.prev_res = free_node;
 }
 
+// Collect at least a few L1s worth
+#define MIN_REVOKE (PAGE_TABLE_ENT_PER_TABLE*4)
+
 void memmgt_revoke_loop(void) {
     while(1) {
         // find a res
@@ -616,7 +698,7 @@ void memmgt_revoke_loop(void) {
                 res_t  res = chain->used.res;
                 capability nfo = rescap_info(res);
                 size_t base = cheri_getbase(nfo) - RES_META_SIZE;
-                size_t len = cheri_getbase(nfo) + RES_META_SIZE;
+                size_t len = cheri_getlen(nfo) + RES_META_SIZE;
 
                 if(len > greatest_len) {
                     longest = chain;
@@ -630,7 +712,7 @@ void memmgt_revoke_loop(void) {
 
         chain = longest;
 
-        if(chain == NULL) {
+        if(chain == NULL || greatest_len/UNTRANSLATED_PAGE_SIZE < MIN_REVOKE) {
             sleep(0);
             sleep(0);
             sleep(0);
@@ -674,19 +756,15 @@ void memmgt_revoke_loop(void) {
 
         res = rescap_revoke_finish();
 
-        printf("Revoke: Revoke finished!\n");
-
         assert(res != NULL);
 
         // update metadata
 
-        printf("Revoke: Getting new chain\n");
-
         chain = (free_chain_t*)get_userdata_for_res(res);
 
-        printf("Revoke: Fixing metadata\n");
-
         assert(chain != NULL);
+
+        replace_chain_link(&tmp_link, chain);
 
         chain->used.res = res;
 
@@ -694,26 +772,35 @@ void memmgt_revoke_loop(void) {
 
         free_chain_t *prv, *nxt;
 
+        prv = free_chain_start;
 
-        prv = tmp_link.used.prev_res;
-        nxt = tmp_link.used.next_res;
+        if(cheri_getbase(prv) > base) {
+            nxt = prv;
+            prv = NULL;
+        } else {
+            nxt = prv->used.next_free_res;
 
-        while(nxt != NULL && nxt->used.allocated_to != NULL) {
-            nxt = nxt->used.next_res;
-        }
-
-        if(nxt) prv = nxt->used.prev_free_res; // If we found a free we can follow it back
-
-        while(prv != NULL && prv->used.allocated_to != NULL) {
-            prv = prv->used.prev_res;
+            while(nxt != NULL && (cheri_getbase(memmgt_nfo(nxt)) < base)) {
+                prv = nxt;
+                nxt = prv->used.next_free_res;
+            }
         }
 
         chain->used.prev_free_res = prv;
         chain->used.next_free_res = nxt;
 
-        if(prv) prv->used.next_free_res = chain;
+        if(prv) {
+            prv->used.next_free_res = chain;
+        } else {
+            free_chain_start = chain;
+        }
         if(nxt) nxt->used.prev_free_res = chain;
 
-        printf("************Revoke restart\n");
+        printf("Revoke: Revoke finished!\n");
     }
+}
+
+void full_dump(void) {
+    print_book(book, 0, -1);
+    dump_whole_chain();
 }

@@ -45,6 +45,8 @@ void commit_vmem(act_kt activation, size_t addr);
 
 void	mmap_set_act(act_kt ref);
 
+void mdump(void);
+
 enum mmap_prot
 {
   PROT_READ		= 1 << 0,

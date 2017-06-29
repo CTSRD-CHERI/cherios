@@ -103,5 +103,7 @@ void print_book(page_t* book, size_t page_n, size_t times);
 
 void memmgt_revoke_loop(void);
 
+void full_dump(void);
+
 extern __thread int worker_id;
 #endif //CHERIOS_VMEM_H

@@ -387,8 +387,6 @@ split_phy_page_range:
     daddu       $t0, $t0, $t1                           # $t0 = book + pagen
 
     cincoffset  $c3, $idc, $t0                          # c3 is book entry
-    dsll        $t3, $a1, PHY_PAGE_ENTRY_SIZE_BITS
-    cincoffset  $c4, $c3, $t3                           # c4 is next book entry
 
     dli         $t8, page_transaction
 1:  cllw        $t9, $c3                                # lock physcial page
@@ -399,6 +397,8 @@ split_phy_page_range:
     cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
     sltu        $t3, $a1, $t2
     beq         $t3, $zero, split_phy_end               # $a1 >= $t2
+    dsll        $t3, $t2, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset  $c4, $c3, $t3                           # c4 is last book entry
     dsubu       $t3, $t2, $a1                           # $t3 is length of next block
 
     csd         $a1, $t0, (REG_SIZE)($idc)              # book[pagen].len = new_len
@@ -1264,7 +1264,7 @@ revoke_restore:
     1:
         cfromptr    $c6, $kdc, $a0              # l1 table
         bne         $t0, $t3, clear_loop_l1_start
-        dli         $t8, PAGE_TABLE_ENT_PER_TABLE
+        dli         $t8, (PAGE_TABLE_ENT_PER_TABLE << PAGE_TABLE_ENT_BITS)
         EXTRACT_AND_SCALE_L1 $a3, $t8, PAGE_TABLE_ENT_BITS
         daddiu      $t8, $t8, PAGE_TABLE_ENT_SIZE
 
@@ -1295,7 +1295,7 @@ revoke_restore:
         1:
             cfromptr    $c7, $kdc, $a0              # l2 table
             bne         $t1, $t8, clear_loop_l2_start
-            dli         $t9, PAGE_TABLE_ENT_PER_TABLE
+            dli         $t9, (PAGE_TABLE_ENT_PER_TABLE << PAGE_TABLE_ENT_BITS)
             EXTRACT_AND_SCALE_L2 $a3, $t9, PAGE_TABLE_ENT_BITS
             daddiu      $t9, $t9, PAGE_TABLE_ENT_SIZE
             clear_loop_l2_start:
@@ -1722,7 +1722,7 @@ free_mapping:
     bne         $t3, $t9, free_er
     nop
 
-    csw         $a3, $t1, REG_SIZE($idc)                # store to update phy page status
+    csw         $a3, $t1, 0($idc)                       # store to update phy page status
 
 free_to_used:
     csd         $t0, $t2, 0($c3)                        # store -1 in vtable to mean 'used'
