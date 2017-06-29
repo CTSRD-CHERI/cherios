@@ -145,9 +145,8 @@ typedef capability ptable_t;
 
 
 /* This structure can't actually be read from c, its just here in case you want to better understand how these
- * are used in the nano kernel. The length field is only set if taken/revoking. Otherwise tmp is used to store
- * the exact capability that will be returned if the reservation is taken. pid is 'parent id'. Reservations
- * can only be merged if their pid is the same and are adjacent. */ /*
+ * are used in the nano kernel pid is 'parent id'. Reservations can only be merged if their pid is the same
+ * and are adjacent. \* /*
 struct res_str {
     struct res_str_priv {
         struct res_str_used {
@@ -157,18 +156,14 @@ struct res_str {
                 res_state_merged,
                 res_state_revoking
             } state;                                            // 64 bit
-            size_t length;                                      // Length of data, only if state = taken | revoking
-            size_t pid;                                         // Parent ID. pid must match for merge
+            size_t length;                                      // Length of data
+            size_t pid;                                         // Parent ID. pid must match for merge.
         };
         char padding[RES_PRIV_SIZE - sizeof(struct res_str_used)]; // Un-used
     } priv;
     struct res_str_user {
         char user_defined[RES_USER_SIZE];                       // The result of calling get_userdata_for_res
     } user;
-    union {
-        capability tmp;                                         // pre-calculated capability that will be returned TODO: Get rid
-        char data[0];                                           // range the reservation covers if state = taken | revoking
-    } data;
 };
 */
 

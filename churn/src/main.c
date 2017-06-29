@@ -39,6 +39,8 @@
 #define WINDOW_SIZE 100
 #define N           1000    // set to 0 for good times
 
+capability naughty[N];
+
 int main(register_t arg, capability carg) {
 
     printf("Churn Hello World!\n");

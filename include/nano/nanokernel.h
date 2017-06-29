@@ -39,6 +39,7 @@
 #include "cheric.h"
 #include "cheriplt.h"
 #include "types.h"
+#include "math.h"
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
@@ -47,6 +48,8 @@ PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 /* Safe (assuming the nano kernel performs relevent locking n the presence of a race */
 static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out) {
     out->data = out->code = NULL;
+    size_t set_bound_to = required;
+    required = align_up_to(set_bound_to, RES_META_SIZE);
     if(res != NULL) {
 
         capability nfo = rescap_info(res);
@@ -61,8 +64,11 @@ static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out
                 rescap_take(res, out);
 
                 if(out->data != NULL) {
-                    if(cheri_getlen(out->data) < required) {
+                    if(cheri_getlen(out->data) < set_bound_to) {
                         out->data = out->code = NULL;
+                    } else {
+                        out->data = cheri_setbounds(out->data, set_bound_to);
+                        out->code = cheri_setbounds(out->code, set_bound_to);
                     }
                 }
             }

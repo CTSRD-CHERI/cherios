@@ -516,11 +516,11 @@ make_first_reservation:
 
     csetoffset  $c4, $kdc, $t1
     csd         $zero, $zero, 0($c3)              # set state to open
+    csd         $t2, $zero, (REG_SIZE)($c3)       # set length
     csd         $zero, $zero, (REG_SIZE*2)($c3)   # set parent to none
-    cincoffset  $c5, $c3, $t0                     # cap for user range
+
+    csetbounds  $c3, $c3, $t0
     cseal       $c3, $c3, $c4                     # handle
-    csetbounds  $c5, $c5, $t2                     # correct bounds to account for user data
-    csc         $c5, $zero, 0($c5)
 
 make_first_er:
     cclearlo    EN2(c4, c5)
@@ -888,30 +888,30 @@ rescap_take:
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
     cld         $t0, $zero, 0($c3)          # get state
-    csetbounds  $c4, $c4, $zero             # clear our sealing cap
     bnez        $t0, take_er                # error if not open
     dli         $t0, res_taken
 
-    clc         $c6, $zero, RES_META_SIZE($c3)   # load return capability from struct
-    cgetlen     $t1, $c6
     csd         $t0, $zero, 0($c3)          # set to taken
-    csd         $t1, $zero, REG_SIZE($c3)   # set length (needed for merge)
+    cld         $t1, $zero, REG_SIZE($c3)          # get length
 
-
-    cgetbase    $t0, $c6                    # We must rederive a cap to have the execute bit
-    cgetlen     $t1, $c6
-    csetoffset  $c4, $kcc, $t0
+    cgetbase    $t0, $c3
+    daddiu      $t0, $t0, RES_META_SIZE     # get base
     dli         $t2, DEF_DATA_PERMS
+
+    csetoffset  $c3, $kcc, $t0              # c3 is code
+    csetoffset  $c4, $kdc, $t0              # c4 is data
+
+    csetbounds  $c3, $c3, $t1
     csetbounds  $c4, $c4, $t1
+
+    candperm    $c3, $c3, $t2
     candperm    $c4, $c4, $t2
 
-    cmove       $c3, $c6
-    csc         $c3, $zero, CAP_SIZE($c5)
-    csc         $c4, $zero, 0($c5)
-    cclearlo    EN2(c5,c6)
+    csc         $c3, $zero, 0($c5)
+    csc         $c4, $zero, CAP_SIZE($c5)
     creturn
 take_er:
-    cfromptr    $c3, $c3, $zero
+    clearlo     EN2(c3, c4)
     creturn
 
 
@@ -923,29 +923,19 @@ rescap_info:
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
-    cld         $t0, $zero, 0($c3)          # get state
-    bnez        $t0, info_not_open          # can also get info for open reservation
-    nop
-
-    b           info_end
-    clc         $c3, $zero, RES_META_SIZE($c3) # load return capability from struct
-
-info_not_open:
-    dli         $t1, res_taken
-    bne         $t0, $t1, info_er
-    dli         $t1, RES_META_SIZE
     cld         $t2, $zero, REG_SIZE($c3)       # get length
-    cincoffset  $c3, $c3, $t1
+    cgetbase    $t1, $c3
+    daddiu      $t1, $t1, RES_META_SIZE
+    dli         $t0, DEF_DATA_PERMS
+
+    csetoffset  $c3, $kdc, $t1
     csetbounds  $c3, $c3, $t2
-
-info_end:
+    candperm    $c3, $c3, $t0
     ccleartag   $c3, $c3
-    cfromptr    $c4, $c4, $zero             # clear our sealing cap
+
+    cclearlo    EN1(c4)
     creturn
 
-info_er:
-    cclearlo    EN2(c3,c4)
-    creturn
 
 .macro EXTRACT_AND_SCALE_L0 addr, out, scale
     dsll        \out, \addr, CHECKED_BITS                                             # clear top bits
@@ -1135,9 +1125,10 @@ rescap_revoke_finish:
     dli         $a0, PHY_MEM_START          #a0 is the start of memory
     dli         $a1, PHY_MEM_END            #a1 the end
 
+TRACE_ON
 
     # Blocking writing of the capability #
-    li          $t0, (DEF_DATA_PERMS & ~Perm_Seal)
+    dli          $t0, -1 #(DEF_DATA_PERMS & ~Perm_Seal)
     dmtc0       $a2, $30, 2
     dmtc0       $a3, $30, 3
     dmtc0       $t0, $30, 4                 # only revoke Writable and Executable caps, not sealing caps
@@ -1160,13 +1151,17 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
     daddu       $t1, $t1, $t2
 
     # only bother scanning nano owned, mapped and system owned #
-    clw         $t1, $t1, 0($idc)
+    # FIXME another thing that might race with updates. Maybe lock modifying the state of these pages #
+    clw         $t2, $t1, 0($idc)
+    cld         $t1, $t1, REG_SIZE($idc)    # Get length. if non zero use last state
+    movn        $t9, $t2, $t1
+
     dli         $t2, page_nano_owned
-    beq         $t1, $t2, 1f
+    beq         $t9, $t2, 1f
     dli         $t2, page_system_owned
-    beq         $t1, $t2, 1f
+    beq         $t9, $t2, 1f
     dli         $t2, page_mapped
-    beq         $t1, $t2, 1f
+    beq         $t9, $t2, 1f
 
     # Otherwise skip this page
     daddu       $t8, $t8, $t3
@@ -1184,6 +1179,7 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
 
     nop
     cscc        $t1, $c6, $c5               # Avoid trample of legitimate capability
+    csc         $c6, $0, 0($c5)
     beqz        $t1, 1b                     # restart on fail
     nop
 
@@ -1193,6 +1189,7 @@ revoke_loop_footer:
     cincoffset  $c5, $c5, $t0
 
 revoke_loop_end:
+TRACE_OFF
 
     # with multicore this will require a sync. This will force a switch to ourselves which will clear registers #
 
@@ -1346,39 +1343,52 @@ revoke_er:
 
 ###################################################
 # res_t  rescap_split(capability res, size_t size)
-.global rescap_split ##FIXME check size
+.global rescap_split
 rescap_split:
 ###################################################
+    andi        $t0, $a0, (RES_META_SIZE-1) # check alignment
+    bnez        $t0, split_er
+
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
+
     cld         $t0, $zero, 0($c3)          # get state
-    cld         $t2, $zero, (2 * REG_SIZE)($c3)  # get depth of old res
-    clc         $c3, $zero, RES_META_SIZE($c3)   # load return capability from res
     bnez        $t0, split_er               # reservation must be open
+
+    cld         $t1, $zero, (REG_SIZE)($c3) # get length
+    beqz        $t1, split_er               # length must be non zero
+
+    daddiu      $a1, $t1, -(RES_META_SIZE)  # length minus new metadata space
+    sltu        $t0, $a1, $a0
+    bnez        $t0, split_er               # size arg too large
+
+    dsubu       $a1, $a1, $a0                   # size of remainder
     cld         $t0, $zero, (2 * REG_SIZE)($c3) # get pid
+    csd         $a0, $zero, (REG_SIZE)($c3)     # set length for old res
 
+    dli         $t8, RES_META_SIZE
 
-    cgetlen     $t1, $c3                    # t1 = original space
-    csetoffset  $c5, $c3, $a0               # c5 = start of the new reservation
-    csetbounds  $c3, $c3, $a0               # c3 = size for the old reservation
-    dli         $t0, RES_META_SIZE
-    csc         $c3, $zero, 0($c3)          # store new sized cap for old reservation
-    cseal       $c3, $c5, $c4               # this is old reservation but resized
-    csd         $zero, $zero, 0($c5)        # set state of new reservation to open
-    csd         $t2, $zero, (2 * REG_SIZE)($c5) # set depth for new res
-    cincoffset  $c5, $c5, $t0               # new size is reduced by size of metadata in band
+    cgetbase    $t3, $c3
+    daddiu      $t3, $t3, RES_META_SIZE
+    daddu       $t3, $t3, $a0               # start of next reservation
 
-    dsubu         $t1, $t1, $t0             # take away space wasted for meta data
-    dsubu         $a0, $t1, $a0             # and size for lower address reservation
-    csetbounds  $c5, $c5, $a0               # set bounds appropriately
-    csc         $c5, $zero, 0($c5)          # store capability in reservation
+    dli         $t1, DEF_DATA_PERMS
 
-    cclearlo    EN2(c4, c5)                 # 4 and 5 used as tmps. 3 returns the new reservation
+    csetoffset  $c3, $kdc, $t3              # Create new meta node
+    csetbounds  $c3, $c3, $t8
+    candperm    $c3, $c3, $t1
+
+    csd         $zero, $zero, 0($c3)        # set state of new reservation to open
+    csd         $a1, $zero, (REG_SIZE)($c3) # set length of new reservation
+    csd         $t0, $zero, (2 * REG_SIZE)($c3) # set parent
+
+    cseal        $c3, $c3, $c4
+    cclearlo    EN1(c4)
     creturn
 
 split_er:
-    cclearlo    EN3(c3, c4, c5)
+    cclearlo    EN2(c3, c4)
     creturn
 
 
@@ -1435,29 +1445,32 @@ rescap_parent:
     cld         $t0, $zero, 0($c3)          # get state
     bnez        $t0, parent_er              # reservation must be open
 
-    cgetbase    $t0, $c3
-    cgetoffset  $t1, $c3
-    dli         $a0, RES_META_SIZE
-    daddu       $t0, $t0, $t1               # the cursor of the parent is the depth of the child
-
-    clc         $c5, $zero, RES_META_SIZE($c3)   # get capability that ranges over open space
-    cgetlen     $t1, $c5                    # get length for parent
     dli         $t2, res_taken
-    csd         $t1, $zero, REG_SIZE($c3)   # set length field for parent
     csd         $t2, $zero, 0($c3)          # set state field for parent
-    csd         $zero, $zero, 0($c5)        # set state for child
-    csd         $t0, $zero, (2*REG_SIZE)($c5) # set depth for child
-    cseal       $c3, $c5, $c4               # seal child for return
-    dsubu       $t1, $t1, $a0               # steal some space from child
-    cincoffset  $c5, $c5, $a0               # capability for space for new reservation
-    csetbounds  $c5, $c5, $t1
-    csc         $c5, $zero, 0($c5)          # store for future use
 
-    cclearlo    EN2(c4, c5)                 # 4 and 5 used as tmps. 3 returns the new reservation
+    cgetbase    $t0, $c3                    # parent base is id for child
+    dli         $a0, RES_META_SIZE
+
+    cld         $t1, $zero, (REG_SIZE)($c3) # get length
+    daddiu      $t2, $t1, (-RES_META_SIZE)  # length of child
+
+    csetoffset  $c3, $kdc, $t0              # create new res node
+    cincoffset  $c3, $c3, $a0
+    csetbounds  $c3, $c3, $a0
+    dli         $t3, DEF_DATA_PERMS
+    candperm    $c3, $c3, $t3
+
+    csd         $zero, $zero, 0($c3)        # set state for child
+    csd         $t2, $zero, (REG_SIZE)($c3) # set length for child
+    csd         $t0, $zero, (2*REG_SIZE)($c3) # set depth for child
+
+    cseal       $c3, $c3, $c4               # seal child for return
+
+    cclearlo    EN1(c4)
     creturn
 parent_er:
 
-    cclearlo    EN3(c3, c4, c5)
+    cclearlo    EN2(c3, c4)
     creturn
 
 nano_kernel_end:
