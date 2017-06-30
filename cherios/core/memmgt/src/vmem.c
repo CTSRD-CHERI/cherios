@@ -670,6 +670,17 @@ static void dump_table(ptable_t tbl) {
     }
 }
 
+size_t virtual_to_physical(size_t vaddr) {
+    size_t low_bits = vaddr & (UNTRANSLATED_PAGE_SIZE-1);
+    ptable_t tbl = get_l2_for_addr(vaddr);
+    if(tbl == NULL) return 0;
+
+    readable_table_t* RO = get_read_only_table(tbl);
+
+    size_t PFN = RO->entries[L2_INDEX(vaddr)];
+
+    return ((PFN >> PFN_SHIFT) << UNTRANSLATED_BITS) | low_bits;
+}
 
 /* We need to replace the link in the chain being revoked because pointers to it will be revoked! */
 static void replace_chain_link(free_chain_t* chain, free_chain_t* free_node) {

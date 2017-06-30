@@ -105,5 +105,7 @@ void memmgt_revoke_loop(void);
 
 void full_dump(void);
 
+size_t virtual_to_physical(size_t vaddr);
+
 extern __thread int worker_id;
 #endif //CHERIOS_VMEM_H

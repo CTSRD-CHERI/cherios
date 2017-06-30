@@ -126,3 +126,7 @@ void mmap_set_act(act_kt ref) {
 void mdump(void) {
 	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 3);
 }
+
+size_t mvirtual_to_physical(size_t vaddr) {
+    return message_send(vaddr,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 4);
+}

@@ -1125,10 +1125,10 @@ rescap_revoke_finish:
     dli         $a0, PHY_MEM_START          #a0 is the start of memory
     dli         $a1, PHY_MEM_END            #a1 the end
 
-TRACE_ON
+#TRACE_ON
 
     # Blocking writing of the capability #
-    dli          $t0, -1 #(DEF_DATA_PERMS & ~Perm_Seal)
+    dli          $t0, DEF_DATA_PERMS
     dmtc0       $a2, $30, 2
     dmtc0       $a3, $30, 3
     dmtc0       $t0, $30, 4                 # only revoke Writable and Executable caps, not sealing caps
@@ -1162,6 +1162,7 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
     beq         $t9, $t2, 1f
     dli         $t2, page_mapped
     beq         $t9, $t2, 1f
+    nop
 
     # Otherwise skip this page
     daddu       $t8, $t8, $t3
@@ -1169,6 +1170,7 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
     cincoffset  $c5, $c5, $t3
 
     b           revoke_loop_end
+    nop
 
 1:  cllc        $c6, $c5
     cgetbase    $t1, $c6
@@ -1179,7 +1181,6 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
 
     nop
     cscc        $t1, $c6, $c5               # Avoid trample of legitimate capability
-    csc         $c6, $0, 0($c5)
     beqz        $t1, 1b                     # restart on fail
     nop
 
@@ -1189,7 +1190,7 @@ revoke_loop_footer:
     cincoffset  $c5, $c5, $t0
 
 revoke_loop_end:
-TRACE_OFF
+#TRACE_OFF
 
     # with multicore this will require a sync. This will force a switch to ourselves which will clear registers #
 

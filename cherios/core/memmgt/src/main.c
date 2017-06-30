@@ -37,7 +37,7 @@
 __thread int worker_id = 0;
 
 extern void msg_entry;
-void (*msg_methods[]) = {__mmap, __munmap, memgt_commit_vmem, full_dump};
+void (*msg_methods[]) = {__mmap, __munmap, memgt_commit_vmem, full_dump, virtual_to_physical};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);

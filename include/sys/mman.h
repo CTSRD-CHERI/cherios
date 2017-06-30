@@ -47,6 +47,8 @@ void	mmap_set_act(act_kt ref);
 
 void mdump(void);
 
+size_t mvirtual_to_physical(size_t vaddr);
+
 enum mmap_prot
 {
   PROT_READ		= 1 << 0,

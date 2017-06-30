@@ -65,6 +65,8 @@ int main(register_t arg, capability carg) {
         capability  old = maps[ndx];
         maps[ndx] = pr.data;
 
+        naughty[i] = cheri_setbounds(cheri_incoffset(pr.data, 100),100);
+
         if(old != NULL) {
             if(munmap(old, 0) != 0) {
                 printf("munmap failed\n");
@@ -74,6 +76,13 @@ int main(register_t arg, capability carg) {
     }
 
     printf("Churn test done\n");
+
+
+    printf("Array at: %lx\n", mvirtual_to_physical((size_t)naughty));
+
+    for(size_t i = 0; i < N; i++) {
+        CHERI_PRINT_CAP(naughty[i]);
+    }
 
     mdump();
 
