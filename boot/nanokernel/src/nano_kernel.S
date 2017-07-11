@@ -1757,6 +1757,98 @@ free_er:
     cclearlo    EN2(c3, c4)
     creturn
 
+
+
+###########################################################################################
+# entry_t foundation_create(size_t image_size, capability image,
+#                           size_t code_start, size_t entry0, size_t n_entries, res_t res)
+.global foundation_create
+foundation_create:
+###########################################################################################
+
+
+creturn
+
+###########################################################################################
+# void foundation_enter(entry_t entry)
+.global foundation_enter
+foundation_enter:
+###########################################################################################
+
+
+creturn
+
+
+###########################################################################################
+# void foundation_exit(void)
+.global foundation_exit
+foundation_exit:
+###########################################################################################
+
+
+creturn
+
+
+###########################################################################################
+# entry_t foundation_new_entry(size_t eid)
+.global foundation_new_entry
+foundation_new_entry:
+###########################################################################################
+
+
+creturn
+
+
+###########################################################################################
+# cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms)
+.global rescap_take_cert
+rescap_take_cert:
+###########################################################################################
+
+
+creturn
+
+
+###########################################################################################
+# locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms, found_id_t* recipient_id)
+.global rescap_take_locked
+rescap_take_locked:
+###########################################################################################
+
+
+creturn
+
+
+###########################################################################################
+# void rescap_check_cert(cert_t cert, found_id* out_id, cap_pair* out)
+.global rescap_check_cert
+rescap_check_cert:
+###########################################################################################
+
+
+creturn
+
+
+###########################################################################################
+# void rescap_unlock(locked_t locked, cap_pair* out)
+.global rescap_unlock
+rescap_unlock:
+###########################################################################################
+
+
+creturn
+
+
+
+
+
+
+
+
+############################################
+# Some stuff used by the exception vectors #
+############################################
+
 tlb_table_missing:
     cgetcause $k0
     dla $k1, locals_start

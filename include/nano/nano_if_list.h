@@ -98,10 +98,28 @@
     ITEM(get_last_exception, void, (exection_cause_t*, out), __VA_ARGS__)\
 /* For both diagnostic and performance reasons a r.w capability to the EL is available. Use this for a fast critical region*/\
     ITEM(get_critical_level_ptr, ex_lvl_t*,  (void), __VA_ARGS__)\
-    ITEM(get_critical_cause_ptr, cause_t*,  (void), __VA_ARGS__)
+    ITEM(get_critical_cause_ptr, cause_t*,  (void), __VA_ARGS__) \
+/* Create a new founded code block. The entry returned will be code_start_entry0 */\
+    ITEM(foundation_create, entry_t,                                                                            \
+    (size_t, image_size, capability, image, size_t, code_start, size_t, entry0, size_t, n_entries, res_t, res),   \
+    __VA_ARGS__)\
+/* Enter a foundation created with foundation_create or foundation_new_entry */\
+    ITEM(foundation_enter, void, (entry_t entry), __VA_ARGS__)\
+/* Exit a foundation */\
+    ITEM(foundation_exit, void, (void), __VA_ARGS__)\
+/* Create a new entry from within a foundation */\
+    ITEM(foundation_new_entry, entry_t, (size_t, eid), __VA_ARGS__)\
+/* Take and sign a reservation. Signer gets full access. */\
+    ITEM(rescap_take_cert, cert_t, (res_t, res, cap_pair*, out, register_t, user_perms), __VA_ARGS__)\
+/* Get access to certfied capability from signed handle. Only has user_perms. Will return identity of signer*/\
+    ITEM(rescap_check_cert, void, (cert_t, cert, found_id_t*, out_id, cap_pair*, out), __VA_ARGS__)\
+/* Take a reservation and lock for intended user (identified by id) */\
+    ITEM(rescap_take_locked, locked_t, (res_t, res, cap_pair*, out, register_t, user_perms, found_id_t*, recipient_id), __VA_ARGS__)\
+/* Unlock a lcoked capability. Can only be done inside correct foundation */\
+    ITEM(rescap_unlock, void, (locked_t, locked, cap_pair*, out), __VA_ARGS__)
 
 
-
+/* TODO We need a method to convert something certified and encrypt it for remote attestation */
 
 #define RAW_TO_NORMAL(name, ret, raw_sig, X, ...) X(name, ret, MAKE_SIG(raw_sig), __VA_ARGS__)
 

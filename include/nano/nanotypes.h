@@ -135,14 +135,25 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 
 #define BOOK_END                        ((size_t)(TOTAL_PHY_PAGES))
 
-typedef capability context_t;
-typedef capability res_t;
-
-typedef capability ptable_t;
-
-
 /* WARN: these structures are used in assembly */
 
+typedef capability context_t;               // Type of a nanokernel context handle
+typedef capability res_t;                   // Type of a reservation handle
+typedef capability ptable_t;                // Type of a page table handle
+
+
+typedef capability entry_t;                 // Type of a foundation entry handle
+
+/* Identifying information for a foundation */
+typedef struct found_id_t {
+    char hash[256];
+    size_t length;
+    size_t code_start;
+    size_t e0;
+} found_id_t;
+
+typedef capability cert_t;                  // A certified capability
+typedef capability locked_t;               // A capability that can be unlocked by intended code
 
 /* This structure can't actually be read from c, its just here in case you want to better understand how these
  * are used in the nano kernel pid is 'parent id'. Reservations can only be merged if their pid is the same
