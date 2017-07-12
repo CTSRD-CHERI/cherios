@@ -713,36 +713,41 @@ get_phy_page_end:
 create_context:
 ########################################################
 
-    dli         $t0, CONTEXT_TYPE
-    csetoffset  $c13, $kdc, $t0                             # Load sealing capability
-    cmove       $c4,  $c3
+# first check alignment
+    cgetbase    $t0, $c3
+    cgetoffset  $t1, $c3
+    daddu       $t0, $t0, $t1
+    andi        $t0, $t0, (CAP_SIZE-1)
+    bnez        $t0, 1f
+
+
     dli         $t0,  CONTEXT_SIZE                          # TODO atomic increment
-    clc         $c3,  $zero, next_context($idc)
-    cincoffset  $c14, $c3, $t0
-    csc         $c14, $zero, next_context($idc)             # increment next context
+    clc         $c4,  $zero, next_context($idc)
+    cincoffset  $c5,  $c4, $t0
+    csc         $c5,  $zero, next_context($idc)             # increment next context
 
 
 
-    csetbounds  $c3, $c3, $t0
+    csetbounds  $c4, $c4, $t0
     dli         $a0, CHERI_FRAME_SIZE
     csd         $zero, $a0, 0($c3)                          # set state to allocated for new context
-    # FIXME we dont need all of memcpy_c. We should either remove the need for it (and use a coventional fork)
-    # FIXME or inline and remove all the fluff we know we dont need
-    dla         $t0,  memcpy_c
-    cgetpccsetoffset  $c12, $t0
-    cmove       $c15, $c17                                  # Save return address
-    cjalr       $c12, $c17                                  # Copy initial state into new context
-    nop                                                     # Only uses an extra c5. We will need to clear this too
 
-    cmove       $c17,  $c15                                 # Restore return address
+    # memcpy a0 bytes from c3 to c4
+    dli         $t0, 0
 
-    cseal       $c3, $c3, $c13                              # Return sealed cap
+memcpy_loop:
+    clc         $c5, $t0, 0($c3)
+    daddiu      $t0, $t0, CAP_SIZE
+    bne         $t0, $a0, memcpy_loop
+    csc         $c5, $t0, (-CAP_SIZE)($c4)
 
+    dli         $t0, CONTEXT_TYPE
+    csetoffset  $c3, $kdc, $t0                             # Load sealing capability
+    cseal       $c3, $c4, $c3                              # Return sealed cap
 
-create_context_end:
-    cclearlo    EN6(c4,c5,c12,c13,c14,c15)                  # c3 is a return value
+1:
+    cclearlo    EN3(c4,c5,c6)                              # c3 is a return value
     creturn
-
 
 
 

@@ -36,7 +36,6 @@ set(BOOT_ASM_SRCS
 )
 
 set(NANO_ASM_SRCS
-    ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
     nanokernel/src/nano_kernel.S
     nanokernel/src/ccall_soft.S
 )
