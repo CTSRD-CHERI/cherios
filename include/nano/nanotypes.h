@@ -39,6 +39,9 @@
 #define CONTEXT_TYPE       0x5555         // The type of contexts
 #define NANO_KERNEL_TYPE   0x6666         // The type of sealed local data
 #define RES_TYPE           0x7777         // The type of a reservation handle
+#define FOUND_ENTRY_TYPE   0x9990         // The type of a foundation entry handle
+#define FOUND_CERT_TYPE    0x9991         // The type of a foundation certificate handle
+#define FOUND_LOCKED_TYPE  0x9992         // The type of a foundation locked message hnadle
 #define VTABLE_TYPE_L0     0x8880         // The type of the top level page table
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
@@ -123,6 +126,18 @@ DECLARE_ENUM(e_res_status, NANO_KERNEL_RES_STATUS_ENUM_LIST)
 
 DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
 
+/* Stuff to do with the foundation system */
+
+#define FOUNDATION_ID_SIZE                      (32 + (8 * 4))      // sha256 + other fields
+#define FOUNDATION_ID_LEN_OFFSET                32
+#define FOUNDATION_ID_CS_OFFSET                 40
+#define FOUNDATION_ID_E0_OFFSET                 48
+#define FOUNDATION_ID_NENT_OFFSET               56
+#define FOUNDATION_META_DATA_OFFSET             FOUNDATION_ID_SIZE
+#define FOUNDATION_META_ENTRY_VECTOR_OFFSET     (FOUNDATION_ID_SIZE + CAP_SIZE)
+#define FOUNDATION_META_SIZE(N)                 (FOUNDATION_ID_SIZE + CAP_SIZE + (N * CAP_SIZE))
+
+#define RES_CERT_META_SIZE                      (3 * CAP_SIZE)
 
 #ifndef __ASSEMBLY__
 
@@ -146,11 +161,15 @@ typedef capability entry_t;                 // Type of a foundation entry handle
 
 /* Identifying information for a foundation */
 typedef struct found_id_t {
-    char hash[256];
+    char sha256[256/8];
     size_t length;
     size_t code_start;
     size_t e0;
+    size_t nentries;
 } found_id_t;
+
+/* This is how big the structure is in the nano kernel */
+_Static_assert(sizeof(found_id_t) == FOUNDATION_ID_SIZE, "Assumed by nano kernel");
 
 typedef capability cert_t;                  // A certified capability
 typedef capability locked_t;               // A capability that can be unlocked by intended code

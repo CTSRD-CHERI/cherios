@@ -39,9 +39,10 @@
 # struct context_t {
 #   reg_frame_t
 #   enum state{allocated, dead} (size of a cap)
+#   found_id_t* foundation
 #};
 
-.set CONTEXT_SIZE, CHERI_FRAME_SIZE + CAP_SIZE
+.set CONTEXT_SIZE, CHERI_FRAME_SIZE + CAP_SIZE + CAP_SIZE
 
 
 .set N_CONTEXTS,         64             # We never reallocate these, so its currently a huge limitation
@@ -907,8 +908,13 @@ rescap_take:
     candperm    $c3, $c3, $t2
     candperm    $c4, $c4, $t2
 
+    cbtu        $c5, take_end
+    nop
+
     csc         $c3, $zero, 0($c5)
     csc         $c4, $zero, CAP_SIZE($c5)
+
+take_end:
     creturn
 take_er:
     clearlo     EN2(c3, c4)
@@ -1759,15 +1765,119 @@ free_er:
 
 
 
+# Notes on calling rescap_take: provide c4 as null to avoid write. Will return in c3 and c4. Will use c5 #
+
+.macro SUBROUTINE_TAKE
+    cmove       $c14, $c17                          # save return code
+    cmove       $c15, $c18                          # save return data
+
+    dla         $t0, rescap_take
+    cgetpccsetoffset $c12, $t0
+    cjalr       $c12, $c17                          # call rescap_take
+    cfromptr    $c4, $c4, $zero                     # null c4 for call to rescap_take
+
+    cmove       $c17, $c14                          # restore return code
+    cmove       $c18, $c15                          # restore return data
+.endm
+
+#struct foundation_metadata {
+#    found_id_t id;
+#    capability data;
+#    capability entrys[n_entries];
+#};
+
 ###########################################################################################
-# entry_t foundation_create(size_t image_size, capability image,
-#                           size_t code_start, size_t entry0, size_t n_entries, res_t res)
+# entry_t foundation_create(res_t res, size_t image_size, capability image,
+#                           size_t code_start, size_t entry0, size_t n_entries)
 .global foundation_create
 foundation_create:
 ###########################################################################################
 
+    andi        $t0, $a0, (CAP_SIZE-1)
+    bnez        $t0, found_er                       # make sure we copying a multiple of a cap
+    cgetbase    $t0, $c4
+    cgetoffset  $t1, $c4
+    daddu       $t0, $t0, $t1
+    andi        $t0, $t0, (CAP_SIZE-1)
+    bnez        $t0, found_er                       # check source alignment
+    nop
 
-creturn
+    cmove       $c13, $c4                           # save image
+
+    SUBROUTINE_TAKE
+
+    cbtu        $c3, found_er
+
+    # check res size
+    cgetlen     $t0, $c3
+
+    # calculate meta size
+    dsll        $t1, $a3, CAP_SIZE_BITS
+    daddiu      $t1, $t1, FOUNDATION_ID_SIZE
+
+    # check meta+image <= res size
+    daddu       $t2, $t1, $a0
+    sltu        $t3, $t0, $t2
+    bnez        $t3, found_er
+
+    # memcpy into image calculating sha256 as we go
+    cincoffset  $c5, $c4, $t1                       # c5 is the start of the user code/data
+
+    # source is c13. Dest is c5. Copy a0 bytes everything is capability aligned.
+    # TODO current hash is XOR. This is not a secure hash. hash in t2
+    dli         $t3, 0
+    dli         $t2, 0
+
+copy_and_hash_loop_start:
+    cld         $t0, $t3, 0($c13)
+    csd         $t0, $t3, 0($c5)
+    daddiu      $t3, $t3, REG_SIZE
+    bne         $t3, $a0, copy_and_hash_loop_start
+    xor         $t2, $t2, $t0
+
+
+    # store hash
+    csd         $t2, $zero, 0($c4)
+    csd         $t2, $zero, 8($c4)
+    csd         $t2, $zero, 16($c4)
+    csd         $t2, $zero, 24($c4)
+
+    # store other id fields
+    csd         $a0, $zero, FOUNDATION_ID_LEN_OFFSET($c4)                   # id length field
+    csd         $a1, $zero, FOUNDATION_ID_CS_OFFSET($c4)                    # id code start field
+    csd         $a2, $zero, FOUNDATION_ID_E0_OFFSET($c4)                    # id entry0 field
+    csd         $a3, $zero, FOUNDATION_ID_NENT_OFFSET($c4)                  # if nentries field
+
+    # store data we will get on entry
+    csetbounds  $c5, $c5, $a1                       # c5 is users data
+    csc         $c5, $zero, FOUNDATION_META_DATA_OFFSET($c4) # store data for invocation
+
+    # create first entry point
+    cincoffset  $c3, $c3, $t1
+    dsubu       $t3, $a0, $a1                       # code size
+    cincoffset  $c3, $c3, $a1                       # code start
+    csetbounds  $c3, $c3, $t3                       # correctly bounded code pointer
+    csetoffset  $c3, $c3, $a2                       # correctly offset entry
+
+    csc         $c3, $zero, FOUNDATION_META_ENTRY_VECTOR_OFFSET($c4) # store first entry trampoline
+
+    # create return token
+    csetbounds  $c4, $c4, $t1                       # we can set offset to 0 to get metadata
+    dli         $t3, FOUNDATION_META_ENTRY_VECTOR_OFFSET
+    csetoffset  $c4, $c4, $t3                       # entry points to pcc to load in trampoline
+
+    dli         $t3, FOUND_ENTRY_TYPE
+    csetoffset  $c3, $kdc, $t3
+
+    cseal       $c3, $c4, $c3
+
+    cclearlo    EN5(c4,c5,c13,c14,c15)
+    creturn
+
+    found_er:
+    cclearlo    EN6(c3,c4,c5,c13,c14,c15)
+    creturn
+
 
 ###########################################################################################
 # void foundation_enter(entry_t entry)
@@ -1775,8 +1885,20 @@ creturn
 foundation_enter:
 ###########################################################################################
 
+    dli         $t3, FOUND_ENTRY_TYPE
+    csetoffset  $c4, $kdc, $t3
+    cunseal     $c3, $c3, $c4
 
-creturn
+    clc         $c12, $zero, 0($c3)                     # get entry pcc
+    csetoffset  $c3, $c3, $zero
+    clc         $c4, $zero, current_context($idc)       # get current context
+    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
+    clc         $idc, $zero, FOUNDATION_ID_SIZE($c3)    # get entry data
+
+    csc         $c3, $t0, 0($c4)                        # set current context to point to id of foundation
+
+    cjr         $c12
+    cclearlo    EN2(c3,c4)
 
 
 ###########################################################################################
@@ -1785,18 +1907,51 @@ creturn
 foundation_exit:
 ###########################################################################################
 
+    clc         $c3, $zero, current_context($idc)       # get current context
+    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
+    cfromptr    $c4, $c4, $zero
 
-creturn
+    csc         $c4, $t0, 0($c3)
+    cclearlo    EN2(c3,c4)
+    creturn
 
 
 ###########################################################################################
-# entry_t foundation_new_entry(size_t eid)
+# entry_t foundation_new_entry(size_t eid, capability at)
 .global foundation_new_entry
 foundation_new_entry:
 ###########################################################################################
 
+    # Get found struct from current context
+    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
+    clc         $c4, $zero, current_context($idc)
+    clc         $c4, $t0, 0($c4)
 
-creturn
+    cbtu        $c4, new_entry_er
+    nop
+
+    # get entry count
+    cld         $t0, $zero, FOUNDATION_ID_NENT_OFFSET($c4)
+    sltu        $t0, $a0, $t0
+
+    # bounds check
+    beqz        $t0, new_entry_er
+
+    dsll        $t0, $a0, CAP_SIZE_BITS
+    daddiu      $t0, $t0, FOUNDATION_META_ENTRY_VECTOR_OFFSET
+    cincoffset  $c4, $c4, $t0
+
+    # set entry
+    csc         $c3, $zero, 0($c4)
+
+    # construct token
+    li          $t0, FOUND_ENTRY_TYPE
+    csetoffset  $c3, $kdc, $t0
+    cseal       $c3, $c4, $c3
+
+new_entry_er:
+    cclearlo    EN1(c4)
+    creturn
 
 
 ###########################################################################################
@@ -1805,9 +1960,20 @@ creturn
 rescap_take_cert:
 ###########################################################################################
 
+    # get current foundation
+    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
+    clc         $c5, $zero, current_context($idc)
+    clc         $c5, $t0, 0($c5)
+    cbtu        $c5, take_cert_er
 
-creturn
+    # make cert for current foundation
+    dli         $t0, FOUNDATION_ID_SIZE
+    csetbounds  $c5, $c5, $t0
+    dli         $t0, Perm_Load
+    candperm    $c5, $c5, $t0
 
+    b           rescap_take_locked_cert_shared
+    dli         $a1, FOUND_CERT_TYPE
 
 ###########################################################################################
 # locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms, found_id_t* recipient_id)
@@ -1815,18 +1981,79 @@ creturn
 rescap_take_locked:
 ###########################################################################################
 
+    dli         $a1, FOUND_LOCKED_TYPE
 
-creturn
+# rescap_take_locked_cert_shared(res_t res, cap_pair* out, register_t user_perms, found_id_t* id, size_t type_ret)
+rescap_take_locked_cert_shared:
 
+    cmove       $c13, $c4
+    cmove       $c7, $c5        # c5 clobbered by take
+
+    SUBROUTINE_TAKE
+
+    cbtu        $c3, take_cert_er
+
+    # c3 and c4 are code/data. c13 is what we plan to store by
+    dli         $t0, RES_CERT_META_SIZE
+    cgetlen     $t1, $c3
+    daddiu      $t1, $t1, -RES_CERT_META_SIZE
+
+    # make space for cert metadata
+    cmove       $c6, $c4
+    cincoffset  $c3, $c3, $t0
+    cincoffset  $c4, $c4, $t0
+    csetbounds  $c6, $c6, $t0
+    csetbounds  $c3, $c3, $t1
+    csetbounds   $c4, $c4, $t1
+
+    # store cert
+    csc         $c7, $zero, 0($c6)
+    # store user code
+    candperm    $c5, $c3, $a0
+    csc         $c5, $zero, CAP_SIZE($c6)
+    # store user data
+    candperm    $c5, $c4, $a0
+    csc         $c5, $zero, (2*CAP_SIZE)($c6)
+
+    # store out code
+    csc         $c3, $zero, 0($c13)
+    # store out data
+    csc         $c4, $zero, CAP_SIZE($c13)
+
+
+    # construct token
+    csetoffset  $c5, $kdc, $a1
+    cseal       $c3, $c6, $c5
+
+    cclearlo    EN7(c4,c5,c6,c7,c13,c14,c15)
+    creturn
+
+take_cert_er:
+    cclearlo    EN8(c3,c4,c5,c6,c7,c13,c14,c15)
+    creturn
 
 ###########################################################################################
-# void rescap_check_cert(cert_t cert, found_id* out_id, cap_pair* out)
+# found_id_t* rescap_check_cert(cert_t cert, cap_pair* out)
 .global rescap_check_cert
 rescap_check_cert:
 ###########################################################################################
 
+    # unlock
+    dli         $t0, FOUND_CERT_TYPE
+    csetoffset  $c5, $kdc, $t0
+    cunseal     $c5, $c3, $c5
 
-creturn
+    # get user code
+    clc         $c3, $zero, CAP_SIZE($c5)
+    csc         $c3, $zero, 0($c4)
+    # get user data
+    clc         $c3, $zero, (2*CAP_SIZE)($c5)
+    csc         $c3, $zero, CAP_SIZE($c4)
+    # get found id
+    clc         $c3, $zero, 0($c5)
+
+    cclearlo    EN2(c4,c5)
+    creturn
 
 
 ###########################################################################################
@@ -1835,8 +2062,43 @@ creturn
 rescap_unlock:
 ###########################################################################################
 
+    # unlock
+    dli         $t0, FOUND_CERT_TYPE
+    csetoffset  $c5, $kdc, $t0
+    cunseal     $c3, $c3, $c5
 
-creturn
+    # get current foundation
+    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
+    clc         $c5, $zero, current_context($idc)
+    clc         $c5, $t0, 0($c5)
+    cbtu        $c5, 1f
+
+    # convert to same form as used for cert earlier
+    dli         $t0, FOUNDATION_ID_SIZE
+    csetbounds  $c5, $c5, $t0
+    dli         $t0, Perm_Load
+    candperm    $c5, $c5, $t0
+
+    # load capability this is locked for
+    clc         $c6, $zero, 0($c3)
+    cexeq       $t0, $c6, $c5               # only proper guy can unlock
+    beqz        $t0, 1f
+    cmove       $c5, $c4
+
+    # load return stuffs
+    clc         $c4, $zero, (2*CAP_SIZE)($c3)
+    clc         $c3, $zero, (CAP_SIZE)($c3)
+
+    # store to out
+    csc         $c3, $zero, 0($c5)
+    csc         $c4, $zero, (CAP_SIZE)($c5)
+
+    cclearlo    EN2(c5,c6)
+    creturn
+
+1:
+    cclearlo    EN4(c3,c4,c5,c6)
+    creturn
 
 
 
