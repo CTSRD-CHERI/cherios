@@ -130,9 +130,8 @@ DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
 
 #define FOUNDATION_ID_SIZE                      (32 + (8 * 4))      // sha256 + other fields
 #define FOUNDATION_ID_LEN_OFFSET                32
-#define FOUNDATION_ID_CS_OFFSET                 40
-#define FOUNDATION_ID_E0_OFFSET                 48
-#define FOUNDATION_ID_NENT_OFFSET               56
+#define FOUNDATION_ID_E0_OFFSET                 40
+#define FOUNDATION_ID_NENT_OFFSET               48
 #define FOUNDATION_META_DATA_OFFSET             FOUNDATION_ID_SIZE
 #define FOUNDATION_META_ENTRY_VECTOR_OFFSET     (FOUNDATION_ID_SIZE + CAP_SIZE)
 #define FOUNDATION_META_SIZE(N)                 (FOUNDATION_ID_SIZE + CAP_SIZE + (N * CAP_SIZE))
@@ -163,9 +162,9 @@ typedef capability entry_t;                 // Type of a foundation entry handle
 typedef struct found_id_t {
     char sha256[256/8];
     size_t length;
-    size_t code_start;
     size_t e0;
     size_t nentries;
+    size_t pad;
 } found_id_t;
 
 /* This is how big the structure is in the nano kernel */

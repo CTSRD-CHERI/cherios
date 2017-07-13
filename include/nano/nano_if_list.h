@@ -101,7 +101,7 @@
     ITEM(get_critical_cause_ptr, cause_t*,  (void), __VA_ARGS__) \
 /* Create a new founded code block. The entry returned will be code_start_entry0 */\
     ITEM(foundation_create, entry_t,                                                                            \
-    (res_t, res, size_t, image_size, capability, image, size_t, code_start, size_t, entry0, size_t, n_entries),   \
+    (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries),   \
     __VA_ARGS__)\
 /* Enter a foundation created with foundation_create or foundation_new_entry */\
     ITEM(foundation_enter, void, (entry_t entry), __VA_ARGS__)\

@@ -1793,7 +1793,7 @@ free_er:
 
 ###########################################################################################
 # entry_t foundation_create(res_t res, size_t image_size, capability image,
-#                           size_t code_start, size_t entry0, size_t n_entries)
+#                           size_t entry0, size_t n_entries)
 .global foundation_create
 foundation_create:
 ###########################################################################################
@@ -1849,20 +1849,17 @@ copy_and_hash_loop_start:
 
     # store other id fields
     csd         $a0, $zero, FOUNDATION_ID_LEN_OFFSET($c4)                   # id length field
-    csd         $a1, $zero, FOUNDATION_ID_CS_OFFSET($c4)                    # id code start field
-    csd         $a2, $zero, FOUNDATION_ID_E0_OFFSET($c4)                    # id entry0 field
-    csd         $a3, $zero, FOUNDATION_ID_NENT_OFFSET($c4)                  # if nentries field
+    csd         $a1, $zero, FOUNDATION_ID_E0_OFFSET($c4)                    # id entry0 field
+    csd         $a2, $zero, FOUNDATION_ID_NENT_OFFSET($c4)                  # if nentries field
 
     # store data we will get on entry
-    csetbounds  $c5, $c5, $a1                       # c5 is users data
+    csetbounds  $c5, $c5, $a0                       # c5 is users data
     csc         $c5, $zero, FOUNDATION_META_DATA_OFFSET($c4) # store data for invocation
 
     # create first entry point
-    cincoffset  $c3, $c3, $t1
-    dsubu       $t3, $a0, $a1                       # code size
-    cincoffset  $c3, $c3, $a1                       # code start
-    csetbounds  $c3, $c3, $t3                       # correctly bounded code pointer
-    csetoffset  $c3, $c3, $a2                       # correctly offset entry
+    cincoffset  $c3, $c3, $t1                       # skip over metadata
+    csetbounds  $c3, $c3, $a0                       # correctly bounded code pointer
+    csetoffset  $c3, $c3, $a1                       # correctly offset entry
 
     csc         $c3, $zero, FOUNDATION_META_ENTRY_VECTOR_OFFSET($c4) # store first entry trampoline
 
