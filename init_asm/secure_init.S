@@ -1,5 +1,5 @@
 #-
-# Copyright (c) 2016 Hadrien Barral
+# Copyright (c) 2017 Lawrence Esswood
 # All rights reserved.
 #
 # This software was developed by SRI International and the University of
@@ -32,8 +32,43 @@
 .set nobopt
 .set noat
 
+    .data
+
+.align  8
+enter_once_lock: .space 8
+
 	.text
 	.global start
 	.ent start
 start:
+// This is the secure version of init. c3 will contain the entry_t. c0 will contain c3. idc will contain c0
+
+// First undo this mixup. c0 and c3 will be sensible. idc will contain our entry_t. start_common may want to keep this.
+
+    cmove       $c4, $idc
+    cmove       $idc, $c3
+    cgetdefault $c3
+    csetdefault $c4
+
+// Now enforce start once semantics. The entrance lock is set to 1 and never unset.
+// If found set, we just die.
+
+    dla         $t0, enter_once_lock
+    cincoffset  $c5, $c4, $t0
+
+    li          $t1, 1
+
+    clld        $t0, $c5
+retry:
+    bnez        $t0, secure_double_entry
+    cscd        $t0, $t1, $c5
+    beqz        $t0, retry
+    clld        $t0, $c5
+
+//Finally go to normal start_common
 	j start_common
+
+secure_double_entry:
+// FIXME: A better faulting sequence
+    cfromptr    $c3, $c3, $zero
+    cld         $t0, $zero, 0($c3) // Will trigger an exception

@@ -3,7 +3,7 @@ include_directories(${CMAKE_SOURCE_DIR}/elf/include)
 include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
 
 set(PROC_SRCS
-    src/init.S
+    ${INIT_ASM}
     src/main.c
     ${CMAKE_SOURCE_DIR}/elf/src/elf_loader.c
     ${CMAKE_SOURCE_DIR}/elf/src/cprogram.c
