@@ -1801,6 +1801,7 @@ free_er:
 foundation_create:
 ###########################################################################################
 
+    beqz        $a2, found_er                       # must have at least 1 entry slot
     andi        $t0, $a0, (CAP_SIZE-1)
     bnez        $t0, found_er                       # make sure we copying a multiple of a cap
     cgetbase    $t0, $c4
@@ -1820,7 +1821,7 @@ foundation_create:
     cgetlen     $t0, $c3
 
     # calculate meta size
-    dsll        $t1, $a3, CAP_SIZE_BITS
+    dsll        $t1, $a2, CAP_SIZE_BITS
     daddiu      $t1, $t1, FOUNDATION_ID_SIZE
 
     # check meta+image <= res size
