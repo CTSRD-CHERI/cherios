@@ -330,7 +330,7 @@ set(CHERIOS_DIR         "${CMAKE_SOURCE_DIR}/cherios")
 set(DRIVERS_DIR         "${CHERIOS_DIR}/drivers")
 set(INIT_ASM_DIR        "${CMAKE_SOURCE_DIR}/init_asm")
 set(INIT_ASM            "${INIT_ASM_DIR}/init.S")
-set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/init.S")
+set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/secure_init.S")
 
 add_subdirectory(libuser)
 
