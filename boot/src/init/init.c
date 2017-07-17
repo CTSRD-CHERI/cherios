@@ -185,7 +185,7 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             return pair.data;
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;
-            procman_arg.nano_if = info->nano_default_cap;
+            procman_arg.nano_if = info->nano_if;
             return &procman_arg;
         case m_namespace:
         case m_core:
