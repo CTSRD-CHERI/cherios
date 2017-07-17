@@ -28,7 +28,6 @@
  * SUCH DAMAGE.
  */
 
-#include <elf.h>
 #include "object.h"
 #include "misc.h"
 #include "proc.h"
@@ -40,6 +39,9 @@
 #include "thread.h"
 #include "namespace.h"
 #include "tmpalloc.h"
+#include "../../boot/include/boot/boot_info.h"
+
+ALLOCATE_PLT_NANO
 
 /*Some "documentation" for the interface between the kernel and activation start                                        *
 * These fields are setup by the caller of act_register                                                                  *
@@ -84,6 +86,13 @@ process_t* unseal_proc(process_t* process) {
 	return process;
 }
 
+/* Trampoline used as entry point for all secure loaded programs. Simply calls nano kernel enter. */
+__asm__ (
+	".global secure_entry_trampoline\n"
+	"secure_entry_trampoline: ccall $c1, $c2\n"
+);
+extern void secure_entry_trampoline(void);
+
 static act_control_kt create_activation_for_image(image* im, const char* name, register_t arg, capability carg, capability pcc,
                                                   char* stack_args, size_t stack_args_size, process_t * process) {
     reg_frame_t frame;
@@ -92,6 +101,15 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
     queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size);
 
     frame.cf_c22 = seal_proc_for_user(process);
+
+	if(process->im.secure_loaded) {
+		frame.cf_pcc = &secure_entry_trampoline;
+		// we need c3 for the trampoline. C0 would be useless anyway as it points to the unsecure copy
+		frame.cf_c0 = frame.cf_c3;
+		frame.cf_c1 = foundation_enter_default_obj.code;
+		frame.cf_c2 = foundation_enter_default_obj.data;
+		frame.cf_c3 = process->im.secure_entry;
+	}
 
     return syscall_act_register(&frame, name, queue, get_res_pool());
 }
@@ -112,7 +130,7 @@ act_control_kt create_thread(process_t * process, const char* name, register_t a
 	return ctrl;
 }
 
-process_t* create_process(const char* name, capability file) {
+process_t* create_process(const char* name, capability file, int secure_load) {
 
 	process_t* proc;
 
@@ -125,7 +143,7 @@ process_t* create_process(const char* name, capability file) {
 	cap_pair prgmp;
 
 	if(old_im == NULL) {
-		prgmp = elf_loader_mem(&env, file, &proc->im);
+		prgmp = elf_loader_mem(&env, file, &proc->im, secure_load);
 	} else {
 		prgmp = create_image(&env, old_im, &proc->im, storage_process);
 	}
@@ -183,16 +201,19 @@ cap_pair proc_tmp_alloc(size_t s) {
     }
 }
 
-int main(cap_pair* pool_from_init)
+int main(procman_init_t* init)
 {
-    init_tmp_alloc(*pool_from_init);
+	init_nano_kernel_if_t(init->nano_if, init->nano_default_cap);
+
+    init_tmp_alloc(init->pool_from_init);
 
     env.alloc = &proc_tmp_alloc;
     env.free = &tmp_free;
     env.printf = &printf;
     env.memcpy = &memcpy;
     env.vprintf = &vprintf;
+	env.mmap_new = mmap_new;
 
-    namespace_register(namespace_num_proc_manager, act_self_ref);
+	namespace_register(namespace_num_proc_manager, act_self_ref);
     msg_enable = 1;
 }

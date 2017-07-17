@@ -30,9 +30,7 @@
 
 #ifdef CHERIOS_BOOT
 
-#include <elf.h>
 #include "boot/boot.h"
-#include "math.h"
 
 #define assert(e) boot_assert(e)
 
@@ -47,6 +45,7 @@
 #include "math.h"
 #include "string.h"
 #include "elf.h"
+#include "nano/nanokernel.h"
 
 #define TRACE_ELF_LOADER	0
 
@@ -176,6 +175,13 @@ static void load_PT_loads(Elf_Env* env, struct image* elf, char* prgmp) {
     }
 }
 
+static void TLS_copy(image* elf, size_t tls_num) {
+	char* tls_base = (char*)elf->loaded_process.data + elf->tls_base + (elf->tls_size * tls_num);
+	memcpy(tls_base, elf->tls_load_start, elf->tls_load_size);
+	/* tbss always follows tdata. zero here */
+	bzero(tls_base + elf->tls_load_size, elf->tls_size - elf->tls_load_size);
+}
+
 /* Load an image */
 cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_type store_type) {
 
@@ -204,14 +210,41 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
 
 			load_PT_loads(env, out_elf, prgmp);
 
+			if(out_elf->secure_loaded) {
+				// We can't copy tls for a secure loaded section as we can't access it.
+				// We can fix this by a) getting programs to init their own TLS (bad)
+				// b) Having a CAPABILITY TLS register (good)
+				// for now just init a load of TLS sections just in case we want them later
+				if(out_elf->tls_size != 0) {
+					for(size_t tls_num = 0; tls_num != MAX_THREADS; tls_num++) {
+						TLS_copy(out_elf, tls_num);
+					}
+				}
+
+#ifdef CHERIOS_BOOT
+				assert(0);
+#else
+				cap_pair pr;
+				env->mmap_new(0, out_elf->maxaddr + FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES), 0,
+						 MAP_PRIVATE | MAP_ANONYMOUS | MAP_RESERVED, &pr);
+				res_t res = pr.code;
+				assert(res != NULL);
+				entry_t e0 = foundation_create(res, out_elf->maxaddr,
+											   out_elf->loaded_process.data, out_elf->entry, MAX_FOUND_ENTRIES);
+
+				assert(e0 != NULL);
+
+				out_elf->secure_entry = e0;
+				out_elf->foundation_res = res;
+#endif
+
+			}
+
         case storage_thread:
             assert(out_elf->tls_size == 0 || out_elf->tls_num != MAX_THREADS);
-            //TODO initialise TLS  BSS to 0 and globals to appropriate values
-            if(out_elf->tls_size != 0) {
-                char* tls_base = (char*)out_elf->loaded_process.data + out_elf->tls_base + (out_elf->tls_size * out_elf->tls_num++);
-                memcpy(tls_base, out_elf->tls_load_start, out_elf->tls_load_size);
-                /* tbss always follows tdata. zero here */
-                bzero(tls_base + out_elf->tls_load_size, out_elf->tls_size - out_elf->tls_load_size);
+			/* If secure loaded we did all TLS upfront */
+            if(out_elf->tls_size != 0 && !out_elf->secure_loaded) {
+				TLS_copy(out_elf, elf->tls_num++);
             }
             break;
     }
@@ -220,7 +253,7 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
 }
 
 /* Parse an elf file already resident in memory. */
-cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf) {
+cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf, int secure_load) {
 	char *addr = (char *)p;
 	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
@@ -279,6 +312,8 @@ cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf) {
 	out_elf->minaddr = lowaddr;
 	out_elf->maxaddr = allocsize;
 	out_elf->entry   = e_entry;
+
+	out_elf->secure_loaded = secure_load;
 
 	return create_image(env, out_elf, out_elf, storage_process);
 }

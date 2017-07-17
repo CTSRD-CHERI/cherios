@@ -342,6 +342,8 @@ add_subdirectory(zlib)
 add_subdirectory(zlib_test)
 
 add_subdirectory(churn)
+add_subdirectory(foundation_test)
+
 #add_subdirectory(prga)
 #add_subdirectory(sockets)
 #add_subdirectory(test1a)

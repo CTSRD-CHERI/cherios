@@ -60,7 +60,7 @@ thread thread_new(const char* name, register_t arg, capability carg, thread_star
 
 /* These are wrappers for messages to the process manager */
 
-process_kt thread_create_process(const char* name, capability file);
+process_kt thread_create_process(const char* name, capability file, int secure_load);
 thread thread_start_process(process_kt* proc, startup_desc_t* desc);
 thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* desc);
 

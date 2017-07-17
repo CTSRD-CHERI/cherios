@@ -82,12 +82,12 @@ void c_thread_start(register_t arg, capability carg, queue_t* queue, act_control
     }
 }
 
-process_kt thread_create_process(const char* name, capability file) {
+process_kt thread_create_process(const char* name, capability file, int secure_load) {
     if(proc_man_ref == NULL) {
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }
     assert(proc_man_ref != NULL);
-    return message_send_c(0, 0, 0, 0, name, file, NULL, NULL, proc_man_ref, SYNC_CALL, 0);
+    return message_send_c(secure_load, 0, 0, 0, name, file, NULL, NULL, proc_man_ref, SYNC_CALL, 0);
 }
 thread thread_start_process(process_kt* proc, startup_desc_t* desc) {
     if(proc_man_ref == NULL) {

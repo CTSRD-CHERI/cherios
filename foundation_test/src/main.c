@@ -1,7 +1,5 @@
 /*-
- * Copyright (c) 2016 Robert N. M. Watson
- * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2016 SRI International
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -30,54 +28,9 @@
  * SUCH DAMAGE.
  */
 
-#ifndef _INIT_H_
-#define _INIT_H_
+#include "cheric.h"
+#include "nano/usernano.h"
 
-#include "mips.h"
-#include "cdefs.h"
-#include "stdio.h"
-#include "boot/boot_info.h"
-#include "types.h"
-#include "mman.h"
-#include "elf.h"
+int main(register_t arg, capability carg) {
 
-typedef enum module_type {
-	m_memmgt,
-	m_namespace,
-	m_uart,
-	m_fs,
-    m_proc,
-	m_core,
-	m_user,
-	m_secure,
-	m_fence
-} module_t;
-
-typedef struct init_elem_s {
-	module_t     type;
-	int          cond;
-	const char * name;
-	register_t   arg;
-	int          daemon;
-	int          status;
-	act_control_kt ctrl;
-} init_elem_t;
-
-/*
- * Memory routines
- */
-
-extern Elf_Env env;
-
-int	acts_alive(init_elem_t * init_list, size_t  init_list_len);
-
-int	num_registered_modules(void);
-
-void	stats_init(void);
-void	stats_display(void);
-
-void *	load(const char * filename, int * len);
-
-int init_main(void);
-
-#endif
+}

@@ -43,6 +43,7 @@
 #include "thread.h"
 #include "tmpalloc.h"
 #include "assert.h"
+#include "nano/nanokernel.h"
 
 #define B_FS 0
 #define B_SO 0
@@ -116,6 +117,7 @@ init_elem_t init_list[] = {
 	B_PENTRY(m_user,	"test2a.elf",		0,	B_T2)
 	B_PENTRY(m_user,	"test2b.elf",		0,	B_T2)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
+    B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
 
 #if 0
 	#define T3(_arg) \
@@ -133,6 +135,8 @@ init_elem_t init_list[] = {
 };
 
 const size_t init_list_len = countof(init_list);
+
+ALLOCATE_PLT_NANO
 
 static void print_build_date(void) {
 	int filelen=0;
@@ -156,9 +160,10 @@ static void print_init_info(init_info_t * init_info) {
 
 extern char __nano_size;
 
-memmgt_init_t memmgt_init;
+static memmgt_init_t memmgt_init;
+static procman_init_t procman_arg;
+
 Elf_Env env;
-cap_pair remaining_pool;
 
 /* Return the capability needed by the activation */
 static void * get_act_cap(module_t type, init_info_t* info) {
@@ -179,7 +184,9 @@ static void * get_act_cap(module_t type, init_info_t* info) {
                             MAP_ANONYMOUS | MAP_SHARED | MAP_PHY, &pair);
             return pair.data;
         case m_proc:
-            return &remaining_pool;
+            procman_arg.nano_default_cap = info->nano_default_cap;
+            procman_arg.nano_if = info->nano_default_cap;
+            return &procman_arg;
         case m_namespace:
         case m_core:
         case m_user:
@@ -241,7 +248,7 @@ static void load_modules(init_info_t * init_info) {
 
     /* FIXME technically a bit of a race. This global will be read by proc so it needs to be set before context switch */
 
-    remaining_pool = get_remaining();
+    procman_arg.pool_from_init = get_remaining();
     /* Wait for registration */
 
     printf("Waiting for proc manager to register \n");
@@ -257,7 +264,7 @@ static void load_modules(init_info_t * init_info) {
     desc.stack_args = NULL;
     desc.stack_args_size = 0;
     /* This version allows the process to spawn new threads */
-    memgtbe->ctrl = thread_start_process(thread_create_process(memgtbe->name, memmgt_file), &desc);
+    memgtbe->ctrl = thread_start_process(thread_create_process(memgtbe->name, memmgt_file, 0), &desc);
 
     /* Wait for registration */
 
@@ -294,7 +301,7 @@ static void load_modules(init_info_t * init_info) {
         desc.stack_args = NULL;
         desc.stack_args_size = 0;
         /* This version allows the process to spawn new threads */
-        be->ctrl = thread_start_process(thread_create_process(be->name, addr), &desc);
+        be->ctrl = thread_start_process(thread_create_process(be->name, addr, be->type == m_secure), &desc);
 
 		printf("Module ready: %s\n", be->name);
 	}
@@ -303,6 +310,8 @@ static void load_modules(init_info_t * init_info) {
 static capability pool[POOL_SIZE/sizeof(capability)];
 
 int main(init_info_t * init_info) {
+    init_nano_kernel_if_t(init_info->nano_if,init_info->nano_default_cap);
+
 	stats_init();
 
     env.free = &tmp_free;

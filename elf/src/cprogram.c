@@ -38,7 +38,7 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
     reg_frame_t frame;
     bzero(&frame, sizeof(frame));
 
-    cap_pair prgmp = elf_loader_mem(env, file, &im);
+    cap_pair prgmp = elf_loader_mem(env, file, &im, 0);
 
     void * pcc = cheri_setoffset(prgmp.code, im.entry);
     pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD

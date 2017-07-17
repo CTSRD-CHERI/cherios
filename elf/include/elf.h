@@ -34,6 +34,7 @@
 #include "mips.h"
 #include "stdarg.h"
 #include "mman.h"
+#include "nano/nanotypes.h"
 
 typedef uint16_t Elf64_Half;	// Unsigned half int
 typedef uint64_t Elf64_Off;	// Unsigned offset
@@ -105,13 +106,14 @@ typedef struct {
 	int (*printf)(const char *fmt, ...);
 	int (*vprintf)(const char *fmt, va_list ap);
 	void *(*memcpy)(void *dest, const void *src, size_t n);
+	int (*mmap_new)(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result);
 } Elf_Env;
 
 typedef struct image{
 	/* Pointer to file for when we need the headers again*/
 	Elf64_Ehdr *hdr;
 
-	/* These are per process */
+	/* These are per process. Note if secure loaded, this cap_pair is a COPY of the real image */
 	cap_pair loaded_process;
 	size_t minaddr, maxaddr, entry;
 
@@ -122,6 +124,14 @@ typedef struct image{
 	size_t tls_base;
 	size_t tls_size;
 	size_t tls_num;
+
+	int secure_loaded;
+
+	/* Only set when secure loaded */
+	/* This entry will transfer the copied foundation + entry */
+	entry_t secure_entry;
+	/* This reservation was taken to create the foundation. It can be revoked here if need be */
+	res_t foundation_res;
 } image;
 
 /* Currently the only supported models */
@@ -135,7 +145,7 @@ enum e_storage_type {
    by the loader, and the entry point.
  */
 
-cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf);
+cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf, int secure_load);
 
 /* Given a pointer to loaded image creates another image that shares storage with the first image
  * specified by image type */
@@ -143,6 +153,7 @@ cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf);
 cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_type store_type);
 
 #define MAX_THREADS 4 // We have to overallocate this much.
+#define MAX_FOUND_ENTRIES 4
 
 #define PT_NULL 	0
 #define PT_LOAD 	1

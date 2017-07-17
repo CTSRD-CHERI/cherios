@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <elf.h>
 #include "mips.h"
 #include "cheric.h"
 #include "cp0.h"
@@ -106,7 +107,7 @@ static void *boot_memcpy(void *dest, const void *src, size_t n) {
 }
 
 static boot_info_t bi;
-static Elf_Env env;
+Elf_Env env;
 
 void init_elf_loader() {
   env.alloc   = kernel_alloc_mem;
@@ -114,6 +115,7 @@ void init_elf_loader() {
   env.printf  = boot_printf;
   env.vprintf = boot_vprintf;
   env.memcpy  = boot_memcpy;
+  env.mmap_new = NULL;
 }
 
 capability load_nano() {
@@ -122,7 +124,7 @@ capability load_nano() {
 	image im;
 
 	char *prgmp = elf_loader_mem(&env, &__nano_elf_start,
-								 &im).data;
+								 &im, 0).data;
 
 	minaddr = im.minaddr;
 	maxaddr = im.maxaddr;
@@ -155,7 +157,7 @@ size_t load_kernel() {
 	image im;
 
 	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
-				     &im).data;
+				     &im, 0).data;
 
 	minaddr = im.minaddr;
 	maxaddr = im.maxaddr;
@@ -189,7 +191,7 @@ boot_info_t *load_init() {
 
 	image im;
 	// FIXME: init is direct mapped for now
-	char *prgmp = elf_loader_mem(&env, &__init_elf_start, &im).data;
+	char *prgmp = elf_loader_mem(&env, &__init_elf_start, &im, 0).data;
 
 	minaddr = im.minaddr;
 	maxaddr = im.maxaddr;

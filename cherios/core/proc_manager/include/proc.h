@@ -52,6 +52,6 @@ act_control_kt create_thread(process_t * process, const char* name, register_t a
 act_control_kt start_process(process_t* proc,
                              register_t arg, capability carg, char* stack_args, size_t stack_args_size);
 
-process_t* create_process(const char* name, capability file);
+process_t* create_process(const char* name, capability file, int secure_load);
 
 #endif //CHERIOS_PROC_H
