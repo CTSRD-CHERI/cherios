@@ -208,7 +208,9 @@ nano_kernel_init:
 
     csetbounds  $c3, $kr2c, $k0
     dli         $k0, CHERI_FRAME_SIZE
-    csd         $zero, $k0, 0($c3)
+    csd         $zero, $k0, 0($c3)                      # Set state to 0
+    cfromptr    $c4, $c4, $zero
+    csc         $c4, $k0, CAP_SIZE($c3)                 # Set foundation ref to NULL
     csc         $c3, $zero, current_context($kr1c)       # Create first context and make it the current context
 
 
@@ -730,8 +732,9 @@ create_context:
 
     csetbounds  $c4, $c4, $t0
     dli         $a0, CHERI_FRAME_SIZE
-    csd         $zero, $a0, 0($c3)                          # set state to allocated for new context
-
+    csd         $zero, $a0, 0($c4)                          # set state to allocated for new context
+    cfromptr    $c5, $c5, $zero
+    csc         $c5, $a0, CAP_SIZE($c4)                     # set foundation ref to null
     # memcpy a0 bytes from c3 to c4
     dli         $t0, 0
 
