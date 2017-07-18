@@ -231,7 +231,7 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
 				assert(res != NULL);
 				entry_t e0 = foundation_create(res, out_elf->maxaddr,
 											   out_elf->loaded_process.data, out_elf->entry, MAX_FOUND_ENTRIES);
-
+				env->printf("Secure foundation size: %lx. TLS base. \n", out_elf->maxaddr);
 				assert(e0 != NULL);
 
 				out_elf->secure_entry = e0;
@@ -244,8 +244,9 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
             assert(out_elf->tls_size == 0 || out_elf->tls_num != MAX_THREADS);
 			/* If secure loaded we did all TLS upfront */
             if(out_elf->tls_size != 0 && !out_elf->secure_loaded) {
-				TLS_copy(out_elf, elf->tls_num++);
+				TLS_copy(out_elf, elf->tls_num);
             }
+            if(out_elf->tls_size != 0) elf->tls_num++;
             break;
     }
 
