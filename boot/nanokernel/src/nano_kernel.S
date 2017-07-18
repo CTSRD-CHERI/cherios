@@ -1857,7 +1857,9 @@ copy_and_hash_loop_start:
     csd         $a2, $zero, FOUNDATION_ID_NENT_OFFSET($c4)                  # if nentries field
 
     # store data we will get on entry
+    dli         $t0, DEF_DATA_PERMS
     csetbounds  $c5, $c5, $a0                       # c5 is users data
+    candperm    $c5, $c5, $t0
     csc         $c5, $zero, FOUNDATION_META_DATA_OFFSET($c4) # store data for invocation
 
     # create first entry point
