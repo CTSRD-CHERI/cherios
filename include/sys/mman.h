@@ -72,6 +72,7 @@ enum mmap_flags
 #define MAP_ANONYMOUS map_anonymous
 #define MAP_SHARED map_shared
 
+#define MAP_DEFAULT_RES (MAP_PRIVATE | MAP_ANONYMOUS | MAP_RESERVED)
 enum mmap_return
 {
   ENOMEM = 1

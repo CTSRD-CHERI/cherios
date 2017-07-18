@@ -227,6 +227,10 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 
 act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
 							status_e create_in_status, act_control_t *parent, res_t res) {
+	// FIXME pcc base will not be the correct base for secure loaded programs as they start via a trampoline
+	// FIXME Only the caller really knows what base to use.
+	// FIXME The reason this is going wrong is that we really should be sending an address to proc_man to query
+	// FIXME what image it is in. This is hard to do when the system is dying however.
 	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc), res);
 	act->context = create_context(frame);
 	return act_create_sealed_ctrl_ref(act);

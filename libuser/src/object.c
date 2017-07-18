@@ -76,7 +76,7 @@ res_t get_res_pool(void) {
 
         if(try_init_memmgt_ref() == NULL) return NULL;
 
-        mmap_new(0, 0x8000, 0, MAP_PRIVATE | MAP_ANONYMOUS | MAP_RESERVED, &pr);
+        mmap_new(0, 0x8000, 0, MAP_DEFAULT_RES , &pr);
         res_pool = pr.data;
 
         if(pr.data == NULL) return NULL;

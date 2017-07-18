@@ -30,7 +30,99 @@
 
 #include "cheric.h"
 #include "nano/usernano.h"
+#include "mman.h"
+#include "stdio.h"
+#include "stdlib.h"
+#include "string.h"
+#include "assert.h"
+
+static res_t get_res(size_t size) {
+    cap_pair pair;
+
+    // Mmmap new will use the message syscall.
+    // All syscalls are in fact dangerous in secure code. Will write an enter/exit routine later.
+    int res = mmap_new(0, 0x1000, 0, MAP_DEFAULT_RES, &pair);
+
+    if(res != 0) {
+        // Also dangerous
+        printf(KRED"MMAP failed"KRST);
+        exit(-1);
+    }
+
+    return pair.data;
+}
 
 int main(register_t arg, capability carg) {
+    /* First try sign something */
+    printf("Foundation test started.\n");
 
+    res_t res1 = get_res(0x500);
+    cap_pair pair1;
+    cert_t certificate = rescap_take_cert_sys(res1, &pair1, CHERI_PERM_LOAD);
+
+    assert(pair1.data != NULL);
+    assert(certificate != NULL);
+
+#define MESSAGE "This message was signed! It can only have produced by me.\n"
+
+    memcpy(pair1.data, MESSAGE, sizeof(MESSAGE));
+
+    /* Now try check the signature */
+    cap_pair pair2;
+    found_id_t* id = rescap_check_cert_sys(certificate, &pair2);
+
+    CHERI_PRINT_CAP(pair1.code);
+    CHERI_PRINT_CAP(pair1.data);
+    CHERI_PRINT_CAP(pair2.code);
+    CHERI_PRINT_CAP(pair2.data);
+
+    printf("Found ID: hash_byte: %x, eo: %lx, len: %lx, nent: %lx\n", id->sha256[0], id->e0, id->length, id->nentries);
+
+    printf("Signs message: %s", (char *)pair2.data);
+
+    /* Now try to lock a message for ourselves */
+
+    res_t res2 = get_res(0x500);
+    cap_pair pair3;
+
+    locked_t locked = rescap_take_locked_sys(res2, &pair3, CHERI_PERM_LOAD, id);
+
+    assert(pair3.data != NULL);
+    assert(locked != NULL);
+
+#define MESSAGE2 "This message is locked. It can only be opened by me.\n"
+    memcpy(pair3.data, MESSAGE2, sizeof(MESSAGE2));
+
+    /* Now try to unlock the message (while we are still us) */
+
+    cap_pair pair4 = NULL_PAIR;
+
+    rescap_unlock_sys(locked, &pair4);
+
+    CHERI_PRINT_CAP(pair3.code);
+    CHERI_PRINT_CAP(pair3.data);
+    CHERI_PRINT_CAP(pair4.code);
+    CHERI_PRINT_CAP(pair4.data);
+
+    assert(pair4.data != NULL);
+
+    printf("Unlocked message: %s", (char*)pair4.data);
+
+    /* Now exit the foundation. */
+    foundation_exit_sys();
+
+
+    /* Now FAIL to unlock the message */
+
+    cap_pair pair5 = NULL_PAIR;
+
+    rescap_unlock_sys(locked, &pair5);
+
+    CHERI_PRINT_CAP(pair5.code);
+    CHERI_PRINT_CAP(pair5.data);
+
+    assert(pair5.data == NULL);
+
+    printf("Foundation test finished!\n");
+    return 0;
 }
