@@ -65,8 +65,11 @@ retry:
     beqz        $t0, retry
     clld        $t0, $c5
 
+// TODO we don't trust our stack, so make a new one and copy all stack arguments
+
 //Finally go to normal start_common
 	j start_common
+    nop
 
 secure_double_entry:
 // FIXME: A better faulting sequence
