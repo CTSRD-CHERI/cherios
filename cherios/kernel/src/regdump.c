@@ -114,7 +114,7 @@ static inline void print_frame(int num, capability ra, char * sp) {
     }
 
     size_t correct = correct_base(base, ra);
-	printf("%2d| [0x%016lx] in %16s (sp=%p)\n", num, correct, name, (void*)sp);
+	printf("%2d| [0x%016lx] in %16s (sp=%p). PCC offset = 0x%016lx\n", num, correct, name, (void*)sp, cheri_getoffset(ra));
 }
 
 int check_cap(capability cap) {
