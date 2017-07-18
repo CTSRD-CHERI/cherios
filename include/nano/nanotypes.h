@@ -157,6 +157,8 @@ typedef capability ptable_t;                // Type of a page table handle
 
 
 typedef capability entry_t;                 // Type of a foundation entry handle
+typedef capability cert_t;                  // A certificate for capability
+typedef capability locked_t;                // A locked capability
 
 /* Identifying information for a foundation */
 typedef struct found_id_t {
