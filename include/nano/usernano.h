@@ -33,21 +33,25 @@
 
 #include "nanokernel.h"
 
-#define CALL_NANO_DEVIRTUAL(Call, n, raw_sig)       \
-do {                                                \
-capability _foo_c1, _foo_c2;                        \
+#define GET_NANO_SYSCALL(c1,c2,n)                   \
+capability c1, c2;                                  \
 __asm__ (                                           \
 "li     $a0, 0          \n"                         \
         "li     $a1, %[i]       \n"                 \
         "syscall                \n"                 \
-        "cmove  %[c1], $c1      \n"                 \
-        "cmove  %[c2], $c2      \n"                 \
-:   [c1]"=C"(_foo_c1), [c2]"=C"(_foo_c2)            \
+        "cmove  %[_foo_c1], $c1      \n"            \
+        "cmove  %[_foo_c2], $c2      \n"            \
+:   [_foo_c1]"=C"(c1), [_foo_c2]"=C"(c2)            \
 :   [i]"i"(n)                                       \
 : "a0", "a1", "$c1", "$c2");                        \
-                                                    \
-return Call ## _inst(CONTEXT(_foo_c1, _foo_c2) MAKE_ARG_LIST_APPEND(raw_sig));       \
+
+
+#define CALL_NANO_DEVIRTUAL(Call, n, raw_sig)       \
+do {                                                \
+    GET_NANO_SYSCALL(c1, c2, n)           \
+return Call ## _inst(CONTEXT(c1, c2) MAKE_ARG_LIST_APPEND(raw_sig));       \
 }while(0);
+
 
 MAKE_CTR(NANO_CTR)
 
@@ -56,4 +60,17 @@ CALL_NANO_DEVIRTUAL(name, (CTR(NANO_CTR)), raw_sig) \
 }
 
 NANO_KERNEL_IF_RAW_LIST(MAKE_WRAPPED,)
+
+/* Assuming you trust your memory (i.e. are secure loaded) you can call this to populate your nano kernel if and
+ * then use the normal interface rather than having to use syscall */
+
+MAKE_CTR(NANO_INIT_CTR)
+
+#define INIT_OBJ_SYSCALL(name, ...) {GET_NANO_SYSCALL(c1,c2,CTR(NANO_INIT_CTR)) \
+    PLT_UNIQUE_OBJECT(name).code = c1; \
+    PLT_UNIQUE_OBJECT(name).data = c2;}
+
+static inline void init_nano_if_sys(void) {
+    NANO_KERNEL_IF_RAW_LIST(INIT_OBJ_SYSCALL,)
+}
 #endif //CHERIOS_USERNANO_H

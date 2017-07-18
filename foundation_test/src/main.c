@@ -36,6 +36,8 @@
 #include "string.h"
 #include "assert.h"
 
+ALLOCATE_PLT_NANO
+
 static res_t get_res(size_t size) {
     cap_pair pair;
 
@@ -53,12 +55,15 @@ static res_t get_res(size_t size) {
 }
 
 int main(register_t arg, capability carg) {
+
+    init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
+
     /* First try sign something */
     printf("Foundation test started.\n");
 
     res_t res1 = get_res(0x500);
     cap_pair pair1;
-    cert_t certificate = rescap_take_cert_sys(res1, &pair1, CHERI_PERM_LOAD);
+    cert_t certificate = rescap_take_cert(res1, &pair1, CHERI_PERM_LOAD);
 
     assert(pair1.data != NULL);
     assert(certificate != NULL);
@@ -69,7 +74,7 @@ int main(register_t arg, capability carg) {
 
     /* Now try check the signature */
     cap_pair pair2;
-    found_id_t* id = rescap_check_cert_sys(certificate, &pair2);
+    found_id_t* id = rescap_check_cert(certificate, &pair2);
 
     CHERI_PRINT_CAP(pair1.code);
     CHERI_PRINT_CAP(pair1.data);
@@ -85,7 +90,7 @@ int main(register_t arg, capability carg) {
     res_t res2 = get_res(0x500);
     cap_pair pair3;
 
-    locked_t locked = rescap_take_locked_sys(res2, &pair3, CHERI_PERM_LOAD, id);
+    locked_t locked = rescap_take_locked(res2, &pair3, CHERI_PERM_LOAD, id);
 
     assert(pair3.data != NULL);
     assert(locked != NULL);
@@ -97,7 +102,7 @@ int main(register_t arg, capability carg) {
 
     cap_pair pair4 = NULL_PAIR;
 
-    rescap_unlock_sys(locked, &pair4);
+    rescap_unlock(locked, &pair4);
 
     CHERI_PRINT_CAP(pair3.code);
     CHERI_PRINT_CAP(pair3.data);
@@ -109,14 +114,14 @@ int main(register_t arg, capability carg) {
     printf("Unlocked message: %s", (char*)pair4.data);
 
     /* Now exit the foundation. */
-    foundation_exit_sys();
+    foundation_exit();
 
 
     /* Now FAIL to unlock the message */
 
     cap_pair pair5 = NULL_PAIR;
 
-    rescap_unlock_sys(locked, &pair5);
+    rescap_unlock(locked, &pair5);
 
     CHERI_PRINT_CAP(pair5.code);
     CHERI_PRINT_CAP(pair5.data);
