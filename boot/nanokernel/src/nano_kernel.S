@@ -2071,7 +2071,7 @@ rescap_unlock:
 ###########################################################################################
 
     # unlock
-    dli         $t0, FOUND_CERT_TYPE
+    dli         $t0, FOUND_LOCKED_TYPE
     csetoffset  $c5, $kdc, $t0
     cunseal     $c3, $c3, $c5
 
