@@ -84,8 +84,7 @@ static act_t* get_act_for_address(size_t address) {
     size_t base = 0;
     size_t top_bits = 2;
     act_t* base_act = NULL;
-    for(size_t i = 0; i < kernel_next_act; i++) {
-        act_t *act = &kernel_acts[i];
+	FOR_EACH_ACT(act) {
         size_t new_base = act->image_base;
 
         /* Should not confuse our two regions */
@@ -307,8 +306,7 @@ void regdump(int reg_num) {
 	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
 
 	printf("\nLoaded images:\n");
-	for(size_t i = 0; i < kernel_next_act; i++) {
-		act_t* act = &kernel_acts[i];
+	FOR_EACH_ACT(act) {
 		printf("%16s: %lx\n", act->name, act->image_base);
 	}
     printf("%16s: %lx\n", "nano", MIPS_KSEG0);

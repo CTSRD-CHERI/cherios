@@ -95,6 +95,8 @@ typedef struct act_t
 
 } act_t;
 
+#define FOR_EACH_ACT(act) for(act_t* act = act_list_start; act != NULL; act = act->list_next)
+
 /* Assumed by assembly */
 _Static_assert(offsetof(act_t, user_kernel_stack) == 0,
 			   "Kernel ccall trampolines assume the stack is the first member");
