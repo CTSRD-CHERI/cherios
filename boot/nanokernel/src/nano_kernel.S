@@ -1829,55 +1829,58 @@ foundation_create:
     sltu        $t3, $t0, $t2
     bnez        $t3, found_er
 
-    # memcpy into image calculating sha256 as we go
-    cincoffset  $c5, $c4, $t1                       # c5 is the start of the user code/data
-
-    # source is c13. Dest is c5. Copy a0 bytes everything is capability aligned.
-    # TODO current hash is XOR. This is not a secure hash. hash in t2
-    dli         $t3, 0
-    dli         $t2, 0
-
-copy_and_hash_loop_start:
-    cld         $t0, $t3, 0($c13)
-    csd         $t0, $t3, 0($c5)
-    daddiu      $t3, $t3, REG_SIZE
-    bne         $t3, $a0, copy_and_hash_loop_start
-    xor         $t2, $t2, $t0
-
-
-    # store hash
-    csd         $t2, $zero, 0($c4)
-    csd         $t2, $zero, 8($c4)
-    csd         $t2, $zero, 16($c4)
-    csd         $t2, $zero, 24($c4)
-
     # store other id fields
     csd         $a0, $zero, FOUNDATION_ID_LEN_OFFSET($c4)                   # id length field
     csd         $a1, $zero, FOUNDATION_ID_E0_OFFSET($c4)                    # id entry0 field
     csd         $a2, $zero, FOUNDATION_ID_NENT_OFFSET($c4)                  # if nentries field
 
+    cmove       $c14, $c4                           # save c4 for later
     # store data we will get on entry
+    cincoffset  $c4, $c4, $t1                       # c4 is the start of the user code/data
     dli         $t0, DEF_DATA_PERMS
-    csetbounds  $c5, $c5, $a0                       # c5 is users data
-    candperm    $c5, $c5, $t0
-    csc         $c5, $zero, FOUNDATION_META_DATA_OFFSET($c4) # store data for invocation
+    csetbounds  $c4, $c4, $a0                       # c4 is users data
+    candperm    $c4, $c4, $t0
+    csc         $c4, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
 
     # create first entry point
     cincoffset  $c3, $c3, $t1                       # skip over metadata
     csetbounds  $c3, $c3, $a0                       # correctly bounded code pointer
     csetoffset  $c3, $c3, $a1                       # correctly offset entry
 
-    csc         $c3, $zero, FOUNDATION_META_ENTRY_VECTOR_OFFSET($c4) # store first entry trampoline
+    csc         $c3, $zero, FOUNDATION_META_ENTRY_VECTOR_OFFSET($c14) # store first entry trampoline
 
     # create return token
-    csetbounds  $c4, $c4, $t1                       # we can set offset to 0 to get metadata
+    csetbounds  $c15, $c14, $t1                       # we can set offset to 0 to get metadata
     dli         $t3, FOUNDATION_META_ENTRY_VECTOR_OFFSET
-    csetoffset  $c4, $c4, $t3                       # entry points to pcc to load in trampoline
+    csetoffset  $c15, $c15, $t3                       # entry points to pcc to load in trampoline
 
     dli         $t3, FOUND_ENTRY_TYPE
     csetoffset  $c3, $kdc, $t3
+    cseal       $c15, $c15, $c3
 
-    cseal       $c3, $c4, $c3
+    # memcpy into image calculating sha256 as we go. c3 = source. c4 = dest. a0 = size.
+    # Normal ABI, but saves c13 to c16 for us (how kind)
+    cmove       $c3, $c13
+    cmove       $c13, $c17          # save c17
+    cmove       $c16, $c12          # save c12
+
+    dla         $t0, sha256_start   # jump to sha256 routine
+    cgetpccsetoffset $c12, $t0
+    cjalr       $c12, $c17
+    nop
+
+    # restore c17/c12
+    cmove       $c17, $c13
+    cmove       $c12, $c16
+
+    # store hash
+    csd         $v0, $zero, 0($c14)
+    csd         $v1, $zero, 8($c14)
+    csd         $t0, $zero, 16($c14)
+    csd         $t1, $zero, 24($c14)
+
+    # get back return value we calculated before the hash
+    cmove       $c3, $c15
 
     cclearlo    EN5(c4,c5,c13,c14,c15)
     creturn

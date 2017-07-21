@@ -38,6 +38,17 @@
 
 ALLOCATE_PLT_NANO
 
+static void print_id(found_id_t* id) {
+    printf("hash:\n");
+    for(size_t i = 0; i < 32; i++) {
+        printf("%02x", (int)(id->sha256[i] & 0xFF));
+    }
+
+    printf("\n");
+
+    printf("entry: %lx. size:%lx. nent: %lx\n", id->e0, id->length, id->nentries);
+}
+
 static res_t get_res(size_t size) {
     cap_pair pair;
 
@@ -81,7 +92,7 @@ int main(register_t arg, capability carg) {
     CHERI_PRINT_CAP(pair2.code);
     CHERI_PRINT_CAP(pair2.data);
 
-    printf("Found ID: hash_byte: %x, eo: %lx, len: %lx, nent: %lx\n", id->sha256[0], id->e0, id->length, id->nentries);
+    print_id(id);
 
     printf("Signs message: %s", (char *)pair2.data);
 
