@@ -50,9 +50,20 @@
 
 
 /* Size of metadata for reservations. Split into private and user data */
-#define RES_PRIV_SIZE                   (REG_SIZE * 4)
+#define RES_PRIV_SIZE                   (32)
 #define RES_META_SIZE                   (256)
 #define RES_USER_SIZE                   (RES_META_SIZE - RES_PRIV_SIZE)
+
+
+#define RES_LENGTH_OFFSET               0
+#define RES_PID_OFFSET                  8
+#define RES_STATE_OFFSET                31
+#define STORE_RES_STATE                 csb
+#define LOAD_RES_STATE                  clb
+#define RES_SUBFIELD_SIZE_OFFSET        30
+#define RES_SUBFIELD_BITMAP_OFFSET      16
+#define RES_SUBFIELD_BITMAP_BITS        (14 * 8)
+
 
 //TODO make this dynamic
 /* Page sizes etc */

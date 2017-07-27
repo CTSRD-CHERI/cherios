@@ -518,9 +518,9 @@ make_first_reservation:
     dli         $t1, RES_TYPE                     # sealing type
 
     csetoffset  $c4, $kdc, $t1
-    csd         $zero, $zero, 0($c3)              # set state to open
-    csd         $t2, $zero, (REG_SIZE)($c3)       # set length
-    csd         $zero, $zero, (REG_SIZE*2)($c3)   # set parent to none
+    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)     # set state to open
+    csd         $t2, $zero, (RES_LENGTH_OFFSET)($c3)        # set length
+    csd         $zero, $zero, (RES_PID_OFFSET)($c3)         # set parent to none
 
     csetbounds  $c3, $c3, $t0
     cseal       $c3, $c3, $c4                     # handle
@@ -896,12 +896,16 @@ rescap_take:
     cmove       $c5, $c4
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
-    cld         $t0, $zero, 0($c3)          # get state
+    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)          # get state
     bnez        $t0, take_er                # error if not open
     dli         $t0, res_taken
 
-    csd         $t0, $zero, 0($c3)          # set to taken
-    cld         $t1, $zero, REG_SIZE($c3)          # get length
+    STORE_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)   # set to taken
+    dli         $t0, ~0
+    csd         $t0, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
+    csw         $t0, $zero, (RES_SUBFIELD_BITMAP_OFFSET+8)($c3)
+    csh         $t0, $zero, (RES_SUBFIELD_BITMAP_OFFSET+12)($c3)    # set bitfield to all taken
+    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)      # get length
 
     cgetbase    $t0, $c3
     daddiu      $t0, $t0, RES_META_SIZE     # get base
@@ -937,7 +941,7 @@ rescap_info:
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
-    cld         $t2, $zero, REG_SIZE($c3)       # get length
+    cld         $t2, $zero, RES_LENGTH_OFFSET($c3)       # get length
     cgetbase    $t1, $c3
     daddiu      $t1, $t1, RES_META_SIZE
     dli         $t0, DEF_DATA_PERMS
@@ -979,7 +983,7 @@ rescap_revoke_start:
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
-    cld         $t0, $zero, 0($c3)
+    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)
     dli         $t1, res_taken
     bne         $t0, $t1, revoke_er        # check this reservation is taken
 
@@ -988,7 +992,7 @@ rescap_revoke_start:
     dli         $t2, res_revoking
 
     ctoptr      $a2, $c3, $kdc              #a2 is the base of our revoke
-    cld         $t1, $zero, REG_SIZE($c3)
+    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)
     daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of revoke
     addu        $a3, $a2, $a4               #a3 is the end of our revoke (not inclusive)
 
@@ -998,9 +1002,9 @@ rescap_revoke_start:
     bnez        $t0, revoke_er              # size of revocation must be page aligned
 
     li          $t1, 1
-    li          $t2, 3
+    li          $t2, res_revoking
     csd         $t1, $zero, revoke_state($idc) # Set revoke state to 1
-    csd         $t2, $zero, 0($c3)                 # Mark reservation as revoking
+    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3) # Mark reservation as revoking
 
     csd         $a2, $zero, revoke_base($idc)
     csd         $a3, $zero, revoke_bound($idc)
@@ -1339,12 +1343,11 @@ revoke_restore:
     dli         $t1, DEF_DATA_PERMS
     candperm    $c3, $c3, $t1
 
-    cincoffset  $c5, $c3, $t0
-    csd         $zero, $zero, 0($c3)        # set state to open
-    csd         $zero, $zero, (2*REG_SIZE)($c3) # set parent to 0
-    csetbounds  $c5, $c5, $a4
+    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)       # set state to open
+    csd         $zero, $zero, (RES_PID_OFFSET)($c3)                   # set parent to 0
+    csd         $a4, $zero, RES_LENGTH_OFFSET($c3)                    # set length
+
     cseal       $c3, $c3, $c4               # seal new reservation
-    csc         $c5, $zero, 0($c5)          # store the result capability for later
 
     csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
@@ -1368,10 +1371,10 @@ rescap_split:
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
-    cld         $t0, $zero, 0($c3)          # get state
+    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)          # get state
     bnez        $t0, split_er               # reservation must be open
 
-    cld         $t1, $zero, (REG_SIZE)($c3) # get length
+    cld         $t1, $zero, (RES_LENGTH_OFFSET)($c3) # get length
     beqz        $t1, split_er               # length must be non zero
 
     daddiu      $a1, $t1, -(RES_META_SIZE)  # length minus new metadata space
@@ -1379,8 +1382,8 @@ rescap_split:
     bnez        $t0, split_er               # size arg too large
 
     dsubu       $a1, $a1, $a0                   # size of remainder
-    cld         $t0, $zero, (2 * REG_SIZE)($c3) # get pid
-    csd         $a0, $zero, (REG_SIZE)($c3)     # set length for old res
+    cld         $t0, $zero, (RES_PID_OFFSET)($c3)       # get pid
+    csd         $a0, $zero, (RES_LENGTH_OFFSET)($c3)    # set length for old res
 
     dli         $t8, RES_META_SIZE
 
@@ -1394,9 +1397,9 @@ rescap_split:
     csetbounds  $c3, $c3, $t8
     candperm    $c3, $c3, $t1
 
-    csd         $zero, $zero, 0($c3)        # set state of new reservation to open
-    csd         $a1, $zero, (REG_SIZE)($c3) # set length of new reservation
-    csd         $t0, $zero, (2 * REG_SIZE)($c3) # set parent
+    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)     # set state of new reservation to open
+    csd         $a1, $zero, (RES_LENGTH_OFFSET)($c3)        # set length of new reservation
+    csd         $t0, $zero, (RES_PID_OFFSET)($c3)           # set parent
 
     cseal        $c3, $c3, $c4
     cclearlo    EN1(c4)
@@ -1420,18 +1423,18 @@ rescap_merge:
     cunseal     $c4, $c4, $c5               # unseal both arguments
     dli         $t0, res_taken
 
-    cld         $t1, $zero, 0($c3)
+    LOAD_RES_STATE $t1, $zero, RES_STATE_OFFSET($c3)
     bne         $t0, $t1, merge_er          # check first is taken
 
-    cld         $t1, $zero, 0($c4)
+    LOAD_RES_STATE $t1, $zero, RES_STATE_OFFSET($c4)
     bne         $t0, $t1, merge_er          # check second is taken
 
-    cld         $t0, $zero, (2 * REG_SIZE)($c3) # get depth of first
-    cld         $t1, $zero, (2 * REG_SIZE)($c4) # get depth of second
+    cld         $t0, $zero, (RES_PID_OFFSET)($c3) # get depth of first
+    cld         $t1, $zero, (RES_PID_OFFSET)($c4) # get depth of second
     bne         $t0, $t1, merge_er          # must have same depth
 
-    cld         $t0, $zero, REG_SIZE($c3)   # get first length
-    cld         $t1, $zero, REG_SIZE($c4)   # get second length
+    cld         $t0, $zero, RES_LENGTH_OFFSET($c3)   # get first length
+    cld         $t1, $zero, RES_LENGTH_OFFSET($c4)   # get second length
     daddiu      $t0, RES_META_SIZE
     cincoffset  $c6, $c3, $t0               # c6 should point to the next reservation
     cne         $t2, $c6, $c4               # if not equal then we are not merging adjacent blocks
@@ -1439,8 +1442,8 @@ rescap_merge:
 
     addu        $t0, $t0, $t1               # this is the total new length
     li          $t1, res_merged
-    csd         $t0, $zero, REG_SIZE($c3)   # store back in the field of the lower address reservation a new length.
-    csd         $t1, $zero, 0($c4)          # set higher address reservation to merged
+    csd         $t0, $zero, RES_LENGTH_OFFSET($c3)      # store back in the field of the lower address reservation a new length.
+    STORE_RES_STATE $t1, $zero, RES_STATE_OFFSET($c4)   # set higher address reservation to merged
     cseal       $c3, $c3, $c5               # although the caller can just use the first argument, its nice to return it
     cclearlo    EN3(c4, c5, c6)
     creturn
@@ -1457,16 +1460,16 @@ rescap_parent:
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
-    cld         $t0, $zero, 0($c3)          # get state
+    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)          # get state
     bnez        $t0, parent_er              # reservation must be open
 
     dli         $t2, res_taken
-    csd         $t2, $zero, 0($c3)          # set state field for parent
+    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3)          # set state field for parent
 
     cgetbase    $t0, $c3                    # parent base is id for child
     dli         $a0, RES_META_SIZE
 
-    cld         $t1, $zero, (REG_SIZE)($c3) # get length
+    cld         $t1, $zero, (RES_LENGTH_OFFSET)($c3) # get length
     daddiu      $t2, $t1, (-RES_META_SIZE)  # length of child
 
     csetoffset  $c3, $kdc, $t0              # create new res node
@@ -1475,9 +1478,9 @@ rescap_parent:
     dli         $t3, DEF_DATA_PERMS
     candperm    $c3, $c3, $t3
 
-    csd         $zero, $zero, 0($c3)        # set state for child
-    csd         $t2, $zero, (REG_SIZE)($c3) # set length for child
-    csd         $t0, $zero, (2*REG_SIZE)($c3) # set depth for child
+    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3) # set state for child
+    csd         $t2, $zero, (RES_LENGTH_OFFSET)($c3)    # set length for child
+    csd         $t0, $zero, (RES_PID_OFFSET)($c3)       # set depth for child
 
     cseal       $c3, $c3, $c4               # seal child for return
 
@@ -1487,9 +1490,6 @@ parent_er:
 
     cclearlo    EN2(c3, c4)
     creturn
-
-nano_kernel_end:
-.size nano_kernel, nano_kernel_end - nano_kernel_start
 
 # Notes: will lock the physical page, and atomically updates the vtable entry #
 ########################################################################
@@ -2250,3 +2250,6 @@ tlb_trampoline_end:
     .global tlb_trampoline_end
     .end tlb_trampoline
     .size tlb_trampoline, tlb_trampoline_end - tlb_trampoline
+
+nano_kernel_end:
+.size nano_kernel, nano_kernel_end - nano_kernel_start
