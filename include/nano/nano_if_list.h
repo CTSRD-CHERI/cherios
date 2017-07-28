@@ -66,6 +66,10 @@
     ITEM(rescap_merge, res_t, (res_t, res1, res_t, res2), __VA_ARGS__)\
 /* Create a node. Argument must be open, will transition to taken, and a single child will be created and returned*/\
     ITEM(rescap_parent, res_t, (res_t, res), __VA_ARGS__)\
+/* Makes this reservation subdividable. Is now considered taken - but you can get subservations with getsub*/\
+    ITEM(rescap_splitsub, res_t, (res_t, res, register_t, scale),__VA_ARGS__)\
+/* Like split, but the size will be (2 ^ scale) that was set with splitsub. Cannot be split further */\
+    ITEM(rescap_getsub, res_t, (res_t, res, register_t, index),__VA_ARGS__)\
 /* Get a physical page. Can only be done if the page is not nano owned, or mapped to from a virtual address*/\
 /* If IO the pages won't be scanned for revoke - but can't be used to store capabilities */\
     ITEM(get_phy_page, void, (register_t, page_n, int, cached, register_t, npages, cap_pair*, out, register_t, IO), __VA_ARGS__)\

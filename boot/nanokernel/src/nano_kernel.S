@@ -896,19 +896,62 @@ rescap_take:
     cmove       $c5, $c4
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
-    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)          # get state
-    bnez        $t0, take_er                # error if not open
-    dli         $t0, res_taken
-
-    STORE_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)   # set to taken
-    dli         $t0, ~0
-    csd         $t0, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
-    csw         $t0, $zero, (RES_SUBFIELD_BITMAP_OFFSET+8)($c3)
-    csh         $t0, $zero, (RES_SUBFIELD_BITMAP_OFFSET+12)($c3)    # set bitfield to all taken
-    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)      # get length
+    cgetoffset  $t3, $c3                    # t3 is non zero if using subfields
+    csetoffset  $c3, $c3, $zero
 
     cgetbase    $t0, $c3
     daddiu      $t0, $t0, RES_META_SIZE     # get base
+    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)      # get length
+
+
+    bnez        $t3, take_sub
+    LOAD_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3)          # get state
+
+    bnez        $t2, take_er                # error if not open
+    dli         $t2, res_taken
+
+    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3)   # set to taken
+    dli         $t2, ~0
+    csd         $t2, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
+    csw         $t2, $zero, (RES_SUBFIELD_BITMAP_OFFSET+8)($c3)
+    b           take_make
+    csh         $t2, $zero, (RES_SUBFIELD_BITMAP_OFFSET+12)($c3)    # set bitfield to all taken
+
+take_sub:
+# t0 is base of ALL of the reservation. t1 is length of ALL. t2 is state. t3 is index+1.
+    dli         $t8, res_taken
+    bne         $t2, $t8, take_er           # subfields are marked taken. We should look at the bitmap.
+    daddiu      $t3, $t3, -1
+
+    # first calculate byte and mask
+    dli         $t2, 1
+    andi        $t8, $t3, 0b111
+    dsllv       $t8, $t2, $t8               # t8 is 1 byte mask for bitfield
+    dsrl        $t2, $t3, 3                 # t2 is byte
+
+    # set bit or error if already set
+    clb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
+    and         $a0, $t8, $t9
+    bnez        $a0, take_er
+    or          $t9, $t9, $t8
+    csb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
+
+    # calculate base offset
+    clb         $t2, $zero, RES_SUBFIELD_SIZE_OFFSET($c3)   # t2 is the scale
+    daddiu      $t8, $t3, 1
+    dsllv       $t3, $t3, $t2                               # baseoff
+    dsllv       $t8, $t8, $t2                               # bound
+
+    # check bound not greater than total length
+    sltu        $t9, $t1, $t8
+    bnez        $t9, take_er
+
+    # otherwise correctly calculate capability base+bounds to generate
+    daddu       $t0, $t0, $t3
+    dsubu       $t1, $t8, $t3
+
+# t0 is base. t1 is length. #
+take_make:
     dli         $t2, DEF_DATA_PERMS
 
     csetoffset  $c3, $kcc, $t0              # c3 is code
@@ -932,6 +975,51 @@ take_er:
     clearlo     EN2(c3, c4)
     creturn
 
+##################################################
+# res_t rescap_getsub(res_t res, register_t index)
+.global rescap_getsub
+rescap_getsub:
+##################################################
+
+    cgetoffset  $t0, $c3
+    bnez        $t0, getsub_er          # can only sub the main reservation
+    sltiu       $t0, $a0, RES_SUBFIELD_BITMAP_BITS
+    beqz        $t0, getsub_er          # can only have an index that will fit in the bitfield
+
+    daddiu      $a0, $a0, 1             # 0 means not a subfield
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0
+    cunseal     $c3, $c3, $c4
+    csetoffset  $c3, $c3, $a0           # offset field encodes sub
+    cseal       $c3, $c3, $c4
+
+getsub_er:
+    cclearlo    EN1(c4)
+    creturn
+
+####################################################
+# res_t rescap_splitsub(res_t res, register_t scale)
+.global rescap_splitsub
+rescap_splitsub:
+####################################################
+
+    dli         $t0, RES_TYPE
+    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)            # get state
+    bnez        $t0, take_er                                    # error if not open
+    dli         $t0, res_taken
+    STORE_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)           # set to taken
+
+    csd         $zero, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
+    csw         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+8)($c3)
+    csh         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+12)($c3)      # set bitfield to all not taken
+    csb         $a0, $zero, (RES_SUBFIELD_SIZE_OFFSET)($c3)             # set scale
+
+    cseal       $c3, $c3, $c4
+
+    cclearlo    EN1(c4)
+    creturn
 
 ####################################
 # capability rescap_info(res_t res)
@@ -941,13 +1029,26 @@ rescap_info:
     dli         $t0, RES_TYPE
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
+
+    cgetoffset  $t3, $c3                    # get sub-id if exists
+    csetoffset  $c3, $c3, $zero
     cld         $t2, $zero, RES_LENGTH_OFFSET($c3)       # get length
     cgetbase    $t1, $c3
     daddiu      $t1, $t1, RES_META_SIZE
-    dli         $t0, DEF_DATA_PERMS
 
-    csetoffset  $c3, $kdc, $t1
-    csetbounds  $c3, $c3, $t2
+    beqz        $t3, normal_info
+    csetoffset  $c5, $kdc, $t1
+
+    clb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3)
+    dli         $t2, 1
+    dsllv       $t2, $t2, $t0               # set new bounds
+    daddiu      $t3, $t3, -1
+    dsllv       $t3, $t3, $t0
+    cincoffset  $c5, $c5, $t3               # increment to get sub
+
+    normal_info:
+    dli         $t0, DEF_DATA_PERMS
+    csetbounds  $c3, $c5, $t2
     candperm    $c3, $c3, $t0
     ccleartag   $c3, $c3
 
@@ -983,8 +1084,11 @@ rescap_revoke_start:
     csetoffset  $c4, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
-    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)
+    cgetoffset  $t0, $c3
+    bnez        $t0, revoke_er
     dli         $t1, res_taken
+
+    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)
     bne         $t0, $t1, revoke_er        # check this reservation is taken
 
     cld         $t0, $zero, revoke_state($idc)
@@ -1421,6 +1525,12 @@ rescap_merge:
     csetoffset  $c5, $kdc, $t0              # create unsealing cap
     cunseal     $c3, $c3, $c5
     cunseal     $c4, $c4, $c5               # unseal both arguments
+
+    cgetoffset  $t1, $c3
+    bnez        $t1, merge_er
+    cgetoffset  $t1, $c4
+    bnez        $t1, merge_er
+
     dli         $t0, res_taken
 
     LOAD_RES_STATE $t1, $zero, RES_STATE_OFFSET($c3)
