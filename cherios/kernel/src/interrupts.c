@@ -71,6 +71,7 @@ static void kernel_interrupt_others(register_t pending) {
             KERNEL_TRACE("interrupt disable", "%ld", i);
 			cp0_status_im_disable(1<<i);
 			// FIXME we probabably want a seperate interrupt source from the kernel
+			// FIXME this needs locking
 			if(msg_push(NULL, NULL, NULL, NULL, i, 0, 0, 0, -3, int_child[i], &kernel_acts[0], NULL)) {
 				kernel_panic("queue full (int)");
 			}

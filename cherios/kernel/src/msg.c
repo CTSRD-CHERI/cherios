@@ -37,6 +37,7 @@
 #include "stddef.h"
 #include "queue.h"
 #include "mutex.h"
+#include "misc.h"
 
 DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
@@ -65,8 +66,6 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t a0, register_t a1, register_t a2, register_t a3,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
-
-	FAST_CRITICAL_ENTER
 
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
@@ -100,7 +99,6 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 
 	sched_receives_msg(dest);
 
-	FAST_CRITICAL_EXIT
 	return 0;
 }
 
@@ -162,6 +160,25 @@ static int token_expected(act_t* ccaller, capability token) {
 	return ccaller->sync_state.sync_token == got;
 }
 
+/* Will touch all pages covered by cap. If cap is later not mapped then it must have been unmapped (an error) and we
+ * are allowed to die */
+static void touch_cap(capability cap) {
+    size_t base = cheri_getbase(cap);
+    size_t bound = base + cheri_getlen(cap);
+
+    volatile char * cha_start = cheri_setoffset(cap, 0);
+    *cha_start;
+
+    size_t first_page = align_down_to(base, UNTRANSLATED_PAGE_SIZE) + UNTRANSLATED_PAGE_SIZE;
+    cha_start = cheri_setcursor(cap, first_page);
+
+    while(first_page < bound) {
+        *cha_start;
+        cha_start += UNTRANSLATED_PAGE_SIZE;
+        first_page+= UNTRANSLATED_PAGE_SIZE;
+    }
+}
+
 /* This function 'returns' by setting the sync state ret values appropriately */
 void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
 					 register_t a0, register_t a1, register_t a2, register_t a3,
@@ -187,6 +204,9 @@ void kernel_message_send(capability c3, capability c4, capability c5, capability
 		source_activation->sync_state.sync_ret = ret;
 		sync_token = get_and_set_sealed_sync_token(source_activation);
 	}
+
+    touch_cap(target_activation);
+    touch_cap(target_activation->msg_queue);
 
     CRITICAL_LOCKED_BEGIN(&target_activation->writer_spinlock);
 	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);

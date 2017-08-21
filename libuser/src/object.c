@@ -47,8 +47,12 @@ __thread queue_t * act_self_queue = NULL;
 kernel_if_t kernel_if;
 
 ALLOCATE_PLT_SYSCALLS
+ALLOCATE_PLT_NANO
+
+#define MAX_SIMPLE_ALLOC 0x8000 - (2 * RES_META_SIZE)
 
 res_t res_pool;
+size_t pool_remains;
 
 void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c) {
 
@@ -58,6 +62,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
         memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
     }
 
+    init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
 
 	act_self_ctrl = self_ctrl;
 
@@ -70,29 +75,30 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     sync_state = (sync_state_t){.sync_caller = NULL, .sync_token = NULL};
 }
 
-res_t get_res_pool(void) {
-    if(res_pool == NULL) {
-        cap_pair pr;
+res_t simple_res_alloc(size_t length) {
+    if(memmgt_ref == NULL) return NULL;
 
-        if(try_init_memmgt_ref() == NULL) return NULL;
+    assert(own_mop != NULL);
 
-        mmap_new(0, 0x8000, 0, MAP_DEFAULT_RES , &pr);
-        res_pool = pr.data;
-
-        if(pr.data == NULL) return NULL;
+    if(length > MAX_SIMPLE_ALLOC) {
+        return mem_request(0, length, NONE, own_mop);
     }
 
-    return res_pool;
-}
+    if(res_pool == NULL || length > pool_remains) {
+        res_pool = mem_request(0, MAX_SIMPLE_ALLOC, NONE, own_mop);
+        pool_remains = MAX_SIMPLE_ALLOC;
+    }
 
-res_t grab_res_from_pool(size_t length) {
-    res_t old = get_res_pool();
+    res_t result = res_pool;
 
-    if(old == NULL) return old;
+    if(pool_remains > length + (2 * RES_META_SIZE)) {
+        res_pool = rescap_split(res_pool, length);
+        pool_remains -= (length + RES_META_SIZE);
+    } else {
+        res_pool = NULL;
+    }
 
-	res_t new = rescap_split_sys(old, length);
-	res_pool = new;
-	return old;
+    return result;
 }
 
 void ctor_null(void) {

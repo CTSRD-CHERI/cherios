@@ -37,13 +37,16 @@
 #include "assert.h"
 #include "syscalls.h"
 #include "thread.h"
+#include "mman.h"
 
 void libuser_init(act_control_kt self_ctrl,
 				  act_kt ns_ref,
 				  kernel_if_t* kernel_if_c,
 				  queue_t * queue,
-				  capability proc) {
+				  capability proc,
+				  mop_t mop) {
 	proc_handle = proc;
+	mmap_set_mop(mop);
 	object_init(self_ctrl, queue, kernel_if_c);
 	namespace_init(ns_ref);
 }

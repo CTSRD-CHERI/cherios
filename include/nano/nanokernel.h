@@ -76,6 +76,16 @@ static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out
     }
 }
 
+static inline void try_take_res(res_t res, size_t required, cap_pair* out) {
+    out->data = out->code = NULL;
+    if(res != NULL && cheri_gettype(res) == RES_TYPE) {
+        rescap_take(res, out);
+        if(out->data != NULL && (cheri_getlen((out->data)) >= required)) {
+            out->data = cheri_setbounds(out->data, required);
+            out->code = cheri_setbounds(out->code, required);
+        }
+    }
+}
 
 /* Try to ask memgt instead of using this */
 static inline capability get_phy_cap(page_t* book, size_t address, size_t size, int cached, int IO) {

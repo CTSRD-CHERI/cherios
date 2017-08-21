@@ -38,6 +38,7 @@
 typedef struct process_t {
     const char* name; // Or some other appropriate i.d.
     image im;
+    mop_t mop;
     act_control_kt threads[MAX_THREADS];
     size_t n_threads;
 } process_t;

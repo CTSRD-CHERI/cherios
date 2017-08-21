@@ -34,21 +34,15 @@
 #include "namespace.h"
 #include "stdio.h"
 #include "assert.h"
-#include "../../cherios/kernel/include/activations.h"
 
 act_kt memmgt_ref = NULL;
+mop_t own_mop = NULL;
 
 act_kt try_init_memmgt_ref(void) {
     if(memmgt_ref == NULL) {
         memmgt_ref = namespace_get_ref(namespace_num_memmgt);
     }
     return memmgt_ref;
-}
-
-static int _mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result) {
-	if(memmgt_ref == NULL) try_init_memmgt_ref();
-	assert(memmgt_ref != NULL);
-	return (int)message_send(base, length, cheri_perms, flags, result, NULL, NULL, NULL, memmgt_ref, SYNC_CALL, 0);
 }
 
 void commit_vmem(act_kt activation, size_t addr) {
@@ -100,9 +94,11 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 		perms |= CHERI_PERM_EXECUTE;
 	}
 
-	int res = _mmap(0, length, perms, flags, &pair);
+	size_t req_length = align_up_to(length, RES_META_SIZE);
+	res_t res = mem_request(0, req_length, NONE, own_mop);
 
-	if(res == MAP_SUCCESS_INT) {
+	if(res != NULL) {
+		rescap_take(res, &pair);
 		if((prot & PROT_EXECUTE) == 0) {
 			return pair.data;
 		} else {
@@ -111,22 +107,67 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 	} else return NULL;
 }
 
-int mmap_new(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result) {
-	return _mmap(base, length, cheri_perms, flags, result);
+int munmap(void *addr, size_t length) {
+    mem_release((size_t)addr, length, own_mop);
 }
 
-int munmap(void *addr, size_t length) {
-	return (int)message_send(length, 0, 0, 0, addr, NULL, NULL, NULL, memmgt_ref, SYNC_CALL, 1);
+res_t mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return message_send_c(base, length, flags, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 0);
+}
+
+int mem_claim(size_t base, size_t length, mop_t mop) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(base, length, 0, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 5);
+}
+
+int mem_release(size_t base, size_t length, mop_t mop) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(base, length, 0, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 1);
+}
+
+mop_t mem_makemop(res_t space, mop_t auth_mop) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return message_send_c(0, 0, 0, 0, space, auth_mop, NULL, NULL, memmgt, SYNC_CALL, 7);
+}
+
+int mem_reclaim_mop(mop_t mop_sealed) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(0, 0, 0, 0, mop_sealed, NULL, NULL, NULL, memmgt, SYNC_CALL, 9);
+}
+mop_t init_mop(capability mop_sealing_cap) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return message_send_c(0, 0, 0, 0, mop_sealing_cap, NULL, NULL, NULL, memmgt, SYNC_CALL, 6);
+}
+
+void get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop, cap_pair* result) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	message_send(base, length, (register_t )IO, (register_t)cached, mop, result, NULL, NULL, memmgt, SYNC_CALL, 8);
 }
 
 void mmap_set_act(act_kt ref) {
 	memmgt_ref = ref;
 }
 
+void mmap_set_mop(mop_t mop) {
+	own_mop = mop;
+}
+
 void mdump(void) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
 	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 3);
 }
 
 size_t mvirtual_to_physical(size_t vaddr) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
     return message_send(vaddr,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 4);
 }

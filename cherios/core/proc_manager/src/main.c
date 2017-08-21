@@ -63,6 +63,8 @@ size_t processes_end = 0;
 
 Elf_Env env;
 
+int bootstrapping = 1;
+
 static image* find_process(const char *name) {
 	for(size_t i = 0; i < processes_end; i++) {
 		if(strcmp(name, loaded_processes[i].name) == 0) return &(loaded_processes[i].im);
@@ -94,12 +96,22 @@ __asm__ (
 );
 extern void secure_entry_trampoline(void);
 
+static mop_t make_mop_for_process(void) {
+	if(bootstrapping) return NULL;
+
+	res_t  space = simple_res_alloc(MOP_REQUIRED_SPACE);
+	assert(space != NULL);
+	mop_t mop = mem_makemop(space, own_mop);
+	assert(mop != NULL);
+	return mop;
+}
+
 static act_control_kt create_activation_for_image(image* im, const char* name, register_t arg, capability carg, capability pcc,
                                                   char* stack_args, size_t stack_args_size, process_t * process) {
     reg_frame_t frame;
     memset(&frame, 0, sizeof(reg_frame_t));
 
-    queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size);
+    queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size, process->mop);
 
     frame.cf_c22 = seal_proc_for_user(process);
 
@@ -112,7 +124,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 		frame.cf_c3 = process->im.secure_entry;
 	}
 
-    return syscall_act_register(&frame, name, queue, get_res_pool());
+    return syscall_act_register(&frame, name, queue, simple_res_alloc(ACT_REQUIRED_SPACE));
 }
 
 act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
@@ -155,6 +167,7 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 	}
 
 	proc->n_threads = 0;
+	proc->mop = make_mop_for_process();
 
 	return seal_proc_for_user(proc);
 }
@@ -182,14 +195,24 @@ act_control_kt user_start_process(process_t* proc, startup_desc_t* desc) {
 
 act_control_kt user_create_thread(process_t* proc, const char* name, startup_desc_t* desc) {
     proc = unseal_proc(proc);
-    act_control_kt* ctrl = create_thread(proc, name, desc->arg, NULL, desc->pcc, desc->stack_args, desc->stack_args_size);
+    act_control_kt* ctrl = create_thread(proc, name, desc->arg, desc->carg, desc->pcc, desc->stack_args, desc->stack_args_size);
     return ctrl;
 }
 
-void (*msg_methods[]) = {create_process, user_start_process, user_create_thread};
+static void deliver_mop(mop_t mop) {
+	/* Normally a process would already have these, but we were created before memmgt */
+	if(own_mop == NULL) {
+		mmap_set_mop(mop);
+		try_init_memmgt_ref();
+		bootstrapping = 0;
+	}
+}
+
+void (*msg_methods[]) = {create_process, user_start_process, user_create_thread, deliver_mop};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
+
 
 cap_pair proc_tmp_alloc(size_t s) {
     /* Swaps to using the proper alloc when memmgt is up */
@@ -213,7 +236,6 @@ int main(procman_init_t* init)
     env.printf = &printf;
     env.memcpy = &memcpy;
     env.vprintf = &vprintf;
-	env.mmap_new = mmap_new;
 
 	namespace_register(namespace_num_proc_manager, act_self_ref);
     msg_enable = 1;

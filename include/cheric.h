@@ -102,6 +102,7 @@ typedef capability sealing_cap;
 				    __DECONST(capability, (c)), (t))
 
 #define cheri_getcursour(x) (cheri_getbase(x) + cheri_getoffset(x))
+#define cheri_setcursor(x,y) (cheri_setoffset(x, y - cheri_getbase(x)))
 
 #define	cheri_getdefault()	__builtin_mips_cheri_get_global_data_cap()
 #define	cheri_getidc()		__builtin_mips_cheri_get_invoke_data_cap()

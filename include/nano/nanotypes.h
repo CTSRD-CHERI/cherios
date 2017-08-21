@@ -98,6 +98,9 @@
 #define L2_BITS                         PAGE_TABLE_BITS_PER_LEVEL
 #define UNTRANSLATED_BITS               (1 + PHY_PAGE_SIZE_BITS) /* +1 for having two PFNs per VPN */
 
+#define TRANSLATED_BITS                 (L0_BITS + L1_BITS + L2_BITS)
+#define MAX_VIRTUAL_PAGES               (1 << TRANSLATED_BITS)
+
 #define UNTRANSLATED_PAGE_SIZE          (1 << UNTRANSLATED_BITS)
 
 #define VTABLE_ENTRY_USED               (-1)
@@ -231,6 +234,7 @@ typedef struct {
     register_t cause;
     register_t ccause;
     register_t badvaddr;
+    register_t ex_level;
 } exection_cause_t;
 
 typedef register_t ex_lvl_t;

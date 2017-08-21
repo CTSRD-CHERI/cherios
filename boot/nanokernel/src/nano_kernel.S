@@ -650,10 +650,12 @@ get_last_exception:
     cld        $t0, $zero, last_exception_cause($idc)
     cld        $t1, $zero, last_exception_ccause($idc)
     cld        $t2, $zero, last_bad_vaddr($idc)
+    cld        $t3, $zero, exception_level($idc)
     csc        $c4, $zero, 0($c3)
     csd        $t0, $zero, CAP_SIZE($c3)
     csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
     csd        $t2, $zero, (CAP_SIZE+(2*REG_SIZE))($c3)
+    csd        $t3, $zero, (CAP_SIZE+(3*REG_SIZE))($c3)
     creturn
 
 ################################################################################################################
@@ -877,6 +879,8 @@ nano_kernel_die:
 .global get_userdata_for_res
 get_userdata_for_res:
 #############################################
+    cgetoffset  $t0, $c3
+    bnez        $t0, take_er
     dli         $t0, RES_TYPE
     dli         $t1, RES_PRIV_SIZE
     csetoffset  $c4, $kdc, $t0
@@ -2237,6 +2241,11 @@ tlb_table_missing:
     dla $k1, locals_start
     csetoffset $kr1c, $kdc, $k1
     csd     $k0, $zero, exception_ccause($kr1c)
+
+    cld     $k0, $zero, exception_level($kr1c)
+    bnez    $k0, nano_kernel_die
+    nop
+
     b context_switch_exception_entry
     dmfc0 $k0, $13
 

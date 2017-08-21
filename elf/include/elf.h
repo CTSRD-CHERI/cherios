@@ -106,7 +106,6 @@ typedef struct {
 	int (*printf)(const char *fmt, ...);
 	int (*vprintf)(const char *fmt, va_list ap);
 	void *(*memcpy)(void *dest, const void *src, size_t n);
-	int (*mmap_new)(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result);
 } Elf_Env;
 
 typedef struct image{

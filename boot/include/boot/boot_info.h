@@ -50,10 +50,15 @@ typedef struct boot_info {
 	size_t 		init_tls_base;
 } boot_info_t;
 
+#define MOP_SEALING_TYPE (0x666)
+
 typedef struct memmgt_init_t {
-    // Reservation is for use when we want better security
 	nano_kernel_if_t* nano_if;
 	capability nano_default_cap;
+	capability mop_sealing_cap;
+
+	capability base_mop;
+	size_t 	   mop_signal_flag;
 } memmgt_init_t;
 
 typedef struct procman_init_t {
@@ -74,6 +79,8 @@ typedef struct init_info {
 
 	capability uart_cap;
     size_t uart_page;
+
+	capability mop_sealing_cap;
 } init_info_t;
 
 #endif /* _BOOT_INFO_H_ */

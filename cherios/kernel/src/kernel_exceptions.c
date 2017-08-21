@@ -30,6 +30,7 @@
 
 #include <activations.h>
 #include <nano/nanokernel.h>
+#include <nano/nanotypes.h>
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"
@@ -183,8 +184,6 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 				kernel_exception_unknown(excode);
 				break;
 		}
-
-		KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
 
 		entered--;
 

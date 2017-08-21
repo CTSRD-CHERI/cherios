@@ -114,6 +114,7 @@ start_common:
 	cmove		$c5, $c24 #kernel_if
 	cmove       $c6, $c25 #queue
 	cmove       $c7, $c22 # process ref
+    cmove       $c8, $c19
 
 	cgetpcc		$c12
 	dla		$t0, libuser_init

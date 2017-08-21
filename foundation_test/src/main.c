@@ -36,8 +36,6 @@
 #include "string.h"
 #include "assert.h"
 
-ALLOCATE_PLT_NANO
-
 static void print_id(found_id_t* id) {
     printf("hash:\n");
     for(size_t i = 0; i < 32; i++) {
@@ -50,19 +48,17 @@ static void print_id(found_id_t* id) {
 }
 
 static res_t get_res(size_t size) {
-    cap_pair pair;
-
     // Mmmap new will use the message syscall.
     // All syscalls are in fact dangerous in secure code. Will write an enter/exit routine later.
-    int res = mmap_new(0, 0x1000, 0, MAP_DEFAULT_RES, &pair);
+    res_t res = mem_request(0, 0x1000, NONE, own_mop);
 
-    if(res != 0) {
+    if(res == NULL) {
         // Also dangerous
         printf(KRED"MMAP failed"KRST);
         exit(-1);
     }
 
-    return pair.data;
+    return res;
 }
 
 int main(register_t arg, capability carg) {

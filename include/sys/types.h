@@ -67,6 +67,8 @@ typedef struct cap_pair {
     capability data;
 } cap_pair;
 
+#define ACT_REQUIRED_SPACE ((8 * 1024) - (RES_META_SIZE * 2))
+
 typedef capability act_kt;
 typedef capability act_control_kt;
 typedef capability act_reply_kt;

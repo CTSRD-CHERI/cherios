@@ -225,9 +225,8 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
 				assert(0);
 #else
 				cap_pair pr;
-				env->mmap_new(0, out_elf->maxaddr + FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES), 0,
-						 MAP_PRIVATE | MAP_ANONYMOUS | MAP_RESERVED, &pr);
-				res_t res = pr.code;
+
+				res_t res = mem_request(0, out_elf->maxaddr + FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES), NONE, own_mop);
 				assert(res != NULL);
 				entry_t e0 = foundation_create(res, out_elf->maxaddr,
 											   out_elf->loaded_process.data, out_elf->entry, MAX_FOUND_ENTRIES);

@@ -36,188 +36,12 @@
 #include "stdio.h"
 #include "math.h"
 #include "string.h"
+#include "pmem.h"
 
-page_t* book;
-free_chain_t *chain_start, *free_chain_start;
+ptable_t vmem_create_table(ptable_t parent, register_t index) {
+    size_t page = pmem_find_page_type(1, page_ptable_free);
 
-static capability memmgt_nfo(free_chain_t* chain) {
-    capability nfo;
-    if(chain->used.allocated_to != CHAIN_REVOKING) {
-        capability res = chain->used.res;
-        assert(res != NULL);
-        nfo = rescap_info(res);
-    } else {
-        nfo = chain->used.res;
-    }
-
-    assert(nfo != NULL);
-    return nfo;
-}
-
-static void check_phy_entry(size_t pagen) {
-    if(pagen != 0) {
-        size_t prv = book[pagen].prev;
-        assert(book[prv].len + prv == pagen);
-    }
-    size_t nxt = pagen + book[pagen].len;
-    assert(nxt <= BOOK_END);
-    assert(book[nxt].prev == pagen);
-}
-
-static void check_book(void) {
-    size_t pagen = 0;
-    size_t ppagen = (size_t)-1;
-
-    while(pagen < BOOK_END) {
-        size_t len = book[pagen].len;
-        size_t prv = book[pagen].prev;
-
-        assert(len != 0);
-
-        if(ppagen != -1) {
-            assert(prv == ppagen);
-        }
-
-        ppagen = pagen;
-        pagen +=len;
-    }
-
-    if(pagen != BOOK_END) {
-        printf("Book ended at %lx instead of %lx\n", pagen, BOOK_END);
-    }
-    assert(pagen == BOOK_END);
-}
-
-static void try_merge(size_t page_n) {
-    assert(page_n < TOTAL_PHY_PAGES);
-
-    size_t before = book[page_n].prev;
-    size_t after = page_n + book[page_n].len;
-
-    if(book[before].status == book[page_n].status) {
-        merge_phy_page_range(before);
-        check_phy_entry(before);
-        assert(book[page_n].len == 0);
-        page_n = before;
-    }
-
-    if((after != BOOK_END) && book[page_n].status == book[after].status) {
-        merge_phy_page_range(page_n);
-        check_phy_entry(page_n);
-        assert(book[after].len == 0);
-    }
-}
-
-void print_book(page_t* book, size_t page_n, size_t times) {
-    while(times-- > 0) {
-        printf("%p addr: page: %lx. state = %d. len = %lx. prev = %lx\n",
-               &book[page_n],
-               page_n,
-               book[page_n].status,
-               book[page_n].len,
-               book[page_n].prev);
-        page_n = book[page_n].len + page_n;
-        if(page_n == BOOK_END) break;
-    }
-
-}
-
-static void dump_chain(free_chain_t* chain) {
-    capability nfo = memmgt_nfo(chain);
-    act_kt al = chain->used.allocated_to;
-    printf("%12lx to %12lx. State: %s\n",
-    cheri_getbase(nfo)-RES_META_SIZE,
-    cheri_getlen(nfo) + cheri_getbase(nfo),
-    al == NULL ? "available" : (al == CHAIN_FREED ? "freed" : (al == CHAIN_REVOKING ? "revoking" : "allocated")));
-}
-
-static void dump_whole_chain(void) {
-    free_chain_t* chain = chain_start;
-
-    printf("Chain start\n");
-    while(chain != NULL) {
-        dump_chain(chain);
-        chain = chain->used.next_res;
-    }
-    printf("Chain end\n");
-
-    chain = free_chain_start;
-
-    printf("Free Chain start\n");
-    while(chain != NULL) {
-        dump_chain(chain);
-        chain = chain->used.next_free_res;
-    }
-    printf("Chain end\n");
-}
-
-static size_t get_chain_len(void) {
-    free_chain_t* chain = chain_start;
-    size_t size = 0;
-    while(chain != NULL) {
-        size++;
-        chain = chain->used.next_res;
-    }
-    return size;
-}
-
-void break_page_to(size_t page_n, size_t len) {
-    if(book[page_n].len == len) return;
-
-    if(book[page_n].len > len && len != 0) {
-        split_phy_page_range(page_n, len);
-        check_phy_entry(page_n+len);
-    } else {
-        printf("len is %lx. Tried to split to %lx\n", book[page_n].len, len);
-        assert(0);
-    }
-}
-
-size_t get_valid_page_entry(size_t page_n) {
-    assert(page_n < TOTAL_PHY_PAGES);
-
-    if(book[page_n].len != 0) return page_n;
-
-    size_t search_index = 0;
-
-    // TODO here is where a skip list comes in handy.
-    // TODO we could also scan linearly, but this is effectively the finest grain of the skip list
-    // TODO we could also compact the structure here
-    while(book[search_index].len + search_index < page_n) {
-        search_index = search_index + book[search_index].len;
-    }
-
-    // We had one very large page we need to break. Otherwise we would have returned it straight away
-    size_t diff = page_n - search_index;
-    break_page_to(search_index, diff);
-
-    return page_n;
-}
-
-size_t find_page_type(size_t required_len, e_page_status required_type) {
-    size_t search_index = 0;
-
-    while((search_index != BOOK_END) && (book[search_index].len < required_len || book[search_index].status != required_type)) {
-        search_index = search_index + book[search_index].len;
-    }
-
-    if(search_index == BOOK_END) return BOOK_END;
-
-    if(book[search_index].len != required_len) {
-        break_page_to(search_index, required_len);
-    }
-
-    return search_index;
-}
-
-size_t get_free_page() {
-    return find_page_type(1, page_unused);
-}
-
-ptable_t memmgt_create_table(ptable_t parent, register_t index) {
-    size_t page = find_page_type(1, page_ptable_free);
-
-    if(page == BOOK_END) page = get_free_page();
+    if(page == BOOK_END) page = pmem_get_free_page();
 
     if(page == BOOK_END) return NULL;
 
@@ -227,14 +51,14 @@ ptable_t memmgt_create_table(ptable_t parent, register_t index) {
 
     assert(book[page].status == page_ptable);
 
-    check_phy_entry(page);
+    pmem_check_phy_entry(page);
 
-    try_merge(page);
+    pmem_try_merge(page);
     return  r;
 }
 
-int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags) {
-    size_t page = find_page_type(2, page_unused);
+int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) {
+    size_t page = pmem_find_page_type(2, page_unused);
     if(page == BOOK_END) return -1;
 
     assert(L2_table != NULL);
@@ -245,14 +69,15 @@ int memmgt_create_mapping(ptable_t L2_table, register_t index, register_t flags)
 
     assert(book[page].status == page_mapped);
 
-    check_phy_entry(page);
+    pmem_check_phy_entry(page);
 
-    try_merge(page);
+    pmem_try_merge(page);
     return 0;
 }
 
 /* TODO commiting per page is a stupid policy. We are doing this for now to make sure everything works */
-void memgt_commit_vmem(act_kt activation, size_t addr) {
+void vmem_commit_vmem(act_kt activation, size_t addr) {
+    // WARN: THIS MUST NOT TOUCH VIRTUAL MEMORY. Mops are virtual, if we want to update commit tallies, send a message.
 
     assert(worker_id == 0);
 
@@ -264,7 +89,7 @@ void memgt_commit_vmem(act_kt activation, size_t addr) {
 
     if(l1 == NULL) {
         printf("memmgt: creating a l1 table at index %lx\n", l0_index);
-        l1 = memmgt_create_table(top_table, l0_index);
+        l1 = vmem_create_table(top_table, l0_index);
         assert(l1 != NULL);
     }
 
@@ -274,7 +99,7 @@ void memgt_commit_vmem(act_kt activation, size_t addr) {
 
     if(l2 == NULL) {
         printf("memmgt: creating a l2 table at index %lx\n", l1_index);
-        l2 = memmgt_create_table(l1, l1_index);
+        l2 = vmem_create_table(l1, l1_index);
         assert(l2 != NULL);
     }
 
@@ -290,7 +115,9 @@ void memgt_commit_vmem(act_kt activation, size_t addr) {
         }
         printf("spurious commit!\n");
     }
-    else memmgt_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
+    else vmem_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
+
+    // TODO bump counters on commits for MOPs
 }
 
 void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, size_t index, size_t is_last_level) {
@@ -301,9 +128,9 @@ void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, si
     if(page_n != 0) {
         page_n = is_last_level ? (page_n >> PFN_SHIFT) : (PHY_ADDR_TO_PAGEN(page_n));
 
-        page_n = get_valid_page_entry(page_n);
+        page_n = pmem_get_valid_page_entry(page_n);
 
-        break_page_to(page_n, is_last_level ? 2 : 1); // We can't reclaim the page unless we size the record first
+        pmem_break_page_to(page_n, is_last_level ? 2 : 1); // We can't reclaim the page unless we size the record first
     }
 
     free_mapping(parent_handle, index);
@@ -314,13 +141,9 @@ void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, si
     assert(parent_ro->entries[index] == VTABLE_ENTRY_USED);
 
     if(page_n != 0) {
-        try_merge(page_n);
+        pmem_try_merge(page_n);
     }
 }
-
-/* We should be careful not to free a table that contains an address we are rovking or the nano kernel will complain */
-static size_t addr_revoke_low = -1;
-static size_t addr_revoke_hi = -1;
 
 int range_is_free(readable_table_t *tbl, size_t start, size_t stop) {
     for(size_t i = start; i < stop; i++) {
@@ -366,15 +189,10 @@ size_t memmgt_free_mappings(ptable_t table, size_t l0, size_t l1, size_t l2, siz
                 size_t lowest = ndx << (UNTRANSLATED_BITS + L2_BITS + L1_BITS);
                 size_t highest = (ndx + 1) << (UNTRANSLATED_BITS + L2_BITS + L1_BITS);
 
-                /* Must not free an L1 page that shares entries with what is being revoked */
-                if((lowest <= addr_revoke_low) && (addr_revoke_hi < highest)) should_free = 0;
             } else if(lvl == 1) {
                 size_t lowest = l0 << (UNTRANSLATED_BITS + L2_BITS + L1_BITS);
                 lowest += ndx << (UNTRANSLATED_BITS + L2_BITS);
                 size_t highest = lowest + (1 << (UNTRANSLATED_BITS + L2_BITS));
-
-                /* Must not free an L2 page that shares entries with what is being revoked */
-                if((lowest <= addr_revoke_low) && (addr_revoke_hi < highest)) should_free = 0;
             }
 
             size_t f = memmgt_free_mappings(get_sub_table(table, ndx), ndx, l1, l2, n, lvl+1,
@@ -412,7 +230,7 @@ static void check_vaddr(size_t vaddr) {
     assert(L2 != NULL);
 }
 
-static void memmgt_free_single(size_t vaddr) {
+void vmem_free_single(size_t vaddr) {
     ptable_t l2 = get_l2_for_addr(vaddr);
     assert(l2 != NULL);
     readable_table_t *RO = get_read_only_table(l2);
@@ -420,7 +238,7 @@ static void memmgt_free_single(size_t vaddr) {
 }
 
 /* Will free n pages staring at vaddr_start, also freeing tables as required */
-void memmgt_free_range(size_t vaddr_start, size_t pages) {
+void vmem_free_range(size_t vaddr_start, size_t pages) {
 
     if(pages == 0) return;
 
@@ -429,218 +247,9 @@ void memmgt_free_range(size_t vaddr_start, size_t pages) {
                          pages, 0, NULL);
 }
 
-free_chain_t* memmgt_find_res_for_addr(size_t vaddr) {
-    free_chain_t* chain = chain_start;
-
-    do {
-        capability nfo = memmgt_nfo(chain);
-
-        size_t base = cheri_getbase(nfo);
-        size_t length = cheri_getlen(nfo);
-
-        if(base <= vaddr && base+length > vaddr) {
-            return chain;
-        }
-
-        chain = chain->used.next_res;
-    } while(chain != NULL);
-
-    printf("Error: could find address %lx in chain\n", vaddr);
-    assert(0 && "Chain structure broken");
-}
-
-static int chain_is_free(free_chain_t* chain) {
-    if(chain == NULL) {
-        printf("prev null?\n");
-        return 0;
-    }
-    return chain->used.allocated_to == CHAIN_FREED;
-}
-
 static void dump_res(res_t res) {
     capability nfo = rescap_info(res);
     printf("Base: %lx. Length %lx\n", cheri_getbase(nfo)-RES_META_SIZE, cheri_getlen(nfo)+RES_META_SIZE);
-}
-
-static void memmgt_merge_res(free_chain_t* a, free_chain_t* b) {
-    res_t res_a = a->used.res;
-    res_t res_b = b->used.res;
-
-    assert(res_a != NULL);
-    assert(res_b != NULL);
-
-    rescap_merge(res_a, res_b);
-
-    assert(a->used.res != NULL);
-
-    // b is no longer valid for pretty much anything - remove it from the chain
-
-    free_chain_t* next = b->used.next_res;
-
-    a->used.next_res = next;
-    if(next != NULL) next->used.prev_res = a;
-}
-
-free_chain_t* memmgt_free_res(free_chain_t* chain) {
-    chain->used.allocated_to = CHAIN_FREED;
-
-    free_chain_t* pr = chain->used.prev_res;
-    free_chain_t* nx = chain->used.next_res;
-
-    capability foo = (chain->used.res);
-    assert(foo != NULL);
-    capability mid_nfo = rescap_info(foo);
-
-    size_t true_base = cheri_getbase(mid_nfo);
-    size_t true_bound = true_base + cheri_getlen(mid_nfo);
-
-    size_t aligned_base;
-    size_t aligned_bound = align_down_to(true_bound, UNTRANSLATED_PAGE_SIZE);;
-
-    if(chain_is_free(pr)) {
-
-        true_base -= RES_META_SIZE; // If we merge this reservation we will gain back metadata
-        aligned_base = align_up_to(true_base, UNTRANSLATED_PAGE_SIZE);
-
-        /* Merging might have gained us a page back */
-        if(aligned_base != true_base) {
-            capability foo = pr->used.res;
-            assert(foo != NULL);
-            capability pr_nfo = rescap_info(foo);
-            size_t pr_base = align_up_to(cheri_getbase(pr_nfo), UNTRANSLATED_PAGE_SIZE);
-            if(pr_base != aligned_base) aligned_base-= UNTRANSLATED_PAGE_SIZE;
-        }
-
-        memmgt_merge_res(pr, chain);
-        chain = pr;
-    } else {
-        aligned_base = align_up_to(true_base, UNTRANSLATED_PAGE_SIZE);
-    }
-
-    if(chain_is_free(nx)) {
-
-        if(true_bound != aligned_bound) {
-            capability foo = nx->used.next_res;
-            assert(foo != NULL);
-            capability  nx_nfo = rescap_info(foo);
-            size_t nx_len = RES_META_SIZE + cheri_getlen(nx_nfo);
-            if(nx_len >= (true_bound-aligned_bound)) aligned_bound+=UNTRANSLATED_PAGE_SIZE;
-        }
-        memmgt_merge_res(chain, nx);
-    }
-
-    size_t pages_to_free = (aligned_bound-aligned_base) >> UNTRANSLATED_BITS;
-
-    if(pages_to_free != 0) {
-        memmgt_free_range(aligned_base, pages_to_free);
-    }
-
-    return chain;
-}
-
-
-
-free_chain_t* memmgt_find_free_reservation(size_t with_addr, size_t req_length, size_t* out_base, size_t *out_length) {
-    free_chain_t* chain = free_chain_start;
-
-    int care_about_addr = with_addr != 0;
-    while(chain != NULL) {
-        capability foo = chain->used.res;
-        assert(foo != NULL);
-        capability info = rescap_info(foo);
-
-        size_t base = cheri_getbase(info);
-        size_t length = cheri_getlen(info);
-
-        if(care_about_addr) {
-            if(base <= with_addr && (length-(with_addr-base)) >= req_length) {
-                if(out_base) *out_base = base;
-                if(out_length) *out_length = length;
-                return chain;
-            } else if(base >= with_addr) {
-                return NULL;
-            }
-        } else if(length > req_length) {
-            if(out_base) *out_base = base;
-            if(out_length) *out_length = length;
-            return chain;
-        }
-
-        chain = chain->used.next_free_res;
-
-    }
-
-    assert(0 && "We are either completely out of VMEM or this is broken");
-}
-
-free_chain_t* memmgt_split_free_reservation(free_chain_t* chain, size_t length) {
-    assert((length & (RES_META_SIZE-1)) == 0);
-
-    res_t old = chain->used.res;
-    res_t new = rescap_split(old, length);
-
-    assert(new != NULL);
-
-    free_chain_t* new_chain = (free_chain_t*)get_userdata_for_res(new);
-
-    new_chain->used.res = new;
-
-    assert(new_chain->used.res != NULL);
-
-    new_chain->used.allocated_to = chain->used.allocated_to;
-    new_chain->used.next_res = chain->used.next_res;
-    new_chain->used.next_free_res = chain->used.next_free_res;
-    new_chain->used.prev_res = chain;
-    new_chain->used.prev_free_res = chain;
-
-    chain->used.next_res = new_chain;
-    chain->used.next_free_res = new_chain;
-
-    if(new_chain->used.next_free_res != NULL) {
-        new_chain->used.next_free_res->used.prev_free_res = new_chain;
-    }
-
-    if(new_chain->used.next_res != NULL) {
-        new_chain->used.next_res->used.prev_res = new_chain;
-    }
-
-    return new_chain;
-}
-
-static void update_chain(free_chain_t* chain, act_kt assign_to) {
-    chain->used.allocated_to = assign_to;
-
-    if(chain->used.prev_free_res != NULL) chain->used.prev_free_res->used.next_free_res = chain->used.next_free_res;
-    if(chain->used.next_free_res != NULL) chain->used.next_free_res->used.prev_free_res = chain->used.prev_free_res;
-
-    if(free_chain_start == chain) {
-        if(chain->used.prev_free_res != NULL) free_chain_start = chain->used.prev_free_res;
-        else free_chain_start = chain->used.next_free_res;
-    }
-
-    chain->used.prev_free_res = NULL;
-    chain->used.next_free_res = NULL;
-}
-
-void memgt_take_reservation(free_chain_t* chain, act_kt assign_to, cap_pair* out) {
-    update_chain(chain, assign_to);
-
-    res_t old = chain->used.res;
-
-    if(old == NULL) {
-        printf("Tried to take a null rervation. Chain data: %p, %d\n", chain, (int)chain->used.allocated_to);
-        dump_chain(chain);
-    }
-
-    assert(old != NULL);
-
-    rescap_take(old, out);
-}
-
-res_t memmgt_parent_reservation(free_chain_t* chain, act_kt assign_to) {
-    update_chain(chain, assign_to);
-
-    return rescap_parent(chain->used.res);
 }
 
 static int mapping_exists(size_t vaddr) {
@@ -680,138 +289,4 @@ size_t virtual_to_physical(size_t vaddr) {
     size_t PFN = RO->entries[L2_INDEX(vaddr)];
 
     return ((PFN >> PFN_SHIFT) << UNTRANSLATED_BITS) | low_bits;
-}
-
-/* We need to replace the link in the chain being revoked because pointers to it will be revoked! */
-static void replace_chain_link(free_chain_t* chain, free_chain_t* free_node) {
-    memcpy(free_node, chain, sizeof(free_chain_t));
-
-    free_chain_t* prv = free_node->used.prev_res;
-    free_chain_t* nxt = free_node->used.next_res;
-
-    if(prv) prv->used.next_res = free_node;
-    if(nxt) nxt->used.prev_res = free_node;
-}
-
-// Collect at least a few L1s worth
-#define MIN_REVOKE (PAGE_TABLE_ENT_PER_TABLE*4)
-
-void memmgt_revoke_loop(void) {
-    while(1) {
-        // find a res
-        free_chain_t* chain = chain_start;
-        free_chain_t* longest = NULL;
-
-        size_t greatest_len = 0;
-
-        while(chain != NULL) {
-            if(chain->used.allocated_to == CHAIN_FREED) {
-                res_t  res = chain->used.res;
-                capability nfo = rescap_info(res);
-                size_t base = cheri_getbase(nfo) - RES_META_SIZE;
-                size_t len = cheri_getlen(nfo) + RES_META_SIZE;
-
-                if(len > greatest_len) {
-                    longest = chain;
-                    greatest_len = len;
-                }
-
-            }
-
-            chain = chain->used.next_res;
-        }
-
-        chain = longest;
-
-        if(chain == NULL || greatest_len/UNTRANSLATED_PAGE_SIZE < MIN_REVOKE) {
-            sleep(0);
-            sleep(0);
-            sleep(0);
-            sleep(0);
-            continue;
-        }
-
-        res_t  res = chain->used.res;
-
-        assert(chain->used.allocated_to == CHAIN_FREED);
-
-        chain->used.allocated_to = CHAIN_REVOKING;
-
-        free_chain_t tmp_link;
-        replace_chain_link(chain, &tmp_link);
-        /* Store info instead of normal res as the res will be untagged and no longer useable */
-        tmp_link.used.res = rescap_info(tmp_link.used.res);
-
-        // revoke a res
-        capability nfo = rescap_info(res);
-        size_t base = cheri_getbase(nfo) - RES_META_SIZE;
-        size_t len = cheri_getlen(nfo) + RES_META_SIZE;
-
-        printf("Revoke: Revoking from %lx to %lx (%lx pages)\n", base, base+len, len/UNTRANSLATED_PAGE_SIZE);
-
-        assert((base & (UNTRANSLATED_PAGE_SIZE-1)) == 0);
-        assert((len & (UNTRANSLATED_PAGE_SIZE-1)) == 0);
-
-        addr_revoke_low = base;
-        addr_revoke_hi = base+len;
-
-        rescap_revoke_start(res); // reads info from the servation;
-        memmgt_free_single(base);
-
-        check_range(base, len);
-
-        check_vaddr(base);
-        check_vaddr(base + len - UNTRANSLATED_PAGE_SIZE);
-
-        //dump_table(get_l2_for_addr(base));
-
-        res = rescap_revoke_finish();
-
-        assert(res != NULL);
-
-        // update metadata
-
-        chain = (free_chain_t*)get_userdata_for_res(res);
-
-        assert(chain != NULL);
-
-        replace_chain_link(&tmp_link, chain);
-
-        chain->used.res = res;
-
-        chain->used.allocated_to = NULL;
-
-        free_chain_t *prv, *nxt;
-
-        prv = free_chain_start;
-
-        if(cheri_getbase(prv) > base) {
-            nxt = prv;
-            prv = NULL;
-        } else {
-            nxt = prv->used.next_free_res;
-
-            while(nxt != NULL && (cheri_getbase(memmgt_nfo(nxt)) < base)) {
-                prv = nxt;
-                nxt = prv->used.next_free_res;
-            }
-        }
-
-        chain->used.prev_free_res = prv;
-        chain->used.next_free_res = nxt;
-
-        if(prv) {
-            prv->used.next_free_res = chain;
-        } else {
-            free_chain_start = chain;
-        }
-        if(nxt) nxt->used.prev_free_res = chain;
-
-        printf("Revoke: Revoke finished!\n");
-    }
-}
-
-void full_dump(void) {
-    print_book(book, 0, -1);
-    dump_whole_chain();
 }

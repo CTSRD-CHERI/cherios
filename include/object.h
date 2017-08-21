@@ -78,5 +78,6 @@ int msg_queue_empty(void);
 
 res_t grab_res_from_pool(size_t length);
 
-res_t get_res_pool(void);
+res_t simple_res_alloc(size_t length);
+
 #endif

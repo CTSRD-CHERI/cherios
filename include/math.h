@@ -72,4 +72,16 @@ static inline size_t align_up_to(size_t size, size_t align) {
 static inline size_t align_down_to(size_t size, size_t align) {
 	return size & ~(align-1);
 }
+
+static inline size_t round_up_to_nearest_power_2(size_t v) {
+	v--;
+	v |= v >> 1L;
+	v |= v >> 2L;
+	v |= v >> 4L;
+	v |= v >> 8L;
+	v |= v >> 16L;
+	v |= v >> 32L;
+	v++;
+	return v;
+}
 #endif

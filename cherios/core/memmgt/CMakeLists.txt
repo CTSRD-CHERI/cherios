@@ -5,6 +5,7 @@ set(SRCS
     src/main.c
     src/mmap.c
     src/vmem.c
+    src/pmem.c
     src/vmem_init.c
 )
 

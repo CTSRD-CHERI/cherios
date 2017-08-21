@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2016 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -34,16 +35,67 @@
 #include "cdefs.h"
 #include "errno.h"
 #include "types.h"
+#include "nano/nanokernel.h"
 
 #define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
 
-void *  mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
-int mmap_new(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result);
-int	munmap(void *addr, size_t length);
+typedef capability mop_t;
+
+#define MOP_REQUIRED_SPACE (2 * RES_META_SIZE)
+
+extern mop_t own_mop;
+
+#define MEM_OK      (0)
+#define MEM_BAD_MOP (-1)
+#define MEM_BAD_BASE (-2)
+
+#define MEM_REQUEST_NONE_FOUND  (-3)
+#define MEM_REQUEST_UNAVAILABLE (-7)
+
+#define MEM_CLAIM_NOT_IN_USE    (-4)
+#define MEM_CLAIM_FREED         (-5)
+#define MEM_CLAIM_CLAIM_LIMIT   (-6)
+
+typedef enum mem_request_flags {
+    NONE = 0,
+    ALIGN_TOP = 1
+} mem_request_flags;
+
+/* 'You' is defined by a system given token "memory ownership principle" (mop). You must quote this to the system.
+ * Each process should be given a mop.
+ * Handing your mop to another principle is ok. */
+
+/* Memory Request. Adds to your resource limit and claims the pages. Returns a reservation for those pages.
+ * If align_top is set the range with have all its high bits the same.
+ * base must be aligned to RES_META_SIZE. */
+res_t       mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop);
+
+/* Claiming adds to your resource limit - but guarantees the page(es) claimed will not be unmapped until you call release.
+ * We must add to your resource limit straight away, otherwise we allow an attack where you think you are well below your
+ * limit but then have lots of memory dumped on you. Note this does not award any capabilities. You can ask for any
+ * page to stay mapped, not access any page. You must seek the capability elsewhere. */
+int         mem_claim(size_t base, size_t length, mop_t mop);
+
+/* Will give back your resource allowance, but will not guarantee unmapping. However, If you somehow still manage to
+ * access the page it will still refer to the same physical page as before. */
+int         mem_release(size_t base, size_t length, mop_t mop);
+
+/* Makes a new mop, places it in space provided by a reservation, and returns a handle. */
+mop_t       mem_makemop(res_t space, mop_t auth_mop);
+
+/* Releases all resources attributable to mop and makes it invalid. Will also reclaim all mops derived from it */
+int         mem_reclaim_mop(mop_t mop_sealed);
+
+/* Creates the first mop, and also provides a sealing cap to the memory system. Can only be called once */
+mop_t       init_mop(capability mop_sealing_cap);
+
+/* Gets a physical capability. Can never be returned */
+void        get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop, cap_pair* result);
 
 void commit_vmem(act_kt activation, size_t addr);
 
 void	mmap_set_act(act_kt ref);
+void    mmap_set_mop(mop_t mop);
 
 void mdump(void);
 
@@ -64,32 +116,30 @@ enum mmap_flags
   map_private	= 1 << 0,
   map_shared	= 1 << 1,
   map_anonymous	= 1 << 2,
-  MAP_CACHED    = 1 << 3,
-  MAP_PHY       = 1 << 4,
-  MAP_RESERVED  = 1 << 5
 };
 #define MAP_PRIVATE map_private
 #define MAP_ANONYMOUS map_anonymous
 #define MAP_SHARED map_shared
 
-#define MAP_DEFAULT_RES (MAP_PRIVATE | MAP_ANONYMOUS | MAP_RESERVED)
 enum mmap_return
 {
-  ENOMEM = 1
+    ENOMEM = 1
 };
-
-#define MAP_FAILED_OLD ((void *) -1)
-#define MAP_FAILED_INT -1
-#define MAP_SUCCESS_INT 0
 
 static cap_pair mmap_based_alloc(size_t s) {
     cap_pair p;
-    int result = mmap_new(0, s, CHERI_PERM_ALL, MAP_SHARED|MAP_ANONYMOUS, &p);
+    res_t res = mem_request(0, s, NONE, own_mop);
+    if(res == NULL) return NULL_PAIR;
+    rescap_take(res, &p);
     return p;
 }
 
-static void mmap_based_free(void * p __unused) {
-    /* fixme: use munmap */
+static void mmap_based_free(capability c) {
+    return mem_release(cheri_getbase(c), cheri_getlen(c), own_mop);
 }
 
+/* Old mmap for anything that needs it */
+void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
+
+int munmap(void *addr, size_t length);
 #endif // SYS_MMAN_H

@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
+ * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,33 +28,41 @@
  * SUCH DAMAGE.
  */
 
-#ifndef	_LIB_H_
-#define	_LIB_H_
+#ifndef CHERIOS_PMEM_H
+#define CHERIOS_PMEM_H
 
-#include "mips.h"
-#include "assert.h"
-#include "cheric.h"
-#include "cdefs.h"
-#include "debug.h"
-#include "misc.h"
-#include "namespace.h"
-#include "object.h"
-#include "stdarg.h"
-#include "stdio.h"
-#include "string.h"
-#include "nano/nanokernel.h"
 #include "mman.h"
 
-void register_ns(void * ns_ref);
+extern page_t* book;
 
-void	release(void * p) __attribute__((cheri_ccallee));
-void	release_init(void);
+/* Sets page_n to cover a range of len (MUST ALREADY BE A VALID RECORD)*/
+void pmem_break_page_to(size_t page_n, size_t len);
 
-int __mmap(size_t base, size_t length, int cheri_perms, int flags, cap_pair* result);
-int	__munmap(void *addr, size_t length);
-void	minit(void);
-void	mfree(void *addr);
+/* Gets the pagen that can be used to index the book. If in doubt, call this.*/
+size_t pmem_get_valid_page_entry(size_t page_n);
 
-void memgt_commit_vmem(act_kt activation, size_t addr);
+/* Searches for a range of pages of a particular size and minimum length */
+size_t pmem_find_page_type(size_t required_len, e_page_status required_type);
 
-#endif /* !_LIB_H_ */
+/* Get one free page */
+size_t pmem_get_free_page();
+
+/* Prints out the physical page book for debug */
+void pmem_print_book(page_t *book, size_t page_n, size_t times);
+
+/* Debug check a single page */
+void pmem_check_phy_entry(size_t pagen);
+
+/* Debug check the book */
+void pmem_check_book(void);
+
+/* Tries to remove page_n if it is a redundent node */
+void pmem_try_merge(size_t page_n);
+
+/* Get a physical capability. Mediates access to the similar nano kernel function */
+void __get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop_sealed, cap_pair* result);
+
+/* Dumps the whole book */
+void full_dump(void);
+
+#endif //CHERIOS_PMEM_H

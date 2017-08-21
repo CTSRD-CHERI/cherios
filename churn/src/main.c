@@ -46,7 +46,7 @@ int main(register_t arg, capability carg) {
     printf("Churn Hello World!\n");
     cap_pair pr;
 
-    capability maps[WINDOW_SIZE];
+    res_t maps[WINDOW_SIZE];
 
     bzero(maps, sizeof(maps));
 
@@ -54,21 +54,29 @@ int main(register_t arg, capability carg) {
 
     for(size_t i = 0; i < N; i++) {
         size_t ndx = (i % WINDOW_SIZE);
+        res_t res = NULL;
 
         if(i + WINDOW_SIZE < N) {
-            if( mmap_new(0, BLOCK_SIZE, CHERI_PERM_ALL, MAP_ANONYMOUS | MAP_PRIVATE, &pr) != 0) {
+            res = mem_request(0, BLOCK_SIZE - (2*RES_META_SIZE), NONE, own_mop);
+            if(res == NULL) {
                 printf("mmap failed\n");
                 return -1;
             }
         }
 
-        capability  old = maps[ndx];
-        maps[ndx] = pr.data;
+        res_t old = maps[ndx];
 
-        naughty[i] = cheri_setbounds(cheri_incoffset(pr.data, 100),100);
+        maps[ndx] = res;
+
+        naughty[i] = res;
 
         if(old != NULL) {
-            if(munmap(old, 0) != 0) {
+            capability nfo = rescap_info(old);
+
+            size_t base = align_down_to(cheri_getbase(nfo), UNTRANSLATED_PAGE_SIZE);
+            size_t length = align_up_to(cheri_getlen(nfo) + (base - cheri_getbase(nfo)), UNTRANSLATED_PAGE_SIZE);
+
+            if(mem_release(base,length, own_mop) != 0) {
                 printf("munmap failed\n");
                 return -1;
             }

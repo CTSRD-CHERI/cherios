@@ -115,7 +115,6 @@ void init_elf_loader() {
   env.printf  = boot_printf;
   env.vprintf = boot_vprintf;
   env.memcpy  = boot_memcpy;
-  env.mmap_new = NULL;
 }
 
 capability load_nano() {

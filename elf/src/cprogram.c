@@ -32,8 +32,9 @@
 #include "queue.h"
 #include "string.h"
 #include "syscalls.h"
+#include "mman.h"
 
-act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg) {
+act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop) {
     image im;
     reg_frame_t frame;
     bzero(&frame, sizeof(frame));
@@ -44,13 +45,13 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
     pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
                               | CHERI_PERM_LOAD_CAP));
 
-    queue_t* queue = setup_c_program(env, &frame, &im, arg, carg, pcc , NULL, 0);
+    queue_t* queue = setup_c_program(env, &frame, &im, arg, carg, pcc , NULL, 0, mop);
 
     return syscall_act_register(&frame, name, queue, NULL);
 }
 
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
-                     capability pcc, char* stack_args, size_t stack_args_size) {
+                     capability pcc, char* stack_args, size_t stack_args_size, mop_t mop) {
     cap_pair prgmp = im->loaded_process;
 
     size_t low_bits = cheri_getbase(prgmp.data) & (0x20 - 1);
@@ -100,6 +101,8 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     /* Setup args */
     frame->mf_a0 = arg;
     frame->cf_c3 = carg;
+
+    frame->cf_c19 = mop;
 
     return queue;
 }

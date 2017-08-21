@@ -174,14 +174,14 @@ static void * get_act_cap(module_t type, init_info_t* info) {
 
             memmgt_init.nano_default_cap = info->nano_default_cap;
             memmgt_init.nano_if = info->nano_if;
+            memmgt_init.mop_sealing_cap = info->mop_sealing_cap;
+            memmgt_init.mop_signal_flag = 0;
+
             return &memmgt_init;
 
         case m_fs:{}
-        //TODO get this from memmgt.
             cap_pair pair;
-			mmap_new(FS_PHY_BASE, FS_PHY_SIZE,
-                            CHERI_PERM_LOAD | CHERI_PERM_STORE,
-                            MAP_ANONYMOUS | MAP_SHARED | MAP_PHY, &pair);
+            get_physical_capability(FS_PHY_BASE, FS_PHY_SIZE, 1, 0, own_mop, &pair);
             return pair.data;
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;
@@ -230,7 +230,8 @@ static void load_modules(init_info_t * init_info) {
 
     /* Namespace */
     namebe->ctrl =
-            simple_start(&env, namebe->name, load_check(namebe->name), namebe->arg, get_act_cap(m_namespace, init_info));
+            simple_start(&env, namebe->name, load_check(namebe->name),
+                         namebe->arg, get_act_cap(m_namespace, init_info), NULL);
 
 
     namespace_init(syscall_act_ctrl_get_ref(namebe->ctrl));
@@ -244,7 +245,7 @@ static void load_modules(init_info_t * init_info) {
     capability memmgt_file = load_check(memgtbe->name);
 
     procbe->ctrl =
-            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info));
+            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info), NULL);
 
     /* FIXME technically a bit of a race. This global will be read by proc so it needs to be set before context switch */
 
@@ -272,10 +273,37 @@ static void load_modules(init_info_t * init_info) {
     while(namespace_get_ref(namespace_num_memmgt) == NULL) {
         nssleep(3);
     }
+
+    try_init_memmgt_ref();
+
     printf("memory manager registered \n");
+
+    printf("Wait for mop pass back\n");
+    while (memmgt_init.mop_signal_flag == 0) {
+        nssleep(3);
+    }
+
+    /* This is the base mop for our system. We should create two children, one for use by init, one for use by proc_man
+     * proc_man will then furthere subdivide for all the processes it creates */
+
+    mop_t mop = (mop_t)memmgt_init.base_mop;
+
+    /* We need to do this as we had no mop when created */
+    mmap_set_mop(mop);
+
+    printf("Creating mop for proc man\n");
+    // TODO eventually capmalloc will do this nicely */
+    res_t space_for_mop = simple_res_alloc(MOP_REQUIRED_SPACE);
+    mop_t mop_for_proc = mem_makemop(space_for_mop, mop);
+
+
+    /* Send the mop */
+    printf("Passing mop to proc man\n");
+    message_send_c(0,0,0,0,mop_for_proc,NULL,NULL,NULL,syscall_act_ctrl_get_ref(procbe->ctrl), SEND, 3);
 
     /* We no longer have our pool. But now we can use virtual memory */
 
+    printf("Core load finished. Loading other processes\n");
     env.alloc = &mmap_based_alloc;
     env.free = &mmap_based_free;
 

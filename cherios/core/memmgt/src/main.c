@@ -28,21 +28,33 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
-#include "malloc_heap.h"
 #include "../../boot/include/boot/boot_info.h"
+#include "object.h"
+#include "misc.h"
+#include "namespace.h"
+#include "stdio.h"
 #include "thread.h"
 #include "vmem.h"
+#include "pmem.h"
+#include "mmap.h"
 
 __thread int worker_id = 0;
 
 extern void msg_entry;
-void (*msg_methods[]) = {__mmap, __munmap, memgt_commit_vmem, full_dump, virtual_to_physical};
+
+/* FIXME: Any thread will accidentally run any of these. They should be thread local */
+void (*msg_methods[]) = {__mem_request, __mem_release, vmem_commit_vmem, full_dump, virtual_to_physical, __mem_claim,
+						 NULL, __mem_makemop, __get_physical_capability, __mem_reclaim_mop, __revoke, __revoke_finish};
+
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
 ALLOCATE_PLT_NANO
+
+act_kt general_act; // For anything else (worker id 1)
+act_kt commit_act;  // Only for commit   (worker id 0)
+act_kt revoke_act;  // Only for revoke   (worker if 2)
 
 void register_ns(void * ns_ref) {
 	namespace_init(ns_ref);
@@ -54,7 +66,10 @@ void register_ns(void * ns_ref) {
 
 static void worker_start(register_t arg, capability carg) {
 
+    general_act = act_self_ref;
 	memmgt_init_t* mem_init = (memmgt_init_t*)carg;
+
+    assert(mem_init != NULL);
 
     worker_id = 1;
 
@@ -63,7 +78,8 @@ static void worker_start(register_t arg, capability carg) {
 		printf(KRED"memmgt: Register failed %d\n", ret);
 	}
 
-	minit();
+    mem_init->base_mop = mem_minit(mem_init->mop_sealing_cap);
+    mem_init->mop_signal_flag = 1;
 
 	syscall_puts("memmgt: Going into daemon mode\n");
 
@@ -100,15 +116,28 @@ static void clear_revoke(void) {
 	set_addr_lo(0);
 }
 
+void revoke(void) {
+    message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, revoke_act, SEND, 10);
+}
+
+void revoke_finish(res_t res) {
+    message_send(0, 0, 0, 0, res, NULL, NULL, NULL, general_act, SEND, 11);
+}
+
 static void revoke_worker_start(register_t arg, capability carg) {
 	printf("Revoker hello world!\n");
     worker_id = 2;
-    memmgt_revoke_loop();
+    revoke_act = act_self_ref;
+
+    /* This thread handles revoke */
+    msg_enable = 1;
 }
 
 int main(memmgt_init_t* mem_init) {
 	/* So we can call nano kernel functions. This would normally be done by the linker */
 	init_nano_kernel_if_t(mem_init->nano_if, mem_init->nano_default_cap);
+
+    commit_act = act_self_ref;
 
 	printf("spawning worker\n");
 

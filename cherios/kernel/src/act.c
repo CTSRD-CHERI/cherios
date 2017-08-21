@@ -132,7 +132,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	act_t * act = NULL;
     cap_pair pr;
 
-    try_take_end_of_res(res, sizeof(act_t), &pr);
+	try_take_res(res, sizeof(act_t), &pr);
 
     act = (act_t*)pr.data;
 

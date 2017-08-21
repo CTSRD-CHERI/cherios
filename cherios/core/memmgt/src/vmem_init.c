@@ -31,24 +31,26 @@
 #include "vmem.h"
 #include "stdio.h"
 #include "math.h"
+#include "mmap.h"
+#include "pmem.h"
 
-static void init_vmem(void) {
+static mop_t init_vmem(capability mop_sealing_cap) {
     /* This creates enough virtual memory to get started */
     ptable_t top_table, L1_0, L2_0;
 
     top_table = get_top_level_table();
     assert(top_table != NULL);
     CHERI_PRINT_CAP(top_table);
-    L1_0 = memmgt_create_table(top_table, 0);
+    L1_0 = vmem_create_table(top_table, 0);
     assert(L1_0 != NULL);
     CHERI_PRINT_CAP(L1_0);
-    L2_0 = memmgt_create_table(L1_0, 0);
+    L2_0 = vmem_create_table(L1_0, 0);
     assert(L2_0 != NULL);
     CHERI_PRINT_CAP(L2_0);
 
-    int res = memmgt_create_mapping(L2_0, 0, TLB_FLAGS_DEFAULT);
+    int res = vmem_create_mapping(L2_0, 0, TLB_FLAGS_DEFAULT);
     assert(res == 0);
-    res = memmgt_create_mapping(L2_0, 1, TLB_FLAGS_DEFAULT);
+    res = vmem_create_mapping(L2_0, 1, TLB_FLAGS_DEFAULT);
     assert(res == 0);
 
     /* Now we get the first reservation which NEEDS virtual mem */
@@ -65,26 +67,17 @@ static void init_vmem(void) {
         first = rescap_split(first, diff);
     }
 
-    chain_start = free_chain_start = get_userdata_for_res(first);
-
-    chain_start->used.allocated_to = NULL;
-    chain_start->used.next_free_res = NULL;
-    chain_start->used.next_res = NULL;
-    chain_start->used.prev_free_res = NULL;
-    chain_start->used.next_res = NULL;
-    chain_start->used.res = first;
-
-    free_chain_start = chain_start;
+    /* Intialising memory ownership tracking */
+    return __init_mop(mop_sealing_cap, first);
 }
 
 static void init_book(void) {
     book = get_book();
 }
 
-void minit(void) {
+mop_t mem_minit(capability mop_sealing_cap) {
     printf("Getting book\n");
     init_book();
     printf("Starting up virtual memory and reservation system\n");
-    init_vmem();
-
+    return init_vmem(mop_sealing_cap);
 }

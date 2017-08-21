@@ -74,6 +74,7 @@ int cherios_main(nano_kernel_if_t* interface,
 	kernel_assert((init_info.kernel_size & (PAGE_SIZE-1)) == 0);
     init_info.uart_cap = cap_for_uart;
 	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
+	init_info.mop_sealing_cap = cheri_setcursor(sealer, MOP_SEALING_TYPE);
 
 	sched_init();
 

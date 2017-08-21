@@ -39,3 +39,11 @@ void __assert(const char *assert_function, const char *assert_file,
 			assert_file, assert_lineno, assert_message);
 	panic("assert failed");
 }
+
+void __assert_int_ex(const char *assert_function, const char *assert_file,
+			  int assert_lineno, const char *am, const char *opm,const char *bm,
+                     unsigned long long int a, unsigned long long int b) {
+	printf(KRED"assertion failure in %s at %s:%d: Expected %s (%llx) %s %s(%llx)"KRST"\n", assert_function,
+		   assert_file, assert_lineno, am, a, opm, bm, b);
+	panic("assert failed");
+}

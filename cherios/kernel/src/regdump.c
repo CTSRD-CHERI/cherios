@@ -265,7 +265,7 @@ void regdump(int reg_num) {
 	CHERI_PRINT_CAP(kernel_curr_act->context);
 	reg_frame_t* frame = kernel_unseal_any(kernel_curr_act->context);
 	CHERI_PRINT_CAP(frame);
-
+	printf("Died in: %s\n", kernel_curr_act->name);
     dump_tlb();
 
 	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
