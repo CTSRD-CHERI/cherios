@@ -54,4 +54,6 @@ static const int namespace_num_zlib = 0x41;
 static const int namespace_num_sockets = 0x42;
 static const int namespace_num_virtio = 0x43;
 
+static const int namespace_num_event_service = 0x61;
+
 #endif

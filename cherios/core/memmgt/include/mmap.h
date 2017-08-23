@@ -43,10 +43,7 @@
 #define VISIT_DONE (0)
 
 typedef struct claimer_link_t{
-    /* We can't store a pointer to the index in the container with having to do ugly container ofs */
-    /* Instead we store a link to the containing object and an index. If this is slow, we can use
-     * capability offsets to store both in one pointer */
-    struct vpage_range_desc_t* link;
+    size_t start_page;
     size_t index;
 } claimer_link_t;
 
@@ -98,18 +95,19 @@ enum allocation_type_t {
     tomb_node = 5           // Everything freed
 };
 
-#define FOLLOW(X) (X.link->claimers[X.index])
+#define FOLLOW(X) (hard_index((X).start_page)->claimers[X.index])
 
 #define FOREACH_CLAIMER(desc, index, claim)     \
 size_t index;     \
 claimer_t* claim; \
 for(index = 0; claim = &desc->claimers[index], index != MAX_CLAIMERS; index++)
 
-#define FOREACH_CLAIMED_RANGE(owner, desc, claim)  \
+#define FOREACH_CLAIMED_RANGE(owner, desc, lnk)  \
 claimer_link_t lnk;             \
 vpage_range_desc_t* desc;       \
-claimer_t claim;                \
-for(lnk = owner->first, desc = lnk.link, claim = FOLLOW(lnk); desc != NULL; lnk = claim.next, desc = lnk.link, claim = FOLLOW(lnk))
+claimer_t* claim;                \
+claimer_link_t lnk_tmp;         \
+for(lnk = owner->first; lnk.index != 0 && (desc = hard_index(lnk.start_page), claim = &desc->claimers[lnk.index], lnk_tmp = claim->next, 1); lnk = lnk_tmp)
 
 typedef struct vpage_range_desc_t {
     // An array of all claimers. Each part of a doubly linked list managed by a mop

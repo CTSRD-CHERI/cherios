@@ -39,6 +39,7 @@
 #include "nano/nanokernel.h"
 #include "queue.h"
 #include "nano/nanokernel.h"
+#include "act_events.h"
 
 /*
  * Routines to handle activations
@@ -59,6 +60,7 @@ act_t* act_list_start;
 act_t* act_list_end;
 
 act_t* memgt_ref = NULL;
+act_t* event_ref = NULL;
 
 static kernel_if_t* get_if() {
 	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
@@ -78,6 +80,10 @@ act_t * act_unseal_ref(act_t * act) {
 
 act_control_t* act_unseal_ctrl_ref(act_t* act) {
 	return (act_control_t*)kernel_unseal(act, act_ctrl_ref_type);
+}
+
+void act_set_event_ref(act_t* act) {
+	event_ref = act;
 }
 
 context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base) {
@@ -241,12 +247,20 @@ int act_revoke(act_control_t * ctrl) {
 		return -1;
 	}
 	ctrl->status = status_revoked;
+
+	if(event_ref != NULL)
+		msg_push(act_create_sealed_ref(ctrl), NULL, NULL, NULL, 0, 0 , 0, 0, notify_revoke_port, event_ref, ctrl, NULL);
+
 	return 0;
 }
 
 int act_terminate(act_control_t * ctrl) {
 	ctrl->status = status_terminated;
 	KERNEL_TRACE("act", "Terminating %s", ctrl->name);
+
+	if(event_ref != NULL)
+		msg_push(act_create_sealed_ref(ctrl), NULL, NULL, NULL, 0, 0 , 0, 0, notify_terminate_port, event_ref, ctrl, NULL);
+
 	/* This will never return if this is a self terminate. We will be removed from the queue and descheduled */
 	sched_delete(ctrl);
 	if(ctrl == kernel_curr_act) { /* terminated itself */

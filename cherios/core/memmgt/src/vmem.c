@@ -76,7 +76,7 @@ int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) {
 }
 
 /* TODO commiting per page is a stupid policy. We are doing this for now to make sure everything works */
-void vmem_commit_vmem(act_kt activation, size_t addr) {
+void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
     // WARN: THIS MUST NOT TOUCH VIRTUAL MEMORY. Mops are virtual, if we want to update commit tallies, send a message.
 
     assert(worker_id == 0);
@@ -111,7 +111,9 @@ void vmem_commit_vmem(act_kt activation, size_t addr) {
 
     if(ro->entries[ndx] != NULL) {
         if(ro->entries[ndx] == VTABLE_ENTRY_USED) {
-            panic("Someone tried to use a virtual address that was already freed!\n");
+            printf("%s used %lx\n", name, addr);
+            CHERI_PRINT_CAP(activation);
+            panic("Someone tried to use a virtual address (%lx) that was already freed!\n");
         }
         printf("spurious commit!\n");
     }

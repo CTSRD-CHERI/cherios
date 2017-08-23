@@ -58,6 +58,7 @@
         ITEM(syscall_interrupt_register, int, (int number), __VA_ARGS__)                                                     \
         ITEM(syscall_interrupt_enable, int, (int number), __VA_ARGS__)                                                       \
         ITEM(syscall_shutdown, void, (shutdown_t), __VA_ARGS__)                                                              \
+        ITEM(syscall_register_act_event_registrar, void, (act_kt act), __VA_ARGS__)                                          \
 
 
 #define CCALL_SELECTOR_LIST(ITEM)   \

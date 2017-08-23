@@ -40,6 +40,7 @@
 #include "namespace.h"
 #include "tmpalloc.h"
 #include "../../boot/include/boot/boot_info.h"
+#include "act_events.h"
 
 ALLOCATE_PLT_NANO
 
@@ -124,11 +125,23 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 		frame.cf_c3 = process->im.secure_entry;
 	}
 
-    return syscall_act_register(&frame, name, queue, simple_res_alloc(ACT_REQUIRED_SPACE));
+	act_control_kt ctrl = syscall_act_register(&frame, name, queue, simple_res_alloc(ACT_REQUIRED_SPACE));
+
+	act_kt act = syscall_act_ctrl_get_ref(ctrl);
+
+    if(event_act == NULL) try_set_event_source();
+	if(event_act != NULL) {
+        int status = subscribe_terminate(act, act_self_ref, seal_proc_for_user(process), process->n_threads, 4);
+        assert_int_ex(status, ==, SUBSCRIBE_OK);
+    }
+
+	return ctrl;
 }
 
 act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
 							 char* stack_args, size_t stack_args_size) {
+
+	if(process->state != proc_started) return NULL;
 
 	assert(process->n_threads != MAX_THREADS);
 
@@ -166,7 +179,9 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 		return NULL;
 	}
 
+	proc->state = proc_created;
 	proc->n_threads = 0;
+	proc->terminated_threads = 0;
 	proc->mop = make_mop_for_process();
 
 	return seal_proc_for_user(proc);
@@ -174,6 +189,9 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 
 act_control_kt start_process(process_t* proc, register_t arg, capability carg, char* stack_args, size_t stack_args_size) {
 	assert(proc->n_threads == 0);
+	assert(proc->state == proc_created);
+
+	proc->state = proc_started;
 
 	cap_pair prgmp = proc->im.loaded_process;
 
@@ -208,7 +226,28 @@ static void deliver_mop(mop_t mop) {
 	}
 }
 
-void (*msg_methods[]) = {create_process, user_start_process, user_create_thread, deliver_mop};
+static void handle_termination(register_t thread_num, process_t* proc, act_kt target) {
+
+    proc = unseal_proc(proc);
+
+	assert(proc->state == proc_started);
+	assert(proc->threads[thread_num] != NULL);
+
+	printf("Process %s terminated thread %lx\n", proc->name, thread_num);
+
+	proc->threads[thread_num] = NULL;
+	proc->terminated_threads++;
+
+	if(proc->terminated_threads == proc->n_threads) {
+		printf("Last thread terminated, killing process\n");
+		proc->state = proc_zombie;
+		int status = mem_reclaim_mop(proc->mop);
+		assert_int_ex(status, ==, MEM_OK);
+	}
+}
+
+
+void (*msg_methods[]) = {create_process, user_start_process, user_create_thread, deliver_mop, handle_termination};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);

@@ -35,12 +35,20 @@
 
 #define MAX_PROCS 20
 
+enum process_state {
+    proc_created = 0,
+    proc_started = 1,
+    proc_zombie = 2
+};
+
 typedef struct process_t {
     const char* name; // Or some other appropriate i.d.
+    enum process_state state;
     image im;
     mop_t mop;
     act_control_kt threads[MAX_THREADS];
     size_t n_threads;
+    size_t terminated_threads;
 } process_t;
 
 

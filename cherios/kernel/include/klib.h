@@ -125,6 +125,8 @@ act_control_t * act_create_sealed_ctrl_ref(act_t * act);
 act_t * act_unseal_ref(act_t * act);
 act_control_t* act_unseal_ctrl_ref(act_t* act);
 
+void act_set_event_ref(act_t* act);
+
 status_e act_get_status(act_control_t *ctrl);
 int	act_revoke(act_control_t * ctrl);
 int	act_terminate(act_control_t * ctrl);

@@ -105,7 +105,7 @@ static void kernel_exception_tlb(register_t badvaddr) {
 		kernel_freeze();
 	}
 
-	msg_push(act_create_sealed_ref(kernel_curr_act), NULL, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
+	msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
 	sched_reschedule(memgt_ref, 1);
 }
 /*

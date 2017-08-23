@@ -199,6 +199,30 @@ static size_t check_desc_correctness(vpage_range_desc_t* desc, size_t expected_p
     return expected_prev;
 }
 
+// Fast but will only work if page_n is not in the middle a range covered by a node
+static vpage_range_desc_t* hard_index(size_t page_n) {
+
+    if(page_n == MAX_VIRTUAL_PAGES) return NULL;
+
+    size_t l0 = L0_INDEX(page_n << UNTRANSLATED_BITS);
+    vpage_range_desc_t* l = & desc_table_root.descs[l0];
+    if(l->allocation_type != internal_node) {
+        return l;
+    }
+
+    size_t l1 = L1_INDEX(page_n << UNTRANSLATED_BITS);
+    l = & l->sub_table->descs[l1];
+
+    if(l->allocation_type != internal_node) {
+        return l;
+    }
+
+    size_t l2 = L2_INDEX(page_n << UNTRANSLATED_BITS);
+    l = & l->sub_table->descs[l2];
+
+    return l;
+}
+
 static size_t find_free_claim_index(vpage_range_desc_t* desc, mop_internal_t* mop) {
     size_t free_index = (size_t)-1;
     size_t claim_index = (size_t)-1;
@@ -229,16 +253,19 @@ static int claim_node(mop_internal_t* mop, vpage_range_desc_t* desc, size_t inde
 
     desc->claims_used++;
 
-    mop->last.link = desc;
+    mop->last.start_page = desc->start;
     mop->last.index = index;
 
-    if(mop->first.link == NULL) {
+    if(mop->first.start_page == 0) {
+        // Our first claim
         mop->first = mop->last;
-        claim->prev.link = NULL;
+        claim->prev.start_page = 0;
     } else {
+        FOLLOW(old_last).next = mop->last;
         claim->prev = old_last;
-        claim->next.link = NULL;
     }
+
+    claim->next.start_page = 0;
 
     mop->allocated_pages += desc->length;
     mop->allocated_ranges++;
@@ -251,13 +278,13 @@ static void release_claim(vpage_range_desc_t* desc, size_t index) {
     mop_internal_t* owner = claim->owner;
     assert(owner != NULL);
 
-    if(claim->prev.link == NULL) {
+    if(claim->prev.start_page == 0) {
         owner->first = claim->next;
     } else {
        FOLLOW(claim->prev).next = claim->next;
     }
 
-    if(claim->next.link == NULL) {
+    if(claim->next.start_page == 0) {
         owner->last = claim->prev;
     } else {
         FOLLOW(claim->next).prev = claim->prev;
@@ -286,30 +313,6 @@ struct index_result {
     vpage_range_desc_t* result;
     size_t indexs[3];
 };
-
-// Fast but will only work if page_n is not in the middle a range covered by a node
-static vpage_range_desc_t* hard_index(size_t page_n) {
-
-    if(page_n == MAX_VIRTUAL_PAGES) return NULL;
-
-    size_t l0 = L0_INDEX(page_n << UNTRANSLATED_BITS);
-    vpage_range_desc_t* l = & desc_table_root.descs[l0];
-    if(l->allocation_type != internal_node) {
-        return l;
-    }
-
-    size_t l1 = L1_INDEX(page_n << UNTRANSLATED_BITS);
-    l = & l->sub_table->descs[l1];
-
-    if(l->allocation_type != internal_node) {
-        return l;
-    }
-
-    size_t l2 = L2_INDEX(page_n << UNTRANSLATED_BITS);
-    l = & l->sub_table->descs[l2];
-
-    return l;
-}
 
 // Fast but will only work if page_n is not in the middle a range covered by a node
 static vpage_range_desc_t* hard_index_parent(size_t page_n) {
@@ -531,6 +534,7 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
             // Can't merge right alloc node on to left partial node
 
             size_t transfer_amount = right_desc->length;
+            size_t left_amount = left_desc->length;
 
             left_desc->length += transfer_amount;
 
@@ -548,8 +552,8 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
                 // Merge reservation nodes, and unmap page containing right
                 rescap_merge(left_desc->reservation, right_desc->reservation);
 
-                vmem_free_single((right_desc->start-1) << UNTRANSLATED_BITS);
-                vmem_free_single(right_desc->start << UNTRANSLATED_BITS);
+                if(left_amount != 1) vmem_free_single((right_desc->start-1) << UNTRANSLATED_BITS);
+                if(transfer_amount != 1) vmem_free_single(right_desc->start << UNTRANSLATED_BITS);
             }
 
             /* Our parent nodes may need start and end adjusting */
@@ -594,6 +598,50 @@ void revoke_start(vpage_range_desc_t* desc) {
     vmem_free_single((base+len)-1);
 }
 
+static vpage_range_desc_t * free_desc(vpage_range_desc_t *desc) {
+    // 1: Unmap all pages (but NOT the first or last page)
+
+    size_t free_start = desc->start;
+    size_t free_len = desc->length;
+
+    if(desc->allocated_length != 0) {
+        free_start++;
+        free_len--;
+    }
+
+    if(free_len >= 3) {
+        vmem_free_range((free_start + 1)  << UNTRANSLATED_BITS, free_len-2);
+    }
+
+    // 2: mark as tomb
+
+    desc->allocation_type = tomb_node;
+
+    // 3 : merge with previous
+
+    vpage_range_desc_t *prev = hard_index(desc->prev);
+    vpage_range_desc_t *next = hard_index(desc->start + desc->length);
+
+    desc = merge_index(prev, desc, next);
+
+    // 5: merge with next
+    size_t next_ndx = (desc->start + desc->length);
+    next = hard_index(next_ndx);
+
+    if(next != NULL) {
+
+        vpage_range_desc_t * next_next = hard_index(next->start + next->length);
+        vpage_range_desc_t * mergeres = merge_index(desc, next, next_next);
+
+
+        if(mergeres != next) {
+            desc = mergeres;
+        }
+    }
+
+    return desc;
+}
+
 static vpage_range_desc_t * visit_free(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length) {
 
     size_t index = find_free_claim_index(desc, owner);
@@ -602,47 +650,7 @@ static vpage_range_desc_t * visit_free(vpage_range_desc_t *desc, size_t base, mo
     if(rem_claims == 0) {
         release_claim(desc, index);
         if(desc->claims_used == 0) {
-
-            // 1: Unmap all pages (but NOT the first or last page)
-
-            size_t free_start = desc->start;
-            size_t free_len = desc->length;
-
-            if(desc->allocated_length != 0) {
-                free_start++;
-                free_len--;
-            }
-
-            if(free_len >= 3) {
-                vmem_free_range((free_start + 1)  << UNTRANSLATED_BITS, free_len-2);
-            }
-
-            // 2: mark as tomb
-
-            desc->allocation_type = tomb_node;
-
-            // 3 : merge with previous
-
-            vpage_range_desc_t *prev = hard_index(desc->prev);
-            vpage_range_desc_t *next = hard_index(desc->start + desc->length);
-
-            desc = merge_index(prev, desc, next);
-
-            // 5: merge with next
-            size_t next_ndx = (desc->start + desc->length);
-            next = hard_index(next_ndx);
-
-            if(next != NULL) {
-
-                vpage_range_desc_t * next_next = hard_index(next->start + next->length);
-                vpage_range_desc_t * mergeres = merge_index(desc, next, next_next);
-
-
-                if(mergeres != next) {
-                    desc = mergeres;
-                }
-            }
-
+            desc = free_desc(desc);
         }
     }
 
@@ -675,19 +683,6 @@ static vpage_range_desc_t* leaf_to_internal(vpage_range_desc_t* desc, size_t tra
     desc->reservation = NULL;
     desc->allocation_type = internal_node;
     bzero(desc->claimers, sizeof(desc->claimers));
-
-    if(sub_desc->allocation_type == allocation_node) {
-        FOREACH_CLAIMER(sub_desc, index, claim) {
-            if(claim->owner != NULL) {
-                if(claim->prev.link != NULL) {
-                    FOLLOW(claim->prev).next.link = sub_desc;
-                }
-                if(claim->next.link != NULL) {
-                    FOLLOW(claim->next).prev.link = sub_desc;
-                }
-            }
-        }
-    }
 
     return sub_desc;
 }
@@ -1086,8 +1081,10 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
     }
 
     /* Then release all claims */
-    FOREACH_CLAIMED_RANGE(mop, desc, claim) {
-        release_claim(desc, lnk.index);
+    FOREACH_CLAIMED_RANGE(mop, desc, lnk) {
+        assert(mop == claim->owner);
+        claim->n_claims = 1;
+        visit_free(desc, desc->start, mop, desc->length);
     }
 
     /* Remove from sibling chain */
@@ -1118,6 +1115,8 @@ int __mem_reclaim_mop(mop_t mop_sealed) {
     if(check_mop(mop) != 0) return MEM_BAD_MOP;
 
     reclaim(mop, 1);
+
+    return MEM_OK;
 }
 
 mop_t __mem_makemop(res_t space, mop_t mop_sealed) {

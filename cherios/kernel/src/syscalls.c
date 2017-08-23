@@ -137,6 +137,16 @@ void kernel_syscall_shutdown(shutdown_t mode) {
 
 }
 
+void kernel_syscall_register_act_event_registrar(act_t* act);
+void kernel_syscall_register_act_event_registrar(act_t* act) {
+	static int once = 0;
+	if(!once) {
+		once = 1;
+		act = act_unseal_ref(act);
+		act_set_event_ref(act);
+	}
+}
+
 extern void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
                          register_t a0, register_t a1, register_t a2, register_t a3,
                          act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret);
@@ -175,6 +185,7 @@ DADT(syscall_panic)
 DADT(syscall_interrupt_register)
 DADT(syscall_interrupt_enable)
 DADT(syscall_shutdown)
+DADT(syscall_register_act_event_registrar)
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
     SYS_CALL_LIST(SET_IF,)

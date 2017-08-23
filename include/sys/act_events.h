@@ -3,7 +3,7 @@
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,38 +28,42 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_VMEM_H
-#define CHERIOS_VMEM_H
+#ifndef ACT_EVENTS
+#define ACT_EVENTS
 
-#include "sys/mman.h"
-#include "nano/nanokernel.h"
-#include "assert.h"
+#include "types.h"
 
-#define TLB_ENTRY_CACHE_ALGORITHM_UNCACHED              (2 << 3)
-#define TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT    (3 << 3)
-#define TLB_ENTRY_VALID                                 2
-#define TLB_ENTRY_DIRTY                                 4
-#define TLB_ENTRY_GLOBAL                                1
+/* Add more events here! Of the from ITEM(name, once, __VA_ARGS__). Will create an event called name. If once is true
+ * the event will happen once then everyone will be unsubscribed. */
 
-#define TLB_FLAGS_DEFAULT                               (TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT |\
-                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY | TLB_ENTRY_GLOBAL)
+#define EVENT_LIST(ITEM, ...)           \
+    ITEM(revoke, 1, __VA_ARGS__)        \
+    ITEM(terminate, 1, __VA_ARGS__)
 
-mop_t	mem_minit(capability mop_sealing_cap);
+#define SUBSCRIBE_OK                    (0)
 
-void vmem_commit_vmem(act_kt activation, char* name, size_t addr);
+#define SUBSCRIBE_ALREADY_SUBSCRIBED    (-1)
+#define SUBSCRIBE_NOT_SUBSCRIBED        (-2)
+#define SUBSCRIBE_INVALID_TARGET        (-3)
+#define SUBSCRIBE_INVALID_NOTIFY        (-4)
+#define SUBSCRIBE_NO_SERVICE            (-5)
 
-/* Allocates a page table, but finds a physical page for you */
-ptable_t vmem_create_table(ptable_t parent, register_t index);
+#define EVENT_PORT_NAMES(name, ...) notify_ ## name ## _port, subscribe_ ## name ## _port,  \
+unsubscribe_ ## name ## _port, unsubscribe_all ## name ## _port,
 
-/* Creates a virt->phy mapping but chooses a physical page for you */
-int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags);
+typedef enum act_event_port {
+    EVENT_LIST(EVENT_PORT_NAMES,)
+} act_event_port;
 
-/* Will free n pages staring at vaddr_start, also freeing tables as required */
-void vmem_free_range(size_t vaddr_start, size_t pages);
 
-void vmem_free_single(size_t vaddr);
+#define EVENT_IF(name, ...) \
+int subscribe_ ## name (act_kt target, act_kt notify, capability carg, register_t arg, register_t port);  \
+int unsubscribe_## name(act_kt target, act_kt notify, register_t port);                                   \
+int unsubscribe_all_ ## name(act_kt target, act_kt notify);                                               \
 
-size_t virtual_to_physical(size_t vaddr);
+EVENT_LIST(EVENT_IF,)
 
-extern __thread int worker_id;
-#endif //CHERIOS_VMEM_H
+void try_set_event_source(void);
+
+extern act_kt event_act;
+#endif //ACT_EVENTS
