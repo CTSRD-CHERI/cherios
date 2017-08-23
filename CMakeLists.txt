@@ -129,6 +129,8 @@ endif()
 
 include_directories(include)
 include_directories(include/sys)
+include_directories(elf/include)
+
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
     -mcpu=${CHERI_CPU}

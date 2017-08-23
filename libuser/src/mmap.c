@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include "elf.h"
 #include "mips.h"
 #include "sys/mman.h"
 #include "object.h"
@@ -109,6 +110,20 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 
 int munmap(void *addr, size_t length) {
     mem_release((size_t)addr, length, own_mop);
+}
+
+cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
+    assert(env != NULL);
+    assert(env->handle != NULL);
+	cap_pair p;
+	res_t res = mem_request(0, s, NONE, env->handle);
+	if(res == NULL) return NULL_PAIR;
+	rescap_take(res, &p);
+	return p;
+}
+
+void mmap_based_free(capability c, Elf_Env* env) {
+	return mem_release(cheri_getbase(c), cheri_getlen(c), env->handle);
 }
 
 res_t mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop) {

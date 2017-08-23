@@ -32,6 +32,7 @@
 #define CHERIOS_PROC_H
 
 #include "elf.h"
+#include "mman.h"
 
 #define MAX_PROCS 20
 

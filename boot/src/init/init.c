@@ -308,6 +308,7 @@ static void load_modules(init_info_t * init_info) {
     printf("Core load finished. Loading other processes\n");
     env.alloc = &mmap_based_alloc;
     env.free = &mmap_based_free;
+    env.handle = mop;
 
     /* Now load the rest */
 

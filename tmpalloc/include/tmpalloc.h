@@ -36,12 +36,12 @@
 
 #define POOL_SIZE (1024*1024*32)
 
-cap_pair tmp_alloc(size_t s);
+cap_pair tmp_alloc(size_t s, Elf_Env* unused __unused);
 
 void init_tmp_alloc(cap_pair pool);
 
 cap_pair get_remaining(void);
 
-void tmp_free(void * p __unused);
+void tmp_free(void * p __unused, Elf_Env* unused __unused);
 
 #endif //CHERIOS_TMPALLOC_H

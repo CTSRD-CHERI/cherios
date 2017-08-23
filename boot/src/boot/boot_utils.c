@@ -63,7 +63,7 @@ extern char __boot_load_physaddr;
 
 static char* phy_mem;
 
-static cap_pair kernel_alloc_mem(size_t _size) {
+static cap_pair kernel_alloc_mem(size_t _size, capability unused) {
 	/* We will allocate the first few objects in low physical memory. THe first thing we load is the nano kernel
 	 * and this will be direct mapped.*/
     static int alloc_direct = 1;

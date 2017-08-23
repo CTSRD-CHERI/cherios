@@ -34,6 +34,7 @@
 #include "cheric.h"
 #include "elf.h"
 #include "queue.h"
+#include "mman.h"
 
 act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop);
 

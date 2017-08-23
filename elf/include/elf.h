@@ -33,8 +33,8 @@
 
 #include "mips.h"
 #include "stdarg.h"
-#include "mman.h"
 #include "nano/nanotypes.h"
+#include "types.h"
 
 typedef uint16_t Elf64_Half;	// Unsigned half int
 typedef uint64_t Elf64_Off;	// Unsigned offset
@@ -100,12 +100,13 @@ typedef struct {
 }  Elf64_Phdr;
 
 /* Calling environment for loader */
-typedef struct {
-	cap_pair (*alloc)(size_t size);
-	void (*free)(void *addr);
+typedef struct Elf_Env {
+	cap_pair (*alloc)(size_t size, struct Elf_Env * handle);
+	void (*free)(void *addr, struct Elf_Env* handle);
 	int (*printf)(const char *fmt, ...);
 	int (*vprintf)(const char *fmt, va_list ap);
 	void *(*memcpy)(void *dest, const void *src, size_t n);
+	capability handle;
 } Elf_Env;
 
 typedef struct image{

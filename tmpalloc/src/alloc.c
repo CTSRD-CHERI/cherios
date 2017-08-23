@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include "elf.h"
 #include "mips.h"
 #include "misc.h"
 #include "stdlib.h"
@@ -49,7 +50,7 @@ static char * pool_next = NULL;
 
 static char * pool_ex = NULL;
 
-cap_pair tmp_alloc(size_t s) {
+cap_pair tmp_alloc(size_t s, Elf_Env unused __unused) {
 	if(pool_next + s >= pool_end) {
 		return (cap_pair){.code = NULL, .data = NULL};
 	}
@@ -83,6 +84,6 @@ cap_pair get_remaining(void) {
 	return ret;
 }
 
-void tmp_free(void * p __unused) {
+void tmp_free(void * p __unused, Elf_Env unused __unused) {
 	/* init alloc has no free */
 }

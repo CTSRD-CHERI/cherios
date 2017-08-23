@@ -168,6 +168,13 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 
 	cap_pair prgmp;
 
+	proc->state = proc_created;
+	proc->n_threads = 0;
+	proc->terminated_threads = 0;
+	proc->mop = make_mop_for_process();
+
+	env.handle = proc->mop;
+
 	if(old_im == NULL) {
 		prgmp = elf_loader_mem(&env, file, &proc->im, secure_load);
 	} else {
@@ -178,11 +185,6 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 		assert(0);
 		return NULL;
 	}
-
-	proc->state = proc_created;
-	proc->n_threads = 0;
-	proc->terminated_threads = 0;
-	proc->mop = make_mop_for_process();
 
 	return seal_proc_for_user(proc);
 }
@@ -253,14 +255,14 @@ void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
 
-cap_pair proc_tmp_alloc(size_t s) {
+cap_pair proc_tmp_alloc(size_t s, Elf_Env* the_env) {
     /* Swaps to using the proper alloc when memmgt is up */
     if(namespace_get_ref(namespace_num_memmgt) != NULL) {
-        env.alloc = &mmap_based_alloc;
-        env.free = &mmap_based_free;
-        return mmap_based_alloc(s);
+        the_env->alloc = &mmap_based_alloc;
+        the_env->free = &mmap_based_free;
+        return mmap_based_alloc(s, the_env);
     } else {
-        return tmp_alloc(s);
+        return tmp_alloc(s, the_env);
     }
 }
 

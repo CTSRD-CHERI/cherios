@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <elf.h>
 #include "cprogram.h"
 #include "queue.h"
 #include "string.h"
@@ -64,7 +65,7 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     size_t stack_size = 0x10000;
     size_t stack_align = 0x40;
     size_t queue_size = ((sizeof(queue_default_t) + stack_align - 1) / stack_align) * stack_align;
-    void * stack = env->alloc(stack_size).data;
+    void * stack = env->alloc(stack_size, env).data;
     if(!stack) {
         return NULL;
     }

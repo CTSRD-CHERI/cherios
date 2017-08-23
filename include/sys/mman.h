@@ -36,6 +36,7 @@
 #include "errno.h"
 #include "types.h"
 #include "nano/nanokernel.h"
+#include "elf.h"
 
 #define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
 
@@ -126,17 +127,8 @@ enum mmap_return
     ENOMEM = 1
 };
 
-static cap_pair mmap_based_alloc(size_t s) {
-    cap_pair p;
-    res_t res = mem_request(0, s, NONE, own_mop);
-    if(res == NULL) return NULL_PAIR;
-    rescap_take(res, &p);
-    return p;
-}
-
-static void mmap_based_free(capability c) {
-    return mem_release(cheri_getbase(c), cheri_getlen(c), own_mop);
-}
+cap_pair mmap_based_alloc(size_t s, Elf_Env* env);
+void mmap_based_free(capability c, Elf_Env* env);
 
 /* Old mmap for anything that needs it */
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);

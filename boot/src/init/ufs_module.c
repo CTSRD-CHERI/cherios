@@ -89,7 +89,7 @@ load(const char *filepath, int *bufsize)
 		return NULL;
 	}
 
-	void * buf = env.alloc(size).data;
+	void * buf = env.alloc(size, &env).data;
 	if (buf == NULL) {
 		printf("Failed to allocate read buffer %zu for '%s'\n",
 		       size, filepath);
@@ -100,7 +100,7 @@ load(const char *filepath, int *bufsize)
 	if ((size_t)read != size) {
 		printf("Failed to read '%s' (%zd != %zu)\n", filepath, read,
 		       size);
-		env.free(buf);
+		env.free(buf, &env);
 		return NULL;
 	}
 

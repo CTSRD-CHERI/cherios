@@ -46,6 +46,7 @@
 #include "string.h"
 #include "elf.h"
 #include "nano/nanokernel.h"
+#include "mman.h"
 
 #define TRACE_ELF_LOADER	0
 
@@ -196,7 +197,7 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
     switch(store_type) {
 
         case storage_process:
-			out_elf->loaded_process = env->alloc(elf->maxaddr);
+			out_elf->loaded_process = env->alloc(elf->maxaddr, env);
 			out_elf->tls_num = 0;
 
 			char *prgmp = out_elf->loaded_process.data;
@@ -226,7 +227,7 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
 #else
 				cap_pair pr;
 
-				res_t res = mem_request(0, out_elf->maxaddr + FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES), NONE, own_mop);
+				res_t res = mem_request(0, out_elf->maxaddr + FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES), NONE, env->handle);
 				assert(res != NULL);
 				entry_t e0 = foundation_create(res, out_elf->maxaddr,
 											   out_elf->loaded_process.data, out_elf->entry, MAX_FOUND_ENTRIES);
