@@ -239,7 +239,7 @@ static size_t find_free_claim_index(vpage_range_desc_t* desc, mop_internal_t* mo
     else return free_index;
 }
 
-static int claim_node(mop_internal_t* mop, vpage_range_desc_t* desc, size_t index) {
+static int claim_node(mop_internal_t* mop, vpage_range_desc_t* desc, size_t index, size_t times) {
     // We are using NULL as no owner
     assert(mop != NULL);
 
@@ -249,7 +249,7 @@ static int claim_node(mop_internal_t* mop, vpage_range_desc_t* desc, size_t inde
     claimer_link_t old_last = mop->last;
 
     claim->owner = mop;
-    claim->n_claims = 1;
+    claim->n_claims = times;
 
     desc->claims_used++;
 
@@ -302,7 +302,7 @@ static void transfer_claims(vpage_range_desc_t* desc, vpage_range_desc_t* free_d
     size_t alloc_fix = free_desc->length;
     FOREACH_CLAIMER(desc, index, claim) {
         if(claim->owner != NULL) {
-            claim_node(claim->owner, free_desc, index);
+            claim_node(claim->owner, free_desc, index, claim->n_claims);
             claim->owner->allocated_pages -= alloc_fix; // Don't double count
         }
     }
@@ -388,7 +388,7 @@ static void soft_index(size_t page_n, struct index_result* result) {
 
 /* Visitor functions for request/claim/free */
 
-static int visit_claim_check(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length) {
+static int visit_claim_check(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
     if(desc->allocation_type == open_node) {
         return MEM_CLAIM_NOT_IN_USE;
     } else if(desc->allocation_type == tomb_node) {
@@ -398,6 +398,9 @@ static int visit_claim_check(vpage_range_desc_t *desc, size_t base, mop_internal
     size_t index = find_free_claim_index(desc, owner);
 
     if(index == (size_t)(-1)) return MEM_CLAIM_CLAIM_LIMIT;
+
+    size_t claims = desc->claimers[index].n_claims;
+    if(claims + times < claims) return MEM_CLAIM_OVERFLOW;
 
     return CHECK_PASS;
 }
@@ -415,7 +418,7 @@ static int visit_request_check(vpage_range_desc_t *desc, size_t base, mop_intern
     return CHECK_PASS;
 }
 
-static int visit_free_check(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length) {
+static int visit_free_check(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
     if(desc->allocation_type != allocation_node) {
         // Won't be claimed anyway
         return VISIT_CONT;
@@ -429,14 +432,15 @@ static int visit_free_check(vpage_range_desc_t *desc, size_t base, mop_internal_
     return CHECK_PASS;
 }
 
-static vpage_range_desc_t * visit_claim(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length) {
+static vpage_range_desc_t *
+visit_claim(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
 
     size_t index = find_free_claim_index(desc, owner);
 
     if(desc->claimers[index].owner == owner) {
-        desc->claimers[index].n_claims++;
+        desc->claimers[index].n_claims += times;
     } else {
-        claim_node(owner, desc, index);
+        claim_node(owner, desc, index, times);
     }
 
     return desc;
@@ -642,10 +646,14 @@ static vpage_range_desc_t * free_desc(vpage_range_desc_t *desc) {
     return desc;
 }
 
-static vpage_range_desc_t * visit_free(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length) {
+static vpage_range_desc_t *
+visit_free(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
 
     size_t index = find_free_claim_index(desc, owner);
-    size_t rem_claims =  --desc->claimers[index].n_claims;
+    size_t rem_claims =  desc->claimers[index].n_claims;
+
+    rem_claims = rem_claims <= times ? 0 : rem_claims - times;
+    desc->claimers[index].n_claims = rem_claims;
 
     if(rem_claims == 0) {
         release_claim(desc, index);
@@ -768,9 +776,6 @@ static void split_index(size_t page_n, struct index_result* containing_index,
         } else if(left_desc->allocation_type == internal_node) {
             split_index(page_n, containing_index, left_desc->sub_table, lvl+1, split_result, desc_out, 1);
         } else {
-            printf("was of len %lx \n", left_desc->length);
-            printf("type %d, lvl %lx\n", left_desc->allocation_type, lvl);
-            mmap_dump();
             assert(0 && "For some reason we are trying to split a tomb or invalid node");
         }
 
@@ -841,8 +846,8 @@ void size_node(size_t page_n, size_t npages, struct index_result* index) {
     }
 }
 
-typedef vpage_range_desc_t * visit_t(vpage_range_desc_t *desc, size_t page_n, mop_internal_t* owner, size_t npages);
-typedef int check_t(vpage_range_desc_t *desc, size_t page_n, mop_internal_t* owner, size_t npages);
+typedef vpage_range_desc_t * visit_t(vpage_range_desc_t *desc, size_t page_n, mop_internal_t* owner, size_t npages, size_t times);
+typedef int check_t(vpage_range_desc_t *desc, size_t page_n, mop_internal_t* owner, size_t npages, size_t times);
 
 void mmap_dump(void) {
     size_t search_page_n = 0;
@@ -859,7 +864,7 @@ void mmap_dump(void) {
     } while(search_page_n != MAX_VIRTUAL_PAGES);
 }
 
-static int mem_claim_or_release(size_t base, size_t length, mop_internal_t* mop, visit_t* visitf, check_t* checkf) {
+static int mem_claim_or_release(size_t base, size_t length, size_t times, mop_internal_t* mop, visit_t* visitf, check_t* checkf) {
     ALIGN_PAGE_REQUEST(base, length, page_n, npages)
 
     if(npages == 0) return 0;
@@ -871,12 +876,12 @@ static int mem_claim_or_release(size_t base, size_t length, mop_internal_t* mop,
 
 
     do {
-        int check = checkf(index.result, page_n, mop, npages);
+        int check = checkf(index.result, page_n, mop, npages, times);
         if(check <= VISIT_DONE) return check;
 
         if(check == CHECK_PASS) {
             size_node(page_n, npages, &index);
-            index.result = visitf(index.result, page_n, mop, npages);
+            index.result = visitf(index.result, page_n, mop, npages, times);
         }
 
         size_t result_ends_at = index.result->start + index.result->length;
@@ -898,10 +903,10 @@ static int mem_claim_or_release(size_t base, size_t length, mop_internal_t* mop,
 }
 
 static int claim_mop(mop_internal_t* mop) {
-    return mem_claim_or_release(cheri_getbase(mop),sizeof(mop_internal_t), &mmap_mop, &visit_claim, &visit_claim_check);
+    return mem_claim_or_release(cheri_getbase(mop),sizeof(mop_internal_t), 1, &mmap_mop, &visit_claim, &visit_claim_check);
 }
 static void release_mop(mop_internal_t* mop) {
-    mem_claim_or_release(cheri_getbase(mop),sizeof(mop_internal_t), &mmap_mop, &visit_free, &visit_free_check);
+    mem_claim_or_release(cheri_getbase(mop),sizeof(mop_internal_t), 1, &mmap_mop, &visit_free, &visit_free_check);
 }
 
 /* Check mop is safe in the presence of an adversary. i.e., it will not deference mop unless it knows it is mapped */
@@ -1036,7 +1041,7 @@ res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t m
 
     index.result->allocation_type = allocation_node;
 
-    visit_claim(index.result, base, mop, length);
+    visit_claim(index.result, base, mop, length, 1);
 
     assert(result != NULL);
 
@@ -1084,7 +1089,7 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
     FOREACH_CLAIMED_RANGE(mop, desc, lnk) {
         assert(mop == claim->owner);
         claim->n_claims = 1;
-        visit_free(desc, desc->start, mop, desc->length);
+        visit_free(desc, desc->start, mop, desc->length, 1);
     }
 
     /* Remove from sibling chain */
@@ -1149,20 +1154,20 @@ mop_t __mem_makemop(res_t space, mop_t mop_sealed) {
 
 }
 
-int __mem_claim(size_t base, size_t length, mop_t mop_sealed) {
+int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
     if(check_mop(mop) != 0) return MEM_BAD_MOP;
 
-    return mem_claim_or_release(base, length, mop, &visit_claim, &visit_claim_check);
+    return mem_claim_or_release(base, length, times, mop, &visit_claim, &visit_claim_check);
 }
 
-int __mem_release(size_t base, size_t length, mop_t mop_sealed) {
+int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
     if(check_mop(mop) != 0) return MEM_BAD_MOP;
 
-    return mem_claim_or_release(base, length, mop, &visit_free, &visit_free_check);
+    return mem_claim_or_release(base, length, times, mop, &visit_free, &visit_free_check);
 }
 
 void __revoke_finish(res_t res) {

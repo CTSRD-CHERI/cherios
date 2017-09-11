@@ -132,10 +132,10 @@ res_t mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop
 	return message_send_c(base, length, flags, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 0);
 }
 
-int mem_claim(size_t base, size_t length, mop_t mop) {
+int mem_claim(size_t base, size_t length, size_t times, mop_t mop) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
-	return (int)message_send(base, length, 0, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 5);
+	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 5);
 }
 
 int mem_release(size_t base, size_t length, mop_t mop) {

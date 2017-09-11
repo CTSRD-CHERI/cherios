@@ -56,6 +56,7 @@ extern mop_t own_mop;
 #define MEM_CLAIM_NOT_IN_USE    (-4)
 #define MEM_CLAIM_FREED         (-5)
 #define MEM_CLAIM_CLAIM_LIMIT   (-6)
+#define MEM_CLAIM_OVERFLOW      (-8)
 
 typedef enum mem_request_flags {
     NONE = 0,
@@ -75,7 +76,7 @@ res_t       mem_request(size_t base, size_t length, mem_request_flags flags, mop
  * We must add to your resource limit straight away, otherwise we allow an attack where you think you are well below your
  * limit but then have lots of memory dumped on you. Note this does not award any capabilities. You can ask for any
  * page to stay mapped, not access any page. You must seek the capability elsewhere. */
-int         mem_claim(size_t base, size_t length, mop_t mop);
+int         mem_claim(size_t base, size_t length, size_t times, mop_t mop);
 
 /* Will give back your resource allowance, but will not guarantee unmapping. However, If you somehow still manage to
  * access the page it will still refer to the same physical page as before. */

@@ -171,8 +171,8 @@ void revoke_finish(res_t res);
 void __revoke(void);
 void __revoke_finish(res_t res);
 
-int __mem_claim(size_t base, size_t length, mop_t mop_sealed);
-int __mem_release(size_t base, size_t length, mop_t mop_sealed);
+int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed);
+int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed);
 res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed);
 mop_t __init_mop(capability sealing_cap, res_t big_res);
 mop_t __mem_makemop(res_t space, mop_t mop_sealed);
