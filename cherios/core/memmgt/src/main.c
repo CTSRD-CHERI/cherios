@@ -56,14 +56,6 @@ act_kt general_act; // For anything else (worker id 1)
 act_kt commit_act;  // Only for commit   (worker id 0)
 act_kt revoke_act;  // Only for revoke   (worker if 2)
 
-void register_ns(void * ns_ref) {
-	namespace_init(ns_ref);
-	int ret = namespace_register(namespace_num_memmgt, act_self_ref);
-	if(ret!=0) {
-		printf(KRED"memmgt: Register failed %d\n", ret);
-	}
-}
-
 static void worker_start(register_t arg, capability carg) {
 
     general_act = act_self_ref;

@@ -28,42 +28,29 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_UNISTD_H_H
-#define CHERIOS_UNISTD_H_H
+#ifndef CHERIOS_CAPMALLOC_H
+#define CHERIOS_CAPMALLOC_H
 
-#include "types.h"
-#include "queue.h"
+#include "cheric.h"
+#include "nano/nanokernel.h"
 
-typedef struct startup_desc_t {
-    capability carg;
-    capability pcc;
-    char* stack_args;
-    register_t arg;
-    size_t stack_args_size;
-} startup_desc_t;
+/* Get a reservation capability of size `size'. Will result in a claim being made on all memory the reservation covers,
+ * both the metadata and the capability that would result from a take. */
+res_t       cap_malloc(size_t size);
 
-/* The type of a start function */
-typedef void thread_start_func_t(register_t arg, capability carg);
+/* Lay claim to a capability OR reservation. This capability will not be unmapped until free is called (by you). If cap
+ * came from cap_malloc it will also be temporally safe. You may call claim multiple times. */
+int         cap_claim(capability mem);
 
-/* Map a user thread onto a single activation */
-typedef act_control_kt thread;
+/* Free a capability. Afterwards use of this capability (by you) will be:
+ * either an exception or unchanged data if cap was a result of cap_malloc, or
+ * undefined if cap was not.
+ * Note: If this came from cap_malloc, you may free EITHER the reservation or the resultant capability.
+ * If you claim something else, you must free exactly that. */
+void        cap_free(capability mem);
 
-/* We will get sealed handles from the process manager that represent a process */
-typedef capability process_kt;
+/* Note on free and claim: You may claim something X times. It will only be freed after calling free X times. */
 
-/* A global reference to the handle for the process this thread belongs to */
-extern process_kt proc_handle;
+void        init_cap_malloc(void);
 
-/* Create a thread with the same c0 and pcc capabilities as the caller,
- * but with its own stack and queue and ref/ctrl ref */
-thread thread_new(const char* name, register_t arg, capability carg, thread_start_func_t* start);
-
-void thread_init(void);
-
-/* These are wrappers for messages to the process manager */
-
-process_kt thread_create_process(const char* name, capability file, int secure_load);
-thread thread_start_process(process_kt* proc, startup_desc_t* desc);
-thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* desc);
-
-#endif //CHERIOS_UNISTD_H_H
+#endif //CHERIOS_CAPMALLOC_H

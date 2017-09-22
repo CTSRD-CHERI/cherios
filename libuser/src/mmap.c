@@ -109,7 +109,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 }
 
 int munmap(void *addr, size_t length) {
-    mem_release((size_t)addr, length, own_mop);
+    mem_release((size_t)addr, length, 1, own_mop);
 }
 
 cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
@@ -123,7 +123,7 @@ cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
 }
 
 void mmap_based_free(capability c, Elf_Env* env) {
-	return mem_release(cheri_getbase(c), cheri_getlen(c), env->handle);
+	return mem_release(cheri_getbase(c), cheri_getlen(c), 1, env->handle);
 }
 
 res_t mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop) {
@@ -138,10 +138,10 @@ int mem_claim(size_t base, size_t length, size_t times, mop_t mop) {
 	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 5);
 }
 
-int mem_release(size_t base, size_t length, mop_t mop) {
+int mem_release(size_t base, size_t length, size_t times, mop_t mop) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
-	return (int)message_send(base, length, 0, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 1);
+	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 1);
 }
 
 mop_t mem_makemop(res_t space, mop_t auth_mop) {

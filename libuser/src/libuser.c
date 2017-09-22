@@ -47,6 +47,6 @@ void libuser_init(act_control_kt self_ctrl,
 				  mop_t mop) {
 	proc_handle = proc;
 	mmap_set_mop(mop);
-	object_init(self_ctrl, queue, kernel_if_c);
 	namespace_init(ns_ref);
+	object_init(self_ctrl, queue, kernel_if_c);
 }

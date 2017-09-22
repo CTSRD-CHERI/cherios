@@ -41,6 +41,7 @@
 #include "tmpalloc.h"
 #include "../../boot/include/boot/boot_info.h"
 #include "act_events.h"
+#include "capmalloc.h"
 
 ALLOCATE_PLT_NANO
 
@@ -99,8 +100,7 @@ extern void secure_entry_trampoline(void);
 
 static mop_t make_mop_for_process(void) {
 	if(bootstrapping) return NULL;
-
-	res_t  space = simple_res_alloc(MOP_REQUIRED_SPACE);
+	res_t  space = cap_malloc(MOP_REQUIRED_SPACE);
 	assert(space != NULL);
 	mop_t mop = mem_makemop(space, own_mop);
 	assert(mop != NULL);
@@ -125,7 +125,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 		frame.cf_c3 = process->im.secure_entry;
 	}
 
-	act_control_kt ctrl = syscall_act_register(&frame, name, queue, simple_res_alloc(ACT_REQUIRED_SPACE));
+	act_control_kt ctrl = syscall_act_register(&frame, name, queue, cap_malloc(ACT_REQUIRED_SPACE));
 
 	act_kt act = syscall_act_ctrl_get_ref(ctrl);
 

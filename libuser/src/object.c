@@ -39,20 +39,19 @@
 #include "stdio.h"
 #include "nano/nanokernel.h"
 #include "mman.h"
+#include "capmalloc.h"
+#include "thread.h"
 
 __thread act_control_kt act_self_ctrl = NULL;
 __thread act_kt act_self_ref  = NULL;
 __thread queue_t * act_self_queue = NULL;
 
 kernel_if_t kernel_if;
+int    was_secure_loaded;
+found_id_t* own_found_id;
 
 ALLOCATE_PLT_SYSCALLS
 ALLOCATE_PLT_NANO
-
-#define MAX_SIMPLE_ALLOC 0x8000 - (2 * RES_META_SIZE)
-
-res_t res_pool;
-size_t pool_remains;
 
 void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c) {
 
@@ -73,32 +72,13 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 	act_self_queue = queue;
 
     sync_state = (sync_state_t){.sync_caller = NULL, .sync_token = NULL};
-}
 
-res_t simple_res_alloc(size_t length) {
-    if(memmgt_ref == NULL) return NULL;
+    own_found_id = foundation_get_id();
+    was_secure_loaded = (own_found_id != NULL);
 
-    assert(own_mop != NULL);
+    init_cap_malloc();
 
-    if(length > MAX_SIMPLE_ALLOC) {
-        return mem_request(0, length, NONE, own_mop);
-    }
-
-    if(res_pool == NULL || length > pool_remains) {
-        res_pool = mem_request(0, MAX_SIMPLE_ALLOC, NONE, own_mop);
-        pool_remains = MAX_SIMPLE_ALLOC;
-    }
-
-    res_t result = res_pool;
-
-    if(pool_remains > length + (2 * RES_META_SIZE)) {
-        res_pool = rescap_split(res_pool, length);
-        pool_remains -= (length + RES_META_SIZE);
-    } else {
-        res_pool = NULL;
-    }
-
-    return result;
+    thread_init();
 }
 
 void ctor_null(void) {

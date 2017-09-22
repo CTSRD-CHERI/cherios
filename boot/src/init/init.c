@@ -44,6 +44,7 @@
 #include "tmpalloc.h"
 #include "assert.h"
 #include "nano/nanokernel.h"
+#include "capmalloc.h"
 
 #define B_FS 0
 #define B_SO 0
@@ -295,7 +296,7 @@ static void load_modules(init_info_t * init_info) {
 
     printf("Creating mop for proc man\n");
     // TODO eventually capmalloc will do this nicely */
-    res_t space_for_mop = simple_res_alloc(MOP_REQUIRED_SPACE);
+    res_t space_for_mop = cap_malloc(MOP_REQUIRED_SPACE);
     mop_t mop_for_proc = mem_makemop(space_for_mop, mop);
 
 

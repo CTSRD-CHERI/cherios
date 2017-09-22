@@ -32,10 +32,24 @@
 #define	__STDLIB_H__
 
 #include "cdefs.h"
+#include "capmalloc.h"
 
-void *	malloc(size_t n);
-void *	calloc(size_t n, size_t s);
-void 	free(void * p);
+static inline capability malloc(size_t size) {
+    res_t res = cap_malloc(size);
+    cap_pair pair;
+    rescap_take(res, &pair);
+    capability taken = pair.data;
+    taken = cheri_setbounds(taken, size);
+    return taken;
+}
+
+static inline void free(capability cap) {
+    cap_free(cap);
+}
+
+static inline void * calloc(size_t n, size_t s) {
+    return malloc(n * s);
+}
 
 void 	abort(void)      __dead2;
 void	exit(int status) __dead2;

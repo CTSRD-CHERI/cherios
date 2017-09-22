@@ -76,7 +76,7 @@ int main(register_t arg, capability carg) {
             size_t base = align_down_to(cheri_getbase(nfo), UNTRANSLATED_PAGE_SIZE);
             size_t length = align_up_to(cheri_getlen(nfo) + (base - cheri_getbase(nfo)), UNTRANSLATED_PAGE_SIZE);
 
-            if(mem_release(base,length, own_mop) != 0) {
+            if(mem_release(base,length, 1, own_mop) != 0) {
                 printf("munmap failed\n");
                 return -1;
             }

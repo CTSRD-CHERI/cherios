@@ -18,10 +18,9 @@ set(LIBUSER_ASM_SRCS
 set(LIBUSER_SRCS
     src/assert.c
     src/ctype.c
-    src/dlmalloc.c
+    src/capmalloc/capmalloc_bump.c
     src/errno.c
     src/libuser.c
-    src/malloc.c
     src/mmap.c
     src/msg.c
     src/msg_default.c

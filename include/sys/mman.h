@@ -42,7 +42,7 @@
 
 typedef capability mop_t;
 
-#define MOP_REQUIRED_SPACE (2 * RES_META_SIZE)
+#define MOP_REQUIRED_SPACE (8 * RES_META_SIZE)
 
 extern mop_t own_mop;
 
@@ -80,7 +80,7 @@ int         mem_claim(size_t base, size_t length, size_t times, mop_t mop);
 
 /* Will give back your resource allowance, but will not guarantee unmapping. However, If you somehow still manage to
  * access the page it will still refer to the same physical page as before. */
-int         mem_release(size_t base, size_t length, mop_t mop);
+int         mem_release(size_t base, size_t length, size_t times, mop_t mop);
 
 /* Makes a new mop, places it in space provided by a reservation, and returns a handle. */
 mop_t       mem_makemop(res_t space, mop_t auth_mop);

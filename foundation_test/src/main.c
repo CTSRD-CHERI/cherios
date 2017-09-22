@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <object.h>
 #include "cheric.h"
 #include "nano/usernano.h"
 #include "mman.h"
@@ -35,6 +36,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "assert.h"
+#include "capmalloc.h"
 
 static void print_id(found_id_t* id) {
     printf("hash:\n");
@@ -47,20 +49,6 @@ static void print_id(found_id_t* id) {
     printf("entry: %lx. size:%lx. nent: %lx\n", id->e0, id->length, id->nentries);
 }
 
-static res_t get_res(size_t size) {
-    // Mmmap new will use the message syscall.
-    // All syscalls are in fact dangerous in secure code. Will write an enter/exit routine later.
-    res_t res = mem_request(0, 0x1000, NONE, own_mop);
-
-    if(res == NULL) {
-        // Also dangerous
-        printf(KRED"MMAP failed"KRST);
-        exit(-1);
-    }
-
-    return res;
-}
-
 int main(register_t arg, capability carg) {
 
     init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
@@ -68,7 +56,9 @@ int main(register_t arg, capability carg) {
     /* First try sign something */
     printf("Foundation test started.\n");
 
-    res_t res1 = get_res(0x500);
+    printf("Is secure loaded: %d.\n", was_secure_loaded);
+
+    res_t res1 = cap_malloc(0x500);
     cap_pair pair1;
     cert_t certificate = rescap_take_cert(res1, &pair1, CHERI_PERM_LOAD);
 
@@ -92,9 +82,11 @@ int main(register_t arg, capability carg) {
 
     printf("Signs message: %s", (char *)pair2.data);
 
+    cap_free(res1);
+
     /* Now try to lock a message for ourselves */
 
-    res_t res2 = get_res(0x500);
+    res_t res2 = cap_malloc(0x500);
     cap_pair pair3;
 
     locked_t locked = rescap_take_locked(res2, &pair3, CHERI_PERM_LOAD, id);
@@ -134,6 +126,8 @@ int main(register_t arg, capability carg) {
     CHERI_PRINT_CAP(pair5.data);
 
     assert(pair5.data == NULL);
+
+    cap_free(res2);
 
     printf("Foundation test finished!\n");
     return 0;
