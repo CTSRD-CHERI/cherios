@@ -44,6 +44,8 @@ extern __thread act_control_kt act_self_ctrl;
 extern __thread act_kt act_self_ref;
 extern __thread queue_t * act_self_queue;
 
+extern int    was_secure_loaded;
+extern found_id_t* own_found_id;
 extern act_kt memmgt_ref;
 
 act_kt try_init_memmgt_ref(void);
@@ -73,11 +75,9 @@ extern kernel_if_t kernel_if;
 
 extern __thread long msg_enable;
 
+void next_msg(void);
+msg_t* get_message(void);
 void pop_msg(msg_t * msg);
 int msg_queue_empty(void);
-
-res_t grab_res_from_pool(size_t length);
-
-res_t simple_res_alloc(size_t length);
 
 #endif
