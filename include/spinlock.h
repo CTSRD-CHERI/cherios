@@ -58,6 +58,27 @@ static inline void spinlock_acquire(spinlock_t* lock) {
     );
 }
 
+static inline int spinlock_try_acquire(spinlock_t* lock) {
+    int result;
+    __asm__ volatile (
+    "start:"
+            "li     %[result], 0\n"
+            "cllb   $t0, %[lock]\n"
+            "check: "
+            "bnez   $t0, 1f\n"
+            "li     $t0, 1\n"
+            "cscb   %[result], $t0, %[lock]\n"
+            "beqz   %[result], check\n"
+            "cllb   $t0, %[lock]\n"
+            "1:"
+    : [result]"=r"(result)
+    : [lock]"C"(lock)
+    : "t0"
+    );
+
+    return result;
+}
+
 static inline void spinlock_release(spinlock_t* lock) {
     lock->lock = 0;
 }
