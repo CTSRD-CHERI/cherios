@@ -891,6 +891,7 @@ get_userdata_for_res:
     cclearlo    EN1(c4)
     creturn
 
+# WARN: This is called as subroutine. Be careful on register usage. Don't clobber argument registers #
 ############################################
 # void rescap_take(res_t res, cap_pair* out)
 .global rescap_take
@@ -935,8 +936,8 @@ take_sub:
 
     # set bit or error if already set
     clb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
-    and         $a0, $t8, $t9
-    bnez        $a0, take_er
+    and         $a3, $t8, $t9
+    bnez        $a3, take_er
     or          $t9, $t9, $t8
     csb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
 
@@ -2078,6 +2079,27 @@ new_entry_er:
     cclearlo    EN1(c4)
     creturn
 
+#######################################
+# found_id_t* foundation_get_id (void)
+.global foundation_get_id
+foundation_get_id:
+#######################################
+
+    # Get found struct from current context
+
+    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
+    clc         $c3, $zero, current_context($idc)
+    clc         $c3, $t0, 0($c3)
+    cbtu        $c3, id_none
+
+    # make cert for current foundation
+    dli         $t0, FOUNDATION_ID_SIZE
+    csetbounds  $c3, $c3, $t0
+    dli         $t0, Perm_Load
+    candperm    $c3, $c3, $t0
+
+id_none:
+    creturn
 
 ###########################################################################################
 # cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms)

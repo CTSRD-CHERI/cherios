@@ -120,7 +120,9 @@
 /* Take a reservation and lock for intended user (identified by id) */\
     ITEM(rescap_take_locked, locked_t, (res_t, res, cap_pair*, out, register_t, user_perms, found_id_t*, recipient_id), __VA_ARGS__)\
 /* Unlock a lcoked capability. Can only be done inside correct foundation */\
-    ITEM(rescap_unlock, void, (locked_t, locked, cap_pair*, out), __VA_ARGS__)
+    ITEM(rescap_unlock, void, (locked_t, locked, cap_pair*, out), __VA_ARGS__)\
+/* If in a foundation get own foundation_id */\
+    ITEM(foundation_get_id, found_id_t*, (void), __VA_ARGS__)
 
 
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
