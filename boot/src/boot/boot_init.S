@@ -33,6 +33,9 @@
 .set nobopt
 .set noat
 
+#define __ASSEMBLY__ 1
+#include "mips.h"
+
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
 # to various startup functions to initialise the C runtime, and then call
@@ -65,6 +68,18 @@ start:
     or      $t0, $t0, $t1
 
     mtc0		$t0, $12
+
+#ifdef SMP_ENABLED
+	# Send SMP cores other than 0 to trap
+
+    dmfc0   $a0, $15, 1
+    andi    $a0, $a0, 0xff
+    bnez    $a0, bootload_smp_trap
+    nop
+
+    # Disable other TCs - TODO DVP not supported
+
+#endif
 
     # Set revoking nothing
 
@@ -162,6 +177,32 @@ cherios_init_jump_target:
 	cjalr		$c12, $c17
 	nop
 
-	# Bootloader done. Go in waiting state. #fixme: revoke object
-	cfromptr $c1, $c1, $0
-	creturn
+#ifdef SMP_ENABLED
+	# Trap for threads other than man
+bootload_smp_trap:
+    cmove   $c3, $c1
+
+    # a0 contains our CPU ID
+
+    # A vector of characters to signal when to exit this trap. 0 = spin. 1 = try exit. 2 = try exit
+    dla $t0, smp_signal_vector
+    daddu   $t0, $t0, $a0
+
+    # A vector of capabilities for when to go on exit
+    dla $t1, smp_destination_vector
+    dsll $a0, $a0, 5 # FIXME 4 for 128
+    daddu  $t1, $t1, $a0
+
+
+    # Spin until signal non zero
+    li  $t2, 0
+bootload_smp_spin:
+    beqz $t2, bootload_smp_spin
+    clb $t2, $t0, 0($c3)
+
+    # Load destination, and jump out while setting signal to 2
+    li  $t2, 2
+    clc $c4, $t1, 0($c3)
+    cjr $c4
+    csb $t2, $t0, 0($c3)
+#endif

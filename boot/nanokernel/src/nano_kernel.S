@@ -33,6 +33,7 @@
 .include "asm.S"
 #include "assembly_utils.h"
 #include "nano/nanokernel.h"
+#include "mips.h"
 
 # We will lay out our contexts like this
 
@@ -177,6 +178,11 @@ nano_zero_page:
     daddiu      zero_page_tmp_1, zero_page_tmp_1, -(UNROLL_FACTOR * CAP_SIZE)
 
     jr          $ra
+    nop
+
+nano_smp_trap:
+    b nano_smp_trap
+    nop
 
 #################################################################
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
@@ -186,6 +192,12 @@ nano_kernel_init:
 	# Populate exception registers: $kdc and $kcc
 	cgetpccsetoffset $kcc, $zero                 # kdcc will hold the code global capability
 	cgetdefault	$kdc                                    # kdc will hold the data global capability
+
+	# Send SMP TCs other than 0 to trap to let nano perform init
+    dmfc0       $t0, $15, 1
+    andi        $t0, $t0, 0xff
+    bnez        $t0, nano_smp_trap
+    nop
 
     cmove       $c15, $c3                               # save this for the end
 

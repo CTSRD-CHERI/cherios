@@ -32,6 +32,11 @@
 #ifndef _CHERIOS_MIPS_H_
 #define	_CHERIOS_MIPS_H_
 
+#define SMP_CORES 2
+// #define SMP_ENABLED
+
+#ifndef __ASSEMBLY__
+
 #ifdef HARDWARE_qemu
 #define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
 #define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
@@ -421,5 +426,7 @@ struct mips_frame {
 	register_t	mf_pc;
 };
 #endif
+
+#endif // ASSEMBLY
 
 #endif /* _CHERIOS_MIPS_H_ */

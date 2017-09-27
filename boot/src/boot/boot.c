@@ -40,6 +40,16 @@ struct packaged_args {
 };
 typedef void nano_init_t(register_t unmanaged_size, register_t return_ptr, struct packaged_args* args);
 
+#ifdef SMP_ENABLED
+enum smp_signal_e {
+    spin_wait = 0,
+    trampoline_ready = 1,
+    trampolined = 2
+};
+
+capability smp_destination_vector[SMP_CORES];
+volatile char smp_signal_vector[SMP_CORES];
+#endif
 
 void bootloader_main(void);
 void bootloader_main(void) {
@@ -79,7 +89,6 @@ void bootloader_main(void) {
      * All registers will be cleared apart from a specified few. mem_size of memory will be left unmanaged and the
      * rest will be returned as a reservation. The third argument is an extra argument to the kernel */
 
-    boot_printf("Jumping to nano kernel...\n");
     BOOT_PRINT_CAP(nano_init);
 
     struct packaged_args args;
@@ -87,5 +96,27 @@ void bootloader_main(void) {
     args.a1 = bi->init_entry;
     args.a2 = bi->init_tls_base;
     args.a3 = 0;
+
+#ifdef SMP_ENABLED
+    boot_printf("Signalling SMP cores...\n");
+    /* We can send each core to a different location - however here will send them all to nano init */
+    for(size_t i = 1; i < SMP_CORES; i++) {
+        smp_destination_vector[i] = nano_init;
+        smp_signal_vector[i] = trampoline_ready;
+    }
+
+    /* Wait until all threads have moved on as the bootloader may overwrite itself before a tread moves on -
+     * very unlikely, be better safe than sorry */
+    boot_printf("Waiting for SMP cores...\n");
+    for(size_t i = 1; i < SMP_CORES; i++) {
+        while(smp_signal_vector[i] != trampolined) {
+            //nop
+        }
+    }
+
+#endif
+
+    boot_printf("Jumping to nano kernel...\n");
+
     nano_init(mem_size, entry, &args);
 }
