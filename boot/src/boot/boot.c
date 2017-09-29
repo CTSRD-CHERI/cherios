@@ -110,7 +110,7 @@ void bootloader_main(void) {
     boot_printf("Waiting for SMP cores...\n");
     for(size_t i = 1; i < SMP_CORES; i++) {
         while(smp_signal_vector[i] != trampolined) {
-            //nop
+            HW_YIELD;
         }
     }
 

@@ -77,8 +77,6 @@ start:
     bnez    $a0, bootload_smp_trap
     nop
 
-    # Disable other TCs - TODO DVP not supported
-
 #endif
 
     # Set revoking nothing
@@ -195,10 +193,12 @@ bootload_smp_trap:
 
 
     # Spin until signal non zero
-    li  $t2, 0
 bootload_smp_spin:
-    beqz $t2, bootload_smp_spin
+    li  $zero, 0xea1d       # yield
+    nop
     clb $t2, $t0, 0($c3)
+    beqz $t2, bootload_smp_spin
+    nop
 
     # Load destination, and jump out while setting signal to 2
     li  $t2, 2
