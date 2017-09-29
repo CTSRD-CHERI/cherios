@@ -133,6 +133,7 @@ include_directories(elf/include)
 
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
+    -DHARDWARE_${HARDWARE}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -cheri-linker
@@ -158,7 +159,6 @@ set(C_COMPILER_FLAGS
     -mxgot
     -O1 # TODO: make this depend on the configuration
     -std=c11
-    -DHARDWARE_${HARDWARE}
     -DCONSOLE_${CONSOLE}
     -fpic
 )
