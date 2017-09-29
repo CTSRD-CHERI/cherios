@@ -51,6 +51,12 @@ register_t cp0_hwrena_get(void);
 void cp0_hwrena_set(register_t hwrena);
 register_t cp0_badvaddr_get(void);
 
+static inline char cp0_get_cpuid(void) {
+	register_t EBase;
+	__asm__ __volatile__ ("dmfc0 %0, $15, 1" : "=r" (EBase));
+	return (char)EBase;
+}
+
 static inline register_t
 cp0_status_get(void)
 {
