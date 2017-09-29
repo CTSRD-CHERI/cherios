@@ -35,23 +35,26 @@
 #define SMP_CORES 2
 #define SMP_ENABLED
 
-#ifndef __ASSEMBLY__
-
 #ifdef HARDWARE_qemu
-#define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
-#define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
+    #define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
+    #define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
 
-#ifdef SMP_ENABLED
-#define HW_YIELD __asm__ __volatile__ ("li  $zero, 0xea1d")
-#else
-#define HW_YIELD
-#endif
+    #ifdef SMP_ENABLED
+    #define HW_YIELD __asm__ __volatile__ ("li  $zero, 0xea1d")
+    #define YIELD li  $zero, 0xea1d
+    #else
+    #define HW_YIELD
+    #define YIELD
+    #endif
 
 #else //qemu
 
-#define HW_YIELD
+    #define HW_YIELD
+    #define YIELD
 
 #endif
+
+#ifndef __ASSEMBLY__
 
 /*
  * Provide more convenient names for useful qualifiers from gcc/clang.

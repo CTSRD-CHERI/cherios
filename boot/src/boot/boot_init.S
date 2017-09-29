@@ -194,7 +194,7 @@ bootload_smp_trap:
 
     # Spin until signal non zero
 bootload_smp_spin:
-    li  $zero, 0xea1d       # yield
+    YIELD
     nop
     clb $t2, $t0, 0($c3)
     beqz $t2, bootload_smp_spin

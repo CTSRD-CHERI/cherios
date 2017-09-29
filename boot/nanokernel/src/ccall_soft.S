@@ -47,8 +47,8 @@
 kernel_ccall_trampoline:
 # FIXME remove this when QEMU is fixed
         dla $k0, 1f
-        csetoffset  $kr1c, $kcc, $k0
-        cjr $kr1c
+        csetoffset  $kr2c, $kcc, $k0
+        cjr $kr2c
         nop
 
         1:
@@ -64,11 +64,11 @@ kernel_ccall_trampoline:
 ccall_soft:
         cchecktype $c1, $c2
         cgettype   $k0, $c1
-        csetoffset $kr1c, $kdc, $k0
+        csetoffset $kr2c, $kdc, $k0
 
         # unseal c1 and c2
-        cunseal $epcc, $c1, $kr1c
-        cunseal $idc, $c2, $kr1c
+        cunseal $epcc, $c1, $kr2c
+        cunseal $idc, $c2, $kr2c
 
         b end
         nop
@@ -80,10 +80,10 @@ creturn_soft:
 
 untrusting:
 		cgettype   $k0, $c17
-        csetoffset $kr1c, $kdc, $k0
+        csetoffset $kr2c, $kdc, $k0
 
-        cunseal $epcc, $c17, $kr1c
-        cunseal $idc, $c18, $kr1c
+        cunseal $epcc, $c17, $kr2c
+        cunseal $idc, $c18, $kr2c
         b end
         nop
 

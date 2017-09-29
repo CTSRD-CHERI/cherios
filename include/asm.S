@@ -121,6 +121,29 @@ li  $zero, 0xdead
     local_var \name, CAP_SIZE, CAP_SIZE_BITS
 .endm
 
+.macro local_cap_var_array, name, n
+    local_var \name, (CAP_SIZE * \num), CAP_SIZE_BITS
+.endm
+
+.macro local_reg_var_array, name, num
+    local_var \name, (REG_SIZE * \num), REG_SIZE_BITS
+.endm
+
+.macro local_array_start name, align, len
+    local_align \align
+    \name\()_start_label :
+    .set \name, local_ctr
+.endm
+
+.macro local_array_end name, align, len
+    local_align \align
+    .set \name\()_size, local_ctr - \name
+    .set \name\()_total_size, ((\len) * \name\()_size)
+    .set extra_size, ((\len - 1) * \name\()_size)
+    .set local_ctr, local_ctr + extra_size
+    .space extra_size
+.endm
+
 .data
 
 .set noreorder
@@ -228,4 +251,9 @@ li  $zero, 0xdead
 
 .macro restore_reg_frame frame_ptr, tmp, c0, pcc
     restore_reg_frame_gen crestore, grestore, \frame_ptr, \tmp, \c0, \pcc
+.endm
+
+.macro get_cpu_id reg
+    dmfc0   \reg, $15, 1
+    andi    \reg, \reg, 0xff
 .endm

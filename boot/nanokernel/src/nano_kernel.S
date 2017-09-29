@@ -28,12 +28,17 @@
 # SUCH DAMAGE.
 #
 
+
+# FIXME: Used cfromptr to create null cap in a few places (this is wrong)
+# FIXME: Better concurrency
+# FIXME: SMP for revoke won't work at all in current state
+
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
+#include "mips.h"
 .include "asm.S"
 #include "assembly_utils.h"
 #include "nano/nanokernel.h"
-#include "mips.h"
 
 # We will lay out our contexts like this
 
@@ -110,10 +115,14 @@
 
 START_LOCALS CAP_SIZE_BITS
 
-# Stuff to do with context switch #
+# Stuff to do with context switch. Allocated for each smp core #
+
+#ifdef SMP_ENABLED
+local_array_start context_array, CAP_SIZE_BITS, SMP_CORES
+#endif
+
 local_cap_var current_context
 local_cap_var exception_context
-local_cap_var next_context
 local_cap_var victim_context
 local_reg_var exception_level
 local_reg_var exception_cause
@@ -121,6 +130,13 @@ local_reg_var exception_ccause
 local_reg_var last_exception_cause
 local_reg_var last_exception_ccause
 local_reg_var last_bad_vaddr
+
+#ifdef SMP_ENABLED
+local_array_end context_array, CAP_SIZE_BITS,  SMP_CORES
+#endif
+
+# For context allocation
+local_cap_var next_context
 
 # Stuff to do with virtual space management
 local_reg_var made_first_res
@@ -180,9 +196,70 @@ nano_zero_page:
     jr          $ra
     nop
 
+#ifdef SMP_ENABLED
+
+# t0 will contain our id
 nano_smp_trap:
-    b nano_smp_trap
+# idc for global state
+    cmove       $idc, $kr1c
+
+# kr1c for thread local
+    dli         $t1, context_array_size
+    multu       $t0, $t1
+    mflo        $t2
+    cincoffset  $kr1c, $kr1c, $t2
+    dli         $t1, context_array_size
+    csetbounds  $kr1c, $kr1c, $t1
+
+    TRACE_ON
+    TRACE_OFF
+
+# wait for signal
+nano_smp_spin:
+    clc         $c3, $zero, current_context($kr1c)
+    YIELD
+    cbtu        $c3, nano_smp_spin
     nop
+
+    TRACE_ON
+    TRACE_OFF
+# setting k0 to 0 as this signals not to perform an exceptional return
+    b           switch_restore_final
+    dli         $k0, 0
+#endif
+
+###############################################################
+# int smp_context_start(context_t start_as, register_t cpu_id)
+.global smp_context_start
+smp_context_start:
+###############################################################
+
+    dli         $v0, -1
+    sltiu       $t1, $a0, SMP_CORES
+    beqz        $t1, smp_context_start_er
+
+    dli         $t0, CONTEXT_TYPE
+    csetoffset  $c4, $kdc, $t0
+    cunseal     $c3, $c3, $c4
+
+    dli         $t0, context_array_size
+    multu       $t0, $a0
+    mflo        $t0
+    daddiu      $t0, current_context
+
+    csetoffset  $c4, $idc, $t0               # current_context for smp core with cpu_id of $a0
+
+smp_signal_loop:
+    cllc        $c5, $c4
+    cbts        $c5, smp_context_start_er
+    nop
+    cscc        $t0, $c3, $c4
+    beqz        $t0, smp_signal_loop
+    dli         $v0, 1
+
+smp_context_start_er:
+    cclearlo    EN3(c3, c4, c5)
+    creturn
 
 #################################################################
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
@@ -193,18 +270,19 @@ nano_kernel_init:
 	cgetpccsetoffset $kcc, $zero                 # kdcc will hold the code global capability
 	cgetdefault	$kdc                                    # kdc will hold the data global capability
 
-	# Send SMP TCs other than 0 to trap to let nano perform init
-    dmfc0       $t0, $15, 1
-    andi        $t0, $t0, 0xff
-    bnez        $t0, nano_smp_trap
-    nop
-
     cmove       $c15, $c3                               # save this for the end
 
     dla         $k0, locals_start
     dli         $k1, locals_size
     csetoffset  $kr1c, $kdc, $k0
     csetbounds  $kr1c, $kr1c, $k1                       # kr1c will hold a capability to our locals
+
+#ifdef SMP_ENABLED
+	# Send SMP TCs other than 0 to trap to let nano perform init
+	get_cpu_id  $t0
+    bnez        $t0, nano_smp_trap
+    nop
+#endif
 
     csd         $zero, $zero, made_first_res($kr1c)
 
@@ -348,7 +426,7 @@ nano_kernel_init:
     # c4 is a capability is a sealing capability for the type space
     # a0 is to allow boot to pass an argument to the kernel. Don't want capabilities or they would have to be checked.
     cclearlo    EncodeReg(all) & ~(EN6(c0, c1, c2, c3, c4, c5))
-    cclearhi    EncodeReg(all) & ~(EN4(c17, kdc, kcc, c31))
+    cclearhi    EncodeReg(all) & ~(EN6(c17, kdc, kcc, epcc, kr1c, kr2c))
 
     cjr         $c17
     nop
@@ -357,6 +435,7 @@ nano_kernel_init:
 
 ##########################################################################
 # idc/kdc will provide us a capability to our locals in everything below #
+# kr1c will hold a capability to our SMP local array.                    #
 ##########################################################################
 
 .text
@@ -557,8 +636,6 @@ context_switch:
     dli     $k0, 0
 
 context_switch_local_entry:                             # void context_switch_local_entry(reg_t cause)
-    # We cant use $idc fo a bit as we may enter here from an exception, so we put it in $kr1c for now
-    cmove   $kr1c, $idc
     # TODO unseal these (if sealed)
     cmove   $idc, $c18
     cmove   $epcc, $c17
@@ -568,50 +645,46 @@ context_switch_exception_entry:                         # kr1c should contain a 
 
     save_reg_frame_idc $kr2c, $k1, $c1, $epcc, $idc     # Save state
 
-    # Now we can undo our weird juggle and use $idc again
-    cmove   $idc, $kr1c
-
     dli      $k1, CONTEXT_TYPE
     bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
-    csetoffset  $kr1c, $kdc, $k1                        # meant to be in delay
+    csetoffset  $c13 , $kdc, $k1                        # meant to be in delay
 
-    cunseal  $c3, $c3, $kr1c
+    cunseal  $c3, $c3, $c13
 
     # Save a context to
-    cseal    $kr2c, $kr2c, $kr1c                        # seal old context
+    cseal    $kr2c, $kr2c, $c13                         # seal old context
     csc      $kr2c, $zero, 0($c4)                       # save it in store_to
 
 
 switch_restore:                                         # void switch_restore(context_t restore_from)
 
-    csc      $c3, $zero, current_context($idc)          # set c3 it as the current context
+    csc      $c3, $zero, current_context($kr1c)         # set c3 it as the current context
 
     # Check if we had supressed any interrupts. If we did, we can pretty much treat this like the
     # Beginning of an exception and just restore the exception context
 
-    cld     $k0,   $zero, exception_cause($idc)         # load cause
-    csd     $zero, $zero, exception_cause($idc)         # and set to 0
+    cld     $k0,   $zero, exception_cause($kr1c)        # load cause
+    csd     $zero, $zero, exception_cause($kr1c)        # and set to 0
     beqz    $k0,   switch_restore_final                 # no exception
-    csd     $zero, $zero, exception_level($idc)         # critical_state.level = 0 (should be in delay)
+    csd     $zero, $zero, exception_level($kr1c)        # critical_state.level = 0 (should be in delay)
 
 switch_exception:                                       # void switch_exception(context_t victim, reg_t cause)
-    csd     $zero, $zero, exception_cause($idc)
+    csd     $zero, $zero, exception_cause($kr1c)
                 # If we were doing it properly we would modify it to have the faulting instruction be from the new
                 # activation. However, for now as only the bits to check the type of
                 # interrupt we will just use this.
 
-    clc     $c3, $zero, current_context($idc)           # Current context is the victim
-    cld     $t0, $zero, exception_ccause($idc)          # load ccause
-    cseal   $c4, $c3, $kr1c                             # Seal c3 to pass to exception handler
-    csd     $k0, $zero, last_exception_cause($idc)      # store cause
-    csc     $c4, $zero, victim_context($idc)            # store victim
-    csd     $t0, $zero, last_exception_ccause($idc)     # store ccause
+    clc     $c3, $zero, current_context($kr1c)          # Current context is the victim
+    cld     $t0, $zero, exception_ccause($kr1c)         # load ccause
+    cseal   $c4, $c3, $c13                              # Seal c3 to pass to exception handler
+    csd     $k0, $zero, last_exception_cause($kr1c)     # store cause
+    csc     $c4, $zero, victim_context($kr1c)           # store victim
+    csd     $t0, $zero, last_exception_ccause($kr1c)    # store ccause
     dmfc0   $t0, cp0_badvaddr
-    csd     $t0, $zero, last_bad_vaddr($idc)
+    csd     $t0, $zero, last_bad_vaddr($kr1c)
 
-
-    clc     $c3, $zero, exception_context($idc)         # load exception context
-    csc     $c3, $zero, current_context($idc)           # set it as current context
+    clc     $c3, $zero, exception_context($kr1c)        # load exception context
+    csc     $c3, $zero, current_context($kr1c)          # set it as current context
     # HERE # If you want to restore the exception context with magic values, store via c3
 
     # Restore everything, we dont have a register spare for $c0 so set default while restoring
@@ -629,9 +702,9 @@ switch_restore_final:
     cld         $a0, $a0, 0($c3)
     bnez        $a0, nano_kernel_die                    # Check this context is still alive
 
-    # c0 is not really stored in $c1, we just use it as temporary. $c3 will be overwritten so use $kr1c.
-    cmove $kr1c, $c3
-    restore_reg_frame_gen crestore_setc0, grestore, $kr1c, $t0, $c1, $epcc
+    # c0 is not really stored in $c1, we just use it as temporary. $c3 will be overwritten so use $kr2c.
+    cmove $kr2c, $c3
+    restore_reg_frame_gen crestore_setc0, grestore, $kr2c, $t0, $c1, $epcc
 
 return:
     # This tackles a qemu bug
@@ -658,11 +731,11 @@ normal_return:
 .global get_last_exception
 get_last_exception:
 #################################################
-    clc        $c4, $zero, victim_context($idc)
-    cld        $t0, $zero, last_exception_cause($idc)
-    cld        $t1, $zero, last_exception_ccause($idc)
-    cld        $t2, $zero, last_bad_vaddr($idc)
-    cld        $t3, $zero, exception_level($idc)
+    clc        $c4, $zero, victim_context($kr1c)
+    cld        $t0, $zero, last_exception_cause($kr1c)
+    cld        $t1, $zero, last_exception_ccause($kr1c)
+    cld        $t2, $zero, last_bad_vaddr($kr1c)
+    cld        $t3, $zero, exception_level($kr1c)
     csc        $c4, $zero, 0($c3)
     csd        $t0, $zero, CAP_SIZE($c3)
     csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
@@ -777,7 +850,7 @@ destroy_context:
     dli         $t0, CONTEXT_TYPE
     csetoffset  $c13, $kdc, $t0                             # Load sealing capability
     cunseal     $c3, $c3, $c13                              # unseal context we are destroying
-    clc         $c14, $zero, current_context($idc)          # load current context
+    clc         $c14, $zero, current_context($kr1c)         # load current context
     ceq         $t1, $c3, $c14                              # t1 = 1 if we are deleting ourselves
     dli         $t2, 1
     dli         $t0, CHERI_FRAME_SIZE
@@ -803,7 +876,7 @@ get_critical_level_ptr:
 
     dli        $t0, exception_level
     dli        $t1, REG_SIZE
-    cincoffset $c3, $idc, $t0
+    cincoffset $c3, $kr1c, $t0
     dli        $t2, DEF_DATA_PERMS
     csetbounds $c3, $c3, $t1
     candperm   $c3, $c3, $t2
@@ -816,7 +889,7 @@ get_critical_cause_ptr:
 
     dli        $t0, exception_cause
     dli        $t1, REG_SIZE
-    cincoffset $c3, $idc, $t0
+    cincoffset $c3, $kr1c, $t0
     dli        $t2, DEF_DATA_PERMS
     csetbounds $c3, $c3, $t1
     candperm   $c3, $c3, $t2
@@ -828,9 +901,9 @@ get_critical_cause_ptr:
 critical_section_enter:
 #################################
 
-    cld        $v0, $zero, exception_level($idc)            # TODO atomic increment
+    cld        $v0, $zero, exception_level($kr1c)            # TODO atomic increment
     daddiu     $v0, 1
-    csd        $v0, $zero, exception_level($idc)
+    csd        $v0, $zero, exception_level($kr1c)
     creturn
 
 
@@ -842,14 +915,14 @@ critical_section_enter:
 critical_section_exit:
 #################################
 
-    cld        $v0, $zero, exception_level($idc)            # TODO atomic decrement
+    cld        $v0, $zero, exception_level($kr1c)            # TODO atomic decrement
     daddiu     $v0, -1
     bnez       $v0, kernel_critical_section_exit_end
-    csd        $v0, $zero, exception_level($idc)            # decrement level
+    csd        $v0, $zero, exception_level($kr1c)            # decrement level
 
-    cld        $t0, $zero, exception_cause($idc)
+    cld        $t0, $zero, exception_cause($kr1c)
     beqz       $t0, kernel_critical_section_exit_end
-    csd        $zero, $zero, exception_cause($idc)             # and set cause to 0
+    csd        $zero, $zero, exception_cause($kr1c)             # and set cause to 0
 
     dmfc0      $t1, $12
     ori        $t1, 3                                       # set SR(EXL) and SR(IE)
@@ -871,7 +944,7 @@ set_exception_handler:
     dli         $t0, CONTEXT_TYPE
     csetoffset  $c13, $kdc, $t0
     cunseal     $c13, $c3, $c13
-    csc         $c13, $zero, exception_context($idc)
+    csc         $c13, $zero, exception_context($kr1c)
     creturn
 
 
@@ -1332,6 +1405,8 @@ revoke_loop_end:
 #TRACE_OFF
 
     # with multicore this will require a sync. This will force a switch to ourselves which will clear registers #
+
+    # FIXME needs updating for smp
 
     dli         $t1, current_context
     dli         $t0, CONTEXT_TYPE
@@ -2029,7 +2104,7 @@ foundation_enter:
 
     clc         $c12, $zero, 0($c3)                     # get entry pcc
     csetoffset  $c3, $c3, $zero
-    clc         $c4, $zero, current_context($idc)       # get current context
+    clc         $c4, $zero, current_context($kr1c)       # get current context
     dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     clc         $idc, $zero, FOUNDATION_ID_SIZE($c3)    # get entry data
 
@@ -2045,7 +2120,7 @@ foundation_enter:
 foundation_exit:
 ###########################################################################################
 
-    clc         $c3, $zero, current_context($idc)       # get current context
+    clc         $c3, $zero, current_context($kr1c)       # get current context
     dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     cfromptr    $c4, $c4, $zero
 
@@ -2062,7 +2137,7 @@ foundation_new_entry:
 
     # Get found struct from current context
     dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
-    clc         $c4, $zero, current_context($idc)
+    clc         $c4, $zero, current_context($kr1c)
     clc         $c4, $t0, 0($c4)
 
     cbtu        $c4, new_entry_er
@@ -2100,7 +2175,7 @@ foundation_get_id:
     # Get found struct from current context
 
     dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
-    clc         $c3, $zero, current_context($idc)
+    clc         $c3, $zero, current_context($kr1c)
     clc         $c3, $t0, 0($c3)
     cbtu        $c3, id_none
 
@@ -2121,7 +2196,7 @@ rescap_take_cert:
 
     # get current foundation
     dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
-    clc         $c5, $zero, current_context($idc)
+    clc         $c5, $zero, current_context($kr1c)
     clc         $c5, $t0, 0($c5)
     cbtu        $c5, take_cert_er
 
@@ -2228,7 +2303,7 @@ rescap_unlock:
 
     # get current foundation
     dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
-    clc         $c5, $zero, current_context($idc)
+    clc         $c5, $zero, current_context($kr1c)
     clc         $c5, $t0, 0($c5)
     cbtu        $c5, 1f
 
@@ -2272,13 +2347,13 @@ rescap_unlock:
 
 tlb_table_missing:
     cgetcause $k0
-    dla $k1, locals_start
-    csetoffset $kr1c, $kdc, $k1
     csd     $k0, $zero, exception_ccause($kr1c)
 
     cld     $k0, $zero, exception_level($kr1c)
     bnez    $k0, nano_kernel_die
     nop
+
+    TRACE_OFF
 
     b context_switch_exception_entry
     dmfc0 $k0, $13
@@ -2287,19 +2362,18 @@ tlb_table_missing:
 get_interface:
     dla         $k0, locals_start
     dli         $k1, locals_size
-    csetoffset  $kr1c, $kdc, $k0
-    csetbounds  $kr1c, $kr1c, $k1                        # kr1c will hold a capability to our locals
+    csetoffset  $kr2c, $kdc, $k0
+    csetbounds  $kr2c, $kr2c, $k1                        # kr1c will hold a capability to our locals
 
     # TODO have a per context vector to say which functions are allowed
     dsll        $k1, $a1, CAP_SIZE_BITS
 
-    clc         $c1, $k1, create_context_cap($kr1c)      # load code cap
-
     dli         $k0, NANO_KERNEL_TYPE
-    csetoffset  $kr2c, $kdc, $k0                         # kr2c holds the sealing capability for our plt.got
+    csetoffset  $c1, $kdc, $k0                           # c1 holds the sealing capability for our plt.got
+    cseal       $c2, $kr2c, $c1                          # seal local into c2
+    clc         $c1, $k1, create_context_cap($kr1c)      # load code cap into c1
 
     li          $k0, 4
-    cseal       $c2, $kr1c, $kr2c
     cincoffset  $epcc, $epcc, $k0
 
     cgetoffset $k1, $epcc                                # counters an eret bug
@@ -2327,8 +2401,6 @@ kernel_exception_trampoline:
         beqz      $k1, get_interface
         cgetcause $k0
 1:
-        dla $k1, locals_start
-        csetoffset $kr1c, $kdc, $k1
         cld $k1, $zero, exception_level($kr1c)
         beqz $k1, take_exception
         csd     $k0, $zero, exception_ccause($kr1c)
