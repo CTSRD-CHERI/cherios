@@ -46,17 +46,21 @@ __asm__ (                                           \
 : "a0", "a1", "$c1", "$c2");                        \
 
 
-#define CALL_NANO_DEVIRTUAL(Call, n, raw_sig)       \
+#define BLAH(a,c,...) c
+#define RETURN_CASE_VOID_void  a ,
+#define DO_RETURN(...) BLAH(__VA_ARGS__, return)
+
+#define CALL_NANO_DEVIRTUAL(Call, n, ret, raw_sig)       \
 do {                                                \
     GET_NANO_SYSCALL(c1, c2, n)           \
-return Call ## _inst(CONTEXT(c1, c2) MAKE_ARG_LIST_APPEND(raw_sig));       \
+DO_RETURN(RETURN_CASE_VOID_ ## ret) Call ## _inst(CONTEXT(c1, c2) MAKE_ARG_LIST_APPEND(raw_sig));       \
 }while(0);
 
 
 MAKE_CTR(NANO_CTR)
 
 #define MAKE_WRAPPED(name, ret, raw_sig, ...) static inline ret name ## _sys MAKE_SIG(raw_sig) {\
-CALL_NANO_DEVIRTUAL(name, (CTR(NANO_CTR)), raw_sig) \
+CALL_NANO_DEVIRTUAL(name, (CTR(NANO_CTR)), ret, raw_sig) \
 }
 
 NANO_KERNEL_IF_RAW_LIST(MAKE_WRAPPED,)
