@@ -189,7 +189,7 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
     assert(elf != NULL);
     assert(elf->hdr != NULL);
 
-	memcpy(out_elf, elf, sizeof(elf));
+	memcpy(out_elf, elf, sizeof(image));
 
     assert(out_elf != NULL);
     assert(out_elf->hdr != NULL);
