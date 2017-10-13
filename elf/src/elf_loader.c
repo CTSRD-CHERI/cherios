@@ -244,9 +244,9 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
             assert(out_elf->tls_size == 0 || out_elf->tls_num != MAX_THREADS);
 			/* If secure loaded we did all TLS upfront */
             if(out_elf->tls_size != 0 && !out_elf->secure_loaded) {
-				TLS_copy(out_elf, elf->tls_num);
+				TLS_copy(out_elf, out_elf->tls_num);
             }
-            if(out_elf->tls_size != 0) elf->tls_num++;
+            if(out_elf->tls_size != 0) out_elf->tls_num++;
             break;
     }
 
