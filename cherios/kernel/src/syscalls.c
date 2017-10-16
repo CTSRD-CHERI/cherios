@@ -59,12 +59,12 @@ void kernel_sleep(int time) {
 void kernel_wait(void);
 void kernel_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
-	sched_block_until_msg(kernel_curr_act, NULL);
+	sched_block_until_msg(NULL, NULL);
 }
 
-act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res);
-act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res) {
-	return act_register_create(frame, queue, name, status_alive, NULL, res);
+act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint);
+act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint) {
+	return act_register_create(frame, queue, name, status_alive, NULL, res, cpu_hint);
 }
 
 act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl);
@@ -76,7 +76,6 @@ act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl) {
 status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl);
 status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
-    KERNEL_TRACE("get status", "Level: %ld. Cause: %lx", *ex_lvl, *ex_cause);
 	return act_get_status(ctrl);
 }
 

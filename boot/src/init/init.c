@@ -45,6 +45,7 @@
 #include "assert.h"
 #include "nano/nanokernel.h"
 #include "capmalloc.h"
+#include "../../../cherios/kernel/include/sched.h"
 
 #define B_FS 0
 #define B_SO 0
@@ -311,7 +312,21 @@ static void load_modules(init_info_t * init_info) {
     env.free = &mmap_based_free;
     env.handle = mop;
 
-    /* Now load the rest */
+    /* Now load an idle activation for each core */
+
+    const char* idle_name = "idle.elf";
+    capability  idle_addr = load_check(idle_name);
+
+    for(size_t idle_id = 0; idle_id < SMP_CORES; idle_id++) {
+        printf("Creating idle activation %lx\n", idle_id);
+        desc.arg = idle_id;
+        desc.carg = init_info->idle_init.queue_fill_pre[idle_id];
+        desc.stack_args = NULL;
+        desc.stack_args_size = 0;
+        act_control_kt ctrl = thread_start_process(thread_create_process(idle_name,idle_addr,0), &desc);
+    }
+
+    /* Now load the rest (for fun on a different CPU) */
 
 	for(; i<init_list_len; i++) {
 		int cnt;
@@ -332,6 +347,7 @@ static void load_modules(init_info_t * init_info) {
         desc.carg = carg;
         desc.stack_args = NULL;
         desc.stack_args_size = 0;
+        desc.cpu_hint = SMP_CORES-1;
         /* This version allows the process to spawn new threads */
         be->ctrl = thread_start_process(thread_create_process(be->name, addr, be->type == m_secure), &desc);
 
@@ -367,6 +383,7 @@ int main(init_info_t * init_info) {
     printf("All modules loaded! waiting for finish...\n");
 
 	while(acts_alive(init_list, init_list_len)) {
+        HW_YIELD;
         nssleep(10);
 	}
 

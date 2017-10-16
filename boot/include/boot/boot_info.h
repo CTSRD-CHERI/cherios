@@ -31,8 +31,12 @@
 #ifndef _BOOT_INFO_H_
 #define _BOOT_INFO_H_
 
+// FIXME: This header seems to include types needed by the OS and init. Init seems to be in the wrong directory which
+// FIXME: causes all the messyness with directories.
+
 #include "cheric.h"
 #include "nano/nanokernel.h"
+#include "../../../cherios/kernel/include/sched.h"
 /*
  * Information populated by boot-loader, and given to the kernel via a
  * pointer in cherios main.
@@ -81,6 +85,8 @@ typedef struct init_info {
     size_t uart_page;
 
 	capability mop_sealing_cap;
+
+	sched_idle_init_t idle_init;
 } init_info_t;
 
 #endif /* _BOOT_INFO_H_ */

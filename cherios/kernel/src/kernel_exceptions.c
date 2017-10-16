@@ -40,14 +40,10 @@
  * Exception demux
  */
 
-#ifndef HARDWARE_fpga
-register_t badinstr_glob = 0;
-#endif
-
 DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
 
-static void kernel_exception_capability(register_t ccause) __dead2;
-static void kernel_exception_capability(register_t ccause) {
+static void kernel_exception_capability(register_t ccause, act_t* kernel_curr_act) __dead2;
+static void kernel_exception_capability(register_t ccause, act_t* kernel_curr_act) {
 	cap_exception_t exception = parse_cause(ccause);
 
 	KERNEL_TRACE("exception", "kernel_capability %s", enum_cap_cause_exception_t_tostring(exception.cause));
@@ -68,8 +64,8 @@ static void kernel_exception_capability(register_t ccause) {
 	kernel_freeze();
 }
 
-static void kernel_exception_data(register_t excode) __dead2;
-static void kernel_exception_data(register_t excode) {
+static void kernel_exception_data(register_t excode, act_t* kernel_curr_act) __dead2;
+static void kernel_exception_data(register_t excode, act_t* kernel_curr_act) {
 	exception_printf(KRED"Data abort type %ld, BadVAddr:0x%lx in %s"KRST"\n",
 	       excode, cp0_badvaddr_get(),
 	       kernel_curr_act->name);
@@ -77,16 +73,16 @@ static void kernel_exception_data(register_t excode) {
 	kernel_freeze();
 }
 
-static void kernel_exception_trap(void) __dead2;
-static void kernel_exception_trap(void) {
+static void kernel_exception_trap(act_t* kernel_curr_act) __dead2;
+static void kernel_exception_trap(act_t* kernel_curr_act) {
 	exception_printf(KRED"trap in %s"KRST"\n"
 					 , kernel_curr_act->name);
 	regdump(-1);
 	kernel_freeze();
 }
 
-static void kernel_exception_unknown(register_t excode) __dead2;
-static void kernel_exception_unknown(register_t excode) {
+static void kernel_exception_unknown(register_t excode, act_t* kernel_curr_act) __dead2;
+static void kernel_exception_unknown(register_t excode, act_t* kernel_curr_act) {
 	exception_printf(KRED"Unknown exception type '%ld' in  %s"KRST"\n",
 	       excode, kernel_curr_act->name);
 	regdump(-1);
@@ -94,8 +90,8 @@ static void kernel_exception_unknown(register_t excode) {
 }
 
 
-static void kernel_exception_tlb(register_t badvaddr);
-static void kernel_exception_tlb(register_t badvaddr) {
+static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act);
+static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 	if(memgt_ref == NULL) {
 		exception_printf(KRED"Virtual memory exception before memmgt created\n"KRST);
 	}
@@ -105,89 +101,132 @@ static void kernel_exception_tlb(register_t badvaddr) {
 		kernel_freeze();
 	}
 
-	msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
+    /* We may already have sent a message for this address - but it may not have been processed yet */
+    if(badvaddr != kernel_curr_act->last_vaddr_fault) {
+        msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
+    }
+    kernel_curr_act->last_vaddr_fault = badvaddr;
+
 	sched_reschedule(memgt_ref, 1);
 }
 /*
  * Exception handler demux to various more specific exception
  * implementations.
  */
-void kernel_exception(context_t swap_to, context_t own_context) {
+static void handle_exception_loop(context_t* own_context_ptr) {
+    context_t own_context = *own_context_ptr;
     exection_cause_t ex_info;
-    ex_info.victim_context = swap_to;
+    context_t own_save; // We never use this, there is currently no reason to restore the exception context
+    uint8_t cpu_id = cp0_get_cpuid();
 
-	context_t own_save; // We never use this, there is currently no reason to restore the exception context
-
-	set_exception_handler(own_context);
-	cp0_status_bev_set(0);
-	kernel_interrupts_init(1);
-	while(1) {
-		KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
-		context_switch(ex_info.victim_context, &own_save);
+    while(1) {
 
         get_last_exception(&ex_info);
 
-		if(ex_info.victim_context != own_context) {
-			// We only do this as handles are not guaranteed to stay fresh (although they are currently)
-			kernel_curr_act->context = ex_info.victim_context;
-		} else {
-			// This happens if an interrupt happened during the exception level. As soon as we exit
-			// Another exception happens and so take another.
-		}
+        act_t* kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
+
+        if(ex_info.victim_context != own_context) {
+            // We only do this as handles are not guaranteed to stay fresh (although they are currently)
+            kernel_curr_act->context = ex_info.victim_context;
+        } else {
+            // This happens if an interrupt happened during the exception level. As soon as we exit
+            // Another exception happens and so take another.
+        }
+
+        register_t excode = cp0_cause_excode_get(ex_info.cause);
+
+        KERNEL_TRACE("exception", "in %s. Code %lx. CPU_ID: %u",
+                     kernel_curr_act->name,
+                     (unsigned long)(ex_info.cause),
+                    cpu_id);
 
 
-		static int entered = 0;
-		entered++;
+        switch (excode) {
+            case MIPS_CP0_EXCODE_INT:
+                kernel_interrupt(ex_info.cause);
+                break;
 
-		register_t excode = cp0_cause_excode_get(ex_info.cause);
+            case MIPS_CP0_EXCODE_SYSCALL:
+                exception_printf(KRED"Synchronous syscalls now use the ccall interface"KRST"\n");
+                regdump(-1);
+                kernel_freeze();
+                break;
 
-		KERNEL_TRACE("exception", "in %s. Enter: %d. Code %lx.",
-					 kernel_curr_act->name,
-					 entered,
-					 (unsigned long)(ex_info.cause));
+            case MIPS_CP0_EXCODE_C2E:
+                kernel_exception_capability(ex_info.ccause, kernel_curr_act);
+                break;
+            case MIPS_CP0_EXCODE_TLBL:
+            case MIPS_CP0_EXCODE_TLBS:
+                kernel_exception_tlb(ex_info.badvaddr, kernel_curr_act);
+                break;
+            case MIPS_CP0_EXCODE_ADEL:
+            case MIPS_CP0_EXCODE_ADES:
+            case MIPS_CP0_EXCODE_IBE:
+            case MIPS_CP0_EXCODE_DBE:
+                kernel_exception_data(excode, kernel_curr_act);
+                break;
 
-		if(entered > 1) {
-			KERNEL_ERROR("interrupt in interrupt");
-			kernel_freeze();
-		}
+            case MIPS_CP0_EXCODE_TRAP:
+                kernel_exception_trap(kernel_curr_act);
+                break;
+            default:
+                kernel_exception_unknown(excode, kernel_curr_act);
+                break;
+        }
 
+        // We may have changed context due to this exception
+        kernel_curr_act = sched_get_current_act_in_pool(cp0_get_cpuid());
 
-		switch (excode) {
-			case MIPS_CP0_EXCODE_INT:
-				kernel_interrupt(ex_info.cause);
-				break;
+        KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
+        context_switch(kernel_curr_act->context, &own_save);
+    }
+}
 
-			case MIPS_CP0_EXCODE_SYSCALL:
-				exception_printf(KRED"Synchronous syscalls now use the ccall interface"KRST"\n");
-				regdump(-1);
-				kernel_freeze();
-				break;
+#define EXCEPTION_STACK_SIZE 0x4000
+typedef struct {
+    capability stack [EXCEPTION_STACK_SIZE/sizeof(capability)];
+}exception_stack_t;
 
-			case MIPS_CP0_EXCODE_C2E:
-				kernel_exception_capability(ex_info.ccause);
-				break;
-			case MIPS_CP0_EXCODE_TLBL:
-			case MIPS_CP0_EXCODE_TLBS:
-				kernel_exception_tlb(ex_info.badvaddr);
-				break;
-			case MIPS_CP0_EXCODE_ADEL:
-			case MIPS_CP0_EXCODE_ADES:
-			case MIPS_CP0_EXCODE_IBE:
-			case MIPS_CP0_EXCODE_DBE:
-				kernel_exception_data(excode);
-				break;
+static exception_stack_t exception_stacks[SMP_CORES-1]; // Core 0's stack is given by the call of kernel_exception
+static context_t contexts[SMP_CORES];
 
-			case MIPS_CP0_EXCODE_TRAP:
-				kernel_exception_trap();
-				break;
-			default:
-				kernel_exception_unknown(excode);
-				break;
-		}
+static context_t make_exception_context(uint8_t cpu_id) {
+    reg_frame_t frame;
+    bzero(&frame, sizeof(reg_frame_t));
 
-		entered--;
+    // Program counter
+    frame.cf_pcc = frame.cf_c12 = &handle_exception_loop;
 
-		// We have changed context due to this exception, and so we should restore the current context
-		ex_info.victim_context = kernel_curr_act->context;
-	}
+    // DDC
+    frame.cf_c0 = cheri_getdefault();
+
+    // Stack
+    frame.mf_sp = EXCEPTION_STACK_SIZE;
+    frame.cf_c11 = cheri_setbounds(&exception_stacks[cpu_id-1], EXCEPTION_STACK_SIZE);
+
+    frame.cf_c3 = &(contexts[cpu_id]);
+
+    return create_context(&frame);
+}
+
+void kernel_exception(context_t swap_to, context_t own_context) {
+
+    // Create an exception context for every core. The current context is re-used for core0
+    for(uint8_t cpu_id = 0; cpu_id != SMP_CORES; cpu_id++ ) {
+        context_t ex_context = cpu_id == 0 ? own_context : make_exception_context(cpu_id);
+        contexts[cpu_id] = ex_context;
+        set_exception_handler(ex_context, cpu_id);
+    }
+
+    // This is only for core 0. All other cores are still idle.
+    context_t dummy;
+
+    cp0_status_bev_set(0);
+    kernel_interrupts_init(1);
+
+    // Exception contexts set up. Switch core 0 to first non-exception context
+    context_switch(swap_to, &dummy);
+
+    // This will be reached by the first exception for CPU 0.
+    handle_exception_loop(&contexts[0]);
 }

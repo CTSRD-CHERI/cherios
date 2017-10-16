@@ -31,6 +31,8 @@
 #ifndef CHERIOS_SPINLOCK_H
 #define CHERIOS_SPINLOCK_H
 
+#include "cheric.h"
+
 /* TODO align this nicely */
 #define CACHE_LINE_SIZE 64;
 
@@ -43,36 +45,46 @@ static inline void spinlock_init(spinlock_t* lock) {
     lock->lock = 0;
 }
 static inline void spinlock_acquire(spinlock_t* lock) {
+    register register_t tmp;
     __asm__ volatile (
+    SANE_ASM
     "start:"
-            "cllb   $t0, %[lock]\n"
-            "check:"
-            "bnez   $t0, start\n"
-            "li     $t0, 1\n"
-            "cscb   $t0, $t0, %[lock]\n"
-            "beqz   $t0, check\n"
-            "cllb   $t0, %[lock]\n"
+            "b      check                   \n"
+            "cllb   %[tmp], %[lock]         \n"
+    "retry_yield:"
+            "li     $zero, 0xea1d           \n" // yield on retry
+            "cllb   %[tmp], %[lock]         \n"
+    "check: "
+            "bnez   %[tmp], retry_yield     \n"
+            "li     %[tmp], 1               \n"
+            "cscb   %[tmp], %[tmp], %[lock] \n"
+            "beqz   %[tmp], check           \n"
+            "cllb   %[tmp], %[lock]         \n"
+    : [tmp] "=r" (tmp)
+    : [lock]"C"(&lock->lock)
     :
-    : [lock]"C"(lock)
-    : "t0"
     );
 }
 
-static inline int spinlock_try_acquire(spinlock_t* lock) {
+static inline int spinlock_try_acquire(spinlock_t* lock, register_t times) {
     int result;
+    register register_t tmp0;
     __asm__ volatile (
+    SANE_ASM
+            "li     %[result], 0                \n"
     "start:"
-            "li     %[result], 0\n"
-            "cllb   $t0, %[lock]\n"
-            "check: "
-            "bnez   $t0, 1f\n"
-            "li     $t0, 1\n"
-            "cscb   %[result], $t0, %[lock]\n"
-            "beqz   %[result], check\n"
-            "cllb   $t0, %[lock]\n"
-            "1:"
-    : [result]"=r"(result)
-    : [lock]"C"(lock)
+            "beqz   %[times], 2f                \n"
+            "daddiu %[times], %[times], -1      \n"
+            "cllb   %[tmp], %[lock]             \n"
+    "check: "
+            "bnez   %[tmp], start               \n"
+            "li     %[tmp], 1                   \n"
+            "cscb   %[result], %[tmp], %[lock]  \n"
+            "beqz   %[result], start            \n"
+            "nop"
+    "2:"
+    :  [result]"=r"(result), [tmp]"=r"(tmp0)
+    : [lock]"C"(&lock->lock), [times]"r"(times)
     : "t0"
     );
 
@@ -81,6 +93,7 @@ static inline int spinlock_try_acquire(spinlock_t* lock) {
 
 static inline void spinlock_release(spinlock_t* lock) {
     lock->lock = 0;
+    HW_SYNC;
 }
 
 #endif //CHERIOS_SPINLOCK_H

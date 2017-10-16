@@ -52,14 +52,15 @@ int cherios_main(nano_kernel_if_t* interface,
 	 * to get access to the phy mem we need */
 
 	init_nano_kernel_if_t(interface, def_data);
+
     set_sealing_cap(sealer);
 	/* Get the capability for the uart. We should save this somewhere sensible */
 	capability  cap_for_uart = get_phy_cap(get_book(), uart_base_phy_addr, uart_base_size, 0, 1);
 	set_uart_cap(cap_for_uart);
 
-	kernel_puts("Kernel Hello world\n");
-
     init_fast_critical_section();
+
+	kernel_puts("Kernel Hello world\n");
 
     CHERI_PRINT_CAP(interface);
     CHERI_PRINT_CAP(def_data);
@@ -76,8 +77,10 @@ int cherios_main(nano_kernel_if_t* interface,
 	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
 	init_info.mop_sealing_cap = cheri_setcursor(sealer, MOP_SEALING_TYPE);
 
-	sched_init();
+    kernel_printf("Initialising Scheduler\n");
+	sched_init(&init_info.idle_init);
 
+    kernel_printf("Initialising Activation Manager\n");
 	context_t init_context = act_init(own_context, &init_info, init_base, init_entry, init_tls_base);
 
 	KERNEL_TRACE("kernel", "Going into exception handling mode");

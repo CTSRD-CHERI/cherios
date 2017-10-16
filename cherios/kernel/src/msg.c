@@ -67,12 +67,16 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
 
+	//TODO: We might try do this without a lock at first
+
+	CRITICAL_LOCKED_BEGIN(&dest->writer_spinlock);
+
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
 	kernel_assert(qmask > 0);
 	int next_slot = queue->header.end;
 	if(full(queue, qmask)) {
-		critical_section_exit();
+        CRITICAL_LOCKED_END(&dest->writer_spinlock);
 		return -1;
 	}
 
@@ -94,10 +98,13 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 
 	queue->header.end = safe(queue->header.end+1, qmask);
 
-	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(queue), dest->name);
-	kernel_assert(!empty(queue));
+	HW_SYNC;
 
 	sched_receives_msg(dest);
+
+	CRITICAL_LOCKED_END(&dest->writer_spinlock);
+
+	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(queue), dest->name);
 
 	return 0;
 }
@@ -112,6 +119,8 @@ int msg_queue_empty(act_t * act) {
 
 void msg_queue_init(act_t * act, queue_t * queue) {
 	size_t total_length_bytes = cheri_getlen(queue);
+
+    spinlock_init(&act->writer_spinlock);
 
 	kernel_assert(total_length_bytes > sizeof(queue_t));
 
@@ -205,27 +214,25 @@ void kernel_message_send(capability c3, capability c4, capability c5, capability
 		sync_token = get_and_set_sealed_sync_token(source_activation);
 	}
 
+	// FIXME: We should probably touch the queue once when created. We touch it so we don't take a page fault in
+	// FIXME: a critical section.
     touch_cap(target_activation);
     touch_cap(target_activation->msg_queue);
 
-    CRITICAL_LOCKED_BEGIN(&target_activation->writer_spinlock);
 	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
 
 	if(selector == SYNC_CALL) {
-		//TODO in a multicore world we may spin a little if we expect the answer to be fast
-		//TODO The user will indicate this with the switch flag
-		sched_block(source_activation, sched_sync_block);
-        CRITICAL_LOCKED_END(&target_activation->writer_spinlock);
-        sched_reschedule(target_activation, 0);
+
+        sched_block_until_ret(source_activation, target_activation);
 
 		KERNEL_TRACE(__func__, "%s has recieved return message from %s", source_activation->name, target_activation->name);
 		return;
 	} else if(selector == SEND_SWITCH) {
-        source_activation->sched_status = sched_runnable;
-		CRITICAL_LOCKED_END(&target_activation->writer_spinlock);
-		sched_reschedule(target_activation, 0);
+        // No point trying to send and switch to something scheduled on another core
+        if(source_activation->pool_id == target_activation->pool_id)
+		    sched_reschedule(target_activation, 0);
 	} else {
-		CRITICAL_LOCKED_END(&target_activation->writer_spinlock);
+        // Empty
 	}
 
 	ret->v0 = 0;
@@ -271,9 +278,12 @@ int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* cal
 	/* Set condition variable */
 	returned_to->sync_state.sync_condition = 0;
 
+	HW_SYNC;
+
 	/* Make the caller runnable again */
 	sched_recieve_ret(returned_to);
 
+	// TODO have a selector. Do not assume the reply wants to be descheduled
 	sched_reschedule(returned_to, 0);
 
 	return 0;

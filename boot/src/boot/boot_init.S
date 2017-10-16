@@ -69,6 +69,34 @@ start:
 
     mtc0		$t0, $12
 
+	# Wait for capability coprocessor to be enabled for real
+	nop; nop; nop; nop; nop; nop; nop; nop;
+
+	# Clear other capability registers to ensure we don't retain any
+	# executable capabilities: everything but $pcc and $c0.
+	CClearLo	0xfffe
+	CClearHi	0xffff
+
+	# W^X for pointers: ensure $c0 is never executable.
+	cgetdefault	$c3
+	dli		$t0, ~(1<<1)
+	candperm	$c3, $c3, $t0
+	csetdefault	$c3
+
+	# Implement W^X for pointers: trim store permissions from $pcc to
+	# prevent it from becoming writable in the future.
+	cgetpcc		$c12
+	dli		$t0, ~((1<<3) | (1<<5))
+	candperm	$c12, $c12, $t0
+
+	# Jump to write-free $pcc.
+	dla		$t0, cherios_init_jump_target
+	csetoffset	$c12, $c12, $t0
+	cjr		$c12
+	nop
+
+cherios_init_jump_target:
+
 #ifdef SMP_ENABLED
 	# Send SMP cores other than 0 to trap
 
@@ -97,37 +125,6 @@ start:
     bnez    $t1, 1b
     daddiu  $t1, -1
 
-	# Wait for capability coprocessor to be enabled for real
-	nop; nop; nop; nop; nop; nop; nop; nop;
-
-	# Clear other capability registers to ensure we don't retain any
-	# executable capabilities: everything but $pcc and $c0.
-	CClearLo	0xfffe
-	CClearHi	0xffff
-
-	# W^X for pointers: ensure $c0 is never executable.
-	cgetdefault	$c3
-	dli		$t0, ~(1<<1)
-	candperm	$c3, $c3, $t0
-	csetdefault	$c3
-
-	# Implement W^X for pointers: trim store permissions from $pcc to
-	# prevent it from becoming writable in the future.
-	cgetpcc		$c12
-	dli		$t0, ~((1<<3) | (1<<5))
-	candperm	$c12, $c12, $t0
-
-	# Jump to write-free $pcc.
-	dla		$t0, cherios_init_jump_target
-	csetoffset	$c12, $c12, $t0
-	cjr		$c12
-	nop
-cherios_init_jump_target:
-
-    # Nano kernel init will give us a pointer to its plt, and a default data capability
-    cmove       $c18, $c1
-    cmove       $c19, $c2
-    cmove       $c20, $c3
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
 	dla		$t0, __start_boot_stack
@@ -162,12 +159,6 @@ cherios_init_jump_target:
  	cjalr		$c12, $c17
 	nop
 
-	# We pass the nano kernel if / data cap and handle for the first context
-	dli		$a0, 0
-    cmove   $c3, $c20
-    cmove   $c4, $c18
-    cmove   $c5, $c19
-
 	# Call bootloader_main().
 	cgetpcc		$c12
 	dla		$t0, bootloader_main
@@ -178,7 +169,6 @@ cherios_init_jump_target:
 #ifdef SMP_ENABLED
 	# Trap for threads other than man
 bootload_smp_trap:
-    cmove   $c3, $c1
 
     # a0 contains our CPU ID
 

@@ -211,9 +211,6 @@ nano_smp_trap:
     dli         $t1, context_array_size
     csetbounds  $kr1c, $kr1c, $t1
 
-    TRACE_ON
-    TRACE_OFF
-
 # wait for signal
 nano_smp_spin:
     clc         $c3, $zero, current_context($kr1c)
@@ -221,8 +218,10 @@ nano_smp_spin:
     cbtu        $c3, nano_smp_spin
     nop
 
-    TRACE_ON
-    TRACE_OFF
+    dmfc0       $t0, $12
+    dli         $t1, ~(MIPS_CP0_STATUS_BEV)
+    and         $t0, $t0, $t1
+    dmtc0       $t0, $12
 # setting k0 to 0 as this signals not to perform an exceptional return
     b           switch_restore_final
     dli         $k0, 0
@@ -869,30 +868,44 @@ destroy_context_end:
     cclearlo    (1 << 13) | (1 << 14) | (1 << 3)
     creturn
 
-################################
+#################################################
 .global get_critical_level_ptr
 get_critical_level_ptr:
-################################
+#################################################
 
-    dli        $t0, exception_level
+    sltiu       $t0, $a0, SMP_CORES
+    beqz        $t0, get_critical_end
+    dli         $t0, context_array_size
+    multu       $t0, $a0
+    mflo        $t0
+    daddiu      $t0, exception_level
+
     dli        $t1, REG_SIZE
-    cincoffset $c3, $kr1c, $t0
+    cincoffset $c3, $idc, $t0
     dli        $t2, DEF_DATA_PERMS
     csetbounds $c3, $c3, $t1
     candperm   $c3, $c3, $t2
     creturn
 
-################################
+#################################################
 .global get_critical_cause_ptr
 get_critical_cause_ptr:
-################################
+#################################################
 
-    dli        $t0, exception_cause
+    sltiu       $t0, $a0, SMP_CORES
+    beqz        $t0, get_critical_end
+    dli         $t0, context_array_size
+    multu       $t0, $a0
+    mflo        $t0
+    daddiu      $t0, exception_cause
+
     dli        $t1, REG_SIZE
     cincoffset $c3, $kr1c, $t0
     dli        $t2, DEF_DATA_PERMS
     csetbounds $c3, $c3, $t1
     candperm   $c3, $c3, $t2
+
+get_critical_end:
     creturn
 
 #################################
@@ -936,15 +949,27 @@ kernel_critical_section_exit_end:
 
 
 
-#################################################
-# void set_exception_handler(context_t context);
+###################################################################
+# void set_exception_handler(context_t context, register_t cpu_id);
 .global set_exception_handler
 set_exception_handler:
-#################################################
+###################################################################
+    sltiu       $t1, $a0, SMP_CORES
+    beqz        $t1, 1f
+
     dli         $t0, CONTEXT_TYPE
-    csetoffset  $c13, $kdc, $t0
-    cunseal     $c13, $c3, $c13
-    csc         $c13, $zero, exception_context($kr1c)
+    csetoffset  $c4, $kdc, $t0
+    cunseal     $c3, $c3, $c4
+
+    dli         $t0, context_array_size
+    multu       $t0, $a0
+    mflo        $t0
+    daddiu      $t0, current_context
+
+    csc         $c3, $t0, exception_context($idc)
+    sync
+1:
+    cclearlo    EN2(c3,c4)
     creturn
 
 
@@ -2353,8 +2378,6 @@ tlb_table_missing:
     bnez    $k0, nano_kernel_die
     nop
 
-    TRACE_OFF
-
     b context_switch_exception_entry
     dmfc0 $k0, $13
 
@@ -2371,7 +2394,7 @@ get_interface:
     dli         $k0, NANO_KERNEL_TYPE
     csetoffset  $c1, $kdc, $k0                           # c1 holds the sealing capability for our plt.got
     cseal       $c2, $kr2c, $c1                          # seal local into c2
-    clc         $c1, $k1, create_context_cap($kr1c)      # load code cap into c1
+    clc         $c1, $k1, create_context_cap($kr2c)      # load code cap into c1
 
     li          $k0, 4
     cincoffset  $epcc, $epcc, $k0
@@ -2394,6 +2417,7 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens between nano begin and nano end we should just die.
+# FIXME: only check a0 after syscall trap!!!
         bnez      $a0, 1f
         dmfc0     $k0, $13
         andi      $k1, $k0, 0xFF

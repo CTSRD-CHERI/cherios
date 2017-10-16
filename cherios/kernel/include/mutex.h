@@ -35,26 +35,86 @@
 #include "mips.h"
 #include "nano/nanokernel.h"
 #include "spinlock.h"
+#include "cp0.h"
 
 /* TODO align this nicely */
 #define CACHE_LINE_SIZE 64;
 
 /* TODO these are now used so frequently we should make a faster version of critical enter */
 
-extern ex_lvl_t* ex_lvl;
-extern cause_t* ex_cause;
+extern ex_lvl_t* ex_lvl[SMP_CORES];
+extern cause_t* ex_cause[SMP_CORES];
 
-/* This first one may need to be atomix. The second will be guarded by the first */
-#define FAST_CRITICAL_ENTER (*ex_lvl)++;
-#define FAST_CRITICAL_EXIT (*ex_lvl)--; if(*ex_lvl == 0 && *ex_cause != 0) {*ex_lvl = 1; critical_section_exit();}
+static inline uint8_t fast_critical_enter(void) {
+    register uint8_t ret;
+    register register_t tmp0, tmp1, tmp2;
+    register capability tmp_cap;
+    register capability lvl_array = ex_lvl;
+    __asm__ __volatile__ (
+        "       dmfc0       %[_0], $15, 1                   \n"     // get cpu_id. might change due to interrupt.
+        "1:     move        %[_2], %[_0]                    \n"     // %2 is old cpu_id
+        "       andi        %[ret], %[_0], 0xff             \n"
+        "       dsll        %[_1], %[ret], 5                \n"     // get offset from cpu_id
+        "       clc         %[lvl], %[_1], 0(%[lvl_array])  \n"     // ex_lvl capability
+        "       clld        %[_1], %[lvl]                   \n"     // load linked lvl
+        "       dmfc0       %[_0], $15, 1                   \n"     // get cpu_id again. This is now the correct cpu.
+        "       bne         %[_0], %[_2], 1b                \n"     // if cpu has changed, abort
+        "       daddiu      %[_1], %[_1], 1                 \n"     // increment ex_lvl
+        "       cscd        %[_2], %[_1], %[lvl]            \n"     // store conditional lvl. Will fail if cpu_id changed.
+        "       beqz        %[_2], 1b                       \n"     // retry on failure
+        "       nop                                         \n"     // nop for delay slot
+        : [_2] "=r" (tmp2), [_0] "=r" (tmp0), [_1] "=r" (tmp1), [lvl] "=C" (tmp_cap), [ret] "=r" (ret), [lvl_array] "+C" (lvl_array)
+        : [lvl_array] "C" (lvl_array)
+        :
+    );
+    return ret;
+}
+
+/* Note: This must be called when ex_lvl is non zero. Until we decrement it, interrupts are soft off */
+static inline void fast_critical_exit(void) {
+    uint8_t cpu_id = cp0_get_cpuid();
+    register register_t tmp0, tmp1, tmp2;
+    capability tmp_cap;
+    __asm__ __volatile__ (
+        "1:"
+        "       clld        %[_1], %[lvl]                   \n"     // load lvl
+        "       daddiu      %[_1], %[_1], -1                \n"     // decrement level
+        "       bnez        %[_1], 2f                       \n"     // skip anything with cause if still in critical lvl
+        "       nop                                         \n"
+
+        "       cld         %[_2], $zero, 0(%[ex_cause])    \n"     // load cause. If this becomes stale the sc will fail.
+        "       beqz        %[_2], 2f                       \n"     // if no exception has happened just skip
+        "       cmove       $c1, %[code]                    \n"
+        "       cmove       $c2, %[data]                    \n"
+        "       li          %[_2], (6*4)                    \n"     // 6 instructions from cincoffset to 3:
+        "       cgetpcc     $c17                            \n"
+        "       cincoffset  $c17, $c17, %[_2]               \n"     // c17 will point to label 3f
+        "       ccall       $c1, $c2                        \n"     // FIXME: inlining this would clobber registers
+        "       nop                                         \n"
+        "2:"
+        "       cscd        %[_2], %[_1], %[lvl]            \n"     // store. We might take an exception now (if it succeeds).
+        "       beqz        %[_2], 1b                       \n"     // if store fails, try again
+        "       nop                                         \n"
+        "3:"
+        : [_2] "=r" (tmp2), [_0] "=r" (tmp0), [_1] "=r" (tmp1), [lvl] "=C" (tmp_cap)
+        : [lvl] "C" (ex_lvl[cpu_id]), [ex_cause] "C" (ex_cause[cpu_id]),
+    [code] "C" (critical_section_enter_default_obj.code), [data] "C" (critical_section_enter_default_obj.data)
+        :
+    );
+
+}
+
+#define CRITICAL_LOCKED_BEGIN_ID(lock, id) \
+    id = fast_critical_enter();         \
+    spinlock_acquire(lock);
 
 #define CRITICAL_LOCKED_BEGIN(lock)     \
-    FAST_CRITICAL_ENTER                 \
+    fast_critical_enter();              \
     spinlock_acquire(lock);
 
 #define CRITICAL_LOCKED_END(lock)       \
     spinlock_release(lock);             \
-    FAST_CRITICAL_EXIT
+    fast_critical_exit();
 
 typedef struct semaphore_t {
     struct act_t* first_waiter;

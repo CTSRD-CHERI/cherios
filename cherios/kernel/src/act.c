@@ -40,6 +40,7 @@
 #include "queue.h"
 #include "nano/nanokernel.h"
 #include "act_events.h"
+#include "atomic.h"
 
 /*
  * Routines to handle activations
@@ -56,6 +57,7 @@ static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
 static act_t* ns_ref = NULL;
 
+struct spinlock_t 	act_list_lock;
 act_t* act_list_start;
 act_t* act_list_end;
 
@@ -102,7 +104,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(cheri_getpcc()), NULL);
 	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
-
+    sched_create(0, kernel_act);
 	// Create and register the init activation
 	KERNEL_TRACE("act", "Retroactively creating init activation");
 
@@ -122,12 +124,67 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
     frame.mf_user_loc = 0x7000 + init_tls_base;
 
 	act_t * init_act = &kernel_acts[namespace_num_init];
-	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL, NULL);
+	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL, NULL, 0);
 
 	/* The boot activation should be the current activation */
-	sched_schedule(init_act);
+	sched_schedule(0, init_act);
 
 	return init_act->context;
+}
+
+// FIXME: Locking is a bit heavy here. Better to use a transaction so we can keep pre-emption
+
+static void add_act_to_end_of_list(act_t* act) {
+	CRITICAL_LOCKED_BEGIN(&act_list_lock);
+
+	act->list_prev = act_list_end;
+
+	if(act_list_end == NULL) {
+		act_list_start = act;
+	} else {
+		act_list_end->list_next = act;
+	}
+
+	act_list_end = act;
+	act->list_next = NULL;
+
+	CRITICAL_LOCKED_END(&act_list_lock);
+}
+
+static void remove_from_list(act_t* act) {
+	CRITICAL_LOCKED_BEGIN(&act_list_lock);
+
+	act_t* prev = act->list_prev;
+	act_t* next = act->list_next;
+
+	if(prev == NULL) {
+		act_list_start = next;
+	} else {
+		prev->list_next = next;
+	}
+
+	if(next == NULL) {
+		act_list_end = prev;
+	} else {
+		next->list_prev = prev;
+	}
+
+	CRITICAL_LOCKED_END(&act_list_lock);
+}
+
+static act_t* alloc_static_act(aid_t* aid_used) {
+
+	if(kernel_next_act >= MAX_STATIC_ACTIVATIONS) {
+		kernel_panic("no act slot");
+	}
+
+	aid_t id;
+	ATOMIC_ADD(&kernel_next_act, 32, 1, id)
+
+	act_t* act = kernel_acts + id;
+	if(aid_used) *aid_used = id;
+
+	return act;
 }
 
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
@@ -142,27 +199,13 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 
     act = (act_t*)pr.data;
 
+	aid_t used = 0;
+
 	if(act == NULL) {
-		if(kernel_next_act >= MAX_STATIC_ACTIVATIONS) {
-			kernel_panic("no act slot");
-		}
-		act = kernel_acts + kernel_next_act;
-		/*update next_act */
-		kernel_next_act++;
+		act = alloc_static_act(&used);
 	}
 
-	if(act_list_start == NULL) {
-		act_list_start = act;
-		act_list_end = act;
-		act->list_prev = NULL;
-	} else {
-		act_list_end->list_next = act;
-		act->list_prev = act_list_end;
-
-		act_list_end = act;
-	}
-
-	act->list_next = NULL;
+	add_act_to_end_of_list(act);
 
 	/* Push C0 to the bottom of the stack so it can be popped when we ccall in */
 	act->user_kernel_stack[(USER_KERNEL_STACK_SIZE / sizeof(capability)) -1] = cheri_getdefault();
@@ -172,11 +215,11 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	act->image_base = base;
 
 	//TODO bit of a hack. the kernel needs to know what namespace service to use
-	if(kernel_next_act-1 == namespace_num_namespace) {
+	if(used == namespace_num_namespace) {
 		KERNEL_TRACE("act", "found namespace");
 		ns_ref = act_create_sealed_ref(act);
 	}
-	if(kernel_next_act-1 == namespace_num_memmgt) {
+	if(used == namespace_num_memmgt) {
 		memgt_ref = act;
 	}
 
@@ -223,22 +266,23 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	act->sync_state.sync_token = 0;
 	act->sync_state.sync_condition = 0;
 
-	/* set scheduling status */
-	sched_create(act);
-
 	KERNEL_TRACE("register", "image base of %s is %lx", act->name, act->image_base);
 	KERNEL_TRACE("act", "%s OK! ", __func__);
 	return act;
 }
 
 act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
-							status_e create_in_status, act_control_t *parent, res_t res) {
+							status_e create_in_status, act_control_t *parent, res_t res, uint8_t cpu_hint) {
 	// FIXME pcc base will not be the correct base for secure loaded programs as they start via a trampoline
 	// FIXME Only the caller really knows what base to use.
 	// FIXME The reason this is going wrong is that we really should be sending an address to proc_man to query
 	// FIXME what image it is in. This is hard to do when the system is dying however.
 	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc), res);
 	act->context = create_context(frame);
+    /* set scheduling status */
+
+    if(cpu_hint >= SMP_CORES) cpu_hint = SMP_CORES-1;
+    sched_create(cpu_hint, act);
 	return act_create_sealed_ctrl_ref(act);
 }
 
@@ -261,11 +305,16 @@ int act_terminate(act_control_t * ctrl) {
 	if(event_ref != NULL)
 		msg_push(act_create_sealed_ref(ctrl), NULL, NULL, NULL, 0, 0 , 0, 0, notify_terminate_port, event_ref, ctrl, NULL);
 
+	// need to delete from linked list
+	remove_from_list(ctrl);
+
 	/* This will never return if this is a self terminate. We will be removed from the queue and descheduled */
 	sched_delete(ctrl);
-	if(ctrl == kernel_curr_act) { /* terminated itself */
-		kernel_panic("Should not reach here");
-	}
+
+	/* If we get here, we terminated another activation and we are in charge of cleanup. If we delete ourselves
+	 * sched will take care of cleanup */
+	destroy_context(ctrl->context, NULL);
+
 	return 0;
 }
 

@@ -40,6 +40,7 @@ typedef struct startup_desc_t {
     char* stack_args;
     register_t arg;
     size_t stack_args_size;
+    uint8_t cpu_hint;
 } startup_desc_t;
 
 /* The type of a start function */
@@ -57,6 +58,8 @@ extern process_kt proc_handle;
 /* Create a thread with the same c0 and pcc capabilities as the caller,
  * but with its own stack and queue and ref/ctrl ref */
 thread thread_new(const char* name, register_t arg, capability carg, thread_start_func_t* start);
+/* Same but with a hint to schedule on a particular CPU */
+thread thread_new_hint(const char* name, register_t arg, capability carg, thread_start_func_t* start, uint8_t cpu_hint);
 
 void thread_init(void);
 

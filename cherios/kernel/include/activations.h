@@ -65,6 +65,8 @@ typedef struct act_t
 
 	status_e status;		/* Activation status flags */
 
+	size_t last_vaddr_fault; /* Used by exception handler to stop commit message spam */
+
 	/* Debug related */
 	size_t image_base;
 
@@ -73,10 +75,12 @@ typedef struct act_t
     struct spinlock_t writer_spinlock;
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
 					   which has write access to queue) */
-	/* Used by the scheduler to beat races without having to turn off premption */
-	int message_recieve_flag;
+
+
 	/* Scheduling related */
+	struct spinlock_t sched_access_lock;
 	sched_status_e sched_status;	/* Current status */
+	uint8_t pool_id;
 
 	context_t context;	/* Space to put saved context for restore */
 
@@ -84,7 +88,7 @@ typedef struct act_t
 	struct sync_state {
 		ret_t* sync_ret;
 		sync_t sync_token;		/* Helper for the synchronous CCall mecanism */
-		int sync_condition;
+		volatile int sync_condition;
 	} sync_state;
 
 	/* Semaphore related */
@@ -113,9 +117,7 @@ extern act_t		kernel_acts[];
 /* The index of the next activation to put in the above array. NOT to do with scheduling.*/
 extern aid_t 		kernel_next_act;
 
-/* The currently scheduled activation */
-extern act_t* 		kernel_curr_act;
-
+extern struct spinlock_t 	act_list_lock;
 extern act_t*		act_list_start;
 extern act_t*		act_list_end;
 

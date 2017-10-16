@@ -3,7 +3,7 @@
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,40 +28,25 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_PROC_H
-#define CHERIOS_PROC_H
+#include "cheric.h"
+#include "syscalls.h"
+#include "stdio.h"
 
-#include "elf.h"
-#include "mman.h"
+int main(register_t arg, capability carg) {
 
-#define MAX_PROCS 20
+    volatile size_t* queue_fill = (size_t*)carg;
+    uint8_t cpu_id = (uint8_t)arg;
 
-enum process_state {
-    proc_created = 0,
-    proc_started = 1,
-    proc_zombie = 2
-};
-
-typedef struct process_t {
-    const char* name; // Or some other appropriate i.d.
-    enum process_state state;
-    image im;
-    mop_t mop;
-    act_control_kt threads[MAX_THREADS];
-    size_t n_threads;
-    size_t terminated_threads;
-} process_t;
-
-
-process_t* seal_proc_for_user(process_t* process);
-process_t* unseal_proc(process_t* process);
-
-act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
-                             char* stack_args, size_t stack_args_size, uint8_t cpu_hint);
-
-act_control_kt start_process(process_t* proc,
-                             register_t arg, capability carg, char* stack_args, size_t stack_args_size, uint8_t cpu_hint);
-
-process_t* create_process(const char* name, capability file, int secure_load);
-
-#endif //CHERIOS_PROC_H
+    while(1) {
+        if(*queue_fill != 0) {
+            // Another core may cause an activation in our pool to be runnable.
+            // If we see this happen, stop being idle.
+            //printf("CPU %d yielding to OS\n", cpu_id);
+            sleep(0);
+        } else {
+            // Otherwise yield to another core if virtualised
+            //printf("CPU %d idle\n", cpu_id);
+            HW_YIELD;
+        }
+    }
+}

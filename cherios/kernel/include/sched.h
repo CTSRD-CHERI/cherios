@@ -35,18 +35,27 @@
 
 #include "activations.h"
 
-void    sched_init(void);
+typedef struct sched_idle_init_t {
+    size_t* queue_fill_pre[SMP_CORES];
+} sched_idle_init_t;
 
-void    sched_schedule(act_t * act);
+void    sched_init(sched_idle_init_t*);
+
+void    sched_schedule(uint8_t pool_id, act_t * act);
 void    sched_reschedule(act_t *hint, int in_exception_handler);
 
-void	sched_create(act_t * act);
+void	sched_create(uint8_t pool_id, act_t * act);
 void	sched_delete(act_t * act);
 
+void    sched_block_until_ret(act_t * act, act_t * next_hint);
 void    sched_block_until_msg(act_t * act, act_t * next_hint);
 void	sched_block(act_t *act, sched_status_e status);
 void    sched_receives_sem_signal(act_t * act);
 void	sched_receives_msg(act_t * act);
 void    sched_recieve_ret(act_t * act);
 
+size_t* sched_get_queue_fill_pointer(uint8_t pool_id);
+act_t*  sched_get_current_act_in_pool(uint8_t pool_id);
+act_t*  sched_get_current_act(void);
+void    sched_set_idle_act(act_t* idle_act, uint8_t pool_id);
 #endif /* _CHERIOS_SCHED_H_ */

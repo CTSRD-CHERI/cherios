@@ -35,12 +35,16 @@
 #define SMP_CORES 2
 #define SMP_ENABLED
 
+#ifndef SMP_ENABLED
+	#define SMP_CORES 1
+#endif
+
 #ifdef HARDWARE_qemu
     #define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
     #define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
 
     #ifdef SMP_ENABLED
-    #define HW_YIELD __asm__ __volatile__ ("li  $zero, 0xea1d")
+    #define HW_YIELD __asm__ __volatile__ ("nop; li  $zero, 0xea1d")
     #define YIELD li  $zero, 0xea1d
     #else
     #define HW_YIELD
@@ -53,6 +57,13 @@
     #define YIELD
 
 #endif
+
+#define SANE_ASM    \
+".set noreorder\n"  \
+".set nobopt\n"     \
+".set noat\n"
+
+#define HW_SYNC __asm__ __volatile__ ("sync")
 
 #ifndef __ASSEMBLY__
 
@@ -130,6 +141,8 @@ typedef uint64_t	u_int64_t;
 
 #define	MIPS_BEV0_CCALL_VECTOR		(MIPS_KSEG0 + 0x280)
 #define	MIPS_BEV0_CCALL_VECTOR_PTR	((void *)MIPS_BEV0_EXCEPTION_VECTOR)
+
+#endif
 
 /*
  * Hard-coded MIPS interrupt numbers.
@@ -274,6 +287,8 @@ typedef uint64_t	u_int64_t;
  */
 #define	MIPS_XKPHYS_UNCACHED_BASE	0x9800000000000000
 #define	MIPS_XKPHYS_CACHED_NC_BASE	0x9000000000000000
+
+#ifndef __ASSEMBLY__
 
 static inline vaddr_t
 mips_phys_to_cached(paddr_t phys)

@@ -254,7 +254,7 @@ static __inline__  void set_idc(capability idc) {
 
 #define CHERI_PRINT_CAP(cap)						\
 	printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
-	       "b:%016jx l:%016zx o:%jx type:%lx\n",				\
+	       "b:%016jx l:%016zx o:%jx c:%016jx type:%lx\n",				\
 	   __func__,							\
 	   #cap,							\
 	   cheri_gettag(cap),						\
@@ -263,6 +263,7 @@ static __inline__  void set_idc(capability idc) {
 	   cheri_getbase(cap),						\
 	   cheri_getlen(cap),						\
 	   cheri_getoffset(cap),						\
+		cheri_getcursour(cap),				\
 	   cheri_gettype(cap))
 
 #define CHERI_PRINT_CAP_LITE(cap)					\

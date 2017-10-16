@@ -27,41 +27,33 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_ATOMIC_H
+#define CHERIOS_ATOMIC_H
 
-#ifndef CHERIOS_PROC_H
-#define CHERIOS_PROC_H
+#include "cheric.h"
 
-#include "elf.h"
-#include "mman.h"
+#define SUF_8  "b"
+#define SUF_16 "h"
+#define SUF_32 "w"
+#define SUF_64 "d"
 
-#define MAX_PROCS 20
+#define LOAD(type)  "cll" SUF_ ## type
+#define STORE(type) "csc" SUF_ ## type
 
-enum process_state {
-    proc_created = 0,
-    proc_started = 1,
-    proc_zombie = 2
-};
+#define ATOMIC_ADD(pointer, type, val, result)      \
+{                                                   \
+register register_t tmp;                            \
+__asm__ __volatile__ (                              \
+    SANE_ASM                                        \
+    "1:"                                            \
+    LOAD(type) "    %[out], %[ptr]          \n"     \
+    "daddiu         %[tmp], %[out], %[v]    \n"     \
+    STORE(type) "   %[tmp], %[tmp], %[ptr]  \n"     \
+    "beqz           %[tmp], 1b              \n"     \
+    "nop                                    \n"     \
+: [tmp] "=r" (tmp), [out] "=r" (result)             \
+: [ptr] "C" (pointer), [v] "i" (val)                \
+:)    ;                                             \
+}                                                   \
 
-typedef struct process_t {
-    const char* name; // Or some other appropriate i.d.
-    enum process_state state;
-    image im;
-    mop_t mop;
-    act_control_kt threads[MAX_THREADS];
-    size_t n_threads;
-    size_t terminated_threads;
-} process_t;
-
-
-process_t* seal_proc_for_user(process_t* process);
-process_t* unseal_proc(process_t* process);
-
-act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
-                             char* stack_args, size_t stack_args_size, uint8_t cpu_hint);
-
-act_control_kt start_process(process_t* proc,
-                             register_t arg, capability carg, char* stack_args, size_t stack_args_size, uint8_t cpu_hint);
-
-process_t* create_process(const char* name, capability file, int secure_load);
-
-#endif //CHERIOS_PROC_H
+#endif //CHERIOS_ATOMIC_H

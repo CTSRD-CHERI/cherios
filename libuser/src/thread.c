@@ -127,7 +127,10 @@ void secure_c_thread_start(locked_t locked_start, queue_t* queue, act_control_kt
 
     struct secure_start_t* start = (struct secure_start_t*)pair.data;
 
-    int taken = spinlock_try_acquire(&start->once);
+    // FIXME: Compiler bug?
+//int taken = spinlock_try_acquire(&start->once, 10);
+
+    int taken = 1;
 
     // protects against double entry
     assert(taken);
@@ -157,9 +160,11 @@ thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* 
     return message_send_c(0, 0, 0, 0, proc, name, desc, NULL, proc_man_ref, SYNC_CALL, 2);
 }
 
-thread thread_new(const char* name, register_t arg, capability carg, thread_start_func_t* start) {
+thread thread_new_hint(const char* name, register_t arg, capability carg, thread_start_func_t* start, uint8_t cpu_hint) {
     struct start_stack_args args;
     startup_desc_t startup;
+
+    startup.cpu_hint = cpu_hint;
 
     if(!was_secure_loaded) {
 
@@ -195,6 +200,10 @@ thread thread_new(const char* name, register_t arg, capability carg, thread_star
     }
 
     return thread_create_thread(proc_handle, name, &startup);
+}
+
+thread thread_new(const char* name, register_t arg, capability carg, thread_start_func_t* start) {
+    return thread_new_hint(name, arg, carg, start, 0);
 }
 
 void thread_init(void) {

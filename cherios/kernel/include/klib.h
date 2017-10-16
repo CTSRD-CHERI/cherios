@@ -116,7 +116,7 @@ void	act_wait(act_t* act, act_t* next_hint);
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 					 status_e create_in_status, act_control_t *parent, size_t base, res_t res);
 act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const char *name,
-								   status_e create_in_status, act_control_t *parent, res_t res);
+								   status_e create_in_status, act_control_t *parent, res_t res, uint8_t cpu_hint);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);
 

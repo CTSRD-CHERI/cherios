@@ -29,12 +29,17 @@
  * SUCH DAMAGE.
  */
 
+#include "sched.h"
 #include "mutex.h"
 #include "activations.h"
 #include "klib.h"
 #include "nano/nanokernel.h"
+#include "cp0.h"
+#include "boot_info.h"
 
 /* todo: sleep cpu */
+static act_t idle_acts[SMP_CORES];
+
 static void sched_nothing_to_run(void) __dead2;
 static void sched_nothing_to_run(void) {
 	KERNEL_ERROR("No activation to schedule");
@@ -48,56 +53,126 @@ static void sched_nothing_to_run(void) {
 
 #define SCHED_QUEUE_LENGTH 0x10
 
-static act_t * act_queue[SCHED_QUEUE_LENGTH];
-static size_t   act_queue_current = 0;
-static size_t   act_queue_end = 0;
 
-spinlock_t queue_lock;
+typedef struct sched_pool {
+	/* The currently scheduled activation */
+	act_t*		idle_act;
+	act_t* 		current_act; // DONT use the current index for this. This can be accessed without a lock.
+	act_t* 		act_queue[SCHED_QUEUE_LENGTH];
+	size_t   	act_queue_current; // index round robin. MAY NOT ACTUALLY BE CURRENT;
+	size_t   	act_queue_end;	   // index for end;
+	spinlock_t 	queue_lock;
+    uint8_t     pool_id;
+} sched_pool;
 
-void sched_init() {
-	spinlock_init(&queue_lock);
+sched_pool sched_pools[SMP_CORES];
+
+#define FOREACH_POOL(p) for(sched_pool* p = sched_pools; p != (sched_pools + SMP_CORES); p++)
+
+void sched_init(sched_idle_init_t* sched_idle_init) {
+    uint8_t i = 0;
+	FOREACH_POOL(pool) {
+		spinlock_init(&pool->queue_lock);
+		pool->current_act = NULL;
+		pool->act_queue_current = 0;
+		pool->act_queue_end = 0;
+		pool->idle_act = NULL;
+        pool->pool_id = i;
+
+        capability qsz_cap = & pool->act_queue_end;
+        qsz_cap = cheri_setbounds(qsz_cap, sizeof(size_t));
+        qsz_cap = cheri_andperm(qsz_cap, CHERI_PERM_LOAD);
+
+        sched_idle_init->queue_fill_pre[i] = qsz_cap;
+        i++;
+	}
 }
 
-static void add_act_to_queue(act_t * act, sched_status_e set_to) {
-	kernel_assert(act_queue_end != SCHED_QUEUE_LENGTH);
-	CRITICAL_LOCKED_BEGIN(&queue_lock);
-	act_queue[act_queue_end++] = act;
+size_t* sched_get_queue_fill_pointer(uint8_t pool_id) {
+	return &sched_pools[pool_id].act_queue_end;
+}
+
+act_t* sched_get_current_act_in_pool(uint8_t pool_id) {
+	return sched_pools[pool_id].current_act;
+}
+
+act_t* sched_get_current_act(void) {
+	uint8_t pool_id = fast_critical_enter();
+	act_t* ret = sched_get_current_act_in_pool(pool_id);
+	fast_critical_exit();
+	return ret;
+}
+
+static void add_act_to_queue(sched_pool* pool, act_t * act, sched_status_e set_to) {
+	kernel_assert(pool->act_queue_end != SCHED_QUEUE_LENGTH);
+	spinlock_acquire(&pool->queue_lock);
+	pool->act_queue[pool->act_queue_end++] = act;
 	act->sched_status = set_to;
-	CRITICAL_LOCKED_END(&queue_lock);
+ 	spinlock_release(&pool->queue_lock);
 }
 
-static void delete_act_from_queue(act_t * act, sched_status_e set_to) {
+static void delete_act_from_queue(sched_pool* pool, act_t * act, sched_status_e set_to, size_t index_hint) {
     size_t index;
 	restart: index = 0;
-	if (act_queue[act_queue_current] == act) {
-		index = act_queue_current;
+
+	if(pool->act_queue[index_hint] == act) {
+		index = index_hint;
+	} else if (pool->act_queue[pool->act_queue_current] == act) {
+		index = pool->act_queue_current;
 	} else {
 		size_t i;
-		for(i = 0; i < act_queue_end; i++) {
-			if(act_queue[i] == act) {
+		for(i = 0; i < pool->act_queue_end; i++) {
+			if(pool->act_queue[i] == act) {
 				index = i;
 				break;
 			}
 		}
-		kernel_assert(i != act_queue_end);
 	}
 
-	CRITICAL_LOCKED_BEGIN(&queue_lock);
-	if(act_queue[index] != act) {
-		CRITICAL_LOCKED_END(&queue_lock);
+	spinlock_acquire(&pool->queue_lock);
+	if(pool->act_queue[index] != act) {
+		spinlock_release(&pool->queue_lock);
 		goto restart;
 	}
-	act_queue_end--;
-	act_queue[index] = act_queue[act_queue_end];
+	pool->act_queue_end--;
+	pool->act_queue[index] = pool->act_queue[pool->act_queue_end];
+	pool->act_queue[pool->act_queue_end] = NULL;
+
 	act->sched_status = set_to;
-	CRITICAL_LOCKED_END(&queue_lock);
+	spinlock_release(&pool->queue_lock);
 }
 
-void sched_create(act_t * act) {
-	KERNEL_TRACE("sched", "create %s", act->name);
+static act_t* get_idle(sched_pool* pool) {
+    return pool->idle_act;
+}
+
+void sched_create(uint8_t pool_id, act_t * act) {
+	KERNEL_TRACE("sched", "create %s in pool %d", act->name, pool_id);
+	spinlock_init(&act->sched_access_lock);
 	if(act->status == status_alive) {
-		KERNEL_TRACE("sched", "add %s", act->name);
-		add_act_to_queue(act, sched_runnable);
+		KERNEL_TRACE("sched", "add %s  - adding to pool %x", act->name, pool_id);
+        // FIXME: A bit of a hack
+        if(strcmp(act->name, "idle.elf") == 0) {
+            static uint8_t idles_registered = 0;
+            act->sched_status = sched_runnable;
+            act->pool_id = idles_registered;
+            sched_pools[idles_registered].idle_act = act;
+
+            if(idles_registered != 0) {
+                act->sched_status = sched_running;
+				// Schedule the idle process when created for cores other than 0.
+                kernel_assert(sched_pools[idles_registered].current_act == NULL);
+                sched_pools[idles_registered].current_act = act;
+                int result = smp_context_start(act->context, idles_registered);
+            }
+
+            idles_registered++;
+        } else {
+            act->pool_id = pool_id;
+            fast_critical_enter();
+            add_act_to_queue(&sched_pools[pool_id], act, sched_runnable);
+            fast_critical_exit();
+        }
 	} else {
 		act->sched_status = sched_terminated;
 	}
@@ -105,53 +180,102 @@ void sched_create(act_t * act) {
 
 void sched_delete(act_t * act) {
 	KERNEL_TRACE("sched", "delete %s", act->name);
-	int deleted_self = act->sched_status == sched_running;
+
+	uint8_t pool_id;
+
+	CRITICAL_LOCKED_BEGIN_ID(&act->sched_access_lock, pool_id);
+
+	int deleted_running = act->sched_status == sched_running;
+	int deleted_from_own_pool = act->pool_id == pool_id;
+
+	kernel_assert((deleted_from_own_pool || !deleted_running) && "Need to send an interrupt to achieve this");
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
-		delete_act_from_queue(act, sched_terminated);
+		delete_act_from_queue(&sched_pools[act->pool_id], act, sched_terminated, 0);
 	}
 
-	act->status = status_terminated;
+	act->sched_status = sched_terminated;
 
-	if(deleted_self) {
+	spinlock_release(&act->sched_access_lock);
+
+	if(deleted_running && deleted_from_own_pool) {
 		sched_reschedule(NULL, 0);
-	} else {
-		act->sched_status = sched_terminated;
 	}
+
+    fast_critical_exit();
 }
 
 void sched_receives_sem_signal(act_t * act) {
 	kernel_assert(act->sched_status == sched_sem);
 	KERNEL_TRACE("sched", "now unblocked on sempahore%s", act->name);
-	add_act_to_queue(act, sched_runnable);
+	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
+	add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
+	CRITICAL_LOCKED_END(&act->sched_access_lock);
 }
 
 void sched_receives_msg(act_t * act) {
+    // WARN: Assume critical lock for acts sched status is taken
 	if(act->sched_status == sched_waiting) {
 		KERNEL_TRACE("sched", "now unblocked %s", act->name);
-		add_act_to_queue(act, sched_runnable);
+		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
 	}
 }
 
 void sched_recieve_ret(act_t * act) {
-	kernel_assert(act->sched_status == sched_sync_block);
 	KERNEL_TRACE("sched", "now unblocked %s", act->name);
-	add_act_to_queue(act, sched_runnable);
+	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
+    if(act->sched_status == sched_sync_block) {
+        add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
+    } // We might be responding before the other party has actually de-scheduled
+	CRITICAL_LOCKED_END(&act->sched_access_lock);
+}
+
+void sched_block_until_ret(act_t * act, act_t * next_hint) {
+
+    HW_SYNC;
+
+    int need_resched = 0;
+    if(act->sync_state.sync_condition != 0) {
+        // TODO: We might try spin a while if the person we are waiting on is currently scheduled on another core.
+        // Message has not arrived. Block.
+        CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
+        HW_SYNC;
+        if(act->sync_state.sync_condition != 0) {
+            // Message definitely not arrived. Also, if it does arrive we now have the lock
+            sched_block(act, sched_sync_block);
+            need_resched = 1;
+        }
+        CRITICAL_LOCKED_END(&act->sched_access_lock);
+    }
+
+    if(need_resched) sched_reschedule(next_hint, 0);
 }
 
 void sched_block_until_msg(act_t * act, act_t * next_hint) {
-	kernel_assert(act->sched_status == sched_running);
+	/* Act = NULL means current act */
 
-	CRITICAL_LOCKED_BEGIN(&act->writer_spinlock);
-
-	if(msg_queue_empty(act)) {
-		sched_block(act, sched_waiting);
-		CRITICAL_LOCKED_END(&act->writer_spinlock);
-		/* Somebody may now send a message. This is ok, we will get back in the queue */
-		sched_reschedule(next_hint, 0);
+	if(act == NULL) {
+		uint8_t pool_id = fast_critical_enter();
+		act = sched_pools[pool_id].current_act;
 	} else {
-		CRITICAL_LOCKED_END(&act->writer_spinlock);
+		kernel_assert(act->sched_status == sched_running);
 	}
+
+    CRITICAL_LOCKED_BEGIN(&act->writer_spinlock);
+
+    int need_block = msg_queue_empty(act);
+
+    if(need_block) {
+        spinlock_acquire(&act->sched_access_lock);
+        sched_block(act, sched_waiting);
+        spinlock_release(&act->sched_access_lock);
+    }
+
+    CRITICAL_LOCKED_END(&act->writer_spinlock);
+
+    if(need_block) {
+        sched_reschedule(next_hint, 0);
+    }
 }
 
 void sched_block(act_t *act, sched_status_e status) {
@@ -159,7 +283,7 @@ void sched_block(act_t *act, sched_status_e status) {
 	kernel_assert((status == sched_sync_block) || (status == sched_waiting) || (status == sched_sem));
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
-		delete_act_from_queue(act, status);
+		delete_act_from_queue(&sched_pools[act->pool_id], act, status, 0);
 	} else {
 		act->sched_status = status;
 	}
@@ -173,22 +297,28 @@ static void sched_deschedule(act_t * act) {
 	KERNEL_TRACE("sched", "Reschedule from activation '%s'", act->name);
 }
 
-void sched_schedule(act_t * act) {
+void sched_schedule(uint8_t pool_id, act_t * act) {
+    KERNEL_TRACE("sched", "Reschedule to activation '%s'", act->name);
 	kernel_assert(act->sched_status == sched_runnable);
 	act->sched_status = sched_running;
-	kernel_curr_act = act;
-	KERNEL_TRACE("sched", "Reschedule to activation '%s'", kernel_curr_act->name);
+	sched_pools[pool_id].current_act = act;
 }
 
-static act_t * sched_picknext(void) {
-	if(act_queue_end == 0) {
-		return NULL;
+static act_t * sched_picknext(sched_pool* pool) {
+	spinlock_acquire(&pool->queue_lock);
+
+	if(pool->act_queue_end == 0) {
+		spinlock_release(&pool->queue_lock);
+		return get_idle(pool);
 	}
-	act_queue_current = (act_queue_current + 1) % act_queue_end;
-	act_t * next = act_queue[act_queue_current];
-	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
-		KERNEL_TRACE("sched", "%s should not be waiting", next->name);
-	}
+
+	pool->act_queue_current = (pool->act_queue_current + 1) % pool->act_queue_end;
+	act_t * next = pool->act_queue[pool->act_queue_current];
+
+	// FIXME: I am worried about this ordering. If deadlock. look here.
+	spinlock_acquire(&next->sched_access_lock);
+	spinlock_release(&pool->queue_lock);
+
 	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
 		kernel_printf("Activation %s is in the queue and is not runnable\n", next->name);
         kernel_printf("%p: guard %lx. nxt %p. prev %p. status %d. queue %p, mask %lx\n", next, next->stack_guard, next->list_next,
@@ -200,25 +330,44 @@ static act_t * sched_picknext(void) {
 }
 
 void sched_reschedule(act_t *hint, int in_exception_handler) {
-	KERNEL_TRACE("sched", "being asked to schedule someone else. in_exception_handler=%d. have %lu choices.",
-				 in_exception_handler,
-				 act_queue_end);
+
+	uint8_t pool_id;
+
+	if(!in_exception_handler) {
+		pool_id = fast_critical_enter();
+	} else {
+		pool_id = (uint8_t)cp0_get_cpuid();
+	}
+
+	sched_pool* pool = &sched_pools[pool_id];
+	act_t* kernel_curr_act = pool->current_act;
+
+    KERNEL_TRACE("sched", "being asked to schedule someone else in pool %d. in_exception_handler=%d. have %lu choices.",
+                 pool_id,
+                 in_exception_handler,
+                 pool->act_queue_end);
 
 	if(hint != NULL) {
 		KERNEL_TRACE("sched", "hint is %s", hint->name);
+		spinlock_acquire(&hint->sched_access_lock);
+		if(hint->pool_id != pool_id) {
+            HW_YIELD; // We yield because we probably want completion from the other core
+			KERNEL_TRACE("sched", "hint was in another pool. Choosing another.");
+		}
+
+		if((hint->pool_id != pool_id) || (hint->sched_status != sched_runnable)) {
+			spinlock_release(&hint->sched_access_lock);
+			hint = NULL;
+		}
 	}
 
-	if(!hint || hint->sched_status != sched_runnable) {
-		hint = sched_picknext();
+	if(!hint) {
+		hint = sched_picknext(pool);
 	}
 
 	if(!hint) {
 		sched_nothing_to_run();
 	} else {
-
-        if(!in_exception_handler) {
-            FAST_CRITICAL_ENTER
-        }
 
 		if(hint != kernel_curr_act) {
 
@@ -226,19 +375,24 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 			act_t* to = hint;
 
 			sched_deschedule(from);
-			sched_schedule(to);
+			sched_schedule(pool_id, to);
 
-			if(!in_exception_handler) {
-				if(from->status == status_terminated) {
-					KERNEL_TRACE("sched", "now destroying %s", from->name);
-					destroy_context(from->context, to->context); // This will never return
-				}
-				/* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
-				/* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
-				context_switch(to->context, &from->context);
-			}
+            spinlock_release(&hint->sched_access_lock);
+
+            if(!in_exception_handler) {
+                if (from->status == status_terminated) {
+                    KERNEL_TRACE("sched", "now destroying %s", from->name);
+                    destroy_context(from->context, to->context); // This will never return
+                }
+                /* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
+                /* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
+                context_switch(to->context, &from->context);
+            }
 		} else {
-            FAST_CRITICAL_EXIT
+			spinlock_release(&hint->sched_access_lock);
+			if(!in_exception_handler) {
+				fast_critical_exit();
+			}
         }
 	}
 }

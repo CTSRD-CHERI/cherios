@@ -51,7 +51,7 @@
  * TODO who to switch to. If it was a timer interrupt we can just schedule the next person in a list. If it was a
  * TODO specific asyn interrupt, some activation (which might have a high priority) might be waiting on that. In this
  * TODO case we might want to restore that context straight away */ \
-    ITEM(set_exception_handler, void, (context_t, context), __VA_ARGS__) \
+    ITEM(set_exception_handler, void, (context_t, context, register_t ,cpu_id), __VA_ARGS__) \
 /* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
     ITEM(rescap_take, void, (res_t, res, cap_pair*, out), __VA_ARGS__)\
 /* Returns a SEALED version of rescap_take, but does not change state. Then get fields using normal ops */\
@@ -101,8 +101,8 @@
 /* Get the victim context and cause register for the last exception. */\
     ITEM(get_last_exception, void, (exection_cause_t*, out), __VA_ARGS__)\
 /* For both diagnostic and performance reasons a r.w capability to the EL is available. Use this for a fast critical region*/\
-    ITEM(get_critical_level_ptr, ex_lvl_t*,  (void), __VA_ARGS__)\
-    ITEM(get_critical_cause_ptr, cause_t*,  (void), __VA_ARGS__) \
+    ITEM(get_critical_level_ptr, ex_lvl_t*,  (register_t, cpu_id), __VA_ARGS__)\
+    ITEM(get_critical_cause_ptr, cause_t*,  (register_t, cpu_id), __VA_ARGS__) \
 /* Create a new founded code block. The entry returned will be code_start_entry0 */\
     ITEM(foundation_create, entry_t,                                                                            \
     (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries),   \
@@ -122,7 +122,9 @@
 /* Unlock a lcoked capability. Can only be done inside correct foundation */\
     ITEM(rescap_unlock, void, (locked_t, locked, cap_pair*, out), __VA_ARGS__)\
 /* If in a foundation get own foundation_id */\
-    ITEM(foundation_get_id, found_id_t*, (void), __VA_ARGS__)
+    ITEM(foundation_get_id, found_id_t*, (void), __VA_ARGS__)\
+/* Switches an -IDLE- SMP core to context start_as */\
+    ITEM(smp_context_start, int, (context_t, start_as, register_t, cpu_id), __VA_ARGS__)
 
 
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
