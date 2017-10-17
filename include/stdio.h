@@ -35,6 +35,7 @@
 #include "cdefs.h"
 #include "stdarg.h"
 #include "colors.h"
+#include "types.h"
 
 typedef void FILE;
 extern FILE * stderr;
@@ -49,5 +50,5 @@ int	puts(const char *s);
 int	putc(int character, FILE * stream);
 int	fputc(int character, FILE * stream);
 void	panic(const char *str) __dead2;
-
+void panic_proxy(const char *str, act_kt act) __dead2;
 #endif /* !__STDIO_H__ */

@@ -255,10 +255,12 @@ static inline void dump_tlb() {
     printf("\n\n");
 }
 
-void regdump(int reg_num) {
+void regdump(int reg_num, act_t* kernel_curr_act) {
     // Note, dumping will not be possible when we enforce things properly
     // For now we use the obtain super powers to make it possible.
-	act_t* kernel_curr_act = sched_get_current_act_in_pool(cp0_get_cpuid());
+	if(kernel_curr_act == NULL) {
+		kernel_curr_act = sched_get_current_act_in_pool(cp0_get_cpuid());
+	}
 
     capability all_powerfull = obtain_super_powers(); // Super magic wow!
     set_sealing_cap(all_powerfull);

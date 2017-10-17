@@ -147,6 +147,13 @@ typedef capability sealing_cap;
  * appears not currently to be the case, so manually derive using
  * cheri_getpcc() for now.
  */
+static capability gen_to_cap(register_t reg) {
+	return cheri_setoffset(NULL, reg);
+}
+
+static register_t cap_to_gen(capability cap) {
+	return cheri_getoffset(cap);
+}
 static __inline capability
 cheri_codeptr(const void *ptr, size_t len)
 {

@@ -122,6 +122,12 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 
     spinlock_init(&act->writer_spinlock);
 
+#define printf kernel_printf
+    if(total_length_bytes == 0) {
+        CHERI_PRINT_CAP(queue);
+        CHERI_PRINT_CAP(act);
+        printf("WHo: %s", act->name);
+    }
 	kernel_assert(total_length_bytes > sizeof(queue_t));
 
 	size_t queue_len = (total_length_bytes - sizeof(queue->header)) / sizeof(msg_t);

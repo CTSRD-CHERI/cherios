@@ -113,7 +113,15 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
     reg_frame_t frame;
     memset(&frame, 0, sizeof(reg_frame_t));
 
+    env.handle = process->mop;
+
     queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size, process->mop);
+
+    if(queue == NULL) {
+        cap_pair pair = env.alloc(0x100, &env);
+        CHERI_PRINT_CAP(pair.data);
+    }
+	assert(queue != NULL);
 
     frame.cf_c22 = seal_proc_for_user(process);
 

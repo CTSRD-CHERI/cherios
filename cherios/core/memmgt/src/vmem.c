@@ -113,7 +113,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
         if(ro->entries[ndx] == VTABLE_ENTRY_USED) {
             printf("%s used %lx\n", name, addr);
             CHERI_PRINT_CAP(activation);
-            panic("Someone tried to use a virtual address (%lx) that was already freed!\n");
+            panic_proxy("Someone tried to use a virtual address (%lx) that was already freed!\n", activation);
         }
         printf("spurious commit by %s at vaddr %lx!\n", name, addr);
     }

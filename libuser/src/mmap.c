@@ -117,7 +117,10 @@ cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
     assert(env->handle != NULL);
 	cap_pair p;
 	res_t res = mem_request(0, s, NONE, env->handle);
-	if(res == NULL) return NULL_PAIR;
+	if(cheri_gettag(res) == 0)  {
+		printf("mmap based alloc failed %ld\n", cap_to_gen(res));
+		return NULL_PAIR;
+	}
 	rescap_take(res, &p);
 	return p;
 }

@@ -106,10 +106,20 @@ void kernel_syscall_puts(char *msg) {
 	#endif
 }
 
-void kernel_syscall_panic(void) __dead2;
-void kernel_syscall_panic(void) { //fixme: temporary
-	regdump(-1);
+void kernel_syscall_panic_proxy(act_t* act) __dead2;
+void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
+    if(act != NULL) {
+        if(cheri_gettype(act) == act_ref_type)
+            act = act_unseal_ref(act);
+        kernel_printf("Panic proxies to %s\n", act->name);
+    }
+	regdump(-1, act);
 	kernel_freeze();
+}
+
+void kernel_syscall_panic(void) __dead2;
+void kernel_syscall_panic(void) {
+    return kernel_syscall_panic_proxy(NULL);
 }
 
 int kernel_syscall_interrupt_register(int number);
@@ -144,6 +154,15 @@ void kernel_syscall_register_act_event_registrar(act_t* act) {
 		act = act_unseal_ref(act);
 		act_set_event_ref(act);
 	}
+}
+
+const char* kernel_syscall_get_name(act_t * act);
+const char* kernel_syscall_get_name(act_t * act) {
+    act = act_unseal_ref(act);
+    const char* name = act->name;
+    name = cheri_setbounds(name, sizeof(act->name));
+    name = cheri_andperm(name, CHERI_PERM_LOAD);
+    return name;
 }
 
 extern void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
@@ -181,10 +200,12 @@ DADT(syscall_act_revoke)
 DADT(syscall_act_terminate)
 DADT(syscall_puts)
 DADT(syscall_panic)
+DADT(syscall_panic_proxy)
 DADT(syscall_interrupt_register)
 DADT(syscall_interrupt_enable)
 DADT(syscall_shutdown)
 DADT(syscall_register_act_event_registrar)
+DADT(syscall_get_name)
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
     SYS_CALL_LIST(SET_IF,)

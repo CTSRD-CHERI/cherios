@@ -119,7 +119,13 @@ void worker_start(register_t arg, capability carg) {
 }
 
 void try_make_worker(void) {
-    thread_new("cap_wrkr", 0, NULL, &worker_start);
+    const char* name = syscall_get_name(act_self_ref);
+    char wrkrname[] = "____wrkr";
+    wrkrname[0] = name[0];
+    wrkrname[1] = name[1];
+    wrkrname[2] = name[2];
+
+    thread_new(wrkrname, 0, NULL, &worker_start);
     /* Yield until our worker has registered */
 
     while(worker_act == NULL) {

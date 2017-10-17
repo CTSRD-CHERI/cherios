@@ -911,7 +911,7 @@ static void release_mop(mop_internal_t* mop) {
 
 /* Check mop is safe in the presence of an adversary. i.e., it will not deference mop unless it knows it is mapped */
 static int check_mop(mop_internal_t* mop) {
-    if(mop == NULL) return MEM_BAD_MOP;
+    if(mop == NULL) return MEM_BAD_MOP_NULL;
 
     size_t claim_base = cheri_getbase(mop);
 
@@ -922,16 +922,16 @@ static int check_mop(mop_internal_t* mop) {
 
         vpage_range_desc_t* desc = hard_index(claim_base);
 
-        if(desc->length == 0) return MEM_BAD_MOP;
+        if(desc->length == 0) return MEM_BAD_MOP_UNSAFE;
 
         size_t ndx = find_free_claim_index(desc, &mmap_mop);
 
-        if(ndx == (-1) || desc->claimers[ndx].owner != &mmap_mop) return MEM_BAD_MOP;
+        if(ndx == (-1) || desc->claimers[ndx].owner != &mmap_mop) return MEM_BAD_MOP_UNSAFE;
     }
 
     // Safe to dereference. Check state
 
-    return (mop->state != active) ?  MEM_BAD_MOP : 0;
+    return (mop->state != active) ?  MEM_BAD_MOP_DESTROYED : 0;
 
 }
 
@@ -940,10 +940,11 @@ res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t m
 
     if(base & (RES_META_SIZE-1)) {
         printf("Base badly aligned\n");
-        return NULL;
+        return gen_to_cap(MEM_BAD_BASE);
     }
 
-    if(check_mop(mop) != 0) return NULL;
+    int res;
+    if((res = check_mop(mop)) != 0) return gen_to_cap(res);
 
     size_t align_power = 0;
 
@@ -978,7 +979,7 @@ res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t m
 
         if (check <= VISIT_DONE) {
             printf("Mem request error: %d", check);
-            return NULL;
+            return gen_to_cap(check);
         }
 
     } else {
@@ -1026,7 +1027,7 @@ res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t m
 
             if(search_page_n == MAX_VIRTUAL_PAGES) {
                 printf("Search failed\n");
-                return NULL; // No pages matched
+                return gen_to_cap(MEM_REQUEST_NONE_FOUND); // No pages matched
             }
         }
 
@@ -1117,7 +1118,8 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
 int __mem_reclaim_mop(mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    if(check_mop(mop) != 0) return MEM_BAD_MOP;
+    int check;
+    if((check = check_mop(mop)) != 0) return check;
 
     reclaim(mop, 1);
 
@@ -1127,16 +1129,17 @@ int __mem_reclaim_mop(mop_t mop_sealed) {
 mop_t __mem_makemop(res_t space, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    if(check_mop(mop) != 0) return NULL;
+    int res;
+    if((res = check_mop(mop)) != 0) return gen_to_cap(res);
 
     cap_pair pair;
     try_take_res(space, sizeof(mop_internal_t), &pair);
 
     mop_internal_t* new_mop = (mop_internal_t*)pair.data;
 
-    if(new_mop == NULL) return NULL;
+    if(new_mop == NULL) return gen_to_cap(MEM_MAKEMOP_BAD_SPACE);
 
-    if(claim_mop(new_mop) != MEM_OK) return NULL;
+    if(claim_mop(new_mop) != MEM_OK) return gen_to_cap(MEM_BAD_MOP_UNSAFE);
 
 
     bzero(new_mop, sizeof(mop_internal_t));
@@ -1157,7 +1160,8 @@ mop_t __mem_makemop(res_t space, mop_t mop_sealed) {
 int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    if(check_mop(mop) != 0) return MEM_BAD_MOP;
+    int check;
+    if((check = check_mop(mop)) != 0) return check;
 
     return mem_claim_or_release(base, length, times, mop, &visit_claim, &visit_claim_check);
 }
@@ -1165,7 +1169,8 @@ int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed) {
 int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    if(check_mop(mop) != 0) return MEM_BAD_MOP;
+    int check;
+    if((check = check_mop(mop)) != 0) return check;
 
     return mem_claim_or_release(base, length, times, mop, &visit_free, &visit_free_check);
 }

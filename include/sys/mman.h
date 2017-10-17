@@ -47,8 +47,12 @@ typedef capability mop_t;
 extern mop_t own_mop;
 
 #define MEM_OK      (0)
-#define MEM_BAD_MOP (-1)
+#define MEM_BAD_MOP_NULL (-1)
+#define MEM_BAD_MOP_UNSAFE (-9)
+#define MEM_BAD_MOP_DESTROYED (-10)
 #define MEM_BAD_BASE (-2)
+
+#define MEM_MAKEMOP_BAD_SPACE   (-11)
 
 #define MEM_REQUEST_NONE_FOUND  (-3)
 #define MEM_REQUEST_UNAVAILABLE (-7)
