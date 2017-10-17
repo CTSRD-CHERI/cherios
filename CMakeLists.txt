@@ -98,6 +98,7 @@ set(CMAKE_EXE_LINKER_FLAGS "-mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -v -
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 
 enable_language(C)
+enable_language(CXX)
 enable_language(ASM)
 
 include(CMakeParseArguments)
@@ -158,7 +159,6 @@ set(C_COMPILER_FLAGS
     -mxmxgot
     -mxgot
     -O1 # TODO: make this depend on the configuration
-    -std=c11
     -DCONSOLE_${CONSOLE}
     -fpic
 )
@@ -215,9 +215,12 @@ set(C_WARNING_FLAGS
     -Wno-deprecated-declarations
     -Werror=mips-cheri-prototypes
 )
-set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
+set(CXX_COMPILER_FLAGS -std=c++14 -fno-rtti -fno-exceptions ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
+set(C_COMPILER_FLAGS     -std=c11
+        ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
 # Use the strange CMake generator expressions to set per-language compile flags
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${CXX_COMPILER_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_COMPILER_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 
