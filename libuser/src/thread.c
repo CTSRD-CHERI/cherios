@@ -72,6 +72,7 @@ _Static_assert((offsetof(struct start_stack_args, start)) == START_OFF, "used by
 _Static_assert((sizeof(struct start_stack_args)) == ARGS_SIZE, "used by assembly below");
 
 __asm__ (
+    SANE_ASM
     ".text\n"
     ".global thread_start\n"
     "thread_start:\n"
@@ -82,11 +83,13 @@ __asm__ (
     "dla    $t0, c_thread_start\n"
     "cgetpccsetoffset $c12, $t0\n"
     "cjr    $c12\n"
+    "nop\n"
 );
 
 // A trampoline that arrives
 
 __asm__ (
+    SANE_ASM
         ".text\n"
         ".global secure_thread_start\n"
         "secure_thread_start:\n"

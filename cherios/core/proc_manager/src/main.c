@@ -92,6 +92,7 @@ process_t* unseal_proc(process_t* process) {
 
 /* Trampoline used as entry point for all secure loaded programs. Simply calls nano kernel enter. */
 __asm__ (
+	SANE_ASM
 	".text\n"
 	".global secure_entry_trampoline\n"
 	"secure_entry_trampoline: ccall $c1, $c2\n"

@@ -31,6 +31,8 @@
 #ifndef CHERIOS_CCALL_TRAMPOLINE_H
 #define CHERIOS_CCALL_TRAMPOLINE_H
 
+#include "mips.h"
+
 /* Helper functions to make assembly trampolines for ccallable functions. Exposes a _get_trampoline for a function */
 /* Eventually loading the stakc from idc and popping c0 will be a part of the calling convention */
 
@@ -39,6 +41,7 @@
 #define DEFINE_TRAMPOLINE_EXTRA(F, EXTRA_B, EXTRA_A)            \
 extern void F ## _trampoline(void);                             \
 __asm__ (                                                       \
+        SANE_ASM                                                \
         ".text\n"                                               \
         ".global " #F "_trampoline\n"                           \
         #F "_trampoline:\n"                                     \

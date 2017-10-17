@@ -32,6 +32,10 @@
 
 #define __ASSEMBLY__ 1
 
+.set noreorder
+.set nobopt
+.set noat
+
 .set CAP_SIZE, (MIPS_SZCAP/8)
 .set REG_SIZE, (64/8)
 .set MIPS_FRAME_SIZE, (32*REG_SIZE)
@@ -81,6 +85,15 @@ li  $zero, 0xdead
 #    .set \name, 0 #\name\()_label - locals_start
 #.endm
 
+.macro dla_tls reg, sym
+    lui     \reg, %tprel_hi(\sym)
+    daddiu  \reg, \reg, %tprel_lo(\sym)
+.endm
+
+.macro get_tls_sym reg, sym, user_hw_reg
+    dla_tls \reg, \sym
+    daddu   \reg, \user_hw_reg, \reg
+.endm
 
 .macro START_LOCALS align
     .align \align
@@ -143,12 +156,6 @@ li  $zero, 0xdead
     .set local_ctr, local_ctr + extra_size
     .space extra_size
 .endm
-
-.data
-
-.set noreorder
-.set nobopt
-.set noat
 
 #
 # A few useful macros

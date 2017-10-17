@@ -113,6 +113,8 @@
 # The small locals can be accessed from idc with a constant. The others need dli. The address you get is relative
 # to idc. If you want a global address to use name_label.
 
+.data
+
 START_LOCALS CAP_SIZE_BITS
 
 # Stuff to do with context switch. Allocated for each smp core #

@@ -34,6 +34,8 @@
 .set noat
 
 #define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+.include "asm.S"
 #include "mips.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
@@ -178,7 +180,7 @@ bootload_smp_trap:
 
     # A vector of capabilities for when to go on exit
     dla $t1, smp_destination_vector
-    dsll $a0, $a0, 5 # FIXME 4 for 128
+    dsll $a0, $a0, CAP_SIZE_BITS
     daddu  $t1, $t1, $a0
 
 

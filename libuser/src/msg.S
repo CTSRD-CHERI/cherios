@@ -33,21 +33,12 @@
 .set nobopt
 .set noat
 
-.ifeq _MIPS_SZCAP-256
-.set CAP_SIZE_BITS, 5
-.set CAP_SIZE,     32
-.else
-.ifeq _MIPS_SZCAP-128
-.set CAP_SIZE_BITS, 4
-.set CAP_SIZE,     16
-.else
-.error "Unknown cap size"
-.endif
-.endif
-
 #define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+.include "asm.S"
 #include "queue.h"
 #include "syscalls.h"
+#include "mips.h"
 
 # We have so many registers, we may as well use a few rather than using dla all the time
 
@@ -78,11 +69,6 @@
 # lui     \reg, %tprel_hi(\sym)
 # daddiu  \reg, \reg, %tprel_lo(\sym)
 
-.macro get_tls_sym reg, sym, user_hw_reg
-    dla     \reg, \sym
-    daddu   \reg, \user_hw_reg, \reg
-.endm
-
 .type act_self_queue, "tls_object"
 .type sync_state, "tls_object"
 .type act_self_ctrl, "tls_object"
@@ -96,7 +82,7 @@ msg_entry:
     cgetdefault	def_cap
 
     rdhwr       $t1, $29
-    daddiu      $t1, $t1, -0x7000
+#    daddiu      $t1, $t1, -0x7000
 
     get_tls_sym $t0, act_self_queue, $t1
     clc         queue, $t0, 0(def_cap)

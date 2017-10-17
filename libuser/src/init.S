@@ -34,21 +34,9 @@
 .set nobopt
 .set noat
 
-.ifeq _MIPS_SZCAP-256
-.set CAP_SIZE_BITS, 5
-.set CAP_SIZE,     32
-.set CAP_IN_MESSAGE, 7
-.else
-.ifeq _MIPS_SZCAP-128
-.set CAP_SIZE_BITS, 4
-.set CAP_SIZE,     16
-.set CAP_IN_MESSAGE, 6
-.else
-.error "Unknown cap size"
-.endif
-.endif
-
 #define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+.include "asm.S"
 #include "syscalls.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
@@ -135,15 +123,13 @@ start_common:
 
 	# main() done. Go to msg_entry if msg_enable, call terminate otherwise
 	rdhwr   $t1, $29
-	daddiu  $t1, $t1, -0x7000
-	dla		$t0, msg_enable
-	daddu   $t0, $t0, $t1
+#	daddiu  $t1, $t1, -0x7000
+	get_tls_sym	$t0, msg_enable, $t1
 	cgetdefault	$c17
 	cld		$t0, $t0, 0($c17)
 	bne		$t0, $zero, msg_entry
 	nop
-	dla		$t0, act_self_ctrl
-	daddu   $t0, $t0, $t1
+	get_tls_sym	$t0, act_self_ctrl, $t1
 	clc		$c2, $t0, 0($c17)
 	cmove   $c3, $c2
 	dla     $t0, kernel_if

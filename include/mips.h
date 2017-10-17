@@ -61,7 +61,8 @@
 #define SANE_ASM    \
 ".set noreorder\n"  \
 ".set nobopt\n"     \
-".set noat\n"
+".set noat\n"		\
+".option pic0\n"
 
 #define HW_SYNC __asm__ __volatile__ ("sync")
 
