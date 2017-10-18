@@ -120,6 +120,9 @@ static void handle_exception_loop(context_t* own_context_ptr) {
     context_t own_save; // We never use this, there is currently no reason to restore the exception context
     uint8_t cpu_id = cp0_get_cpuid();
 
+    cp0_status_bev_set(0);
+    kernel_interrupts_init(1);
+
     while(1) {
 
         get_last_exception(&ex_info);
@@ -221,9 +224,6 @@ void kernel_exception(context_t swap_to, context_t own_context) {
 
     // This is only for core 0. All other cores are still idle.
     context_t dummy;
-
-    cp0_status_bev_set(0);
-    kernel_interrupts_init(1);
 
     // Exception contexts set up. Switch core 0 to first non-exception context
     context_switch(swap_to, &dummy);
