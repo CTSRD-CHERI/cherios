@@ -105,4 +105,5 @@ kernel_ccall_entry_er:
 		cclearlo   (0b1110011111110110)
 		cmove      $c16, $c1
 
-        creturn
+        ccall $c17, $c18, 2
+        nop

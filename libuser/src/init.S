@@ -135,4 +135,5 @@ start_common:
 	dla     $t0, kernel_if
 	clc     $c1, $t0, syscall_act_terminate_offset($c17)
 	# We don't bother setting up a return as this will terminate us
-	ccall   $c1, $c2
+	ccall   $c1, $c2, 2
+	nop

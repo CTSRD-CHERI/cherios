@@ -161,6 +161,9 @@ END_LOCALS
 .text
 .section .init
 
+.macro CRETURN
+    ccall $c17, $c18, 2 # FIXME: should be ccall $c17, $c18. But caller not setting $c18 yet.
+.endm
 
 .set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal))
 .set DEF_SEALING_PERMS, Perm_Seal
@@ -260,7 +263,8 @@ smp_signal_loop:
 
 smp_context_start_er:
     cclearlo    EN3(c3, c4, c5)
-    creturn
+    CRETURN
+    nop
 
 #################################################################
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
@@ -452,7 +456,8 @@ obtain_super_powers:
     csetbounds  $c17, $c13, $t1
     cmove       $c3, $kdc
     csetoffset  $c17, $c17, $t2
-    creturn
+    CRETURN
+    nop
 
 ###################################
 # page_t* get_book(void)
@@ -465,7 +470,8 @@ get_book:
     dli        $t2, Perm_Load
     csetbounds $c3, $c3, $t1
     candperm   $c3, $c3, $t2
-    creturn
+    CRETURN
+    nop
 
 # Notes: Locks the page being split, but not the next page (which will have its back ptr updated #
 #################################################################
@@ -512,7 +518,8 @@ split_phy_page_range:
 split_phy_end:
     csw         $t9, $zero, 0($c3)                      # unlock page
     cclearlo    EN2(c3,c4)
-    creturn
+    CRETURN
+    nop
 
 # Notes: Locks pagen and the next page. Not the page after that even though the back pointer is updated #
 ##############################################
@@ -568,7 +575,8 @@ merge_phy_er_1:
     csw         $t8, $zero, 0($c3)
 merge_phy_page_range_end:
     cclearlo    EN2(c3,c4)
-    creturn
+    CRETURN
+    nop
 
 ###################################
 # ptable get_top_level_table(void)
@@ -584,7 +592,8 @@ get_top_level_table:
     cseal       $c3, $c3, $c4
 
     clearlo     EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 #####################################
 # res_t make_first_reservation(void)
@@ -619,7 +628,8 @@ make_first_reservation:
 
 make_first_er:
     cclearlo    EN2(c4, c5)
-    creturn
+    CRETURN
+    nop
 
 #####################################################################
 # void context_switch(context_t restore_from, context_t*  store_to);
@@ -742,7 +752,8 @@ get_last_exception:
     csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
     csd        $t2, $zero, (CAP_SIZE+(2*REG_SIZE))($c3)
     csd        $t3, $zero, (CAP_SIZE+(3*REG_SIZE))($c3)
-    creturn
+    CRETURN
+    nop
 
 ################################################################################################################
 # capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out, register_t IO)
@@ -794,7 +805,8 @@ get_phy_page:
     csc         $c4, $zero, 0($c5)
 
 get_phy_page_end:
-    creturn
+    CRETURN
+    nop
 
 
 ########################################################
@@ -838,7 +850,8 @@ memcpy_loop:
 
 1:
     cclearlo    EN3(c4,c5,c6)                              # c3 is a return value
-    creturn
+    CRETURN
+    nop
 
 
 
@@ -868,7 +881,8 @@ destroy_context:
 
 destroy_context_end:
     cclearlo    (1 << 13) | (1 << 14) | (1 << 3)
-    creturn
+    CRETURN
+    nop
 
 #################################################
 .global get_critical_level_ptr
@@ -887,7 +901,8 @@ get_critical_level_ptr:
     dli        $t2, DEF_DATA_PERMS
     csetbounds $c3, $c3, $t1
     candperm   $c3, $c3, $t2
-    creturn
+    CRETURN
+    nop
 
 #################################################
 .global get_critical_cause_ptr
@@ -908,7 +923,8 @@ get_critical_cause_ptr:
     candperm   $c3, $c3, $t2
 
 get_critical_end:
-    creturn
+    CRETURN
+    nop
 
 #################################
 # void critical_section_enter();
@@ -919,7 +935,8 @@ critical_section_enter:
     cld        $v0, $zero, exception_level($kr1c)            # TODO atomic increment
     daddiu     $v0, 1
     csd        $v0, $zero, exception_level($kr1c)
-    creturn
+    CRETURN
+    nop
 
 
 
@@ -946,7 +963,8 @@ critical_section_exit:
     move       $k0, $t0                                     # will switch to the exception context
 
 kernel_critical_section_exit_end:
-    creturn
+    CRETURN
+    nop
 
 
 
@@ -972,7 +990,8 @@ set_exception_handler:
     sync
 1:
     cclearlo    EN2(c3,c4)
-    creturn
+    CRETURN
+    nop
 
 
 #############################
@@ -1001,7 +1020,8 @@ get_userdata_for_res:
     cincoffset  $c3, $c3, $t1
     csetbounds  $c3, $c3, $t2
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 # WARN: This is called as subroutine. Be careful on register usage. Don't clobber argument registers #
 ############################################
@@ -1087,10 +1107,12 @@ take_make:
     csc         $c4, $zero, CAP_SIZE($c5)
 
 take_end:
-    creturn
+    CRETURN
+    nop
 take_er:
     clearlo     EN2(c3, c4)
-    creturn
+    CRETURN
+    nop
 
 ##################################################
 # res_t rescap_getsub(res_t res, register_t index)
@@ -1112,7 +1134,8 @@ rescap_getsub:
 
 getsub_er:
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 ####################################################
 # res_t rescap_splitsub(res_t res, register_t scale)
@@ -1136,7 +1159,8 @@ rescap_splitsub:
     cseal       $c3, $c3, $c4
 
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 ####################################
 # capability rescap_info(res_t res)
@@ -1170,7 +1194,8 @@ rescap_info:
     ccleartag   $c3, $c3
 
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 
 .macro EXTRACT_AND_SCALE_L0 addr, out, scale
@@ -1231,7 +1256,8 @@ rescap_revoke_start:
     csd         $a3, $zero, revoke_bound($idc)
 
     cclearlo    EN4(c3, c4, c5, c6)
-    creturn
+    CRETURN
+    nop
 
 
 
@@ -1575,11 +1601,13 @@ revoke_restore:
     csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
     cclearlo    EN3(c4, c5, c6)
-    creturn
+    CRETURN
+    nop
 
 revoke_er:
     cclearlo    EN4(c3, c4, c5, c6)
-    creturn
+    CRETURN
+    nop
 
 
 ###################################################
@@ -1626,11 +1654,13 @@ rescap_split:
 
     cseal        $c3, $c3, $c4
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 split_er:
     cclearlo    EN2(c3, c4)
-    creturn
+    CRETURN
+    nop
 
 
 #############################################
@@ -1675,11 +1705,13 @@ rescap_merge:
     STORE_RES_STATE $t1, $zero, RES_STATE_OFFSET($c4)   # set higher address reservation to merged
     cseal       $c3, $c3, $c5               # although the caller can just use the first argument, its nice to return it
     cclearlo    EN3(c4, c5, c6)
-    creturn
+    CRETURN
+    nop
 
 merge_er:
     cclearlo    EN4(c3, c4, c5, c6)
-    creturn
+    CRETURN
+    nop
 
 #################################
 # res_t rescap_parent(res_t res)
@@ -1714,11 +1746,13 @@ rescap_parent:
     cseal       $c3, $c3, $c4               # seal child for return
 
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 parent_er:
 
     cclearlo    EN2(c3, c4)
-    creturn
+    CRETURN
+    nop
 
 # Notes: will lock the physical page, and atomically updates the vtable entry #
 ########################################################################
@@ -1799,14 +1833,16 @@ good_level: #t2 now contains the type we will seal the next level with
 
 
     cclearlo    EN4(c4,c17, c5, c6)
-    creturn
+    CRETURN
+    nop
 
 create_ptable_er_restore_state:
     csw         $t9, $zero, 0($c5)
 
 create_ptable_er:
     cclearlo    EN5(c3, c17, c4, c5, c7)
-    creturn
+    CRETURN
+    nop
 
 
 # checked untranslated # l0_index # l1_index # l2_index # unchecked untranslated bits
@@ -1845,11 +1881,13 @@ get_sub_table:
 
     get_sub_table_end:
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
     get_sub_table_er:
     cclearlo    EN2(c3,c4)
-    creturn
+    CRETURN
+    nop
 
 ###########################################################
 # readable_table_t* get_read_only_table(ptable_t table,)
@@ -1870,7 +1908,8 @@ get_read_only_table:
 
 1:
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 # Notes: Locks the physical page, and atomically updates the vtable entry #
 #########################################################################################
@@ -1922,14 +1961,16 @@ create_mapping:
     # TODO add the checked top bits
 
     cclearlo    EN4(c3,c4,c5,c6)
-    creturn
+    CRETURN
+    nop
 
 create_mapping_er_restore_phy:
     csw         $t9, $zero, 0($c6)
 
 create_mapping_er:
     cclearlo    EN4(c3,c4,c5,c6)
-    creturn
+    CRETURN
+    nop
 
 
 
@@ -1998,7 +2039,8 @@ free_to_used:
 
 free_er:
     cclearlo    EN2(c3, c4)
-    creturn
+    CRETURN
+    nop
 
 
 
@@ -2112,11 +2154,13 @@ foundation_create:
     cmove       $c3, $c15
 
     cclearlo    EN5(c4,c5,c13,c14,c15)
-    creturn
+    CRETURN
+    nop
 
     found_er:
     cclearlo    EN6(c3,c4,c5,c13,c14,c15)
-    creturn
+    CRETURN
+    nop
 
 
 ###########################################################################################
@@ -2153,7 +2197,8 @@ foundation_exit:
 
     csc         $c4, $t0, 0($c3)
     cclearlo    EN2(c3,c4)
-    creturn
+    CRETURN
+    nop
 
 
 ###########################################################################################
@@ -2191,7 +2236,8 @@ foundation_new_entry:
 
 new_entry_er:
     cclearlo    EN1(c4)
-    creturn
+    CRETURN
+    nop
 
 #######################################
 # found_id_t* foundation_get_id (void)
@@ -2213,7 +2259,8 @@ foundation_get_id:
     candperm    $c3, $c3, $t0
 
 id_none:
-    creturn
+    CRETURN
+    nop
 
 ###########################################################################################
 # cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms)
@@ -2287,11 +2334,13 @@ rescap_take_locked_cert_shared:
     cseal       $c3, $c6, $c5
 
     cclearlo    EN7(c4,c5,c6,c7,c13,c14,c15)
-    creturn
+    CRETURN
+    nop
 
 take_cert_er:
     cclearlo    EN8(c3,c4,c5,c6,c7,c13,c14,c15)
-    creturn
+    CRETURN
+    nop
 
 ###########################################################################################
 # found_id_t* rescap_check_cert(cert_t cert, cap_pair* out)
@@ -2314,7 +2363,8 @@ rescap_check_cert:
     clc         $c3, $zero, 0($c5)
 
     cclearlo    EN2(c4,c5)
-    creturn
+    CRETURN
+    nop
 
 
 ###########################################################################################
@@ -2355,11 +2405,13 @@ rescap_unlock:
     csc         $c4, $zero, (CAP_SIZE)($c5)
 
     cclearlo    EN2(c5,c6)
-    creturn
+    CRETURN
+    nop
 
 1:
     cclearlo    EN4(c3,c4,c5,c6)
-    creturn
+    CRETURN
+    nop
 
 
 

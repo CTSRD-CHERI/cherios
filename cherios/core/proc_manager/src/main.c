@@ -95,7 +95,7 @@ __asm__ (
 	SANE_ASM
 	".text\n"
 	".global secure_entry_trampoline\n"
-	"secure_entry_trampoline: ccall $c1, $c2\n"
+	"secure_entry_trampoline: ccall $c1, $c2, 2\n"
 );
 extern void secure_entry_trampoline(void);
 

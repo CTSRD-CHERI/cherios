@@ -115,7 +115,7 @@ msg_entry_loop:
     li      $t0, 12                                       # to increment pcc just past the ccall
     cgetpcc $c17
     cincoffset $c17, $c17, $t0
-    ccall   $c1, $c2
+    ccall   $c1, $c2, 2
 
 pop:
     dsll     $t1, start_g, (MSG_LEN_SHIFT)                 # t1 has offet of message in queue
@@ -204,7 +204,7 @@ make_return:
     clc   $c1, $zero, message_reply_offset(kernel_if_cap)
     cmove $c2, self_ctrl_cap
     cmove $c17, msg_entry_loop_cap
-	ccall $c1, $c2
+	ccall $c1, $c2, 2
 
 msg_entry_end:
 	.end msg_entry

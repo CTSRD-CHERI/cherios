@@ -93,7 +93,9 @@ static void kernel_exception_unknown(register_t excode, act_t* kernel_curr_act) 
 static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act);
 static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 	if(memgt_ref == NULL) {
-		exception_printf(KRED"Virtual memory exception before memmgt created\n"KRST);
+		exception_printf(KRED"Virtual memory exception (%lx) before memmgt created\n"KRST, badvaddr);
+        regdump(-1, NULL);
+        kernel_freeze();
 	}
 	if(kernel_curr_act == memgt_ref) {
 		exception_printf(KRED"Virtual memory exception in memmgt is not allowed\n"KRST);

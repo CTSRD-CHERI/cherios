@@ -81,6 +81,9 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
 
     assert(worker_id == 0);
 
+    if(addr < 0x2000) {
+        printf("Commit for %lx\n", addr);
+    }
     ptable_t top_table = get_top_level_table();
 
     size_t l0_index = L0_INDEX(addr);

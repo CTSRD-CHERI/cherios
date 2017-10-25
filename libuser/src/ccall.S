@@ -28,7 +28,9 @@
  * SUCH DAMAGE.
  */
 
+#define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
+.include "asm.S"
 
 .text
 .global cheri_invoke
@@ -63,4 +65,5 @@ cheri_invoke:
 
     daddiu  $sp,  $sp, 0            # fools my backtracer
     nop
-    ccall $c1, $c2, 0
+    ccall $c1, $c2, 2
+    nop
