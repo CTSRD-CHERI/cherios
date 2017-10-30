@@ -124,6 +124,8 @@ act_t * act_create_sealed_ref(act_t * act);
 act_control_t * act_create_sealed_ctrl_ref(act_t * act);
 act_t * act_unseal_ref(act_t * act);
 act_control_t* act_unseal_ctrl_ref(act_t* act);
+act_t * act_create_sealed_sync_ref(act_t * act);
+act_t * act_unseal_sync_ref(act_t * act);
 
 void act_set_event_ref(act_t* act);
 

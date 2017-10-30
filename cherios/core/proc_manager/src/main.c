@@ -96,6 +96,7 @@ __asm__ (
 	".text\n"
 	".global secure_entry_trampoline\n"
 	"secure_entry_trampoline: ccall $c1, $c2, 2\n"
+	"nop\n"
 );
 extern void secure_entry_trampoline(void);
 

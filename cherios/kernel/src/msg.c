@@ -38,6 +38,7 @@
 #include "queue.h"
 #include "mutex.h"
 #include "misc.h"
+#include "ccall_trampoline.h"
 
 DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
@@ -87,7 +88,7 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 	slot->c6 = c6;
 
 	slot->c1 = sync_token;
-	slot->c2 = (sync_token == NULL) ? NULL : kernel_seal(src, act_sync_ref_type);
+	slot->c2 = (sync_token == NULL) ? NULL : act_create_sealed_sync_ref(src);
 
 	slot->a0 = a0;
 	slot->a1 = a1;
@@ -172,6 +173,9 @@ static sync_t unseal_sync_token(capability token) {
 
 static int token_expected(act_t* ccaller, capability token) {
 	sync_t got = unseal_sync_token(token);
+	if(ccaller->sync_state.sync_token != got) {
+		printf("got %lx. wanted %lx. (%p)\n", got, ccaller->sync_state.sync_token, &(ccaller->sync_state.sync_token));
+	}
 	return ccaller->sync_state.sync_token == got;
 }
 
@@ -200,7 +204,7 @@ void kernel_message_send(capability c3, capability c4, capability c5, capability
 					 act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret) {
 
 	target_activation = act_unseal_ref(target_activation);
-	act_t* source_activation = (act_t*) get_idc();
+	act_t* source_activation = (act_t*) CALLER;
 
 	KERNEL_TRACE(__func__, "message from %s to %s", source_activation->name, target_activation->name);
 
@@ -253,8 +257,8 @@ _Static_assert(offsetof(ret_t, v1) == 40, "message return assumes these offsets"
 
 int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token) {
 
-	act_t * returned_from = (act_t*) get_idc();
-	act_t * returned_to = kernel_unseal(caller, act_sync_ref_type);
+	act_t * returned_from = (act_t*) CALLER;
+	act_t * returned_to =  act_unseal_sync_ref(caller);
 
     kernel_assert(returned_to != NULL);
     kernel_assert(returned_to->sync_state.sync_ret != NULL);

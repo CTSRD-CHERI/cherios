@@ -44,9 +44,8 @@
 
 #define def_cap             $c13
 
-#define queue               $c18
+#define queue               $c20
 #define kernel_if_cap       $c19
-#define msg_entry_loop_cap  $c20
 #define self_ctrl_cap       $c21
 #define sync_state_cap      $c22
 #define msg_table           $c23
@@ -76,7 +75,7 @@
 msg_entry:
 
 # Standard function prolog so regdump stops here nicely
-    daddiu      $sp, $sp, -0x20
+    cincoffset  $c11, $c11, -0x20
     csc         $c17, $sp, 0($c11)
 
     cgetdefault	def_cap
@@ -100,7 +99,6 @@ msg_entry:
     csetoffset  ctrl_table, def_cap, $t0
     get_tls_sym $t0, act_self_ctrl, $t1
     clc         self_ctrl_cap, $t0, 0(def_cap)
-    cgetpcc     msg_entry_loop_cap
 
 msg_entry_loop:
 
@@ -113,9 +111,10 @@ msg_entry_loop:
     clc     $c1, $zero, wait_offset(kernel_if_cap)
     cmove   $c2, self_ctrl_cap
     li      $t0, 12                                       # to increment pcc just past the ccall
-    cgetpcc $c17
-    cincoffset $c17, $c17, $t0
+    cgetpccincoffset    $c17, 12
     ccall   $c1, $c2, 2
+    cmove   $c18, $c11
+    cmove   $c11, $idc
 
 pop:
     dsll     $t1, start_g, (MSG_LEN_SHIFT)                 # t1 has offet of message in queue
@@ -203,8 +202,11 @@ make_return:
     move  $a1, $v1
     clc   $c1, $zero, message_reply_offset(kernel_if_cap)
     cmove $c2, self_ctrl_cap
-    cmove $c17, msg_entry_loop_cap
+    cgetpccincoffset    $c17, 12
 	ccall $c1, $c2, 2
+    cmove $c18, $c11
+    b msg_entry_loop
+    cmove $c11, $idc
 
 msg_entry_end:
 	.end msg_entry

@@ -42,8 +42,8 @@ start:
     cgetdefault $c11
     dla         $t1, __size_init_stack
     csetoffset  $c11, $c11, $t0
-    move        $sp, $t1
     csetbounds  $c11, $c11, $t1
+    csetoffset  $c11, $c11, $t1
 
     # Dont use j, linkers suck.
 	dla         $t0, start_common

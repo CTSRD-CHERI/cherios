@@ -128,35 +128,37 @@ int check_cap(capability cap) {
 static inline void backtrace(char* stack_pointer, capability return_address, capability r17) {
 	int i = 0;
 
+
 	// Function prolog:
-	// daddiu  sp,sp,-size			// allocates space
+	// cincoffset $c11, $c11, -size // allocates space
 	// ...
-	// csc     c17,sp,offset(c11)		// stores return address
+	// csc     c17,$zero,offset(c11)		// stores return address
 
 	// Instruction Format
 
-	// daddiu 	rs,rt, im				// |011001|rs   |rt   |im(16)
-	// |011001|11101|11101|im(16)
+	// cincoffset i						// 010010 | 10011 | cd | cb | im(11) |
 
 	// csc     cs,rt,im(cb)				// |111110|cs   |cb   |rt   |im(11)
-	// |111110|10001|01011|11101|im(11)
+	// |111110|10001|01011|00000|im(11)
 
-	uint32_t daddiu_form_mask = 0xFFFF0000;
+	uint32_t cinc_form_mask = 	0xFFFFF800;
 	uint32_t csc_form_mask    = 0xFFFFF800;
-	uint32_t daddiu_form_val  = 0b0110011110111101U << 16U;
-	uint32_t csc_form_val	  = 0b111110100010101111101U << 11U;
-	uint32_t daddiu_i_mask 	  = (1 << 16) - 1;
+
+	uint32_t cinc_form_val    = 0b010010100110101101011U << 11U;
+	uint32_t csc_form_val	  = 0b111110100010101100000U << 11U;
+
+	uint32_t cinc_i_mask 	  = (1 << 11) - 1;
 	uint32_t csc_i_mask		  = (1 << 11) - 1;
 
-	// FIXME assumes a function prolog with daddiu. Not true for leaf functions
+	// FIXME maybe use frame pointer?
 
 	do {
 		print_frame(i++, return_address, stack_pointer);
 
-		//scan backwards for daddiu
+		//scan backwards for cincoffset
 		int16_t stack_size = 0;
 		int16_t offset = 0;
-
+		int found = 0;
 		if(((size_t)return_address & 0xffffffff80000000) != 0xffffffff80000000) {
 			for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
 				if(check_cap(instr)) {
@@ -164,11 +166,13 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 					return;
 				}
 				uint32_t val = *instr;
-				if((val & daddiu_form_mask) == daddiu_form_val) {
-					stack_size = (int16_t)(val & daddiu_i_mask);
+				if((val & cinc_form_mask) == cinc_form_val) {
+					stack_size = (int16_t)(val & cinc_i_mask);
+					stack_size |= 0b11111 << 11;
 					break;
 				}
 				if((val & csc_form_mask) == csc_form_val) {
+					found = 1;
 					offset = (int16_t)((val & csc_i_mask) << 4);
 				}
 			}
@@ -180,7 +184,7 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
 
 
-		if((i == 1) && (offset == 0)) {
+		if((i == 1) && (found == 0)) {
             return_address = r17;
         } else {
             if(check_cap(ra_ptr)) {
@@ -317,7 +321,7 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
     printf("%16s: %lx\n", "nano", MIPS_KSEG0);
 
 	printf("\nAttempting backtrace:\n\n");
-	char * stack_pointer = (char*)frame->cf_c11 + frame->mf_sp;
+	char * stack_pointer = (char*)frame->cf_c11;
 	capability return_address = frame->cf_pcc;
 	backtrace(stack_pointer, return_address, frame->cf_c17);
 }

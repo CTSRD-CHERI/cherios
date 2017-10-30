@@ -68,21 +68,38 @@ static kernel_if_t* get_if() {
 	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
 }
 
+static capability act_seal_for_call(capability act, register_t type) {
+	return kernel_seal(cheri_incoffset(act, offsetof(struct act_t, stack_guard)), type);
+}
+
+static capability act_unseal_callable(capability act, register_t type) {
+	return cheri_incoffset(kernel_unseal(act, type), -offsetof(struct act_t, stack_guard));
+}
+
 act_t * act_create_sealed_ref(act_t * act) {
-	return (act_t *)kernel_seal(act, act_ref_type);
+	return (act_t *)act_seal_for_call(act, act_ref_type);
 }
 
 act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
-	return (act_control_t *)kernel_seal(act, act_ctrl_ref_type);
+	return (act_control_t *)act_seal_for_call(act, act_ctrl_ref_type);
 }
 
 act_t * act_unseal_ref(act_t * act) {
-	return  (act_t *)kernel_unseal(act, act_ref_type);
+	return  (act_t *)act_unseal_callable(act, act_ref_type);
 }
 
 act_control_t* act_unseal_ctrl_ref(act_t* act) {
-	return (act_control_t*)kernel_unseal(act, act_ctrl_ref_type);
+	return (act_control_t*)act_unseal_callable(act, act_ctrl_ref_type);
 }
+
+act_t * act_create_sealed_sync_ref(act_t * act) {
+	return (act_t *)act_seal_for_call(act, act_sync_ref_type);
+}
+
+act_t * act_unseal_sync_ref(act_t * act) {
+	return  (act_t *)act_unseal_callable(act, act_sync_ref_type);
+}
+
 
 void act_set_event_ref(act_t* act) {
 	event_ref = act;
@@ -184,6 +201,7 @@ static act_t* alloc_static_act(aid_t* aid_used) {
 	act_t* act = kernel_acts + id;
 	if(aid_used) *aid_used = id;
 
+    act = cheri_setbounds(act, sizeof(act_t));
 	return act;
 }
 
@@ -208,7 +226,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	add_act_to_end_of_list(act);
 
 	/* Push C0 to the bottom of the stack so it can be popped when we ccall in */
-	act->user_kernel_stack[(USER_KERNEL_STACK_SIZE / sizeof(capability)) -1] = cheri_getdefault();
+	act->ddc = cheri_getdefault();
 
     act->stack_guard = 0;
 

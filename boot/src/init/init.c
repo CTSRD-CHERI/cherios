@@ -268,6 +268,7 @@ static void load_modules(init_info_t * init_info) {
     desc.carg = get_act_cap(m_memmgt, init_info);
     desc.stack_args = NULL;
     desc.stack_args_size = 0;
+    desc.cpu_hint = 0;
     /* This version allows the process to spawn new threads */
     memgtbe->ctrl = thread_start_process(thread_create_process(memgtbe->name, memmgt_file, 0), &desc);
 

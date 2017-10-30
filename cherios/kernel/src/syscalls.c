@@ -34,10 +34,6 @@
 #include "klib.h"
 #include "syscalls.h"
 
-
-//FIXME we can get rid of if c2 is always the object reference which then contains an unsealing cap
-//FIXME see how the nano kernel does it
-
 /*
  * These functions abstract the syscall register convention
  */
@@ -124,12 +120,12 @@ void kernel_syscall_panic(void) {
 
 int kernel_syscall_interrupt_register(int number);
 int kernel_syscall_interrupt_register(int number) {
-	return kernel_interrupt_register(number, (act_control_t *)get_idc());
+	return kernel_interrupt_register(number, (act_control_t *)CALLER);
 }
 
 int kernel_syscall_interrupt_enable(int number);
 int kernel_syscall_interrupt_enable(int number) {
-	return kernel_interrupt_enable(number, (act_control_t *)get_idc());
+	return kernel_interrupt_enable(number, (act_control_t *)CALLER);
 }
 
 void kernel_syscall_shutdown(shutdown_t mode);
@@ -173,14 +169,14 @@ extern int kernel_message_reply(capability c3, register_t v0, register_t v1, act
 
 
 #define message_send_BEFORE	\
-	"daddiu $sp, $sp, -64\n"			\
-	"csetoffset $c8, $c11, $sp\n"
+	"cincoffset  $c11, $c11, -64\n"		\
+    "cmove       $c8, $c11\n"           \
 
 #define message_send_AFTER	\
-	"clc	$c3, $sp, 0($c11)\n"		\
-	"cld $v0, $sp, 32($c11)\n"			\
-	"cld $v1, $sp, 40($c11)\n"			\
-	"daddiu $sp, $sp, 64\n"				\
+	"clc	$c3, $zero, 0($c11)\n"			\
+	"cld $v0, $zero, 32($c11)\n"			\
+	"cld $v1, $zero, 40($c11)\n"			\
+	"cincoffset  $c11, $c11, 64\n"			\
 
 #define SET_IF(call, ...)\
 kernel_if -> call = kernel_seal((capability)(&(kernel_ ## call ## _trampoline)), act_ctrl_ref_type);

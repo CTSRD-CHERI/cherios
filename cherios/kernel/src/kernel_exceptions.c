@@ -207,8 +207,8 @@ static context_t make_exception_context(uint8_t cpu_id) {
     frame.cf_c0 = cheri_getdefault();
 
     // Stack
-    frame.mf_sp = EXCEPTION_STACK_SIZE;
-    frame.cf_c11 = cheri_setbounds(&exception_stacks[cpu_id-1], EXCEPTION_STACK_SIZE);
+    frame.cf_c11 =
+        cheri_setoffset(cheri_setbounds(&exception_stacks[cpu_id-1], EXCEPTION_STACK_SIZE), EXCEPTION_STACK_SIZE);
 
     frame.cf_c3 = &(contexts[cpu_id]);
 

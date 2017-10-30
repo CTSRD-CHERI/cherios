@@ -61,9 +61,24 @@
 
 
 cheri_invoke:
-    # c17/c18 will already be setup with the correct return address / data. May be sealed
+    # c17/c18 will already be setup with the correct return address / data.
 
-    daddiu  $sp,  $sp, 0            # fools my backtracer
+    # This implements the new ABI for the caller
+
+    # save c17 / c18
+    cincoffset  $c11, $c11, -(2 * CAP_SIZE)
+    csc         $c17, $zero, 0($c11)
+    csc         $c18, $zero, (CAP_SIZE)($c11)
+
+    cmove   $idc, $c11          # idc and c11 should have been the same
+    cmove   $c18, $idc          # set return data
+    cgetpccincoffset $c17, 12    # set return code
+    ccall   $c1, $c2, 2
     nop
-    ccall $c1, $c2, 2
-    nop
+
+invoke_return:
+    cmove   $c11, $idc          # idc and c11 should have been the same
+    clc     $c17, $zero, 0($c11)
+    clc     $c18, $zero, (CAP_SIZE)($c11)
+    cjr     $c17
+    cincoffset $c11, $c11, (2 * CAP_SIZE)

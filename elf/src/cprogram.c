@@ -90,8 +90,7 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
                         (im->tls_base + (im->tls_size * (im->tls_num-1)));
 
     /* set stack */
-    frame->cf_c11	= stack;
-    frame->mf_sp	= (cheri_getlen(stack) - stack_args_size);
+    frame->cf_c11	= cheri_setoffset(stack, (cheri_getlen(stack) - stack_args_size));
 
     /* set c12 */
     frame->cf_c12	= frame->cf_pcc;

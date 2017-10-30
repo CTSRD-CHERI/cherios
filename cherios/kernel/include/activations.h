@@ -56,8 +56,10 @@ typedef struct act_t
 	/* Stack for the kernel when acting on users behalf */
 	/* Warning: The offset of this is assumed by assembly */
 	capability user_kernel_stack[USER_KERNEL_STACK_SIZE / sizeof(capability)];
-
 	register_t stack_guard;
+    capability ddc;
+
+
 	/* Activation related */
 
 	struct act_t* list_next;
@@ -108,6 +110,7 @@ _Static_assert(offsetof(act_t, user_kernel_stack) == 0,
 			   "Kernel ccall trampolines assume the stack is the first member");
 _Static_assert(offsetof(act_t, stack_guard) == USER_KERNEL_STACK_SIZE,
 			   "Kernel ccall trampolines assume the guard is the second member");
+_Static_assert((offsetof(act_t, stack_guard)+CAP_SIZE) == offsetof(act_t, ddc));
 
 /* Control references are just references with a different type */
 typedef act_t act_control_t;

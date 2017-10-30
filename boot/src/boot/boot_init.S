@@ -134,7 +134,7 @@ cherios_init_jump_target:
 	cgetdefault	$c11
 	csetoffset	$c11, $c11, $t0
 	csetbounds	$c11, $c11, $t1
-	move		$sp, $t1
+	csetoffset  $c11, $c11, $t1
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C

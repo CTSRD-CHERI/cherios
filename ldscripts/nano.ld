@@ -30,7 +30,6 @@
 
 
 INCLUDE "common.ld"
-INCLUDE "mips.ld"
 
 OUTPUT_FORMAT("elf64-tradbigmips");
 OUTPUT_ARCH(mips)

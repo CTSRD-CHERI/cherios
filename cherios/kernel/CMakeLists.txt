@@ -18,7 +18,6 @@ set(KERNEL_SRCS
 )
 set(KERNEL_ASM_SRCS
     src/init.S
-    src/ccall_trampoline.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")

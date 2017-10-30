@@ -33,10 +33,32 @@
 
 #include "mips.h"
 
+// stack layout for a sealed call - idc will contain the stack:
+
+/**************/
+/* ddc (c0)   */
+/* call guard */ // (64 bits but padded to cap size) <-- stack points here
+/**************/
+
+// Then we save these as we are a trampoline:
+
+/**************/
+/* rddc       */
+/* cra (c17)  */
+/* crd (c18)  */
+/**************/
+
 /* Helper functions to make assembly trampolines for ccallable functions. Exposes a _get_trampoline for a function */
 /* Eventually loading the stakc from idc and popping c0 will be a part of the calling convention */
 
+// FIXME the activation sturct should really be seen as being passed on the stack as the first item
+
+#define CALLER cheri_setoffset(get_idc(), 0)
+
 #define EXPAND_F(F)
+
+// TODO most of this trampoline can be removed by adding it before function prologs. All that stays is the guard and
+// TODO Load of C0.
 
 #define DEFINE_TRAMPOLINE_EXTRA(F, EXTRA_B, EXTRA_A)            \
 extern void F ## _trampoline(void);                             \
@@ -45,19 +67,37 @@ __asm__ (                                                       \
         ".text\n"                                               \
         ".global " #F "_trampoline\n"                           \
         #F "_trampoline:\n"                                     \
-        "dla			$t0, kernel_ccall_stack_swap\n"         \
-        "cgetpccsetoffset  $c16, $t0\n"                         \
-        "cjalr			$c16, $c14\n"                           \
-        "nop\n"                                                 \
+/*      Sets guard to 0 -> 1                                  */\
+        "dli         $t3, 1 \n"                                 \
+        "1: clld        $t2, $idc \n"                           \
+        "tnei        $t2, 0 \n"                                 \
+        "cscd        $t2, $t3, $idc\n"                          \
+        "beqz        $t2, 1b\n"                                 \
+        "nop \n"                                                \
+/*      Swap ddc                                              */\
+        "csc         $c0, $zero, (-1 * 32)($idc) \n"            \
+        "clc         $c0, $zero, (1 * 32)($idc) \n"             \
+/*      Trampoline                                            */\
+        "csc         $c17, $zero, (-2 * 32)($idc) \n"           \
+        "csc         $c18, $zero, (-3 * 32)($idc) \n"           \
+        "cincoffset  $c11, $idc, -(3 * 32) \n"                  \
         EXTRA_B                                                 \
         "dla            $t0, "#F"\n"                            \
         "cgetpccsetoffset  $c12, $t0\n"                         \
         "cjalr          $c12, $c17\n"                           \
         "nop\n"                                                 \
         EXTRA_A                                                 \
-        "dla            $t0, kernel_ccall_stack_unswap\n"       \
-        "jr				$t0\n"                                  \
-        "nop"                                                   \
+/* on return from call restore as needed                      */\
+        "clc         $c18, $zero, (0 * 32)($c11) \n"            \
+        "clc         $c17, $zero, (1 * 32)($c11) \n"            \
+        "clc         $c0, $zero, (2 * 32)($c11) \n"             \
+/* Clear call guard                                           */\
+        "sync \n"                                               \
+        "csd         $zero, $zero, (3 * 32)($c11) \n"           \
+/* Clear everything caller saved ($c1 to $c16 minus 3 (which is the return)) */\
+        "cclearlo   (0b1111111111110110) \n"                    \
+        "ccall $c17, $c18, 2 \n"                                \
+        "nop\n"                                                 \
 );
 
 #endif //CHERIOS_CCALL_TRAMPOLINE_H

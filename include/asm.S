@@ -264,3 +264,8 @@ li  $zero, 0xdead
     dmfc0   \reg, $15, 1
     andi    \reg, \reg, 0xff
 .endm
+
+.macro cgetpccincoffset reg, im
+    cgetpcc \reg
+    cincoffset  \reg, \reg, (\im + 4)
+.endm

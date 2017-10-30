@@ -37,3 +37,4 @@
 	.ent start
 start:
 	j start_common
+    nop
