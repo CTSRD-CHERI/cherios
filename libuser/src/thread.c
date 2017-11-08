@@ -40,7 +40,7 @@
 #include "nano/nanokernel.h"
 #include "capmalloc.h"
 
-act_kt* proc_man_ref = NULL;
+act_kt proc_man_ref = NULL;
 process_kt proc_handle = NULL;
 
 extern void thread_start(void);
