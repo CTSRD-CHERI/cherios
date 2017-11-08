@@ -94,5 +94,10 @@
 #define EN6(X,...) EncodeReg(X) | EN5(__VA_ARGS__)
 #define EN7(X,...) EncodeReg(X) | EN6(__VA_ARGS__)
 #define EN8(X,...) EncodeReg(X) | EN7(__VA_ARGS__)
+#define EN9(X,...) EncodeReg(X) | EN8(__VA_ARGS__)
+#define EN10(X,...) EncodeReg(X) | EN9(__VA_ARGS__)
+#define EN11(X,...) EncodeReg(X) | EN10(__VA_ARGS__)
+#define EN12(X,...) EncodeReg(X) | EN11(__VA_ARGS__)
+#define EN13(X,...) EncodeReg(X) | EN12(__VA_ARGS__)
 
 #endif //CHERIOS_ASSEMBLY_UTILS_H
