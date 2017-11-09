@@ -103,12 +103,17 @@
 /* For both diagnostic and performance reasons a r.w capability to the EL is available. Use this for a fast critical region*/\
     ITEM(get_critical_level_ptr, ex_lvl_t*,  (register_t, cpu_id), __VA_ARGS__)\
     ITEM(get_critical_cause_ptr, cause_t*,  (register_t, cpu_id), __VA_ARGS__) \
-/* Create a new founded code block. The entry returned will be code_start_entry0 */\
+/* Create a new founded code block. The entry returned will be at offset entry0. */\
+/* A public foundation has no associated data, but the entries can be converted into readable capabilities. */\
     ITEM(foundation_create, entry_t,                                                                            \
-    (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries),   \
+    (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries, register_t, is_public),   \
     __VA_ARGS__)\
 /* Enter a foundation created with foundation_create or foundation_new_entry */\
     ITEM(foundation_enter, void, (entry_t entry), __VA_ARGS__)\
+/* Unlock a public foundation */\
+    ITEM(foundation_entry_expose, capability, (entry_t, entry), __VA_ARGS__)\
+/* Gets the -canonical- foundation id for an entry */\
+    ITEM(foundation_entry_get_id, found_id_t*, (entry_t, entry), __VA_ARGS__)\
 /* Exit a foundation */\
     ITEM(foundation_exit, void, (void), __VA_ARGS__)\
 /* Create a new entry from within a foundation */\

@@ -269,3 +269,7 @@ li  $zero, 0xdead
     cgetpcc \reg
     cincoffset  \reg, \reg, (\im + 4)
 .endm
+
+.macro cnull reg
+    cfromptr    \reg, $idc, $zero
+.endm

@@ -230,7 +230,7 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
 				res_t res = mem_request(0, out_elf->maxaddr + FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES), NONE, env->handle).val;
 				assert(res != NULL);
 				entry_t e0 = foundation_create(res, out_elf->maxaddr,
-											   out_elf->loaded_process.data, out_elf->entry, MAX_FOUND_ENTRIES);
+											   out_elf->loaded_process.data, out_elf->entry, MAX_FOUND_ENTRIES, 0);
 				env->printf("Secure foundation size: %lx. TLS base. \n", out_elf->maxaddr);
 				assert(e0 != NULL);
 

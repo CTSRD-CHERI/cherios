@@ -2065,7 +2065,7 @@ free_er:
 
 ###########################################################################################
 # entry_t foundation_create(res_t res, size_t image_size, capability image,
-#                           size_t entry0, size_t n_entries)
+#                           size_t entry0, size_t n_entries, register_t public)
 .global foundation_create
 foundation_create:
 ###########################################################################################
@@ -2105,11 +2105,14 @@ foundation_create:
 
     cmove       $c14, $c4                           # save c4 for later
     # store data we will get on entry
-    cincoffset  $c4, $c4, $t1                       # c4 is the start of the user code/data
+    bnez        $a3, 1f
+    cnull       $c4
+
+    cincoffset  $c4, $c14, $t1                       # c4 is the start of the user code/data
     dli         $t0, DEF_DATA_PERMS
     csetbounds  $c4, $c4, $a0                       # c4 is users data
     candperm    $c4, $c4, $t0
-    csc         $c4, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
+1:  csc         $c4, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
 
     # create first entry point
     cincoffset  $c3, $c3, $t1                       # skip over metadata
@@ -2182,6 +2185,35 @@ foundation_enter:
     cjr         $c12
     cclearlo    EN2(c3,c4)
 
+###########################################################################################
+# capability foundation_entry_expose(entry_t entry)
+.global foundation_entry_expose
+foundation_entry_expose:
+###########################################################################################
+
+    cincoffset  $c4, $kdc, FOUND_ENTRY_TYPE
+    cunseal     $c3, $c3, $c4                           # unseal foundation
+    csetoffset  $c4, $c3, $zero
+    clc         $c4, $zero, (FOUNDATION_ID_SIZE)($c4)   # check is public
+    cbts        $c4, nano_er
+    clc         $c3, $zero, 0($c3)                      # get pcc
+    CRETURN
+    cnull       $c4
+
+###########################################################################################
+# found_id_t* foundation_entry_get_id(entry_t entry)
+.global foundation_entry_get_id
+foundation_entry_get_id:
+###########################################################################################
+
+    cincoffset  $c4, $kdc, FOUND_ENTRY_TYPE
+    cunseal     $c3, $c3, $c4                           # unseal foundation
+    csetoffset  $c3, $c3, $zero
+    csetbounds  $c3, $c3, FOUNDATION_ID_SIZE            # set bounds
+    dli         $t0, Perm_Load
+    candperm    $c3, $c3, $t0                           # read only
+    CRETURN
+    cnull       $c4
 
 ###########################################################################################
 # void foundation_exit(void)
