@@ -75,6 +75,9 @@ static const uint64_t act_ctrl_ref_type = 0x42001;
 static const uint64_t act_sync_type = 0x42000;
 /* The type of object activation response references */
 static const uint64_t act_sync_ref_type = 0x42003;
+
+extern sealing_cap sync_token_sealer;
+extern sealing_cap ctrl_ref_sealer;
 /*
  * Kernel library routines.
  */

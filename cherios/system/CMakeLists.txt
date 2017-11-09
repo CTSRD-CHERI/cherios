@@ -1,3 +1,4 @@
 add_subdirectory(fatfs)
 add_subdirectory(activation_events)
 add_subdirectory(idle)
+add_subdirectory(type_manager)

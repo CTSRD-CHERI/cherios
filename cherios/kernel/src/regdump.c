@@ -102,7 +102,7 @@ static act_t* get_act_for_address(size_t address) {
 }
 
 static act_t* get_act_for_pcc(capability pcc) {
-    return get_act_for_address(cheri_getcursour(pcc));
+    return get_act_for_address(cheri_getcursor(pcc));
 }
 
 static inline void print_frame(int num, capability ra, char * sp) {
@@ -267,12 +267,11 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	}
 
     capability all_powerfull = obtain_super_powers(); // Super magic wow!
-    set_sealing_cap(all_powerfull);
 
 	int creg = 0;
 	printf("Regdump:\n");
 	CHERI_PRINT_CAP(kernel_curr_act->context);
-	reg_frame_t* frame = kernel_unseal_any(kernel_curr_act->context);
+	reg_frame_t* frame = kernel_unseal_any(kernel_curr_act->context, all_powerfull);
 	CHERI_PRINT_CAP(frame);
 	printf("Died in: %s\n", kernel_curr_act->name);
     dump_tlb();

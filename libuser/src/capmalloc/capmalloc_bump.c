@@ -164,7 +164,7 @@ static res_t alloc_from_pool(size_t size, size_t pool_n) {
         /* Needs a new page. We might eventually try make this asyc as well (have a queue of pages waiting */
         if(try_init_memmgt_ref() == NULL) return NULL;
 
-        p->field = mem_request(0,FIXED_POOL_SIZE - RES_META_SIZE, NONE, own_mop);
+        p->field = mem_request(0,FIXED_POOL_SIZE - RES_META_SIZE, NONE, own_mop).val;
 
         assert(p->field != NULL);
 
@@ -276,7 +276,7 @@ static res_t alloc_from_dynamic(size_t size) {
 static res_t allocate_with_request(size_t size) {
     if(try_init_memmgt_ref() == NULL) return NULL;
     size_t aligned_size = align_up_to(size, RES_META_SIZE);
-    res_t res = mem_request(0, aligned_size, NONE, own_mop);
+    res_t res = mem_request(0, aligned_size, NONE, own_mop).val;
     return res;
 }
 

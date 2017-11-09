@@ -153,10 +153,17 @@ extern capability mop_sealing_cap;
 extern vpage_range_desc_table_t desc_table_root;
 
 static inline mop_internal_t* unseal_mop(mop_t mop) {
-    if(cheri_gettype(mop) == cheri_getcursour(mop_sealing_cap)) {
-        return (mop_internal_t*)cheri_unseal(mop, mop_sealing_cap);
-    } else return NULL;
 
+    mop_internal_t* unsealed = (mop_internal_t*)cheri_unseal_2(mop, mop_sealing_cap);
+    if(unsealed == NULL) return NULL;
+
+    enum mop_state result;
+
+    ENUM_VMEM_SAFE_DEREFERENCE(&(unsealed->state), result, dead);
+
+    if(result != active) return NULL;
+
+    return unsealed;
 }
 
 static inline mop_t seal_mop(mop_internal_t* mop_internal) {
@@ -173,9 +180,9 @@ void __revoke_finish(res_t res);
 
 int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed);
 int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed);
-res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed);
+ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed);
 mop_t __init_mop(capability sealing_cap, res_t big_res);
-mop_t __mem_makemop(res_t space, mop_t mop_sealed);
+ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed);
 int __mem_reclaim_mop(mop_t mop_sealed);
 
 void mmap_dump(void);

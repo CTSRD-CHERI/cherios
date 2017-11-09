@@ -36,6 +36,7 @@ set(LIBUSER_SRCS
     src/virtioblk.c
     src/thread.c
     src/act_events.c
+    src/type_man.c
 )
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})

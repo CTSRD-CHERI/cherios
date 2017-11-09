@@ -35,14 +35,26 @@
 
 // FIXME we need to choose appropriate types and remove their accessibility from the rest of the system
 
+#define TYPE_SPACE_BITS     20
+#define TYPE_SPACE          (1 << TYPE_SPACE_BITS)
+
+
+// All types below this value are reserved by the nano kernel
+
+#define NANO_TYPES         0x100
+
+#define SYSTEM_TYPES       (TYPE_SPACE - NANO_TYPES)
+#define TRES_BITFIELD_SIZE ((SYSTEM_TYPES+7)/8)
+
 /* The types used for nano kernel objects. */
-#define CONTEXT_TYPE       0x5555         // The type of contexts
-#define NANO_KERNEL_TYPE   0x6666         // The type of sealed local data
-#define RES_TYPE           0x7777         // The type of a reservation handle
-#define FOUND_ENTRY_TYPE   0x9990         // The type of a foundation entry handle
-#define FOUND_CERT_TYPE    0x9991         // The type of a foundation certificate handle
-#define FOUND_LOCKED_TYPE  0x9992         // The type of a foundation locked message hnadle
-#define VTABLE_TYPE_L0     0x8880         // The type of the top level page table
+#define CONTEXT_TYPE       0x0001         // The type of contexts
+#define NANO_KERNEL_TYPE   0x0002         // The type of sealed local data
+#define RES_TYPE           0x0003         // The type of a reservation handle
+#define TRES_TYPE          0x0004         // The type of a type reservation
+#define FOUND_ENTRY_TYPE   0x0010         // The type of a foundation entry handle
+#define FOUND_CERT_TYPE    0x0011         // The type of a foundation certificate handle
+#define FOUND_LOCKED_TYPE  0x0010         // The type of a foundation locked message hnadle
+#define VTABLE_TYPE_L0     0x0020         // The type of the top level page table
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
 
@@ -167,6 +179,7 @@ _Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
 
 typedef capability context_t;               // Type of a nanokernel context handle
 typedef capability res_t;                   // Type of a reservation handle
+typedef capability tres_t;
 typedef capability ptable_t;                // Type of a page table handle
 
 
@@ -182,6 +195,10 @@ typedef struct found_id_t {
     size_t nentries;
     size_t pad;
 } found_id_t;
+
+typedef struct type_res_bitfield_t {
+    char bitfield[TRES_BITFIELD_SIZE];
+} type_res_bitfield_t;
 
 /* This is how big the structure is in the nano kernel */
 _Static_assert(sizeof(found_id_t) == FOUNDATION_ID_SIZE, "Assumed by nano kernel");
@@ -239,6 +256,17 @@ typedef struct {
 
 typedef register_t ex_lvl_t;
 typedef register_t cause_t;
+
+#define ENUM_VMEM_SAFE_DEREFERENCE(location, result, edefault)  \
+    __asm__ (                                                   \
+        SANE_ASM                                                \
+        "li     %[res], %[def]               \n"                \
+        "clw    %[res], $zero, 0(%[state])   \n"                \
+        "ori    $zero, $zero, 0xd00d            \n"             \
+    : [res]"=r"(result)                                         \
+    : [state]"C"(location),[def]"i"(edefault)                   \
+    :                                                           \
+    )
 
 #endif // __ASSEMBLY__
 

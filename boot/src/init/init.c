@@ -103,6 +103,7 @@ init_elem_t init_list[] = {
     B_DENTRY(m_proc,     "proc.elf", 0, 1)
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
+    B_DENTRY(m_user, "type_manager.elf",0,1)
     B_FENCE
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
@@ -299,7 +300,7 @@ static void load_modules(init_info_t * init_info) {
     printf("Creating mop for proc man\n");
     // TODO eventually capmalloc will do this nicely */
     res_t space_for_mop = cap_malloc(MOP_REQUIRED_SPACE);
-    mop_t mop_for_proc = mem_makemop(space_for_mop, mop);
+    mop_t mop_for_proc = mem_makemop(space_for_mop, mop).val;
 
 
     /* Send the mop */

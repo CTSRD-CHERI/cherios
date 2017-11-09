@@ -152,6 +152,8 @@ NANO_KERNEL_IF_LIST(LOCAL_CAP_VAR_MACRO)
 
 local_var top_virt_page, PAGE_TABLE_SIZE, PAGE_TABLE_ENT_BITS
 
+local_var tres_bitfield, TRES_BITFIELD_SIZE, 1
+
 local_var context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
 local_var phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, PHY_PAGE_ENTRY_SIZE_BITS
@@ -410,9 +412,6 @@ nano_kernel_init:
     csetoffset  $c17, $c17, $a1
     candperm    $c17, $c17, $k0
 
-    # TODO: not include our reserved types
-    dli         $t0, DEF_SEALING_PERMS
-    candperm    $c4, $kdc, $t0
     # Now remove capabilities to the nano kernel. We should deny access to kernel regs
     # TODO: and the tlb
 
@@ -428,9 +427,8 @@ nano_kernel_init:
     # c1 a read only capability to nano kernel method table
     # c2 a data capability for the nano kernel
     # c3 the first context handle
-    # c4 is a capability is a sealing capability for the type space
     # a0 is to allow boot to pass an argument to the kernel. Don't want capabilities or they would have to be checked.
-    cclearlo    EncodeReg(all) & ~(EN6(c0, c1, c2, c3, c4, c5))
+    cclearlo    EncodeReg(all) & ~(EN5(c0, c1, c2, c3, c5))
     cclearhi    EncodeReg(all) & ~(EN6(c17, kdc, kcc, epcc, kr1c, kr2c))
 
     cjr         $c17
@@ -2414,17 +2412,104 @@ rescap_unlock:
     nop
 
 
+###################################
+# tres_t tres_get(register_t type)
+.global tres_get
+tres_get:
+###################################
+
+    slti    $t0, $a0, NANO_TYPES    # 1 if reserved nano type
+    bnez    $t0, nano_er
+
+    li      $t0, DEF_SEALING_PERMS
+    li      $t1, TRES_TYPE
+
+    csetoffset $c3, $kdc, $a0
+    csetoffset $c4, $kdc, $t1
+
+    candperm $c3, $c3, $t0
+    csetbounds $c3, $c3, 1
+    cseal   $c3, $c3, $c4
+
+    CRETURN
+    cclearlo    EN1(c4)
+
+###################################
+# sealing_cap tres_take(tres_t tres)
+.global tres_take
+tres_take:
+###################################
+
+    cincoffset  $c4, $kdc, TRES_TYPE
+    cunseal     $c3, $c3, $c4
+
+    cgetbase    $t0, $c3
+    daddiu      $t0, $t0, -NANO_TYPES
+
+    dli         $t2, 1
+    andi        $t1, $t0, 0x7               # get index into byte
+    dsll        $t1, $t2, $t1               # get mask for bit in byte
+    dsrl        $t0, $t0, 3                 # get index into bitfield
+
+    daddiu      $t0, $t0, tres_bitfield
+    cincoffset  $c4, $idc, $t0               # c4 is capability to byte
+
+1:  cllb        $t0, $c4
+    and         $t2, $t1, $t0               # extract bit
+    bnez        $t2, nano_er                # bit should be 0
+    or          $t0, $t0, $t1               # set bit to 1
+    cscb        $t0, $t0, $c4
+    beqz        $t0, 1b                     # store cond fail, try this again
+    nop
+
+    CRETURN
+    cclearlo    EN1(c4)
+
+############################################################
+# capability tres_revoke(register_t start, register_t end)
+.global tres_revoke
+tres_revoke:
+############################################################
+
+#  TODO:
+
+    CRETURN
+    nop
+
+
+#########################################
+# type_res_bitfield_t* tres_get_ro_bitfield(void)
+.global tres_get_ro_bitfield
+tres_get_ro_bitfield:
+#########################################
+
+    dli         $t0, tres_bitfield
+    cincoffset  $c3, $idc, $t0
+    dli         $t0, TRES_BITFIELD_SIZE
+    csetbounds  $c3, $c3, $t0
+    dli         $t0, (Perm_Load)
+    CRETURN
+    candperm    $c3, $c3, $t0
 
 
 
-
-
+# TODO we have way too many error returns. This one is pretty general, use it in lots of places
+# TODO to make the nano kernel smaller
+nano_er:
+    CRETURN
+    cclearlo    EN11(c3,c4,c5,c6,c7,c8,c9,c10,c13,c14,c15)
 
 ############################################
 # Some stuff used by the exception vectors #
 ############################################
 
 tlb_table_missing:
+
+# Look for magic nop after this instruction. If it is present, we advance pcc and no exception
+    li      $k0, 0x3400d00d
+    clw     $k1, $zero, 4($epcc)            # Might have problems if this is the last instruction ;)
+    beq     $k0, $k1, skip_and_return
+
     cgetcause $k0
     csd     $k0, $zero, exception_ccause($kr1c)
 
@@ -2450,8 +2535,8 @@ get_interface:
     cseal       $c2, $kr2c, $c1                          # seal local into c2
     clc         $c1, $k1, create_context_cap($kr2c)      # load code cap into c1
 
-    li          $k0, 4
-    cincoffset  $epcc, $epcc, $k0
+skip_and_return:
+    cincoffset  $epcc, $epcc, 4
 
     cgetoffset $k1, $epcc                                # counters an eret bug
     dmtc0      $k1, $14

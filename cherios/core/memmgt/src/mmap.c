@@ -155,7 +155,7 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
         printf("|---Claimers: \n");
         FOREACH_CLAIMER(desc, index, claim) {
             if(claim->owner != NULL) {
-                printf("    |--- %lx\n", cheri_getcursour(claim->owner));
+                printf("    |--- %lx\n", cheri_getcursor(claim->owner));
             }
         }
     }
@@ -909,42 +909,15 @@ static void release_mop(mop_internal_t* mop) {
     mem_claim_or_release(cheri_getbase(mop),sizeof(mop_internal_t), 1, &mmap_mop, &visit_free, &visit_free_check);
 }
 
-/* Check mop is safe in the presence of an adversary. i.e., it will not deference mop unless it knows it is mapped */
-static int check_mop(mop_internal_t* mop) {
-    if(mop == NULL) return MEM_BAD_MOP_NULL;
-
-    size_t claim_base = cheri_getbase(mop);
-
-    // Next check we still have a claim if in virtual memory
-
-    if(claim_base < MIPS_XKPHYS_CACHED_NC_BASE) {
-        claim_base = claim_base >> UNTRANSLATED_BITS;
-
-        vpage_range_desc_t* desc = hard_index(claim_base);
-
-        if(desc->length == 0) return MEM_BAD_MOP_UNSAFE;
-
-        size_t ndx = find_free_claim_index(desc, &mmap_mop);
-
-        if(ndx == (-1) || desc->claimers[ndx].owner != &mmap_mop) return MEM_BAD_MOP_UNSAFE;
-    }
-
-    // Safe to dereference. Check state
-
-    return (mop->state != active) ?  MEM_BAD_MOP_DESTROYED : 0;
-
-}
-
-res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed) {
+ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
+
+    if(mop == NULL) return MAKE_ER(res_t, MEM_BAD_MOP);
 
     if(base & (RES_META_SIZE-1)) {
         printf("Base badly aligned\n");
-        return gen_to_cap(MEM_BAD_BASE);
+        return MAKE_ER(res_t, MEM_BAD_BASE);
     }
-
-    int res;
-    if((res = check_mop(mop)) != 0) return gen_to_cap(res);
 
     size_t align_power = 0;
 
@@ -979,7 +952,7 @@ res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t m
 
         if (check <= VISIT_DONE) {
             printf("Mem request error: %d", check);
-            return gen_to_cap(check);
+            return MAKE_ER(res_t, check);
         }
 
     } else {
@@ -1027,7 +1000,7 @@ res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t m
 
             if(search_page_n == MAX_VIRTUAL_PAGES) {
                 printf("Search failed\n");
-                return gen_to_cap(MEM_REQUEST_NONE_FOUND); // No pages matched
+                return MAKE_ER(res_t, MEM_REQUEST_NONE_FOUND); // No pages matched
             }
         }
 
@@ -1065,7 +1038,7 @@ res_t __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t m
         assert(result != NULL);
     }
 
-    return result;
+    return MAKE_VALID(res_t, result);
 }
 
 int reclaim(mop_internal_t* mop, int remove_from_chain) {
@@ -1118,29 +1091,28 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
 int __mem_reclaim_mop(mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    int check;
-    if((check = check_mop(mop)) != 0) return check;
+    if(mop == NULL) return MEM_BAD_MOP;
 
     reclaim(mop, 1);
 
     return MEM_OK;
 }
 
-mop_t __mem_makemop(res_t space, mop_t mop_sealed) {
+// FIXME should we allocate this space ourselves? probably.
+
+ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    int res;
-    if((res = check_mop(mop)) != 0) return gen_to_cap(res);
+    if(mop == NULL) return MAKE_ER(mop_t, MEM_BAD_MOP);
 
     cap_pair pair;
     try_take_res(space, sizeof(mop_internal_t), &pair);
 
     mop_internal_t* new_mop = (mop_internal_t*)pair.data;
 
-    if(new_mop == NULL) return gen_to_cap(MEM_MAKEMOP_BAD_SPACE);
+    if(new_mop == NULL) return MAKE_ER(mop_t, MEM_MAKEMOP_BAD_SPACE);
 
-    if(claim_mop(new_mop) != MEM_OK) return gen_to_cap(MEM_BAD_MOP_UNSAFE);
-
+    if(claim_mop(new_mop) != MEM_OK) return MAKE_ER(mop_t, MEM_BAD_MOP_CANT_CLAIM);
 
     bzero(new_mop, sizeof(mop_internal_t));
 
@@ -1153,15 +1125,14 @@ mop_t __mem_makemop(res_t space, mop_t mop_sealed) {
 
     mop->child_mop = new_mop;
 
-    return seal_mop(new_mop);
+    return MAKE_VALID(mop_t,seal_mop(new_mop));
 
 }
 
 int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    int check;
-    if((check = check_mop(mop)) != 0) return check;
+    if(mop == NULL) return MEM_BAD_MOP;
 
     return mem_claim_or_release(base, length, times, mop, &visit_claim, &visit_claim_check);
 }
@@ -1169,8 +1140,7 @@ int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed) {
 int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
-    int check;
-    if((check = check_mop(mop)) != 0) return check;
+    if(mop == NULL) return MEM_BAD_MOP;
 
     return mem_claim_or_release(base, length, times, mop, &visit_free, &visit_free_check);
 }

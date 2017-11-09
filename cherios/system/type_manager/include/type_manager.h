@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,32 +27,44 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_TYPE_MANAGER_H
+#define CHERIOS_TYPE_MANAGER_H
 
-#ifndef  _KUTILS_H_
-#define _KUTILS_H_
+#include "tman.h"
 
-#include "klib.h"
+#define OWNER_FREED       (top_internal_t*)(-1)
+#define OWNER_FREE        (NULL)
 
-/*
- * Various util functions
- */
+enum top_state {
+    created = 0,
+    destroying = 1,
+    destroyed = 2,
 
-static inline sealing_cap sealing_cap_for(size_t type, sealing_cap auth) {
-	return cheri_setoffset(auth, type - cheri_getbase(auth));
-}
+};
 
-static inline capability kernel_seal(const_capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_seal(p, seal);
-}
+typedef struct top_internal_t {
+    DLL_LINK(top_internal_t);
 
-static inline capability kernel_unseal(capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_unseal(p, seal);
-}
+    struct child {
+        DLL(top_internal_t);
+    } children;
 
-static inline capability kernel_unseal_any(capability p, sealing_cap auth) {
-	return kernel_unseal(p, cheri_gettype(p), auth);
-}
+    struct top_internal_t* parent;
 
-#endif
+    struct owns {
+        DLL(ownership_tracker_t);
+    } owns;
+
+    stype types_allocated;
+    stype types_freed;
+
+    enum top_state state;
+
+} top_internal_t;
+
+typedef struct ownership_tracker_t {
+    DLL_LINK(ownership_tracker_t);
+    top_internal_t* owner;
+} ownership_tracker_t;
+
+#endif //CHERIOS_TYPE_MANAGER_H

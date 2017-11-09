@@ -39,12 +39,11 @@ ALLOCATE_PLT_NANO
 
 /* Use linker allocated memory to store boot-info. */
 static init_info_t init_info;
-sealing_cap def_seal_cap;
 
 int cherios_main(nano_kernel_if_t* interface,
 				 capability def_data,
 				 context_t own_context,
-                 sealing_cap sealer,
+				 // sealing_cap sealer, <-- no longer available. Request individual types from the nano kernel.
 				 size_t init_base,
                  size_t init_entry,
                  size_t init_tls_base) {
@@ -53,7 +52,6 @@ int cherios_main(nano_kernel_if_t* interface,
 
 	init_nano_kernel_if_t(interface, def_data);
 
-    set_sealing_cap(sealer);
 	/* Get the capability for the uart. We should save this somewhere sensible */
 	capability  cap_for_uart = get_phy_cap(get_book(), uart_base_phy_addr, uart_base_size, 0, 1);
 	set_uart_cap(cap_for_uart);
@@ -66,7 +64,7 @@ int cherios_main(nano_kernel_if_t* interface,
     CHERI_PRINT_CAP(def_data);
     CHERI_PRINT_CAP(own_context);
     //CHERI_PRINT_CAP(reservation);
-    CHERI_PRINT_CAP(sealer);
+    //CHERI_PRINT_CAP(sealer);
     kernel_printf("init_base: %lx. entry: %lx. tls_base: %lx\n", init_base, init_entry, init_tls_base);
 
 	init_info.nano_if = interface;
@@ -75,7 +73,8 @@ int cherios_main(nano_kernel_if_t* interface,
 	kernel_assert((init_info.kernel_size & (PAGE_SIZE-1)) == 0);
     init_info.uart_cap = cap_for_uart;
 	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
-	init_info.mop_sealing_cap = cheri_setcursor(sealer, MOP_SEALING_TYPE);
+
+	init_info.mop_sealing_cap = get_sealing_cap_from_nano(MOP_SEALING_TYPE);
 
     kernel_printf("Initialising Scheduler\n");
 	sched_init(&init_info.idle_init);

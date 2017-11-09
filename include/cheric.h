@@ -57,6 +57,8 @@
 typedef __capability void * capability;
 typedef __capability const void *  const_capability;
 typedef capability sealing_cap;
+typedef unsigned int stype;
+
 /*
  * Programmer-friendly macros for CHERI-aware C code -- requires use of
  * CHERI-aware Clang/LLVM, and full CP2 context switching, so not yet usable
@@ -101,7 +103,7 @@ typedef capability sealing_cap;
 #define	cheri_cchecktype(c, t)	__builtin_mips_cheri_check_type(		\
 				    __DECONST(capability, (c)), (t))
 
-#define cheri_getcursour(x) (cheri_getbase(x) + cheri_getoffset(x))
+#define cheri_getcursor(x) (cheri_getbase(x) + cheri_getoffset(x))
 #define cheri_setcursor(x,y) (cheri_setoffset(x, y - cheri_getbase(x)))
 
 #define	cheri_getdefault()	__builtin_mips_cheri_get_global_data_cap()
@@ -147,13 +149,18 @@ typedef capability sealing_cap;
  * appears not currently to be the case, so manually derive using
  * cheri_getpcc() for now.
  */
-static capability gen_to_cap(register_t reg) {
-	return cheri_setoffset(NULL, reg);
-}
 
-static register_t cap_to_gen(capability cap) {
-	return cheri_getoffset(cap);
-}
+typedef intptr_t er_t;
+
+#define ERROR_T(T) T ## _or_er_t
+#define DEC_ERROR_T(T) typedef union ERROR_T(T) {T val; er_t er;} ERROR_T(T)
+#define MAKE_ER(T, code) (ERROR_T(T)){.er = code}
+#define MAKE_VALID(T, valid) (ERROR_T(T)){.val = valid}
+#define IS_VALID(error_or_valid) cheri_gettag(error_or_valid.val)
+
+#define cheri_unseal_2(cap, sealing_cap) \
+    ((cheri_gettag(cap) == 0 || cheri_gettype(cap) != cheri_getcursor(sealing_cap)) ? NULL : cheri_unseal(cap, sealing_cap))
+
 static __inline capability
 cheri_codeptr(const void *ptr, size_t len)
 {
@@ -270,7 +277,7 @@ static __inline__  void set_idc(capability idc) {
 	   cheri_getbase(cap),						\
 	   cheri_getlen(cap),						\
 	   cheri_getoffset(cap),						\
-		cheri_getcursour(cap),				\
+		cheri_getcursor(cap),				\
 	   cheri_gettype(cap))
 
 #define CHERI_PRINT_CAP_LITE(cap)					\

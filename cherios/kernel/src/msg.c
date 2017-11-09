@@ -147,7 +147,6 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 	//todo: zero queue?
 }
 
-
 /* Creates a token for synchronous CCalls. This ensures the answer is unique. */
 static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 	// FIXME No static local variables
@@ -163,11 +162,11 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 	sync_token = cheri_setbounds(sync_token, 0);
 #endif
 	sync_token = cheri_setoffset(sync_token, unique);
-	return kernel_seal(sync_token, act_sync_type);
+	return cheri_seal(sync_token, sync_token_sealer);
 }
 
 static sync_t unseal_sync_token(capability token) {
-	token = kernel_unseal(token, act_sync_type);
+	token = cheri_unseal(token, sync_token_sealer);
 	return cheri_getoffset(token);
 }
 

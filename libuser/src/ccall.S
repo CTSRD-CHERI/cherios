@@ -35,29 +35,7 @@
 .text
 .global cheri_invoke
 
-#TODO save context and seal $11 and $c17 if this is untrusting
-
-# Thoughts #
-
-# We should make this look like a jump and link.
-
-# So with a jump and link we have: pcc = target , and c17 = return
-# With a ccall we ALSO have idc = data target, and c18 = data return
-
-# So a normal return is jump c17.
-# Now a return is creturn c17 c18
-
-# If the target ALWAYS uses creturn (scrap using jump for function return) it does not matter if the return edge
-# is trusting or not. If c17 was unsealed, it is just a jump. if c17 is sealed, we check the c17/c18 pair and do a jump
-
-# By always using idc on function entry to setup our stack pointer and c0, we don't need multiple entries
-
-# The ABI is that parties -SHOULD- obey the normal ABI plus above changes. Unlesss maybe if c17 is sealed, everything
-# Is caller saved? It would be weird for a caller to expect a sealed return, but assume its registers were not trampled
-
-# We have 4 cases, with trust/no trust for caller/callee
-# If the caller is distrusting it should seal its return context, clear what it wants to
-# If the callee is distrusting, it exposes itself to only be accessible by ccall and clears caller saved registers
+# See demo.S for how the ABI will eventually look. This is still a placeholder.
 
 
 cheri_invoke:

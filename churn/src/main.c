@@ -57,7 +57,7 @@ int main(register_t arg, capability carg) {
         res_t res = NULL;
 
         if(i + WINDOW_SIZE < N) {
-            res = mem_request(0, BLOCK_SIZE - (2*RES_META_SIZE), NONE, own_mop);
+            res = mem_request(0, BLOCK_SIZE - (2*RES_META_SIZE), NONE, own_mop).val;
             if(res == NULL) {
                 printf("mmap failed\n");
                 return -1;

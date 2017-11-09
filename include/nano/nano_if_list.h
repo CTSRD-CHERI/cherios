@@ -124,8 +124,15 @@
 /* If in a foundation get own foundation_id */\
     ITEM(foundation_get_id, found_id_t*, (void), __VA_ARGS__)\
 /* Switches an -IDLE- SMP core to context start_as */\
-    ITEM(smp_context_start, int, (context_t, start_as, register_t, cpu_id), __VA_ARGS__)
-
+    ITEM(smp_context_start, int, (context_t, start_as, register_t, cpu_id), __VA_ARGS__)\
+/* Gets a type reservation */\
+    ITEM(tres_get, tres_t, (register_t, type), __VA_ARGS__)\
+/* Turns in a type reservation for a sealing capability */\
+    ITEM(tres_take, sealing_cap, (tres_t, tres), __VA_ARGS__)\
+/* Revokes a range of types */\
+    ITEM(tres_revoke, capability, (register_t, start, register_t, end), __VA_ARGS__)\
+/* Gets a capability to a bit vector representing the state of the type space */\
+    ITEM(tres_get_ro_bitfield, type_res_bitfield_t*, (void), __VA_ARGS__)
 
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
 

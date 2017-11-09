@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,32 +27,39 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_LISTS_H
+#define CHERIOS_LISTS_H
 
-#ifndef  _KUTILS_H_
-#define _KUTILS_H_
 
-#include "klib.h"
+#define DLL(T)          \
+    struct T* first;    \
+    struct T* last
 
-/*
- * Various util functions
- */
+#define DLL_LINK(T)    \
+    struct T* next;     \
+    struct T* prev
 
-static inline sealing_cap sealing_cap_for(size_t type, sealing_cap auth) {
-	return cheri_setoffset(auth, type - cheri_getbase(auth));
-}
+#define DLL_REMOVE(List, Item)                                  \
+    if((Item) == (List)->first) (List)->first = (Item)->next;   \
+    else (Item)->prev->next = (Item)->next;                     \
+    if((Item) == (List)->last) (List)->last = (Item)->prev;     \
+    else (Item)->next->prev = (Item)->prev
 
-static inline capability kernel_seal(const_capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_seal(p, seal);
-}
+#define DLL_FOREACH(T, Item, List) for(T* (Item) = (List)->first; (Item) != NULL; (Item) = (Item->next))
 
-static inline capability kernel_unseal(capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_unseal(p, seal);
-}
+#define DLL_ADD_START(List, Item)                       \
+    (Item)->prev = NULL;                                \
+    (Item)->next = (List)->first;                       \
+    if((List)->first == NULL) (List)->last = (Item);    \
+    else (List)->first->prev = (Item);                  \
+    (List)->first = (Item)
 
-static inline capability kernel_unseal_any(capability p, sealing_cap auth) {
-	return kernel_unseal(p, cheri_gettype(p), auth);
-}
+#define DLL_ADD_END(List, Item)                         \
+    (Item)->prev = (List)->last;                        \
+    (Item)->next = NULL;                                \
+    if((List)->last == NULL) (List)->first = (Item);    \
+    else (List)->last->next = (Item);                   \
+    (List)->last = (Item)
 
-#endif
+
+#endif //CHERIOS_LISTS_H

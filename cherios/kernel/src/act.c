@@ -68,36 +68,41 @@ static kernel_if_t* get_if() {
 	return (kernel_if_t*) cheri_andperm(&internel_if, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
 }
 
-static capability act_seal_for_call(capability act, register_t type) {
-	return kernel_seal(cheri_incoffset(act, offsetof(struct act_t, stack_guard)), type);
+sealing_cap ref_sealer;
+sealing_cap ctrl_ref_sealer;
+sealing_cap sync_ref_sealer;
+sealing_cap sync_token_sealer;
+
+static capability act_seal_for_call(capability act, sealing_cap sealer) {
+	return cheri_seal(cheri_incoffset(act, offsetof(struct act_t, stack_guard)), sealer);
 }
 
-static capability act_unseal_callable(capability act, register_t type) {
-	return cheri_incoffset(kernel_unseal(act, type), -offsetof(struct act_t, stack_guard));
+static capability act_unseal_callable(capability act, sealing_cap sealer) {
+	return cheri_incoffset(cheri_unseal(act, sealer), -offsetof(struct act_t, stack_guard));
 }
 
 act_t * act_create_sealed_ref(act_t * act) {
-	return (act_t *)act_seal_for_call(act, act_ref_type);
+	return (act_t *)act_seal_for_call(act, ref_sealer);
 }
 
 act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
-	return (act_control_t *)act_seal_for_call(act, act_ctrl_ref_type);
+	return (act_control_t *)act_seal_for_call(act, ctrl_ref_sealer);
 }
 
 act_t * act_unseal_ref(act_t * act) {
-	return  (act_t *)act_unseal_callable(act, act_ref_type);
+	return  (act_t *)act_unseal_callable(act, ref_sealer);
 }
 
 act_control_t* act_unseal_ctrl_ref(act_t* act) {
-	return (act_control_t*)act_unseal_callable(act, act_ctrl_ref_type);
+	return (act_control_t*)act_unseal_callable(act, ctrl_ref_sealer);
 }
 
 act_t * act_create_sealed_sync_ref(act_t * act) {
-	return (act_t *)act_seal_for_call(act, act_sync_ref_type);
+	return (act_t *)act_seal_for_call(act, sync_ref_sealer);
 }
 
 act_t * act_unseal_sync_ref(act_t * act) {
-	return  (act_t *)act_unseal_callable(act, act_sync_ref_type);
+	return  (act_t *)act_unseal_callable(act, sync_ref_sealer);
 }
 
 
@@ -107,6 +112,11 @@ void act_set_event_ref(act_t* act) {
 
 context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base) {
 	KERNEL_TRACE("init", "activation init");
+
+    ref_sealer = get_sealing_cap_from_nano(act_ref_type);
+    ctrl_ref_sealer = get_sealing_cap_from_nano(act_ctrl_ref_type);
+    sync_ref_sealer = get_sealing_cap_from_nano(act_sync_ref_type);
+    sync_token_sealer = get_sealing_cap_from_nano(act_sync_type);
 
 	setup_syscall_interface(&internel_if);
 

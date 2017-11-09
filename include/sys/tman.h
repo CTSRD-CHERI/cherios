@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,31 +28,36 @@
  * SUCH DAMAGE.
  */
 
-#ifndef  _KUTILS_H_
-#define _KUTILS_H_
+#ifndef CHERIOS_TMAN_H
+#define CHERIOS_TMAN_H
 
-#include "klib.h"
+#include "cheric.h"
+#include "nano/nanotypes.h"
 
-/*
- * Various util functions
- */
+#define TOP_SEALING_TYPE 0x999
 
-static inline sealing_cap sealing_cap_for(size_t type, sealing_cap auth) {
-	return cheri_setoffset(auth, type - cheri_getbase(auth));
-}
+#define USER_TYPES_START 0x1000
+#define USER_TYPES_END   0x2000
+#define USER_TYPES_LEN   (USER_TYPES_END - USER_TYPES_START)
+typedef capability top_t;
 
-static inline capability kernel_seal(const_capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_seal(p, seal);
-}
 
-static inline capability kernel_unseal(capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_unseal(p, seal);
-}
+DEC_ERROR_T(top_t);
+DEC_ERROR_T(tres_t);
 
-static inline capability kernel_unseal_any(capability p, sealing_cap auth) {
-	return kernel_unseal(p, cheri_gettype(p), auth);
-}
+top_t type_get_first_top(void);
+ERROR_T(top_t) type_new_top(top_t parent);
+er_t type_destroy_top(top_t top);
+ERROR_T(tres_t) type_get_new(top_t top);
+ERROR_T(tres_t) type_get_new_exact(top_t top, stype type);
+er_t type_return_type(top_t top, stype type);
 
-#endif
+#define TYPE_OK                 (0)
+
+#define TYPE_ER_INVALID_TOP     (-1)
+#define TYPE_ER_OUT_OF_TYPES    (-2)
+#define TYPE_ER_TYPE_USED       (-3)
+#define TYPE_ER_OUT_OF_RANGE    (-4)
+#define TYPE_ER_DOES_NOT_OWN    (-5)
+
+#endif //CHERIOS_TMAN_H

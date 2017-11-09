@@ -179,7 +179,7 @@ extern int kernel_message_reply(capability c3, register_t v0, register_t v1, act
 	"cincoffset  $c11, $c11, 64\n"			\
 
 #define SET_IF(call, ...)\
-kernel_if -> call = kernel_seal((capability)(&(kernel_ ## call ## _trampoline)), act_ctrl_ref_type);
+kernel_if -> call = cheri_seal((capability)(&(kernel_ ## call ## _trampoline)), ctrl_ref_sealer);
 
 
 #define DADT(call) DEFINE_TRAMPOLINE_EXTRA(kernel_ ## call,,)

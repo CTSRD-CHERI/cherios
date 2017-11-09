@@ -117,6 +117,13 @@ static inline capability get_phy_cap(page_t* book, size_t address, size_t size, 
     return cap_for_phy;
 }
 
+/* Ask type_manager instead of calling this */
+
+static capability get_sealing_cap_from_nano(register_t type) {
+    return tres_take(tres_get(type));
+}
+
+
 #else
 
 #define LOCAL_CAP_VAR_MACRO(item,...)   local_cap_var item ## _cap;

@@ -47,9 +47,8 @@ typedef capability mop_t;
 extern mop_t own_mop;
 
 #define MEM_OK      (0)
-#define MEM_BAD_MOP_NULL (-1)
-#define MEM_BAD_MOP_UNSAFE (-9)
-#define MEM_BAD_MOP_DESTROYED (-10)
+#define MEM_BAD_MOP (-1)
+#define MEM_BAD_MOP_CANT_CLAIM (-9)
 #define MEM_BAD_BASE (-2)
 
 #define MEM_MAKEMOP_BAD_SPACE   (-11)
@@ -61,6 +60,9 @@ extern mop_t own_mop;
 #define MEM_CLAIM_FREED         (-5)
 #define MEM_CLAIM_CLAIM_LIMIT   (-6)
 #define MEM_CLAIM_OVERFLOW      (-8)
+
+DEC_ERROR_T(mop_t);
+DEC_ERROR_T(res_t);
 
 typedef enum mem_request_flags {
     NONE = 0,
@@ -74,7 +76,7 @@ typedef enum mem_request_flags {
 /* Memory Request. Adds to your resource limit and claims the pages. Returns a reservation for those pages.
  * If align_top is set the range with have all its high bits the same.
  * base must be aligned to RES_META_SIZE. */
-res_t       mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop);
+ERROR_T(res_t) mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop);
 
 /* Claiming adds to your resource limit - but guarantees the page(es) claimed will not be unmapped until you call release.
  * We must add to your resource limit straight away, otherwise we allow an attack where you think you are well below your
@@ -87,7 +89,7 @@ int         mem_claim(size_t base, size_t length, size_t times, mop_t mop);
 int         mem_release(size_t base, size_t length, size_t times, mop_t mop);
 
 /* Makes a new mop, places it in space provided by a reservation, and returns a handle. */
-mop_t       mem_makemop(res_t space, mop_t auth_mop);
+ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop);
 
 /* Releases all resources attributable to mop and makes it invalid. Will also reclaim all mops derived from it */
 int         mem_reclaim_mop(mop_t mop_sealed);

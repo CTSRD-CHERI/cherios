@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,31 +28,40 @@
  * SUCH DAMAGE.
  */
 
-#ifndef  _KUTILS_H_
-#define _KUTILS_H_
+#include "tman.h"
+#include "sys/types.h"
+#include "namespace.h"
+#include "msg.h"
 
-#include "klib.h"
+act_kt tman_ref = NULL;
 
-/*
- * Various util functions
- */
-
-static inline sealing_cap sealing_cap_for(size_t type, sealing_cap auth) {
-	return cheri_setoffset(auth, type - cheri_getbase(auth));
+static act_kt try_init_tman_ref(void) {
+    if(tman_ref == NULL) {
+        tman_ref = namespace_get_ref(namespace_num_tman);
+    }
+    return tman_ref;
 }
 
-static inline capability kernel_seal(const_capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_seal(p, seal);
+top_t type_get_first_top(void) {
+    return (top_t)message_send_c(0, 0, 0, 0, NULL, NULL, NULL, NULL, tman_ref, SYNC_CALL, 0);
 }
 
-static inline capability kernel_unseal(capability p, uint64_t otype, sealing_cap auth) {
-	sealing_cap seal = sealing_cap_for(otype, auth);
-	return cheri_unseal(p, seal);
+ERROR_T(top_t) type_new_top(top_t parent) {
+    return (ERROR_T(top_t))message_send_c(0, 0, 0, 0, parent, NULL, NULL, NULL, tman_ref, SYNC_CALL, 1);
 }
 
-static inline capability kernel_unseal_any(capability p, sealing_cap auth) {
-	return kernel_unseal(p, cheri_gettype(p), auth);
+er_t type_destroy_top(top_t top) {
+    return (er_t)message_send_c(0, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 2);
 }
 
-#endif
+ERROR_T(tres_t) type_get_new(top_t top) {
+    return (ERROR_T(tres_t))message_send_c(0, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 3);
+}
+
+ERROR_T(tres_t) type_get_new_exact(top_t top, stype type) {
+    return (ERROR_T(tres_t))message_send_c(type, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 4);
+}
+
+er_t type_return_type(top_t top, stype type) {
+    return (er_t)message_send_c(type, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 5);
+}
