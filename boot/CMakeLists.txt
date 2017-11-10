@@ -38,7 +38,7 @@ set(BOOT_ASM_SRCS
 set(NANO_ASM_SRCS
     nanokernel/src/nano_kernel.S
     nanokernel/src/ccall_soft.S
-    nanokernel/src/sha256.S
+    ${CMAKE_SOURCE_DIR}/sha256/src/sha256_k.S
 )
 
 set(INIT_SRCS

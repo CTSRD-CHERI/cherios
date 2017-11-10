@@ -125,8 +125,14 @@ k_words:
     dsrl    \R, \R, 32
 .endm
 
-.global sha256_start
-sha256_start:
+#ifdef SHA_COPY
+.global sha256_copy
+sha256_copy:
+#else
+.global sha256
+sha256:
+#endif
+
 
 ###############################################
 # Create a capability to the k_words in K_CAP #
@@ -204,7 +210,11 @@ set1_table_end:
 
 
 cincoffset  IN_CAP, IN_CAP, tmp1                  # Offset by non input bytes so that the cursour is aligned.
+#ifdef SHA_COPY
 cincoffset  OUT_CAP, OUT_CAP, tmp1
+#else
+dsrl        tmp0, tmp0, 1
+#endif
 
 dla         tmp1, (chunk_table_begin-16)
 dadd        tmp1, tmp1, tmp0
@@ -212,6 +222,7 @@ jr          tmp1
 nop
 
 chunk_table_begin:
+#ifdef SHA_COPY
 cld         w4_5, $zero, 0x10(IN_CAP)
 csd         w4_5, $zero, 0x10(OUT_CAP)
 cld         w6_7, $zero, 0x18(IN_CAP)
@@ -224,6 +235,14 @@ cld         w12_13, $zero, 0x30(IN_CAP)
 csd         w12_13, $zero, 0x30(OUT_CAP)
 cld         w14_15, $zero, 0x38(IN_CAP)
 csd         w14_15, $zero, 0x38(OUT_CAP)
+#else
+cld         w4_5, $zero, 0x10(IN_CAP)
+cld         w6_7, $zero, 0x18(IN_CAP)
+cld         w8_9, $zero, 0x20(IN_CAP)
+cld         w10_11, $zero, 0x28(IN_CAP)
+cld         w12_13, $zero, 0x30(IN_CAP)
+cld         w14_15, $zero, 0x38(IN_CAP)
+#endif
 
 ##############
 # Hash chunk #
@@ -301,10 +320,9 @@ move        w0_1, w4_5
 move        w4_5, w8_9
 move        w8_9, w12_13
 
-dli         tmp1, (4 * 4)       # used 4 words from K
 daddiu      tmp0, tmp0, -16
 bltz        tmp0, continue_chunk # skip calculating new w values
-cincoffset  K_CAP, K_CAP, tmp1
+cincoffset  K_CAP, K_CAP, (4 * 4)       # used 4 words from K
 
 
 # calculates w16_17 (plus any i) from previous values
@@ -378,28 +396,36 @@ VECTOR_ADD  h2_6, cg, tmp0, tmp1, tmp2
 VECTOR_ADD  h3_7, dh, tmp0, tmp1, tmp2
 
 beqz        len_arg, hash_finish
-dli         tmp0, 64
 csetoffset  K_CAP, K_CAP, $zero
-cincoffset  IN_CAP, IN_CAP, tmp0
-cincoffset  OUT_CAP, OUT_CAP, tmp0
+cincoffset  IN_CAP, IN_CAP, 64
+cincoffset  OUT_CAP, OUT_CAP, 64
 
 cld         w0_1, $zero, 0x00(IN_CAP)
-csd         w0_1, $zero, 0x00(OUT_CAP)
 cld         w2_3, $zero, 0x08(IN_CAP)
-csd         w2_3, $zero, 0x08(OUT_CAP)
 cld         w4_5, $zero, 0x10(IN_CAP)
-csd         w4_5, $zero, 0x10(OUT_CAP)
 cld         w6_7, $zero, 0x18(IN_CAP)
-csd         w6_7, $zero, 0x18(OUT_CAP)
 cld         w8_9, $zero, 0x20(IN_CAP)
-csd         w8_9, $zero, 0x20(OUT_CAP)
 cld         w10_11, $zero, 0x28(IN_CAP)
-csd         w10_11, $zero, 0x28(OUT_CAP)
 cld         w12_13, $zero, 0x30(IN_CAP)
-csd         w12_13, $zero, 0x30(OUT_CAP)
+
+#ifdef SHA_COPY
 cld         w14_15, $zero, 0x38(IN_CAP)
+
+csd         w0_1, $zero, 0x00(OUT_CAP)
+csd         w2_3, $zero, 0x08(OUT_CAP)
+csd         w4_5, $zero, 0x10(OUT_CAP)
+csd         w6_7, $zero, 0x18(OUT_CAP)
+csd         w8_9, $zero, 0x20(OUT_CAP)
+csd         w10_11, $zero, 0x28(OUT_CAP)
+csd         w12_13, $zero, 0x30(OUT_CAP)
+
 b           process_chunk
 csd         w14_15, $zero, 0x38(OUT_CAP)
+
+#else
+b           process_chunk
+cld         w14_15, $zero, 0x38(IN_CAP)
+#endif
 
 hash_finish:
 
@@ -426,6 +452,18 @@ cgetoffset  $s1, $c7
 cgetoffset  $s2, $c8
 cgetoffset  $s4, $c10
 
+#ifdef SHA_COPY
 cjr         $c17
 cgetoffset  $s3, $c9
 # results how in the 4 return registers
+
+#else
+
+cgetoffset  $s3, $c9
+csd         $v0, $zero, 0(OUT_CAP)
+csd         $v1, $zero, 8(OUT_CAP)
+csd         $t0, $zero, 16(OUT_CAP)
+cjr         $c17
+csd         $t1, $zero, 24(OUT_CAP)
+
+#endif

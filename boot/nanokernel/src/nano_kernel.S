@@ -2136,7 +2136,7 @@ foundation_create:
     cmove       $c13, $c17          # save c17
     cmove       $c16, $c12          # save c12
 
-    dla         $t0, sha256_start   # jump to sha256 routine
+    dla         $t0, sha256_copy    # jump to sha256 routine
     cgetpccsetoffset $c12, $t0
     cjalr       $c12, $c17
     nop
