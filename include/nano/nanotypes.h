@@ -31,9 +31,9 @@
 #ifndef CHERIOS_NANOTYPES_H
 #define CHERIOS_NANOTYPES_H
 
-#include "string_enums.h"
+#include "cheric.h"
 
-// FIXME we need to choose appropriate types and remove their accessibility from the rest of the system
+#include "string_enums.h"
 
 #define TYPE_SPACE_BITS     20
 #define TYPE_SPACE          (1 << TYPE_SPACE_BITS)
@@ -166,8 +166,6 @@ DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
 
 #ifndef __ASSEMBLY__
 
-#include "cheric.h"
-
 #define REG_SIZE        sizeof(register_t)
 #define REG_SIZE_BITS   3
 
@@ -205,29 +203,6 @@ _Static_assert(sizeof(found_id_t) == FOUNDATION_ID_SIZE, "Assumed by nano kernel
 
 typedef capability cert_t;                  // A certified capability
 typedef capability locked_t;               // A capability that can be unlocked by intended code
-
-/* This structure can't actually be read from c, its just here in case you want to better understand how these
- * are used in the nano kernel pid is 'parent id'. Reservations can only be merged if their pid is the same
- * and are adjacent. \* /*
-struct res_str {
-    struct res_str_priv {
-        struct res_str_used {
-            enum {
-                res_state_open,
-                res_state_taken,
-                res_state_merged,
-                res_state_revoking
-            } state;                                            // 64 bit
-            size_t length;                                      // Length of data
-            size_t pid;                                         // Parent ID. pid must match for merge.
-        };
-        char padding[RES_PRIV_SIZE - sizeof(struct res_str_used)]; // Un-used
-    } priv;
-    struct res_str_user {
-        char user_defined[RES_USER_SIZE];                       // The result of calling get_userdata_for_res
-    } user;
-};
-*/
 
 typedef struct {
     e_page_status	status;

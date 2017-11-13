@@ -27,22 +27,8 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_SHA256_H
-#define CHERIOS_SHA256_H
 
-// Both of these will only work for lengths that are multiples of 2!
-// Also must have source buffer aligned to 64 bits
+#ifndef CHERIOS_TEMPLATE_H
+#define CHERIOS_TEMPLATE_H
 
-#ifdef SHA_COPY
-// Also returns the hash in a non-ABI complient way by 4 GP registers - used by assembly
-    void sha256_copy(size_t length, char* in, char* out);
-#else
-
-    struct sha256_hash {
-        uint64_t doublewords[4];
-    };
-
-    void sha256(size_t length, uint64_t * in, sha256_hash* hash);
-#endif
-
-#endif //CHERIOS_SHA256_H
+#endif //CHERIOS_TEMPLATE_H

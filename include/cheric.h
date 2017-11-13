@@ -31,25 +31,27 @@
 #ifndef _MIPS_INCLUDE_CHERIC_H_
 #define	_MIPS_INCLUDE_CHERIC_H_
 
-#include "cdefs.h"
-#include "cherireg.h"
-#include "mips.h"
-
 /*
  * Derive CHERI-flavor from capability size
  */
 
 #if _MIPS_SZCAP == 256
-	#define _CHERI256_
+#define _CHERI256_
 	#define U_PERM_BITS 4
     #define CAP_SIZE 0x20
 #elif _MIPS_SZCAP == 128
-	#define _CHERI128_
+#define _CHERI128_
 	#define U_PERM_BITS 16
     #define CAP_SIZE 0x10
 #else
-	#error Unknown capability size
+#error Unknown capability size
 #endif
+
+#ifndef __ASSEMBLY__
+
+#include "cdefs.h"
+#include "cherireg.h"
+#include "mips.h"
 
 /*
  * Canonical C-language representation of a capability.
@@ -380,4 +382,7 @@ typedef struct reg_frame {
 
 
 } reg_frame_t;
+
+#endif // ASSEMBLY
+
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

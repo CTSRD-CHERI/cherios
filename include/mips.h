@@ -124,6 +124,17 @@ typedef uint8_t		u_int8_t;
 typedef uint16_t	u_int16_t;
 typedef uint32_t	u_int32_t;
 typedef uint64_t	u_int64_t;
+
+#define define_intypes(size)                                \
+typedef int ## size ## _t  int_least ## size ## _t;         \
+typedef uint ## size ## _t  uint_least ## size ## _t;       \
+typedef int ## size ## _t  int_fast ## size ## _t;          \
+typedef uint ## size ## _t  uint_fast ## size ## _t;
+
+#define INT_SIZES(ITEM) ITEM(8) ITEM(16) ITEM(32) ITEM(64)
+
+INT_SIZES(define_intypes)
+
 #define ULONG_MAX	4294967295UL
 #define UINT_MAX	ULONG_MAX
 

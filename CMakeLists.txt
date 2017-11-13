@@ -216,7 +216,14 @@ set(C_WARNING_FLAGS
     -Wno-deprecated-declarations
     -Werror=mips-cheri-prototypes
 )
-set(CXX_COMPILER_FLAGS -std=c++14 -fno-rtti -fno-exceptions ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
+
+set(CXX_WARNING_FLAGS
+        -Wno-c++98-compat-pedantic
+        -Wno-old-style-cast
+        -Wno-c11-extensions
+        )
+
+set(CXX_COMPILER_FLAGS -std=c++14 -fno-rtti -fno-exceptions ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS} ${CXX_WARNING_FLAGS})
 set(C_COMPILER_FLAGS     -std=c11
         ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
