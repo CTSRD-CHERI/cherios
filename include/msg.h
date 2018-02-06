@@ -33,19 +33,12 @@
 #include "ccall.h"
 #include "syscalls.h"
 
-//TODO We have a slightly different ABI than libcheri, we don't use an argument number
-//TODO Our ccall is more analogous to function pointers than objects, but we consider a function pointer to have
-//TODO both a code and data componant.
-
 //Leftmost arguments are for the message recipient. Other arguments are to the message enqueue function
 
 // We define pretty much the same function in syscall.h, but we do it here again with a capability return type
 // This is because message send really returns BOTH c3 and v0/v1.
 
-__attribute__((cheri_ccall))
-__attribute__((cheri_method_suffix("_inst")))
-__attribute__((cheri_method_class(message_send_default_obj)))
-capability message_send_c(register_t a0, register_t a1, register_t a2, register_t a3,
+extern capability message_send_c(register_t a0, register_t a1, register_t a2, register_t a3,
                           capability c3, capability c4, capability c5, capability c6,
                           act_kt dest, ccall_selector_t selector, register_t v0);
 

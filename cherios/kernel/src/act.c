@@ -30,6 +30,7 @@
  */
 
 #include <syscalls.h>
+#include <dylink.h>
 #include "sys/types.h"
 #include "activations.h"
 #include "klib.h"
@@ -73,12 +74,12 @@ sealing_cap ctrl_ref_sealer;
 sealing_cap sync_ref_sealer;
 sealing_cap sync_token_sealer;
 
-static capability act_seal_for_call(capability act, sealing_cap sealer) {
-	return cheri_seal(cheri_incoffset(act, offsetof(struct act_t, stack_guard)), sealer);
+static capability act_seal_for_call(act_t * act, sealing_cap sealer) {
+	return cheri_seal(act, sealer);
 }
 
-static capability act_unseal_callable(capability act, sealing_cap sealer) {
-	return cheri_incoffset(cheri_unseal(act, sealer), -offsetof(struct act_t, stack_guard));
+static capability act_unseal_callable(act_t * act, sealing_cap sealer) {
+	return cheri_unseal(act, sealer);
 }
 
 act_t * act_create_sealed_ref(act_t * act) {
@@ -110,7 +111,8 @@ void act_set_event_ref(act_t* act) {
 	event_ref = act;
 }
 
-context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base) {
+context_t act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base,
+                    capability global_pcc) {
 	KERNEL_TRACE("init", "activation init");
 
     ref_sealer = get_sealing_cap_from_nano(act_ref_type);
@@ -128,7 +130,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 
 	// Register the kernel (exception) activation
 	act_t * kernel_act = &kernel_acts[0];
-	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(cheri_getpcc()), NULL);
+	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(global_pcc), NULL);
 	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
     sched_create(0, kernel_act);
@@ -140,7 +142,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	size_t length = cheri_getlen(cheri_getdefault()) - init_base;
 
     frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
-    capability pcc =  cheri_setbounds(cheri_setoffset(cheri_getpcc(), init_base), length);
+    capability pcc =  cheri_setbounds(cheri_setoffset(global_pcc, init_base), length);
 
 	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
 
@@ -236,9 +238,14 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	add_act_to_end_of_list(act);
 
 	/* Push C0 to the bottom of the stack so it can be popped when we ccall in */
-	act->ddc = cheri_getdefault();
+	// TODO fill in new ABI stuff
 
-    act->stack_guard = 0;
+    act->ctl.guard.guard = callable_ready;
+    act->ctl.csp = cheri_setoffset(cheri_setbounds(&act->user_kernel_stack, USER_KERNEL_STACK_SIZE), USER_KERNEL_STACK_SIZE);
+    // act->ctl.cusp; TODO only if we ever need unsafe stack space in the kernel, which we REALLY should not
+    act->ctl.cdl = &entry_stub;
+    act->ctl.cds = ctrl_ref_sealer;
+    act->ctl.cgp = get_cgp();
 
 	act->image_base = base;
 
@@ -268,24 +275,13 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	/* set status */
 	act->status = create_in_status;
 
-/*Some "documentation" for the interface between the kernel and activation start                                        *
-* These fields are setup by the caller of act_register                                                                  *
-*                                                                                                                       *
-* a0    : user GP argument (goes to main)                                                                               *
-* c3    : user Cap argument (goes to main)                                                                              *
-*                                                                                                                       *
-* These fields are setup by act_register itself. Although the queue is an argument to the function                      *
-*                                                                                                                       *
-* c21   : self control reference                                                 										*
-* c23   : namespace reference (may be null for init and namespace)                                                      *
-* c24   : kernel interface table                                                                                        *
-* c25   : queue                                                                                                        */
+	/* SEE libuser/src/init.S for the conventional start up */
 
 	/* set namespace */
+	frame->cf_c20	= (capability)queue;
 	frame->cf_c21 	= (capability)act_create_sealed_ctrl_ref(act);
 	frame->cf_c23	= (capability)ns_ref;
 	frame->cf_c24	= (capability)get_if();
-	frame->cf_c25	= (capability)queue;
 
 	/* set queue */
 	msg_queue_init(act, queue);

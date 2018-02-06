@@ -51,11 +51,13 @@ SECTIONS
 	. += SIZEOF_HEADERS;
 
 	.boot ALIGN(CAP_ALIGN): {
+	    __boot_segment_start = .;
 		*(.boot)
 	} :boot = 0x0
 
 
 	.text ALIGN(CAP_ALIGN): {
+	    __text_segment_start = .;
 		*(.text)
 	} :text
 
@@ -66,6 +68,7 @@ SECTIONS
 	 * and use $pcc-relative loads, but we are not yet there.
 	 */
 	.MIPS.options ALIGN(PAGE_ALIGN): {
+	    __data_segment_start = .;
 		*(.MIPS.options)
 	} : data
 	.ctors ALIGN(CAP_ALIGN) : {
@@ -82,11 +85,6 @@ SECTIONS
 	} : data
 	.data ALIGN(CAP_ALIGN): {
 		*(.data)
-	} : data
-	_gp = ALIGN(CAP_ALIGN) + 0x7fc0;
-	.got : {
-		*(.got.plt)
-		*(.got)
 	} : data
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)

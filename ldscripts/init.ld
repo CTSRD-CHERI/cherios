@@ -38,6 +38,7 @@ OUTPUT_ARCH(mips)
 ENTRY(start)
 SECTIONS
 {
+    __text_segment_start = .;
 	. += __init_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
@@ -51,14 +52,19 @@ SECTIONS
 		KEEP (*(.fini))
 	} = 0
 
+	.MIPS.options ALIGN(PAGE_ALIGN): {
+		*(.MIPS.options)
+	}
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
 	 * content, it would be much preferable to map into the code segment
 	 * and use $pcc-relative loads, but we are not yet there.
 	 */
-	.MIPS.options ALIGN(PAGE_ALIGN): {
-		*(.MIPS.options)
-	}
+    .data ALIGN(CAP_ALIGN): {
+        __data_segment_start = .;
+        *(.data)
+    }
+
 	.ctors ALIGN(CAP_ALIGN) : {
 		KEEP (*/crtbeginC.o(.ctors))
 		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
@@ -87,14 +93,6 @@ SECTIONS
 		KEEP (*(.fini_array))
 		KEEP (*(SORT(.fini_array.*)))
 		PROVIDE_HIDDEN (__fini_array_end = .);
-	}
-	.data ALIGN(CAP_ALIGN): {
-		*(.data)
-	}
-	_gp = ALIGN(CAP_ALIGN) + 0x7fc0;
-	.got : {
-		*(.got.plt)
-		*(.got)
 	}
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)

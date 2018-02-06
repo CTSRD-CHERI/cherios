@@ -321,7 +321,7 @@ static act_t * sched_picknext(sched_pool* pool) {
 
 	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
 		kernel_printf("Activation %s is in the queue and is not runnable\n", next->name);
-        kernel_printf("%p: guard %lx. nxt %p. prev %p. status %d. queue %p, mask %lx\n", next, next->stack_guard, next->list_next,
+        kernel_printf("%p: guard %lx. nxt %p. prev %p. status %d. queue %p, mask %lx\n", next, next->ctl.guard.guard, next->list_next,
          next->list_prev, next->sched_status, next->msg_queue, next->queue_mask);
 		kernel_assert(0);
 	}

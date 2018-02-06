@@ -32,6 +32,7 @@
 #include "nano/nanokernel.h"
 #include "cp0.h"
 #include "uart.h"
+#include "crt.h"
 
 ALLOCATE_PLT_NANO
 
@@ -40,17 +41,59 @@ ALLOCATE_PLT_NANO
 /* Use linker allocated memory to store boot-info. */
 static init_info_t init_info;
 
+
+capability
+crt_init_globals_kernel()
+{
+    // This works
+
+    void *gdc = cheri_getdefault();
+    void *pcc = cheri_setoffset(cheri_getpcc(), 0);
+
+    uint64_t text_start;
+    uint64_t data_start;
+
+    cheri_dla(__text_segment_start, text_start);
+    cheri_dla(__data_segment_start, data_start);
+
+    capability text_segment = pcc + text_start;
+    capability data_segment = gdc + data_start;
+
+    capability segment_table[4];
+
+    // These are all set up by the linker script
+    segment_table[0] = NULL;
+    segment_table[2] = pcc + text_start;
+    segment_table[3] = gdc + data_start;
+
+    // Get something usable
+    uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;
+    cheri_dla(__cap_table_start, table_start);
+    cheri_dla(__start___cap_relocs, reloc_start);
+    cheri_dla(__stop___cap_relocs, reloc_end);
+
+    capability cgp = cheri_setoffset(gdc, table_start);
+    cheri_setreg(25, cgp);
+
+    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, RELOC_FLAGS_TLS);
+
+    cheri_setreg(25, &__cap_table_start);
+
+    return &__cap_table_local_start;
+}
+
 int cherios_main(nano_kernel_if_t* interface,
 				 capability def_data,
 				 context_t own_context,
-				 // sealing_cap sealer, <-- no longer available. Request individual types from the nano kernel.
+				 capability plt_auth_cap,
+                 capability global_pcc,
 				 size_t init_base,
                  size_t init_entry,
                  size_t init_tls_base) {
 	/* This MUST be called before trying to use the nano kernel, which we will need to do in order
 	 * to get access to the phy mem we need */
 
-	init_nano_kernel_if_t(interface, def_data);
+    init_nano_kernel_if_t(interface, def_data, &plt_common_single_domain, plt_auth_cap);
 
 	/* Get the capability for the uart. We should save this somewhere sensible */
 	capability  cap_for_uart = get_phy_cap(get_book(), uart_base_phy_addr, uart_base_size, 0, 1);
@@ -80,7 +123,8 @@ int cherios_main(nano_kernel_if_t* interface,
 	sched_init(&init_info.idle_init);
 
     kernel_printf("Initialising Activation Manager\n");
-	context_t init_context = act_init(own_context, &init_info, init_base, init_entry, init_tls_base);
+
+	context_t init_context = act_init(own_context, &init_info, init_base, init_entry, init_tls_base, global_pcc);
 
 	KERNEL_TRACE("kernel", "Going into exception handling mode");
 

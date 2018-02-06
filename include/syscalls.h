@@ -43,7 +43,8 @@
 #define SYS_CALL_LIST(ITEM, ...)                                                                                   \
         ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
                                         const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
-                                        act_kt dest, register_t selector, register_t v0), __VA_ARGS__)                        \
+                                        act_kt dest, register_t selector, register_t v0), __VA_ARGS__,                          \
+                                         ".global message_send_c \n message_send_c: \n")                                         \
         ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, capability sync_token), __VA_ARGS__)          \
         ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \
         ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
@@ -82,8 +83,8 @@ DECLARE_ENUM(shutdown_t, SHUTDOWN_TYPES_LIST)
 
 #endif
 
-PLT_thr(kernel_if_t, SYS_CALL_LIST, __thread)
+PLT_thr(kernel_if_t, SYS_CALL_LIST)
 
-#define ALLOCATE_PLT_SYSCALLS PLT_ALLOCATE_thr(kernel_if_t, SYS_CALL_LIST, __thread)
+#define ALLOCATE_PLT_SYSCALLS PLT_ALLOCATE_tls(kernel_if_t, SYS_CALL_LIST)
 
 #endif //CHERIOS_SYSCALLS_H

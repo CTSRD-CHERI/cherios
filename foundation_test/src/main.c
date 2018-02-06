@@ -51,8 +51,6 @@ static void print_id(found_id_t* id) {
 
 int main(register_t arg, capability carg) {
 
-    init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
-
     /* First try sign something */
     printf("Foundation test started.\n");
 

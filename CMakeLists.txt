@@ -18,10 +18,9 @@ set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
 if(NOT CHERI_SDK_DIR)
     # guess the location of CHERI SDK by looking for CheriSDKConfig and checking some guessed locations
     set(GUESSED_CHERISDK_LOCATIONS
-        /local/scratch/cheri/output/sdk256
-        $ENV{HOME}/sdk/sdk
+        /local/scratch/cheri/output/sdk
+        $ENV{HOME}/sdk/
         $ENV{HOME}/cheri/output/sdk
-        $ENV{HOME}/cheri/output/sdk256
     )
     # try to find clang in one of the guessed locations
     foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
@@ -42,7 +41,7 @@ if(CHERI_SDK_DIR)
     if(CheriSDK_FOUND)
         message(STATUS "Found CheriSDKConfig.cmake in ${CheriSDK_DIR}")
     else()
-        # message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
+        message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
         set(CheriSDK_SYSROOT_DIR "${CHERI_SDK_DIR}/sysroot")
         set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
         set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
@@ -65,7 +64,7 @@ option(BUILD_FOR_CHERI128 "build for cheri128" OFF)
 if(BUILD_FOR_CHERI128)
   set(CHERI_CPU cheri128)
 else()
-  set(CHERI_CPU cheri)
+  set(CHERI_CPU cheri256)
 endif()
 
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
@@ -132,12 +131,15 @@ include_directories(include)
 include_directories(include/sys)
 include_directories(elf/include)
 include_directories(sha256/include)
+include_directories(cherios/system/dylink/include)
+include_directories(libcrt/include)
 
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
     -DHARDWARE_${HARDWARE}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
+    -cheri-cap-table
     -cheri-linker
     -integrated-as
     -msoft-float
@@ -156,9 +158,6 @@ set(C_COMPILER_FLAGS
     -nostdinc
     -fno-builtin
     -ffreestanding
-    -mllvm
-    -mxmxgot
-    -mxgot
     -O1 # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
     -fpic
@@ -268,7 +267,7 @@ endfunction()
 function(add_cherios_kernel _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibCRT)
 endfunction()
 
 function(add_cherios_nano _target)
@@ -322,9 +321,9 @@ function(add_cherios_module _target)
   target_link_libraries(${_target}
     -cheri-linker
     -G0
-    -mxgot
     -nostartfiles
     -nodefaultlibs
+    -z norelro
     )
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
@@ -335,7 +334,7 @@ function(add_cherios_module _target)
   endif()
   # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
   add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
     )
 endfunction()
 
@@ -343,6 +342,7 @@ set(CHERIOS_DIR         "${CMAKE_SOURCE_DIR}/cherios")
 set(DRIVERS_DIR         "${CHERIOS_DIR}/drivers")
 set(INIT_ASM_DIR        "${CMAKE_SOURCE_DIR}/init_asm")
 set(INIT_ASM            "${INIT_ASM_DIR}/init.S")
+set(PLT_ASM             "${CHERIOS_DIR}/system/dylink/src/stubs.S")
 set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/secure_init.S")
 
 add_subdirectory(libuser)

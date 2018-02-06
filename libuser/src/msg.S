@@ -40,12 +40,11 @@
 #include "syscalls.h"
 #include "mips.h"
 
-# We have so many registers, we may as well use a few rather than using dla all the time
+# We have so many registers, we may as well use a few rather than using get_sym all the time
 
-#define def_cap             $c13
+#define tmp_cap             $c13
 
 #define queue               $c20
-#define kernel_if_cap       $c19
 #define self_ctrl_cap       $c21
 #define sync_state_cap      $c22
 #define msg_table           $c23
@@ -62,11 +61,7 @@
 	.global msg_entry
 	.ent msg_entry
 
-# Load a bunch of symbols using the default capability.
-# If we were doing this robustly we would also set bounds. I can't be bothered.
-
-# lui     \reg, %tprel_hi(\sym)
-# daddiu  \reg, \reg, %tprel_lo(\sym)
+# Load a bunch of symbols using the cap_table
 
 .type act_self_queue, "tls_object"
 .type sync_state, "tls_object"
@@ -75,30 +70,21 @@
 msg_entry:
 
 # Standard function prolog so regdump stops here nicely
+# We dont bother saving anything as we never return to our caller
     cincoffset  $c11, $c11, -0x20
     csc         $c17, $sp, 0($c11)
 
-    cgetdefault	def_cap
+    get_tls_sym_cap queue, act_self_queue
+    get_tls_sym sync_state_cap, sync_state
 
-    rdhwr       $t1, $29
-#    daddiu      $t1, $t1, -0x7000
+    get_sym_val msg_methods_nb_g, msg_methods_nb, d, tmp_cap
+    get_sym_val ctrl_methods_nb_g, ctrl_methods_nb, d, tmp_cap
+    get_sym_val ctrl_methods_nb_g, ctrl_methods_nb, d, tmp_cap
 
-    get_tls_sym $t0, act_self_queue, $t1
-    clc         queue, $t0, 0(def_cap)
-    dla         $t0, kernel_if
-    csetoffset  kernel_if_cap, def_cap, $t0
-    get_tls_sym $t0, sync_state, $t1
-    csetoffset  sync_state_cap, def_cap, $t0
-    dla         $t0, msg_methods_nb
-    cld         msg_methods_nb_g, $t0, 0(def_cap)
-    dla         $t0, ctrl_methods_nb
-    cld         ctrl_methods_nb_g, $t0, 0(def_cap)
-    dla		    $t0, msg_methods
-    csetoffset  msg_table, def_cap, $t0
-    dla		    $t0, ctrl_methods
-    csetoffset  ctrl_table, def_cap, $t0
-    get_tls_sym $t0, act_self_ctrl, $t1
-    clc         self_ctrl_cap, $t0, 0(def_cap)
+    get_sym     msg_table, msg_methods
+    get_sym     ctrl_table, ctrl_methods
+
+    get_tls_sym_val self_ctrl_cap, act_self_ctrl, c, tmp_cap
 
 msg_entry_loop:
 
@@ -106,15 +92,10 @@ msg_entry_loop:
     cld     start_g, $zero, HEADER_START_OFFSET(queue)    # load start
     cld     $t1, $zero, HEADER_END_OFFSET(queue)          # $t1 = end
     bne     start_g, $t1, pop                             # start_g != $t1
+    nop
 
 # TODO in a multicore world we may wish to spin a few times before resorting to WAIT
-    clc     $c1, $zero, wait_offset(kernel_if_cap)
-    cmove   $c2, self_ctrl_cap
-    li      $t0, 12                                       # to increment pcc just past the ccall
-    cgetpccincoffset    $c17, 12
-    ccall   $c1, $c2, 2
-    cmove   $c18, $c11
-    cmove   $c11, $idc
+    call_func wait
 
 pop:
     dsll     $t1, start_g, (MSG_LEN_SHIFT)                 # t1 has offet of message in queue
@@ -165,7 +146,8 @@ call:
 	sll		$v0, $v0, CAP_SIZE_BITS
 	clc		$c12, $v0, 0($c12)
 	cjalr		$c12, $c17
-	nop
+	cmove   $c18, $idc
+
 	b		end
 	nop
 
@@ -200,13 +182,10 @@ make_return:
     # c17 needs a good return address. We took the address of the loop symbol which is as good as any
     move  $a0, $v0
     move  $a1, $v1
-    clc   $c1, $zero, message_reply_offset(kernel_if_cap)
-    cmove $c2, self_ctrl_cap
-    cgetpccincoffset    $c17, 12
-	ccall $c1, $c2, 2
-    cmove $c18, $c11
+    call_func message_reply
+
     b msg_entry_loop
-    cmove $c11, $idc
+    nop
 
 msg_entry_end:
 	.end msg_entry

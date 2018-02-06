@@ -109,7 +109,20 @@ typedef struct Elf_Env {
 	capability handle;
 } Elf_Env;
 
-typedef struct image{
+enum e_section_uniqueness {
+	per_library,
+	per_process,
+	per_thread
+};
+
+#define section_table_hash(X, T) (((X) >> (T)->hash_shift) % (T)->hash_mod)
+#define SHT_ENTRY(X, T) (((T)->table)[section_table_hash((X),(T))])
+#define SYMBOL_CAP(X, T) (SHT_ENTRY(X, T).section_cap + (X - SHT_ENTRY(X,T).image_offset))
+
+
+#define MAX_SEGS 8
+
+typedef struct image_old {
 	/* Pointer to file for when we need the headers again*/
 	Elf64_Ehdr *hdr;
 
@@ -132,25 +145,61 @@ typedef struct image{
 	entry_t secure_entry;
 	/* This reservation was taken to create the foundation. It can be revoked here if need be */
 	res_t foundation_res;
+} image_old;
+
+typedef struct image {
+	/* Pointer to file for when we need the headers again*/
+	Elf64_Ehdr *hdr;
+
+	capability seg_table[MAX_SEGS];
+
+	capability tls_prototype; // The prototype for tls - actually a part of data
+	capability code_write_cap; // Needed for PLT stubs. I don't like having this, we should move the stub data
+	size_t tls_index;	// 0 if none
+	size_t data_index;
+	size_t code_index;
+
+	size_t tls_vaddr;
+	size_t code_vaddr;
+	size_t data_vaddr;
+
+	size_t tls_size;
+	size_t tls_num;
+
+	size_t entry;
+
+	size_t secure_loaded;
 } image;
 
 /* Currently the only supported models */
 enum e_storage_type {
+	storage_new,
 	storage_process,
-	storage_thread
+	storage_thread,
 };
+
+static inline capability make_global_pcc(image* im) {
+	capability pcc = im->seg_table[im->code_index];
+	pcc = cheri_setoffset(pcc, im->entry - im->code_vaddr);
+	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
+							  | CHERI_PERM_LOAD_CAP));
+	return pcc;
+}
 
 /* given pointer p to ELF image, returns a pointer to the loaded
    image.  if provided, it also sets the min and max addresses touched
    by the loader, and the entry point.
  */
 
-cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf, int secure_load);
+cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secure_load);
 
 /* Given a pointer to loaded image creates another image that shares storage with the first image
  * specified by image type */
 
-cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_type store_type);
+cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum e_storage_type store_type);
+
+int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type store_type);
+int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf);
 
 #define MAX_THREADS 4 // We have to overallocate this much.
 #define MAX_FOUND_ENTRIES 4
@@ -169,5 +218,10 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
 #define PT_HIPROC 	0x7fffffff
 #define PT_GNURELRO 0x6474E552
 #define PT_GNUSTACK 0x6474E551
+
+#define PF_NONE		0
+#define PF_X		1
+#define PF_W		2
+#define PF_R		4
 
 #endif

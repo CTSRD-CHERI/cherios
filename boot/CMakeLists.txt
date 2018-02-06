@@ -52,8 +52,8 @@ set(INIT_SRCS
 )
 
 set(INIT_ASM_SRCS
-    src/init/fs.S
     src/init/init.S
+    src/init/fs.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")

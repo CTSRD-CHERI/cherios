@@ -57,83 +57,134 @@ start_common:
 #                                                                                                                       #
 # a0    : user GP argument (goes to main)                                                                               #
 # c3    : user Cap argument (goes to main)                                                                              #
+# c10   : unsafe stack                                                                                                  #
+# c11   : stack                                                                                                         #
+# c19   : MOP                                                                                                           #
+# c22   : process reference                                                                                             #
 #                                                                                                                       #
+#                                                                                                                       #
+# c4    : segment table                                                                                                 #
+# c5    : tls_segment_prototype                                                                                         #
+# c6    : code_write_cap (for plt stubs)                                                                                #
+# s1    : tls_segment_offset                                                                                            #
+# a2    : data_seg_offset                                                                                               #
+# a3    : data_seg_vaddr                                                                                                #
+# a4    : code_seg_offset                                                                                               #
+# a5    : code_seg_vaddr                                                                                                #
+# a6    : tls_seg_vaddr                                                                                                 #
+                                                                                                                        #
 # These fields are setup by act_register itself. Although the queue is an argument to the function                      #
 #                                                                                                                       #
+# c20   : queue                                                                                                         #
 # c21   : self control reference                                                                                        #
-# c22   : process reference                                                                                             *
 # c23   : namespace reference (may be null for init and namespace)                                                      #
 # c24   : kernel interface table                                                                                        #
-# c25   : queue                                                                                                         #
 #########################################################################################################################
 
 	# Save arguments
+	cincoffset  $c11, $c11, -(6*CAP_SIZE)
 	move		$s0, $a0
-    cmove       $c20, $c3
-
+    csc         $c3, $zero, 0($c11)
+    csc         $c19, $zero, (CAP_SIZE*1)($c11)
+    csc         $c20, $zero, (CAP_SIZE*2)($c11)
+    csc         $c21, $zero, (CAP_SIZE*3)($c11)
+    csc         $c22, $zero, (CAP_SIZE*4)($c11)
+    csc         $c6,  $zero, (CAP_SIZE*5)($c11)
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
-	# Zero BSS.
-	cgetpcc		$c12
-	dla		$t0, crt_init_bss
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+    # We cant use captab yet - instead use dla and subtract vaddr of segment start, then derive from the segment table
+    # The constants we need are provided by the linker
 
-	# Initialise globals.
-	cgetpcc		$c12
-	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+    clc         $c13, $a2, 0($c4)               #   $c13 is data_seg cap
 
-	# Call C constructors.
-	cgetpcc		$c12
-	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+    dla         $t0, __cap_table_start
+    dsubu       $t0, $t0, $a3
+    cincoffset  $c25, $c13, $t0                 #   Globals (unbounded)
+
+
+    dla         $t0, __cap_table_local_start
+    dsubu       $t0, $t0, $a6
+    clc         $c26, $s1, 0($c4)
+    cincoffset  $c26, $c26, $t0                  #   Locals (unbounded)
+
+    dla		    $t0, crt_init_new_globals
+    dsubu       $t0, $t0, $a5
+    clc         $c12, $a4, 0($c4)
+    cincoffset  $c12, $c12, $t0                 # crt_init_new_globals
+
+    # These are in the global address space
+    dla         $t1, __start___cap_relocs
+    dla         $t2, __stop___cap_relocs
+    # Now relative to the data segment
+    dsubu       $t1, $t1, $a3
+    dsubu       $t2, $t2, $a3
+
+    cmove       $c19, $c4                       #   segment_table
+    cincoffset  $c20, $c13, $t1                 #   start_relocs
+    cincoffset  $c21, $c13, $t2                 #   stop_relocs
+    cmove       $c22, $c5                       #   tls_segment_prototype
+
+    # crt_init_new_globals(capability* segment_table, struct capreloc* start, struct capreloc* end)
+    cmove       $c3, $c19
+    cmove       $c4, $c20
+    cmove       $c5, $c21
+    call_func_reg
+
+    # Now we can call functions normally - we can also load globals.
+
+    get_sym     $c25, __cap_table_start         # Bounded cap tab
+    get_sym     $c13, __cap_table_local_start   # This is the prototype for cap_table_local
+    cgetlen     $t0, $c13
+    csetbounds  $c26, $c26, $t0                 # bounds for local cap tab are same as prototype
+
+    # Now we have processed any relocations that might target the prototype - we can copy from proto
+    clc         $c3, $s1, 0($c19)               # dest = tls_seg
+    cmove       $c4, $c22                       # src = proto_tls
+    cgetlen     $a0, $c4                        # length = length(proto_tls)
+    call_func   memcpy_c
+
+    # Now we process relocations that target our TLS (must happen after the proto copy)
+
+    # crt_init_new_locals(capability* segment_table, struct capreloc* start, struct capreloc* end) {
+
+    cmove       $c3, $c19
+    cmove       $c4, $c20
+    cmove       $c5, $c21
+    call_func   crt_init_new_locals
+
+
+    call_func   crt_init_bss
+    call_func   crt_call_constructors # FIXME wont work, pcc wont cover enough
 
 	# Call object init.
-	cmove		$c3, $c21 #self_ctrl
-	cmove		$c4, $c23 #ns_ref
-	cmove		$c5, $c24 #kernel_if
-	cmove       $c6, $c25 #queue
-	cmove       $c7, $c22 # process ref
-    cmove       $c8, $c19
+	clc $c3, $zero, (CAP_SIZE*3)($c11)          # self_ctrl
+	cmove		$c4, $c23                       # ns_ref
+	cmove		$c5, $c24                       # kernel_if
+	clc $c6, $zero, (CAP_SIZE*2)($c11)          # queue
+	clc $c7, $zero, (CAP_SIZE*4)($c11)          # process ref
+    clc $c8, $zero, (CAP_SIZE*1)($c11)          # mop
+    clc $c9, $zero, (CAP_SIZE*5)($c11)          # plt_auth
 
-	cgetpcc		$c12
-	dla		$t0, libuser_init
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+    call_func   libuser_init
 
 	# Restore arguments
 	move		$a0, $s0
-	cmove		$c3, $c20
+	clc		    $c3, $zero, 0($c11)
+	cincoffset  $c11, $c11, (6*CAP_SIZE)
 
 	# Call main().
-	cgetpcc		$c12
-	dla		$t0, main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+	call_func   main
 
 	# main() done. Go to msg_entry if msg_enable, call terminate otherwise
-	rdhwr   $t1, $29
-#	daddiu  $t1, $t1, -0x7000
-	get_tls_sym	$t0, msg_enable, $t1
-	cgetdefault	$c17
-	cld		$t0, $t0, 0($c17)
+	get_tls_sym_val	$t0, msg_enable, d, $c17
 	bne		$t0, $zero, msg_entry
 	nop
-	get_tls_sym	$t0, act_self_ctrl, $t1
-	clc		$c2, $t0, 0($c17)
+	get_tls_sym_val $c2, act_self_ctrl, c, $c17
 	cmove   $c3, $c2
-	dla     $t0, kernel_if
-	clc     $c1, $t0, syscall_act_terminate_offset($c17)
+
+	get_sym_val_array $c1, kernel_if, c, $c17, $zero, syscall_act_terminate_offset
 	# We don't bother setting up a return as this will terminate us
 	ccall   $c1, $c2, 2
 	nop

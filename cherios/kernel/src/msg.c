@@ -153,11 +153,14 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 	static sync_t unique = 0;
 	unique ++;
 
+    static int something;
+
 	kernel_assert(ccaller->sync_state.sync_condition == 0);
 	ccaller->sync_state.sync_token = unique;
 	ccaller->sync_state.sync_condition = 1;
 
-	capability sync_token = cheri_andperm(cheri_getdefault(), 0);
+    // I really want something that is tagged but can have any offset - this only works on 256 now
+	capability sync_token = (capability)&something;
 #ifdef _CHERI256_
 	sync_token = cheri_setbounds(sync_token, 0);
 #endif
@@ -198,7 +201,7 @@ static void touch_cap(capability cap) {
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
-void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
+void kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
 					 register_t a0, register_t a1, register_t a2, register_t a3,
 					 act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret) {
 

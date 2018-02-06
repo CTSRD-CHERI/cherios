@@ -7,12 +7,13 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
     ${CMAKE_SOURCE_DIR}/libcrt/cp0.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strcmp.c
 )
 
 set(LIBUSER_ASM_SRCS
     src/init.S
     src/msg.S
-    src/ccall.S
+    ${PLT_ASM}
 )
 
 set(LIBUSER_SRCS
@@ -32,7 +33,6 @@ set(LIBUSER_SRCS
     src/statcounters.c
     src/stdio.c
     src/stdlib.c
-    src/strcmp.c
     src/virtioblk.c
     src/thread.c
     src/act_events.c
@@ -40,5 +40,6 @@ set(LIBUSER_SRCS
 )
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
-set_target_properties(user PROPERTIES COMPILE_FLAGS -mxgot)
 add_library(CheriOS::LibUser ALIAS user)
+add_library(libcrt STATIC ${LIBCRT_SRCS})
+add_library(CheriOS::LibCRT ALIAS libcrt)

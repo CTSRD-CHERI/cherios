@@ -43,6 +43,7 @@
 #include "nano/nanokernel.h"
 #include "queue.h"
 #include "mutex.h"
+#include "dylink.h"
 
 typedef u32 aid_t;
 
@@ -53,12 +54,11 @@ typedef	uint64_t sync_t;
 
 typedef struct act_t
 {
-	/* Stack for the kernel when acting on users behalf */
-	/* Warning: The offset of this is assumed by assembly */
-	capability user_kernel_stack[USER_KERNEL_STACK_SIZE / sizeof(capability)];
-	register_t stack_guard;
-    capability ddc;
+	/* Warning: The offset of this needs to be zero */
+    CTL_t ctl;
 
+    /* Stack for the kernel when acting on users behalf */
+	capability user_kernel_stack[USER_KERNEL_STACK_SIZE / sizeof(capability)];
 
 	/* Activation related */
 
@@ -106,11 +106,8 @@ _Static_assert(ACT_REQUIRED_SPACE >= sizeof(act_t), "Increase the size of act re
 #define FOR_EACH_ACT(act) for(act_t* act = act_list_start; act != NULL; act = act->list_next)
 
 /* Assumed by assembly */
-_Static_assert(offsetof(act_t, user_kernel_stack) == 0,
-			   "Kernel ccall trampolines assume the stack is the first member");
-_Static_assert(offsetof(act_t, stack_guard) == USER_KERNEL_STACK_SIZE,
-			   "Kernel ccall trampolines assume the guard is the second member");
-_Static_assert((offsetof(act_t, stack_guard)+CAP_SIZE) == offsetof(act_t, ddc));
+_Static_assert(offsetof(act_t, ctl) == 0,
+			   "Dynamic linking requires a ctl struct to be the first item");
 
 /* Control references are just references with a different type */
 typedef act_t act_control_t;

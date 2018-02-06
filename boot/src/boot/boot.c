@@ -34,6 +34,7 @@
 #include "cp0.h"
 #include "plat.h"
 #include "uart.h"
+#include "crt.h"
 
 struct packaged_args {
     register_t a0,a1,a2,a3;
@@ -51,19 +52,61 @@ capability smp_destination_vector[SMP_CORES];
 volatile char smp_signal_vector[SMP_CORES];
 #endif
 
-void bootloader_main(void);
-void bootloader_main(void) {
+capability
+crt_init_globals_boot()
+{
+    // This works
+
+    void *gdc = cheri_getdefault();
+    void *pcc = cheri_setoffset(cheri_getpcc(), 0);
+
+    uint64_t boot_start;
+    uint64_t text_start;
+    uint64_t data_start;
+
+    cheri_dla(__boot_segment_start, boot_start);
+    cheri_dla(__text_segment_start, text_start);
+    cheri_dla(__data_segment_start, data_start);
+
+    capability text_segment = pcc + text_start;
+    capability data_segment = gdc + data_start;
+
+    capability segment_table[5];
+
+    // These are all set up by the linker script
+    segment_table[0] = NULL;
+    segment_table[2] = pcc + boot_start;
+    segment_table[3] = pcc + text_start;
+    segment_table[4] = gdc + data_start;
+
+    // Get something usable
+    uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;
+    cheri_dla(__cap_table_start, table_start);
+    cheri_dla(__start___cap_relocs, reloc_start);
+    cheri_dla(__stop___cap_relocs, reloc_end);
+
+    capability cgp = cheri_setoffset(gdc, table_start);
+    cheri_setreg(25, cgp);
+
+    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, RELOC_FLAGS_TLS);
+
+    cheri_setreg(25, &__cap_table_start);
+
+    return &__cap_table_local_start;
+}
+
+void bootloader_main(capability global_pcc);
+void bootloader_main(capability global_pcc) {
 
 	/* Init hardware */
 	hw_init();
 
 	/* Initialize elf-loader environment */
-	init_elf_loader();
+	init_elf_loader(global_pcc);
 
     /* Load the nano kernel. Doing this will install exception vectors */
     boot_printf("Boot: loading nano kernel ...\n");
-	nano_init_t * nano_init = (nano_init_t *)load_nano(); //We have to rederive this as an executable cap
-    nano_init = (nano_init_t*)cheri_setoffset(cheri_getpcc(),cheri_getoffset(nano_init));
+	nano_init_t * nano_init = (nano_init_t*)cheri_setoffset(global_pcc,load_nano());
 
     /* TODO: we could have some boot exception vectors if we want exception  handling in boot. */
     /* These should be in ROM as a part of the boot image (i.e. make a couple more dedicated sections */
@@ -98,6 +141,9 @@ void bootloader_main(void) {
     args.a3 = 0;
 
 #ifdef SMP_ENABLED
+
+    BOOT_PRINT_CAP(smp_signal_vector);
+
     boot_printf("Signalling SMP cores...\n");
     /* We can send each core to a different location - however here will send them all to nano init */
     for(size_t i = 1; i < SMP_CORES; i++) {

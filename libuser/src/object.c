@@ -53,19 +53,21 @@ found_id_t* own_found_id;
 ALLOCATE_PLT_SYSCALLS
 ALLOCATE_PLT_NANO
 
-void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c) {
+extern void memset_c(void);
+
+void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c, capability plt_auth) {
+
+    act_self_ctrl = self_ctrl;
 
     /* This comes in null for threads other than the first - the interface is not thread local */
 	if(kernel_if_c != NULL) {
         // I feel like as we use these methods on every syscall we should remove the indirection
         memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
+        init_nano_if_sys(&plt_common_single_domain, plt_auth); // <- this allows us to use non sys versions by calling syscall in advance for each function
+        init_kernel_if_t(&kernel_if, self_ctrl, &plt_common_complete_trusting, plt_auth);
+    } else {
+        init_kernel_if_t_new_thread(&kernel_if, self_ctrl, &plt_common_complete_trusting, plt_auth);
     }
-
-    init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
-
-	act_self_ctrl = self_ctrl;
-
-    init_kernel_if_t(&kernel_if, self_ctrl);
 
 	act_self_ref  = syscall_act_ctrl_get_ref(self_ctrl);
 

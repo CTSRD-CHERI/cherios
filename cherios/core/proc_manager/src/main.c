@@ -43,8 +43,6 @@
 #include "act_events.h"
 #include "capmalloc.h"
 
-ALLOCATE_PLT_NANO
-
 /*Some "documentation" for the interface between the kernel and activation start                                        *
 * These fields are setup by the caller of act_register                                                                  *
 *                                                                                                                       *
@@ -129,10 +127,10 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 	if(process->im.secure_loaded) {
 		frame.cf_pcc = &secure_entry_trampoline;
 		// we need c3 for the trampoline. C0 would be useless anyway as it points to the unsecure copy
-		frame.cf_c0 = frame.cf_c3;
-		frame.cf_c1 = foundation_enter_default_obj.code;
-		frame.cf_c2 = foundation_enter_default_obj.data;
-		frame.cf_c3 = process->im.secure_entry;
+		// frame.cf_c0 = frame.cf_c3;
+		// frame.cf_c1 = STUB_STRUCT_RO(foundation_enter)->c1;
+		// frame.cf_c2 = PLT_UNIQUE_OBJECT(nano_kernel_if_t);
+		// frame.cf_c3 = process->im.secure_entry;
 	}
 
 	act_control_kt ctrl = syscall_act_register(&frame, name, queue, cap_malloc(ACT_REQUIRED_SPACE), cpu_hint);
@@ -170,13 +168,13 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 
 	process_t* proc;
 
+	assert(secure_load == 0);
+
 	/* We can save some work by just copying an already loaded image. Later on we will allow some sharing, e.g. of
     * const data / text */
 	image* old_im = find_process(name);
 
 	proc = alloc_process(name);
-
-	cap_pair prgmp;
 
 	proc->state = proc_created;
 	proc->n_threads = 0;
@@ -186,14 +184,9 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 	env.handle = proc->mop;
 
 	if(old_im == NULL) {
-		prgmp = elf_loader_mem(&env, file, &proc->im, secure_load);
+		elf_loader_mem(&env, (Elf64_Ehdr*)file, &proc->im);
 	} else {
-		prgmp = create_image(&env, old_im, &proc->im, storage_process);
-	}
-
-	if(!prgmp.data) {
-		assert(0);
-		return NULL;
+		create_image(&env, old_im, &proc->im, storage_process);
 	}
 
 	return seal_proc_for_user(proc);
@@ -205,11 +198,7 @@ act_control_kt start_process(process_t* proc, register_t arg, capability carg, c
 
 	proc->state = proc_started;
 
-	cap_pair prgmp = proc->im.loaded_process;
-
-	void * pcc = cheri_setoffset(prgmp.code, (proc->im).entry);
-	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-							  | CHERI_PERM_LOAD_CAP));
+	void * pcc = make_global_pcc(&proc->im);
 
 	act_control_kt ctrl = create_activation_for_image(&proc->im, proc->name, arg, carg, pcc,
 													  stack_args, stack_args_size, proc, cpu_hint);
@@ -279,7 +268,6 @@ cap_pair proc_tmp_alloc(size_t s, Elf_Env* the_env) {
 
 int main(procman_init_t* init)
 {
-	init_nano_kernel_if_t(init->nano_if, init->nano_default_cap);
 
     init_tmp_alloc(init->pool_from_init);
 

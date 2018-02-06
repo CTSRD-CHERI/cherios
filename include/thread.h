@@ -34,9 +34,10 @@
 #include "types.h"
 #include "queue.h"
 
+typedef void pcc_type(void);
 typedef struct startup_desc_t {
     capability carg;
-    capability pcc;
+    pcc_type* pcc;
     char* stack_args;
     register_t arg;
     size_t stack_args_size;

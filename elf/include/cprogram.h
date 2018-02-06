@@ -36,7 +36,7 @@
 #include "queue.h"
 #include "mman.h"
 
-act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop);
+act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop, image* im);
 
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
                      capability pcc, char* stack_args, size_t stack_args_size, mop_t mop);

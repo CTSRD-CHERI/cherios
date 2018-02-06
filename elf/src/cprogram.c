@@ -35,32 +35,21 @@
 #include "syscalls.h"
 #include "mman.h"
 
-act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop) {
-    image im;
+act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop, image* im) {
     reg_frame_t frame;
     bzero(&frame, sizeof(frame));
 
-    cap_pair prgmp = elf_loader_mem(env, file, &im, 0);
+    int res = elf_loader_mem(env, (Elf64_Ehdr*)file, im);
 
-    void * pcc = cheri_setoffset(prgmp.code, im.entry);
-    pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-                              | CHERI_PERM_LOAD_CAP));
+    void * pcc = make_global_pcc(im);
 
-    queue_t* queue = setup_c_program(env, &frame, &im, arg, carg, pcc , NULL, 0, mop);
+    queue_t* queue = setup_c_program(env, &frame, im, arg, carg, pcc , NULL, 0, mop);
 
     return syscall_act_register(&frame, name, queue, NULL, 0);
 }
 
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
                      capability pcc, char* stack_args, size_t stack_args_size, mop_t mop) {
-    cap_pair prgmp = im->loaded_process;
-
-    size_t low_bits = cheri_getbase(prgmp.data) & (0x20 - 1);
-
-    if(low_bits != 0) {
-        env->printf("ERROR: alignment of loaded file was %ld\n", low_bits);
-        return NULL;
-    }
 
     size_t stack_size = 0x10000;
     size_t stack_align = 0x40;
@@ -75,34 +64,55 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
 
     queue = cheri_setbounds(queue, queue_size);
     stack = cheri_setbounds(stack, stack_size - queue_size);
+    stack = (char*)stack + (cheri_getlen(stack) - sizeof(im->seg_table) - stack_args_size);
+
+    /* Use some more stack to pass the seg table */
+
+    capability seg_tbl = stack + stack_args_size;
 
     /* allows us to pass stack arguments to a new activation */
     if(stack_args_size != 0) {
-        env->memcpy(stack + cheri_getlen(stack) - stack_args_size, stack_args, stack_args_size);
+        env->memcpy(stack, stack_args, stack_args_size);
     }
+
+    env->memcpy(seg_tbl, im->seg_table, sizeof(im->seg_table));
 
     /* set pc */
     frame->cf_pcc	= pcc;
 
-    /* Setup user local reg */
+    /* Setup thread local reg */
+    frame->cf_idc = NULL;
 
-    frame->mf_user_loc = 0x7000 +
-                        (im->tls_base + (im->tls_size * (im->tls_num-1)));
+    /* Setup the global reg */
+    frame->cf_c25 = NULL;
 
     /* set stack */
-    frame->cf_c11	= cheri_setoffset(stack, (cheri_getlen(stack) - stack_args_size));
+    frame->cf_c11 = stack;
+    /* TODO: Set unsafe stack here */
 
     /* set c12 */
     frame->cf_c12	= frame->cf_pcc;
 
     /* set c0 */
-    frame->cf_c0	= prgmp.data;
+    frame->cf_c0	= NULL;
 
     /* Setup args */
     frame->mf_a0 = arg;
     frame->cf_c3 = carg;
 
     frame->cf_c19 = mop;
+
+    /* Set up a whole bunch of linking info */
+    capability* tbl = im->seg_table;
+    frame->cf_c4 = seg_tbl;                             // segment_table
+    frame->cf_c5 = im->tls_prototype ;                  // tls_prototype
+    frame->cf_c6 = im->code_write_cap;
+    frame->mf_s1 = im->tls_index * sizeof(capability);  // tls_segment_offset
+    frame->mf_a2 = im->data_index * sizeof(capability); // data_seg_offset
+    frame->mf_a3 = im->data_vaddr;                      // data_seg_vaddr
+    frame->mf_a4 = im->code_index * sizeof(capability); // code_seg_offset
+    frame->mf_a5 = im->code_vaddr;                      // code_seg_vaddr
+    frame->mf_a6 = im->tls_vaddr;                       // tls_seg_vaddr
 
     return queue;
 }

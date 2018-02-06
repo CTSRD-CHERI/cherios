@@ -46,6 +46,7 @@
 #include "nano/nanokernel.h"
 #include "capmalloc.h"
 #include "../../../cherios/kernel/include/sched.h"
+#include "crt.h"
 
 #define B_FS 0
 #define B_SO 0
@@ -122,7 +123,7 @@ init_elem_t init_list[] = {
 	B_PENTRY(m_user,	"test2a.elf",		0,	B_T2)
 	B_PENTRY(m_user,	"test2b.elf",		0,	B_T2)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
-    B_PENTRY(m_secure,    "foundation_test.elf", 0, 1)
+    B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
 
 #if 0
 	#define T3(_arg) \
@@ -141,7 +142,7 @@ init_elem_t init_list[] = {
 
 const size_t init_list_len = countof(init_list);
 
-ALLOCATE_PLT_NANO
+// ALLOCATE_PLT_NANO
 
 static void print_build_date(void) {
 	int filelen=0;
@@ -232,11 +233,13 @@ static void load_modules(init_info_t * init_info) {
 
     i++;
 
+    image namespace_im;
+    image proc_im;
 
     /* Namespace */
     namebe->ctrl =
             simple_start(&env, namebe->name, load_check(namebe->name),
-                         namebe->arg, get_act_cap(m_namespace, init_info), NULL);
+                         namebe->arg, get_act_cap(m_namespace, init_info), NULL, &namespace_im);
 
 
     namespace_init(syscall_act_ctrl_get_ref(namebe->ctrl));
@@ -250,7 +253,7 @@ static void load_modules(init_info_t * init_info) {
     capability memmgt_file = load_check(memgtbe->name);
 
     procbe->ctrl =
-            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info), NULL);
+            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info), NULL, &proc_im);
 
     /* FIXME technically a bit of a race. This global will be read by proc so it needs to be set before context switch */
 
@@ -357,10 +360,65 @@ static void load_modules(init_info_t * init_info) {
 	}
 }
 
+// Init will not have a TLS segment provided
+char tls_segment[0x1000];
+
+capability
+crt_init_globals_init()
+{
+    // This works
+
+    void *gdc = cheri_getdefault();
+    void *pcc = cheri_setoffset(cheri_getpcc(), 0);
+
+    uint64_t text_start;
+    uint64_t data_start;
+    uint64_t tls_start;
+
+    cheri_dla(__text_segment_start, text_start);
+    cheri_dla(__data_segment_start, data_start);
+    cheri_dla(__cap_table_local_start, tls_start); // A guess that this comes before tbss and tdata
+
+    capability text_segment = pcc + text_start;
+    capability data_segment = gdc + data_start;
+
+    capability segment_table[5];
+
+    // These are all set up by the linker script
+    segment_table[0] = NULL;
+    segment_table[2] = pcc + text_start;
+    segment_table[3] = gdc + data_start;
+    segment_table[4] = gdc + tls_start;
+
+    // Get something usable
+    uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;
+    cheri_dla(__cap_table_start, table_start);
+    cheri_dla(__start___cap_relocs, reloc_start);
+    cheri_dla(__stop___cap_relocs, reloc_end);
+
+    capability cgp = cheri_setoffset(gdc, table_start);
+    cheri_setreg(25, cgp);
+
+    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, RELOC_FLAGS_TLS);
+
+    cheri_setreg(25, &__cap_table_start);
+
+    // Provide our own tls segment
+
+    segment_table[4] = (capability)tls_segment;
+    capability local_captab = cheri_setbounds(segment_table[4],cheri_getlen(&__cap_table_local_start));
+
+    cheri_setreg(26, local_captab);
+
+    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, 0);
+
+    // We return a capability to our tls_segment. Other threads will have this provided by the linker
+    return local_captab;
+}
+
 static capability pool[POOL_SIZE/sizeof(capability)];
 
-int main(init_info_t * init_info) {
-    init_nano_kernel_if_t(init_info->nano_if,init_info->nano_default_cap);
+int main(init_info_t * init_info, capability pool_auth_cap) {
 
 	stats_init();
 
@@ -373,7 +431,7 @@ int main(init_info_t * init_info) {
     printf("Init loaded\n");
 
 	/* Initialize the memory pool. */
-	init_tmp_alloc((cap_pair){.data = pool, .code = rederive_perms(pool, cheri_getpcc())});
+	init_tmp_alloc((cap_pair){.data = pool, .code = rederive_perms(pool, pool_auth_cap)});
 
 	/* Print fs build date */
 	print_build_date();

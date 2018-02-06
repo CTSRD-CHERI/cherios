@@ -39,6 +39,8 @@
 #include "object.h"
 #include "nano/nanokernel.h"
 #include "capmalloc.h"
+#include "crt.h"
+#include "string.h"
 
 act_kt proc_man_ref = NULL;
 process_kt proc_handle = NULL;
@@ -71,22 +73,49 @@ struct secure_start_t {
 _Static_assert((offsetof(struct start_stack_args, start)) == START_OFF, "used by assembly below");
 _Static_assert((sizeof(struct start_stack_args)) == ARGS_SIZE, "used by assembly below");
 
+
+// These will be called instead of normal init for new threads
+// Check init.S in libuser for convention. Most relocations will have been processed - but we need to do locals again
+// This trampoline constructs a locals and globals captable and then moves straight into c
 __asm__ (
     SANE_ASM
     ".text\n"
-    ".global thread_start\n"
-    "thread_start:\n"
-    "cmove $c4, $c25\n"
-    "cmove $c5, $c21\n"
-    "clc   $c6, $zero, " HELP(START_OFF) "($c11)\n"
+    ".global thread_start           \n"
+    ".ent thread_start              \n"
+    "thread_start:                  \n"
+    "clc         $c13, $a2, 0($c4)  \n"
+
+// Get globals
+    "dla         $t0, __cap_table_start                     \n"
+    "dsubu       $t0, $t0, $a3                              \n"
+    "cincoffset  $c25, $c13, $t0                            \n"
+    "clcbi       $c25, %captab20(__cap_table_start)($c25)   \n"
+
+// Get locals
+    "dla         $t0, __cap_table_local_start   \n"
+    "dsubu       $t0, $t0, $a6                  \n"
+    "clc         $c26, $s1, 0($c4)              \n"
+    "cincoffset  $c26, $c26, $t0                \n"
+    "clcbi       $c13, %captab20(__cap_table_local_start)($c25) \n"
+    "cgetlen     $t0, $c13                      \n"
+    "csetbounds  $c26, $c26, $t0                \n"
+
+    // c3 already carg and a0 already arg
+    // c4 already segment_table
+    // c5 already tls_prototype
+    "move       $a1, $s1    \n"     // tls_segment
+    "cmove      $c6, $c20   \n"     // queue
+    "cmove      $c7, $c21   \n"     // self ctrl
+    "clc        $c8, $zero, " HELP(START_OFF) "($c11)\n"
+
+    // Call c land now globals are set up
+    "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
+    "cjr     $c12\n"
     "cincoffset  $c11, $c11, " HELP(ARGS_SIZE) "\n"
-    "dla    $t0, c_thread_start\n"
-    "cgetpccsetoffset $c12, $t0\n"
-    "cjr    $c12\n"
-    "nop\n"
+    ".end thread_start"
 );
 
-// A trampoline that arrives
+// FIXME: Just wont work with the new ABI
 
 __asm__ (
     SANE_ASM
@@ -106,8 +135,17 @@ __asm__ (
         "nop\n"
 );
 
-void c_thread_start(register_t arg, capability carg, queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start) {
-    object_init(self_ctrl, queue, NULL);
+void c_thread_start(register_t arg, capability carg, // Things from the user
+                    capability* segment_table, capability tls_segment_prototype, register_t tls_segment_offset,
+                    queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start) {
+    // We have to do this before we can get any thread locals
+    memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, cheri_getlen(tls_segment_prototype));
+
+    struct capreloc* r_start = &__start___cap_relocs;
+    struct capreloc* r_stop = cheri_setoffset(r_start, cheri_getlen(r_start));
+    crt_init_new_locals(segment_table, r_start, r_stop);
+
+    object_init(self_ctrl, queue, NULL, NULL);
 
     start(arg, carg);
 
@@ -119,6 +157,8 @@ void c_thread_start(register_t arg, capability carg, queue_t* queue, act_control
 }
 
 void secure_c_thread_start(locked_t locked_start, queue_t* queue, act_control_kt self_ctrl) {
+
+    assert(0 && "Secure load no longer works");
 
     assert(locked_start != NULL && (cheri_gettype(locked_start) == FOUND_LOCKED_TYPE));
 
@@ -138,7 +178,7 @@ void secure_c_thread_start(locked_t locked_start, queue_t* queue, act_control_kt
     // protects against double entry
     assert(taken);
 
-    c_thread_start(start->arg, start->carg, queue, self_ctrl, start->start);
+    // c_thread_start(start->arg, start->carg, queue, self_ctrl, start->start);
 }
 
 process_kt thread_create_process(const char* name, capability file, int secure_load) {

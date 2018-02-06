@@ -85,14 +85,49 @@ li  $zero, 0xdead
 #    .set \name, 0 #\name\()_label - locals_start
 #.endm
 
-.macro dla_tls reg, sym
-    lui     \reg, %tprel_hi(\sym)
-    daddiu  \reg, \reg, %tprel_lo(\sym)
+# Depracated
+
+#.macro dla_tls reg, sym
+#    lui     \reg, %tprel_hi(\sym)
+#    daddiu  \reg, \reg, %tprel_lo(\sym)
+#.endm
+
+
+.macro get_sym reg, sym
+   clcbi	\reg, %captab20(\sym)($c25)
 .endm
 
-.macro get_tls_sym reg, sym, user_hw_reg
-    dla_tls \reg, \sym
-    daddu   \reg, \user_hw_reg, \reg
+.macro get_tls_sym reg, sym
+    clcbi	\reg, %captab_tls20(\sym)($c26)
+.endm
+
+.macro get_sym_val_array reg, sym, size, tmp_cap, base, index
+    get_sym \tmp_cap, \sym
+    cl\size \reg, \base, \index(\tmp_cap)
+.endm
+
+.macro get_sym_val reg, sym, size, tmp_cap
+    get_sym_val_array \reg, \sym, \size, \tmp_cap, $zero, 0
+.endm
+
+.macro get_tls_sym_val reg, sym, size, tmp_cap
+    get_tls_sym \tmp_cap, \sym
+    cl\size \reg, $zero, 0(\tmp_cap)
+.endm
+
+.macro get_tls_sym_cap reg, sym
+    get_tls_sym_val \reg, \sym, c, \reg
+.endm
+
+.macro call_func f
+    clcbi   $c12, %capcall20(\f)($c25)
+    cjalr   $c12, $c17
+    cmove   $c18, $idc
+.endm
+
+.macro call_func_reg
+    cjalr   $c12, $c17
+    cmove   $c18, $idc
 .endm
 
 .macro START_LOCALS align

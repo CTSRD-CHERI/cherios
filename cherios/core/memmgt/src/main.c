@@ -50,8 +50,6 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-ALLOCATE_PLT_NANO
-
 act_kt general_act; // For anything else (worker id 1)
 act_kt commit_act;  // Only for commit   (worker id 0)
 act_kt revoke_act;  // Only for revoke   (worker if 2)
@@ -126,8 +124,6 @@ static void revoke_worker_start(register_t arg, capability carg) {
 }
 
 int main(memmgt_init_t* mem_init) {
-	/* So we can call nano kernel functions. This would normally be done by the linker */
-	init_nano_kernel_if_t(mem_init->nano_if, mem_init->nano_default_cap);
 
     commit_act = act_self_ref;
 

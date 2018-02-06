@@ -51,6 +51,7 @@ static inline uint8_t fast_critical_enter(void) {
     register capability tmp_cap;
     register capability lvl_array = ex_lvl;
     __asm__ __volatile__ (
+        SANE_ASM
         "       dmfc0       %[_0], $15, 1                   \n"     // get cpu_id. might change due to interrupt.
         "1:     move        %[_2], %[_0]                    \n"     // %2 is old cpu_id
         "       andi        %[ret], %[_0], 0xff             \n"
@@ -74,34 +75,30 @@ static inline uint8_t fast_critical_enter(void) {
 static inline void fast_critical_exit(void) {
     uint8_t cpu_id = cp0_get_cpuid();
     register register_t tmp0, tmp1, tmp2;
+    tmp2 = 0;
     capability tmp_cap;
     __asm__ __volatile__ (
+        SANE_ASM
         "1:"
         "       clld        %[_1], %[lvl]                   \n"     // load lvl
         "       daddiu      %[_1], %[_1], -1                \n"     // decrement level
         "       bnez        %[_1], 2f                       \n"     // skip anything with cause if still in critical lvl
-        "       nop                                         \n"
-
         "       cld         %[_2], $zero, 0(%[ex_cause])    \n"     // load cause. If this becomes stale the sc will fail.
-        "       beqz        %[_2], 2f                       \n"     // if no exception has happened just skip
-        "       cmove       $c1, %[code]                    \n"
-        "       cmove       $c2, %[data]                    \n"
-        "       li          %[_2], (6*4)                    \n"     // 6 instructions from cincoffset to 3:
-        "       cgetpcc     $c17                            \n"
-        "       cincoffset  $c17, $c17, %[_2]               \n"     // c17 will point to label 3f
-        "       ccall       $c1, $c2                        \n"     // FIXME: inlining this would clobber registers
+        "       bnez        %[_2], 3f                       \n"     // if no exception has happened just skip
         "       nop                                         \n"
         "2:"
         "       cscd        %[_2], %[_1], %[lvl]            \n"     // store. We might take an exception now (if it succeeds).
         "       beqz        %[_2], 1b                       \n"     // if store fails, try again
-        "       nop                                         \n"
+        "       li          %[_2], 0                        \n"
         "3:"
         : [_2] "=r" (tmp2), [_0] "=r" (tmp0), [_1] "=r" (tmp1), [lvl] "=C" (tmp_cap)
-        : [lvl] "C" (ex_lvl[cpu_id]), [ex_cause] "C" (ex_cause[cpu_id]),
-    [code] "C" (critical_section_enter_default_obj.code), [data] "C" (critical_section_enter_default_obj.data)
+        : [lvl] "C" (ex_lvl[cpu_id]), [ex_cause] "C" (ex_cause[cpu_id])
         :
     );
 
+    if(tmp2 != 0) {
+        critical_section_exit();
+    }
 }
 
 #define CRITICAL_LOCKED_BEGIN_ID(lock, id) \

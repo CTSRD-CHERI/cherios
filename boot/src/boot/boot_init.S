@@ -140,33 +140,23 @@ cherios_init_jump_target:
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
-	# Zero BSS.
+	# Initialise globals. We need to use dla to call this function.
 	cgetpcc		$c12
-	dla		$t0, crt_init_bss
+	dla		$t0, crt_init_globals_boot
 	csetoffset	$c12, $c12, $t0
 	cjalr		$c12, $c17
-	nop
+	cmove   $c18, $c11
 
-	# Initialise globals.
-	cgetpcc		$c12
-	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+    cmove   $idc, $c3
+	# Zero BSS.
+	call_func crt_init_bss
 
 	# Call C constructors.
-	cgetpcc		$c12
-	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
- 	cjalr		$c12, $c17
-	nop
+	call_func crt_call_constructors
 
 	# Call bootloader_main().
-	cgetpcc		$c12
-	dla		$t0, bootloader_main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+	cgetpccsetoffset $c3, $zero                     # Need this to operate a tmp alloc pool
+	call_func bootloader_main
 
 #ifdef SMP_ENABLED
 	# Trap for threads other than man

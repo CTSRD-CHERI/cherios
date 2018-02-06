@@ -37,11 +37,8 @@
 #include "exception_cause.h"
 
 #
-# Relocatable ccall vector; checks arguments, sets c12 <- pcc <- c1 and idc <- c2
-# This runs with KCC installed in PCC.
-#
+# Relocatable ccall vector; No longer used - now just an error.
 
-# Creturn does IF(unsealed($c17)) pcc <- $c17 ELSE c18 <- unseal(c18) ; pcc <- unseal(c17)
 		.global kernel_ccall_trampoline
 		.ent kernel_ccall_trampoline
 kernel_ccall_trampoline:

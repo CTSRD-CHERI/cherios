@@ -114,7 +114,8 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 void	msg_queue_init(act_t* act, queue_t * queue);
 int	msg_queue_empty(act_t* act);
 
-context_t	act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base);
+context_t	act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base,
+					capability global_pcc);
 void	act_wait(act_t* act, act_t* next_hint);
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 					 status_e create_in_status, act_control_t *parent, size_t base, res_t res);
@@ -142,4 +143,7 @@ void	regdump(int reg_num, act_t* act);
 void setup_syscall_interface(kernel_if_t* kernel_if);
 
 void kernel_exception(context_t swap_to, context_t own_context);
+
+#define CALLER (get_idc())
+
 #endif /* _CHERIOS_KLIB_H_ */

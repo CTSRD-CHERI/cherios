@@ -48,17 +48,17 @@ static inline void spinlock_acquire(spinlock_t* lock) {
     register register_t tmp;
     __asm__ volatile (
     SANE_ASM
-    "start:"
-            "b      check                   \n"
+    "1:"
+            "b      2f                      \n"
             "cllb   %[tmp], %[lock]         \n"
-    "retry_yield:"
+    "3:"
             "li     $zero, 0xea1d           \n" // yield on retry
             "cllb   %[tmp], %[lock]         \n"
-    "check: "
-            "bnez   %[tmp], retry_yield     \n"
+    "2: "
+            "bnez   %[tmp], 3b              \n"
             "li     %[tmp], 1               \n"
             "cscb   %[tmp], %[tmp], %[lock] \n"
-            "beqz   %[tmp], check           \n"
+            "beqz   %[tmp], 2b              \n"
             "cllb   %[tmp], %[lock]         \n"
     : [tmp] "=r" (tmp)
     : [lock]"C"(&lock->lock)
@@ -72,15 +72,15 @@ static inline int spinlock_try_acquire(spinlock_t* lock, register_t times) {
     __asm__ volatile (
     SANE_ASM
             "li     %[result], 0                \n"
-    "start:"
+    "1:"
             "beqz   %[times], 2f                \n"
             "daddiu %[times], %[times], -1      \n"
             "cllb   %[tmp], %[lock]             \n"
-    "check: "
-            "bnez   %[tmp], start               \n"
+    "3: "
+            "bnez   %[tmp], 1b                  \n"
             "li     %[tmp], 1                   \n"
             "cscb   %[result], %[tmp], %[lock]  \n"
-            "beqz   %[result], start            \n"
+            "beqz   %[result], 1b               \n"
             "nop"
     "2:"
     :  [result]"=r"(result), [tmp]"=r"(tmp0)

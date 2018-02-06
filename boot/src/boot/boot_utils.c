@@ -63,7 +63,7 @@ extern char __boot_load_physaddr;
 
 static char* phy_mem;
 
-static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env __unused) {
+static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env) {
 	/* We will allocate the first few objects in low physical memory. THe first thing we load is the nano kernel
 	 * and this will be direct mapped.*/
     static int alloc_direct = 1;
@@ -79,6 +79,7 @@ static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env __unused) {
         }
         boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, nano_size);
         phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + nano_size);
+        BOOT_PRINT_CAP(phy_mem);
         alloc = cheri_getdefault();
         alloc_direct = 0;
     } else {
@@ -94,7 +95,7 @@ static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env __unused) {
 		hw_reboot();
 	}
 
-	return (cap_pair){.code = rederive_perms(alloc, cheri_getpcc()), .data = alloc};
+	return (cap_pair){.code = rederive_perms(alloc, env->handle), .data = alloc};
 }
 
 static void kernel_free_mem(void *addr, Elf_Env* env __unused) {
@@ -109,20 +110,21 @@ static void *boot_memcpy(void *dest, const void *src, size_t n) {
 static boot_info_t bi;
 Elf_Env env;
 
-void init_elf_loader() {
+void init_elf_loader(capability pool_code_auth_cap) {
   env.alloc   = kernel_alloc_mem;
   env.free    = kernel_free_mem;
   env.printf  = boot_printf;
   env.vprintf = boot_vprintf;
   env.memcpy  = boot_memcpy;
+  env.handle = pool_code_auth_cap;
 }
 
-capability load_nano() {
+size_t load_nano() {
 	extern u8 __nano_elf_start, __nano_elf_end;
 	size_t minaddr, maxaddr, entry;
-	image im;
+	image_old im;
 
-	char *prgmp = elf_loader_mem(&env, &__nano_elf_start,
+	char *prgmp = (char*)elf_loader_mem_old(&env, &__nano_elf_start,
 								 &im, 0).data;
 
 	minaddr = im.minaddr;
@@ -143,7 +145,7 @@ capability load_nano() {
     boot_printf("Loaded nano kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
                 minaddr, maxaddr, entry);
 
-    return prgmp + entry;
+    return entry;
 
     err:
     hw_reboot();
@@ -153,9 +155,9 @@ size_t load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	size_t minaddr, maxaddr, entry;
 
-	image im;
+	image_old im;
 
-	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
+	char *prgmp = (char*)elf_loader_mem_old(&env, &__kernel_elf_start,
 				     &im, 0).data;
 
 	minaddr = im.minaddr;
@@ -188,9 +190,9 @@ boot_info_t *load_init() {
 	extern u8 __init_elf_start, __init_elf_end;
 	size_t minaddr, maxaddr, entry;
 
-	image im;
+	image_old im;
 	// FIXME: init is direct mapped for now
-	char *prgmp = elf_loader_mem(&env, &__init_elf_start, &im, 0).data;
+	char *prgmp = (char*)elf_loader_mem_old(&env, &__init_elf_start, &im, 0).data;
 
 	minaddr = im.minaddr;
 	maxaddr = im.maxaddr;

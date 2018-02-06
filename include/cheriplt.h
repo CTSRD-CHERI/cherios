@@ -41,47 +41,125 @@
 
 // A helpful init method is also provided. It will populate the default objects from the struct, with a default data
 
+// The stubs are now as they will eventually be in the linker
+
 #ifndef __ASSEMBLY__
 
 #include "cheric.h"
 #include "ccall.h"
+#include "utils.h"
 
-    //TODO once we have proper linker support, we won't have to manually specify the interface like this
-    #define PLT_UNIQUE_OBJECT(name) name ## _ ## default_obj
+// FIXME: alias needs size too
+#define PLT_STUB256(name, obj, tls, tls_reg, alias)  \
+__asm__ (                       \
+    SANE_ASM                    \
+    ".text\n"                   \
+    ".p2align 5\n"              \
+    ".global " #name "\n"       \
+    ".ent " #name "\n"          \
+    "" #name ":\n"              \
+    alias                       \
+    "clc         $c1, $zero, (1*32)($c12)  \n"        \
+    "clc         $c12, $zero, (2*32)($c12)\n"         \
+    "cjr         $c12                                 \n"   \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")("tls_reg")\n"     \
+    ".space (1 * 16) \n"        \
+    ".global " #name "_data\n"  \
+    "" #name "_data:\n"         \
+    ".space (2 * 32) \n"        \
+    ".size " #name "_data, 64\n"\
+    ".end " #name "\n"          \
+);
+
+// This is an inlined mode for single domain, can use this if we know statically our trust relationship
+#define PLT_STUB256_CSD(name, obj, tls, tls_reg, alias) \
+__asm__ (                       \
+    SANE_ASM                    \
+    ".text\n"                   \
+    ".p2align 5\n"              \
+    ".global " #name "\n"       \
+    ".ent " #name "\n"          \
+    "" #name ":\n"              \
+    alias                       \
+    "clc         $c1, $zero, (1*32)($c12)  \n"        \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")("tls_reg")\n"     \
+    "ccall       $c1, $c2, 2 \n"\
+    "nop\n"                     \
+    ".space (1 * 16) \n"        \
+    ".global " #name "_data\n"  \
+    "" #name "_data:\n"         \
+    ".space (2 * 32) \n"        \
+    ".size " #name "_data, 64\n"\
+    ".end " #name "\n"          \
+);
+
+
+typedef void common_t(void);
+
+struct pltstub256 {
+    capability c1;
+    common_t* mode;
+};
+
+
 
     #define PLT_GOT_ENTRY(name, ...) capability name;
-    #define CCALL_WRAP(name, ret, sig, ...)                                                     \
-                        __attribute__((cheri_ccall))                                            \
-                        __attribute__((cheri_method_suffix("_inst")))                           \
-                        __attribute__((cheri_method_class(PLT_UNIQUE_OBJECT(name))))            \
-                        ret name sig;
 
-    #define MAKE_DEFAULT(name, ret, sig, per_thr) extern per_thr struct cheri_object PLT_UNIQUE_OBJECT(name);
-    #define ALLOCATE_DEFAULT(name,  ret, sig, per_thr) per_thr struct cheri_object PLT_UNIQUE_OBJECT(name);
+    #define STUB_STRUCT(name, auth) ((struct pltstub256*)(rederive_perms((((char*)&name) + 32), auth)))
+    #define STUB_STRUCT_RO(name) ((struct pltstub256*)((((char*)&name) + 32)))
+    #define PLT_UNIQUE_OBJECT(name) name ## _data_obj
 
-    #define INIT_OBJ(name, ret, sig, data)    \
-        PLT_UNIQUE_OBJECT(name).code = plt_if -> name;  \
-        PLT_UNIQUE_OBJECT(name).data = data;
+    #define DECLARE_STUB(name, ret, sig, ...) extern ret name sig; extern struct pltstub256 name ## _data;
 
-    #define DECLARE_PLT_INIT(type, LIST)                                \
-    static inline void init_ ## type (type* plt_if, capability data) {  \
-        LIST(INIT_OBJ, data)                                            \
+    #define GET_ALIAS(X, ...) X
+    #define DEFINE_STUB(name, ret, sig, type, ST, tls, tls_reg, ...) ST(name, PLT_UNIQUE_OBJECT(type), tls, tls_reg, GET_ALIAS(__VA_ARGS__,))
+
+    #define DECLARE_DEFAULT(type, per_thr) extern per_thr capability PLT_UNIQUE_OBJECT(type);
+    #define ALLOCATE_DEFAULT(type, per_thr) per_thr capability PLT_UNIQUE_OBJECT(type);
+
+    #define INIT_OBJ(name, ret, sig, mode, auth, ...)             \
+        {struct pltstub256* ob = STUB_STRUCT(name, auth);         \
+        ob->c1 = plt_if -> name;                            \
+        ob->mode = mode;}
+
+    #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
+    static inline void init_ ## type (type* plt_if, capability data, common_t* mode, capability auth) {      \
+        __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)("tls_reg")\n"::[d]"C"(data):); \
+        LIST(INIT_OBJ, mode, auth)                                                                \
+    }\
+    static inline void init_ ## type ##_new_thread(type* plt_if, capability data, common_t* mode, capability auth) {      \
+            __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)("tls_reg")\n"::[d]"C"(data):); \
     }
 
-    #define PLT_thr(type, LIST, per_thr)    \
+    #define PLT_common(type, LIST, per_thr, tls_reg, tls)    \
     typedef struct                          \
     {                                       \
         LIST(PLT_GOT_ENTRY,)                \
     } type;                                 \
-    LIST(MAKE_DEFAULT, per_thr)             \
-    LIST(CCALL_WRAP,)                       \
-    DECLARE_PLT_INIT(type, LIST)
+    DECLARE_DEFAULT(type, per_thr)          \
+    LIST(DECLARE_STUB,)                     \
+    DECLARE_PLT_INIT(type, LIST, tls_reg, tls)
 
-    #define PLT(type, LIST) PLT_thr(type, LIST,)
+    #define PLT(type, LIST) PLT_common(type, LIST,, "$c25",)
+    #define PLT_thr(type, LIST) PLT_common(type, LIST,__thread,"$c26", "_tls")
 
-    #define PLT_ALLOCATE_thr(type, LIST, per_thr) LIST(ALLOCATE_DEFAULT,per_thr)
+    #define PLT_ALLOCATE_common(type, LIST, thread_loc, tls, tls_reg, ST) ALLOCATE_DEFAULT(type, thread_loc) LIST(DEFINE_STUB, type, ST, tls, tls_reg)
 
-    #define PLT_ALLOCATE(type, LIST)  PLT_ALLOCATE_thr(type, LIST, )
+
+    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB256_CSD)
+    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB256)
+    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB256)
+
+    // These are the mode stubs
+    extern void plt_common_single_domain(void);
+    extern void plt_common_complete_trusting(void);
+    extern void plt_common_trusting(void);
+    extern void plt_common_untrusting(void);
+
+    // This is the fully untrusting entry stub
+    extern void entry_stub(void);
+#define MAKE_
+
 #else // __ASSEMBLY__
 
     // If this is included from assembly, we should instead create a set of .set directives that define the offsets

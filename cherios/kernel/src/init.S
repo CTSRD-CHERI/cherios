@@ -31,7 +31,10 @@
 
 #Fixme: clean-up code && comment
 
+#define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
+.include "asm.S"
+#include "mips.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
@@ -46,7 +49,6 @@ start:
     cmove       $c19, $c1   # if
     cmove       $c20, $c2   # data
     cmove       $c21, $c3   # context
-    cmove       $c22, $c4   # types
     move        $s0,  $a0
     move        $s1,  $a1
     move        $s2,  $a2
@@ -65,26 +67,20 @@ start:
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
-	# Zero BSS.
+	# Initialise globals. We need to use dla to call this function. Can only do this because dla was loaded contiguously
 	cgetpcc		$c12
-	dla		$t0, crt_init_bss
+	dla		$t0, crt_init_globals_kernel
 	csetoffset	$c12, $c12, $t0
 	cjalr		$c12, $c17
-	nop
+	cmove   $c18, $c11
 
-	# Initialise globals.
-	cgetpcc		$c12
-	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+	cmove   $idc, $c3
+
+	# Zero BSS.
+	call_func crt_init_bss
 
 	# Call C constructors.
-	cgetpcc		$c12
-	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+	call_func crt_call_constructors
 
 	move		$a0, $s0
 	move        $a1, $s1
@@ -93,14 +89,10 @@ start:
     cmove       $c3, $c19
     cmove       $c4, $c20
     cmove       $c5, $c21
-    cmove       $c6, $c22
-
+    cgetdefault $c6                 # Need this to auth overwriting of the PLT
+    cgetpccsetoffset $c7, $zero     # Need this to construct a pcc for init in act_init
 	# Call cherios_main() this should never return as the kernel will set itself up as the exception context.
-	cgetpcc		$c12
-	dla		$t0, cherios_main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+	call_func   cherios_main
 
 start_end:
 	.size start, start_end - start

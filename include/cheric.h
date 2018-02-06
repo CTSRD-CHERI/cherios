@@ -216,6 +216,13 @@ cheri_ptrpermoff(const void *ptr, size_t len, register_t perm, off_t off)
  * The caller may wish to assert various properties about the returned
  * capability, including that CHERI_PERM_SEAL is set.
  */
+
+#define cheri_dla(symbol, result)               \
+__asm __volatile (                              \
+    "lui %[res], %%hi(" #symbol ")\n"            \
+    "daddiu %[res], %[res], %%lo(" #symbol ")\n" \
+: [res]"=r"(result) ::)
+
 static __inline capability
 cheri_maketype(capability root_type, register_t type)
 {

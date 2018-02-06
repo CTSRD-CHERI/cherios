@@ -37,6 +37,7 @@ OUTPUT_ARCH(mips)
 ENTRY(start)
 SECTIONS
 {
+    __text_segment_start = .;
 	. += __kernel_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
@@ -55,26 +56,24 @@ SECTIONS
 	 * content, it would be much preferable to map into the code segment
 	 * and use $pcc-relative loads, but we are not yet there.
 	 */
-	.ctors ALIGN(CAP_ALIGN) : {
-		KEEP (*/crtbeginC.o(.ctors))
-		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
-		KEEP (*(SORT(.ctors.*)))
-		KEEP (*/crtendC.o(.ctors))
-	}
-	.dtors ALIGN(CAP_ALIGN) : {
-		KEEP (*/crtbeginC.o(.dtors))
-		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
-		KEEP (*(SORT(.dtors.*)))
-		KEEP (*/crtendC.o(.dtors))
-	}
+
+
 	.data ALIGN(CAP_ALIGN): {
+	    __data_segment_start = .;
 		*(.data)
 	}
-	_gp = ALIGN(CAP_ALIGN) + 0x7fc0;
-	.got : {
-		*(.got.plt)
-		*(.got)
-	}
+    .ctors ALIGN(CAP_ALIGN) : {
+        KEEP (*/crtbeginC.o(.ctors))
+        KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
+        KEEP (*(SORT(.ctors.*)))
+        KEEP (*/crtendC.o(.ctors))
+    }
+    .dtors ALIGN(CAP_ALIGN) : {
+        KEEP (*/crtbeginC.o(.dtors))
+        KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
+        KEEP (*(SORT(.dtors.*)))
+        KEEP (*/crtendC.o(.dtors))
+    }
 	.bss ALIGN(CAP_ALIGN): {
 		__start_bss = .;
 		*(.bss)
@@ -93,5 +92,8 @@ SECTIONS
 	   *(.MIPS.abiflags)
 	   *(.pdr)
 	   *(.comment)
+	   *(.tbss)
+	   *(.tdata)
+	   *(.cap_table_local)
 	}
 }

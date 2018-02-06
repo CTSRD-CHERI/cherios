@@ -30,6 +30,7 @@
 
 #ifdef CHERIOS_BOOT
 
+#include <elf.h>
 #include "boot/boot.h"
 
 #define assert(e) boot_assert(e)
@@ -151,14 +152,14 @@ static inline Elf64_Phdr *elf_pheader(Elf64_Ehdr *hdr) {
 	return (Elf64_Phdr *)((char *)hdr + hdr->e_phoff);
 }
 
-static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, int idx) {
+static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, size_t idx) {
 	assert(idx < hdr->e_phnum);
 	return &elf_pheader(hdr)[idx];
 }
 
 /* not secure */
 
-static void load_PT_loads(Elf_Env* env, struct image* elf, char* prgmp) {
+static void load_PT_loads(Elf_Env* env, struct image_old* elf, char* prgmp) {
     char* addr = (char*)elf->hdr;
 
     assert(elf != NULL);
@@ -176,7 +177,7 @@ static void load_PT_loads(Elf_Env* env, struct image* elf, char* prgmp) {
     }
 }
 
-static void TLS_copy(image* elf, size_t tls_num) {
+static void TLS_copy(image_old* elf, size_t tls_num) {
 	char* tls_base = (char*)elf->loaded_process.data + elf->tls_base + (elf->tls_size * tls_num);
 	memcpy(tls_base, elf->tls_load_start, elf->tls_load_size);
 	/* tbss always follows tdata. zero here */
@@ -184,12 +185,12 @@ static void TLS_copy(image* elf, size_t tls_num) {
 }
 
 /* Load an image */
-cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_type store_type) {
+cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum e_storage_type store_type) {
 
     assert(elf != NULL);
     assert(elf->hdr != NULL);
 
-	memcpy(out_elf, elf, sizeof(image));
+	memcpy(out_elf, elf, sizeof(image_old));
 
     assert(out_elf != NULL);
     assert(out_elf->hdr != NULL);
@@ -248,13 +249,130 @@ cap_pair create_image(Elf_Env *env, image* elf, image* out_elf, enum e_storage_t
             }
             if(out_elf->tls_size != 0) out_elf->tls_num++;
             break;
+		default:
+			assert(0 && "New storage not define for old image loading");
     }
 
 	return out_elf->loaded_process;
 }
 
+static void load_seg(Elf_Env* env, size_t i, Elf64_Phdr *seg, image* out_im) {
+	cap_pair seg_cap_pair = env->alloc(seg->p_memsz, env);
+	capability seg_cap = (seg->p_flags & PF_X) ? seg_cap_pair.code : seg_cap_pair.data;
+    if(seg->p_flags & PF_X) out_im->code_write_cap = seg_cap_pair.data;
+	out_im->seg_table[i+1] = cheri_setbounds(seg_cap, seg->p_memsz);
+	char* src = ((char*)out_im->hdr) + seg->p_offset;
+	memcpy(seg_cap_pair.data, src, seg->p_filesz);
+}
+
+// TODO secure loading should put each segment directly into a (single) foundation?
+
+int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type store_type) {
+	assert(in_im != NULL);
+	assert(in_im->hdr != NULL);
+
+	memcpy(out_im, in_im, sizeof(image));
+
+	switch(store_type) {
+		case storage_new:
+			// Needs all new segments
+			for(size_t i=0; i<out_im->hdr->e_phnum; i++) {
+				Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
+				if (seg->p_type == PT_LOAD) {
+					if((seg->p_flags & PF_W) == 0) {
+						load_seg(env, i, seg, out_im);
+					}
+				}
+			}
+		case storage_process:
+			// Needs new writable parts
+			for(size_t i=0; i<out_im->hdr->e_phnum; i++) {
+				Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
+				if (seg->p_type == PT_LOAD) {
+					if(seg->p_flags & PF_W) {
+						load_seg(env, i, seg, out_im);
+					}
+				}
+				if (seg->p_type == PT_TLS) {
+					// This is the prototype
+					capability data_seg = out_im->seg_table[out_im->data_index];
+					capability proto_tls_seg = cheri_incoffset(data_seg, out_im->tls_vaddr - out_im->data_vaddr);
+					proto_tls_seg = cheri_setbounds(proto_tls_seg, seg->p_filesz);
+                    out_im->tls_prototype = proto_tls_seg;
+				}
+			}
+		case storage_thread:
+			// Only needs new TLS
+			if(out_im->tls_index != 0) {
+				out_im->tls_num++;
+                out_im->seg_table[out_im->tls_index] = env->alloc(out_im->tls_size, env).data;
+                // We dont memcpy from proto here as fixups may need to occur
+			}
+	}
+	return 0;
+}
+
+int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf) {
+	if(!elf_check_supported(env, hdr)) {
+		ERROR("ELF File cannot be loaded");
+		return -1;
+	}
+
+	bzero(out_elf, sizeof(image));
+	out_elf->hdr = hdr;
+
+	Elf64_Addr e_entry = hdr->e_entry;
+	TRACE("e_entry:%lX e_phnum:%d e_shnum:%d", hdr->e_entry, hdr->e_phnum, hdr->e_shnum);
+
+	int has_tls = 0;
+	int found_code = 0;
+	int found_data = 0;
+
+	for(size_t i=0; i<hdr->e_phnum; i++) {
+		Elf64_Phdr *seg = elf_segment(hdr, i);
+		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX filesz:%lX memsz:%lX align:%lX",
+			  seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr,
+			  seg->p_filesz, seg->p_memsz, seg->p_align);
+		if(seg->p_filesz > seg->p_memsz) {
+			ERROR("Section is larger in file than in memory");
+			return -1;
+		}
+		if(seg->p_type == PT_LOAD) {
+
+			assert((seg->p_flags & (PF_W | PF_X)) != (PF_W |PF_X));
+
+			if(seg->p_flags & PF_W) {
+				assert(found_data == 0);
+				found_data = 1;
+				out_elf->data_index = (size_t)i + 1;
+				out_elf->data_vaddr = seg->p_vaddr;
+			} else if(seg->p_flags & PF_X) {
+				assert(found_code == 0);
+				found_code = 1;
+				out_elf->code_index = (size_t)i + 1;
+				out_elf->code_vaddr = seg->p_vaddr;
+			}
+		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO) {
+			/* Ignore these headers */
+		} else if(seg->p_type == PT_TLS) {
+			assert(has_tls == 0);
+			has_tls = 1;
+			out_elf->tls_index = (size_t)i + 1;
+			out_elf->tls_vaddr = seg->p_vaddr;
+			out_elf->tls_size = seg->p_memsz;
+		} else {
+			ERROR("Unknown section");
+			return -1;
+		}
+	}
+
+	out_elf->entry   = e_entry;
+
+	return create_image(env, out_elf, out_elf, storage_new);
+}
+
 /* Parse an elf file already resident in memory. */
-cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf, int secure_load) {
+cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secure_load) {
 	char *addr = (char *)p;
 	size_t lowaddr = (size_t)(-1);
 	Elf64_Ehdr *hdr = (Elf64_Ehdr *)addr;
@@ -263,7 +381,7 @@ cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf, int secure_load) 
 		return NULL_PAIR;
 	}
 
-    bzero(out_elf, sizeof(image));
+    bzero(out_elf, sizeof(image_old));
     out_elf->hdr = hdr;
 
 	Elf64_Addr e_entry = hdr->e_entry;
@@ -316,5 +434,5 @@ cap_pair elf_loader_mem(Elf_Env *env, void *p, image* out_elf, int secure_load) 
 
 	out_elf->secure_loaded = secure_load;
 
-	return create_image(env, out_elf, out_elf, storage_process);
+	return create_image_old(env, out_elf, out_elf, storage_process);
 }

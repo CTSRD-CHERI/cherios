@@ -18,6 +18,7 @@ set(KERNEL_SRCS
 )
 set(KERNEL_ASM_SRCS
     src/init.S
+    ${PLT_ASM}
 )
 
 if("${CONSOLE}" STREQUAL "malta")

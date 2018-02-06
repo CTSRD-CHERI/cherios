@@ -35,15 +35,12 @@
 #include "syscalls.h"
 
 /*
- * These functions abstract the syscall register convention
+ * These functions are those that are available by dynamic linking with the kernel
  */
 
-/* TODO to avoid work I will use an activation reference plus a c0 trampoline for most of these
- * TODO however, the intention is that the sealed capability should obey the principle of least privilige.
- * TODO that is, if we want to sleep it should contain just enough to do a context switch
- * TODO this works nicely when we just want, for example, to get a field from a struct
- */
-void kernel_sleep(int time);
+#define DECLARE_WITH_CD(A, B) A B; A __cross_domain_## B; A __cross_domain_trusted_## B
+
+DECLARE_WITH_CD(void, kernel_sleep(int time));
 void kernel_sleep(int time) {
 	if(time != 0) {
 		KERNEL_ERROR("sleep >0 not implemented");
@@ -52,48 +49,48 @@ void kernel_sleep(int time) {
 	}
 }
 
-void kernel_wait(void);
+DECLARE_WITH_CD(void, kernel_wait(void));
 void kernel_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
 	sched_block_until_msg(NULL, NULL);
 }
 
-act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint);
+DECLARE_WITH_CD(act_control_t *, kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint));
 act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint) {
 	return act_register_create(frame, queue, name, status_alive, NULL, res, cpu_hint);
 }
 
-act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl);
+DECLARE_WITH_CD(act_t *, kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl));
 act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_get_sealed_ref_from_ctrl(ctrl);
 }
 
-status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl);
+DECLARE_WITH_CD(status_e, kernel_syscall_act_ctrl_get_status(act_control_t* ctrl));
 status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_get_status(ctrl);
 }
 
-sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl);
+DECLARE_WITH_CD(sched_status_e, kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl));
 sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return ctrl->sched_status;
 }
 
-int kernel_syscall_act_revoke(act_control_t* ctrl);
+DECLARE_WITH_CD(int, kernel_syscall_act_revoke(act_control_t* ctrl));
 int kernel_syscall_act_revoke(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_revoke(ctrl);
 }
 
-int kernel_syscall_act_terminate(act_control_t* ctrl);
+DECLARE_WITH_CD(int, kernel_syscall_act_terminate(act_control_t* ctrl));
 int kernel_syscall_act_terminate(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_terminate(ctrl);
 }
 
-void kernel_syscall_puts(char *msg);
+DECLARE_WITH_CD(void, kernel_syscall_puts(char *msg));
 void kernel_syscall_puts(char *msg) {
 	#ifndef __LITE__
 	kernel_printf(KGRN"%s" KREG KRST, msg);
@@ -102,7 +99,7 @@ void kernel_syscall_puts(char *msg) {
 	#endif
 }
 
-void kernel_syscall_panic_proxy(act_t* act) __dead2;
+DECLARE_WITH_CD(void, kernel_syscall_panic_proxy(act_t* act) __dead2);
 void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
     if(act != NULL) {
         if(cheri_gettype(act) == act_ref_type)
@@ -113,22 +110,22 @@ void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
 	kernel_freeze();
 }
 
-void kernel_syscall_panic(void) __dead2;
+DECLARE_WITH_CD(void, kernel_syscall_panic(void) __dead2);
 void kernel_syscall_panic(void) {
     return kernel_syscall_panic_proxy(NULL);
 }
 
-int kernel_syscall_interrupt_register(int number);
+DECLARE_WITH_CD(int, kernel_syscall_interrupt_register(int number));
 int kernel_syscall_interrupt_register(int number) {
 	return kernel_interrupt_register(number, (act_control_t *)CALLER);
 }
 
-int kernel_syscall_interrupt_enable(int number);
+DECLARE_WITH_CD(int, kernel_syscall_interrupt_enable(int number));
 int kernel_syscall_interrupt_enable(int number) {
 	return kernel_interrupt_enable(number, (act_control_t *)CALLER);
 }
 
-void kernel_syscall_shutdown(shutdown_t mode);
+DECLARE_WITH_CD(void, kernel_syscall_shutdown(shutdown_t mode));
 void kernel_syscall_shutdown(shutdown_t mode) {
     // Mode if we want restart/shotdown etc
     switch(mode) {
@@ -142,7 +139,7 @@ void kernel_syscall_shutdown(shutdown_t mode) {
 
 }
 
-void kernel_syscall_register_act_event_registrar(act_t* act);
+DECLARE_WITH_CD(void, kernel_syscall_register_act_event_registrar(act_t* act));
 void kernel_syscall_register_act_event_registrar(act_t* act) {
 	static int once = 0;
 	if(!once) {
@@ -152,7 +149,7 @@ void kernel_syscall_register_act_event_registrar(act_t* act) {
 	}
 }
 
-const char* kernel_syscall_get_name(act_t * act);
+DECLARE_WITH_CD(const char*, kernel_syscall_get_name(act_t * act));
 const char* kernel_syscall_get_name(act_t * act) {
     act = act_unseal_ref(act);
     const char* name = act->name;
@@ -161,47 +158,48 @@ const char* kernel_syscall_get_name(act_t * act) {
     return name;
 }
 
-extern void kernel_message_send(capability c3, capability c4, capability c5, capability c6,
-                         register_t a0, register_t a1, register_t a2, register_t a3,
-                         act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret);
+DECLARE_WITH_CD (void, kernel_message_send(capability c3, capability c4, capability c5, capability c6,
+        register_t a0, register_t a1, register_t a2, register_t a3,
+        act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret));
+void kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
+                             register_t a0, register_t a1, register_t a2, register_t a3,
+                             act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret);
 
-extern int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token);
+// Message send is still a bit funky because of how it returns, should probably fix this
+// This does the normal cross domain stuff, but creates a struct to contain both possible return registers and
+// loads them before returning to the caller
+__asm__ (
+    SANE_ASM
+    ".text \n"
+    ".global __cross_domain_kernel_message_send         \n"
+    "__cross_domain_kernel_message_send:                \n"
+    "clcbi  $c14, (32 * 4)($idc)                        \n"
+    "cjalr  $c14, $c12                                  \n"
+    "clcbi  $c11, (32 * 1)($idc)                        \n"
+    "clcbi  $c10, (32 * 2)($idc)                        \n"
+    "clcbi  $c25, (32 * 5)($idc)                        \n"
+    "cincoffset  $c11, $c11, -(64 + 64)                 \n"
+    "cmove       $c8, $c11                              \n"
+	"csc	$c17, $zero, 64($c11)						\n"
+	"csc	$c18, $zero, (64 + 32)($c11)				\n"
+    "clcbi  $c12, %capcall20(kernel_message_send_ret)($c25) \n"
+    "cjalr  $c12, $c17                                  \n"
+    "cmove  $c18, $idc                                  \n"
+	"clc	$c17, $zero, 64($c11)						\n"
+	"clc	$c18, $zero, (64 + 32)($c11)				\n"
+	"clc	$c3, $zero, 0($c11)                         \n"
+	"cld    $v0, $zero, 32($c11)                        \n"
+	"cld    $v1, $zero, 40($c11)                        \n"
+    "ccall  $c17, $c18, 2                               \n"
+    "cincoffset $c11, $c11, (64 + 64)                   \n"
+);
 
 
-#define message_send_BEFORE	\
-	"cincoffset  $c11, $c11, -64\n"		\
-    "cmove       $c8, $c11\n"           \
 
-#define message_send_AFTER	\
-	"clc	$c3, $zero, 0($c11)\n"			\
-	"cld $v0, $zero, 32($c11)\n"			\
-	"cld $v1, $zero, 40($c11)\n"			\
-	"cincoffset  $c11, $c11, 64\n"			\
+DECLARE_WITH_CD(int, kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token));
 
 #define SET_IF(call, ...)\
-kernel_if -> call = cheri_seal((capability)(&(kernel_ ## call ## _trampoline)), ctrl_ref_sealer);
-
-
-#define DADT(call) DEFINE_TRAMPOLINE_EXTRA(kernel_ ## call,,)
-
-DEFINE_TRAMPOLINE_EXTRA(kernel_message_send, message_send_BEFORE, message_send_AFTER);
-DADT(message_reply)
-DADT(sleep)
-DADT(wait)
-DADT(syscall_act_register)
-DADT(syscall_act_ctrl_get_ref)
-DADT(syscall_act_ctrl_get_status)
-DADT(syscall_act_ctrl_get_sched_status)
-DADT(syscall_act_revoke)
-DADT(syscall_act_terminate)
-DADT(syscall_puts)
-DADT(syscall_panic)
-DADT(syscall_panic_proxy)
-DADT(syscall_interrupt_register)
-DADT(syscall_interrupt_enable)
-DADT(syscall_shutdown)
-DADT(syscall_register_act_event_registrar)
-DADT(syscall_get_name)
+kernel_if -> call = cheri_seal((capability)(&(__cross_domain_kernel_ ## call)), ctrl_ref_sealer);
 
 void setup_syscall_interface(kernel_if_t* kernel_if) {
     SYS_CALL_LIST(SET_IF,)

@@ -43,7 +43,7 @@
 
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
-#define ALLOCATE_PLT_NANO PLT_ALLOCATE(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
+#define ALLOCATE_PLT_NANO PLT_ALLOCATE_csd(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 /* Safe (assuming the nano kernel performs relevent locking n the presence of a race */
 static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out) {

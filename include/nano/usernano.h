@@ -45,36 +45,17 @@ __asm__ (                                           \
 :   [i]"i"(n)                                       \
 : "a0", "a1", "$c1", "$c2");                        \
 
-
-#define BLAH(a,c,...) c
-#define RETURN_CASE_VOID_void  a ,
-#define DO_RETURN(...) BLAH(__VA_ARGS__, return)
-
-#define CALL_NANO_DEVIRTUAL(Call, n, ret, raw_sig)       \
-do {                                                \
-    GET_NANO_SYSCALL(c1, c2, n)           \
-DO_RETURN(RETURN_CASE_VOID_ ## ret) Call ## _inst(CONTEXT(c1, c2) MAKE_ARG_LIST_APPEND(raw_sig));       \
-}while(0);
-
-
-MAKE_CTR(NANO_CTR)
-
-#define MAKE_WRAPPED(name, ret, raw_sig, ...) static inline ret name ## _sys MAKE_SIG(raw_sig) {\
-CALL_NANO_DEVIRTUAL(name, (CTR(NANO_CTR)), ret, raw_sig) \
-}
-
-NANO_KERNEL_IF_RAW_LIST(MAKE_WRAPPED,)
-
 /* Assuming you trust your memory (i.e. are secure loaded) you can call this to populate your nano kernel if and
- * then use the normal interface rather than having to use syscall */
+ * then use the normal interface rather than having to use syscall repeatedly */
 
 MAKE_CTR(NANO_INIT_CTR)
 
-#define INIT_OBJ_SYSCALL(name, ...) {GET_NANO_SYSCALL(c1,c2,CTR(NANO_INIT_CTR)) \
-    PLT_UNIQUE_OBJECT(name).code = c1; \
-    PLT_UNIQUE_OBJECT(name).data = c2;}
+#define INIT_OBJ_SYSCALL(name, ret, sig, auth, ...) {GET_NANO_SYSCALL(c1,c2,CTR(NANO_INIT_CTR)) \
+    struct pltstub256* ob = STUB_STRUCT(name, auth); ob->c1 = c1; ob->mode = mode; data = c2;}
 
-static inline void init_nano_if_sys(void) {
-    NANO_KERNEL_IF_RAW_LIST(INIT_OBJ_SYSCALL,)
+static inline void init_nano_if_sys(common_t* mode, capability plt_auth) {
+    capability data; // we always get the same data cap from syscall, we can use any of them
+    NANO_KERNEL_IF_RAW_LIST(INIT_OBJ_SYSCALL,plt_auth)
+    __asm__ ("cscbi %[d], %%captab20(nano_kernel_if_t_data_obj)($c25)\n"::[d]"C"(data):);
 }
 #endif //CHERIOS_USERNANO_H
