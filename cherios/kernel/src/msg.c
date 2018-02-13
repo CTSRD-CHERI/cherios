@@ -33,12 +33,10 @@
 #include "klib.h"
 #include "activations.h"
 #include "syscalls.h"
-#include "ccall_trampoline.h"
 #include "stddef.h"
 #include "queue.h"
 #include "mutex.h"
 #include "misc.h"
-#include "ccall_trampoline.h"
 
 DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 

@@ -36,7 +36,6 @@
 #include "klib.h"
 #include "namespace.h"
 #include "msg.h"
-#include "ccall_trampoline.h"
 #include "nano/nanokernel.h"
 #include "queue.h"
 #include "nano/nanokernel.h"

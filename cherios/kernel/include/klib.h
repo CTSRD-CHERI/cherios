@@ -44,7 +44,6 @@
 #include "sched.h"
 #include "string.h"
 #include "kutils.h"
-#include "ccall_trampoline.h"
 #include "syscalls.h"
 
 #ifdef __TRACE__
