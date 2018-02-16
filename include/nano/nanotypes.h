@@ -229,6 +229,11 @@ typedef struct {
     register_t ex_level;
 } exection_cause_t;
 
+typedef struct {
+    register_t cause;
+    register_t ccause;
+} user_exception_cause_t;
+
 typedef register_t ex_lvl_t;
 typedef register_t cause_t;
 

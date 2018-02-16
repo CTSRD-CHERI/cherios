@@ -299,6 +299,8 @@ STUB_END plt_common_trusting
 
 STUB_BEGIN plt_common_untrusting
 
+# FIXME: Now out of date since nanokernel introduced constraints on idc for exceptions
+
 csc             csp,    $zero,  -(CLO_UNSAFE_SIZE + 2*CAP_SIZE)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack
 clc             cusp,   $zero,  CSP_OFF_NEXT(cusp)

@@ -39,18 +39,40 @@
 .include "asm.S"
 #include "assembly_utils.h"
 #include "nano/nanokernel.h"
+#include "dylink.h"
 
 # We will lay out our contexts like this
 
+# FIXME We could shorten our code by re-ordering context_t
+# We need to put normal registers first, then capability regs
+
 # struct context_t {
 #   reg_frame_t
-#   enum state{allocated, dead} (size of a cap)
+#   enum state{allocated, dead} (size of a double)
+#   emum exception_state{ user_handle = 1, in_exception = 2} (size of a double
+#   user_cause
+#   user_ccause
+#   padded to a cap
 #   found_id_t* foundation
+#   exception_pcc       # PCC that was the exception pcc
+#   exception_idc       # IDC that was the exception idc
+#   exception_saved_idc # IDC to do swapping with
 #};
 
-.set CONTEXT_SIZE, CHERI_FRAME_SIZE + CAP_SIZE + CAP_SIZE
+.set CONTEXT_SIZE, CHERI_FRAME_SIZE + (CAP_SIZE * 5)
 
+.set CONTEXT_OFFSET_STATE,      CHERI_FRAME_SIZE
+.set CONTEXT_OFFSET_EX_STATE,   CHERI_FRAME_SIZE + REG_SIZE
 
+.set EX_STATE_UH, 1
+.set EX_STATE_EL, 2
+
+.set CONTEXT_OFFSET_CAUSE,      CHERI_FRAME_SIZE + (2 * REG_SIZE)
+.set CONTEXT_OFFSET_CCAUSE,     CHERI_FRAME_SIZE + (3 * REG_SIZE)
+.set CONTEXT_OFFSET_FOUND,      CHERI_FRAME_SIZE + CAP_SIZE
+.set CONTEXT_OFFSET_EX_PCC,     CHERI_FRAME_SIZE + (2 * CAP_SIZE)
+.set CONTEXT_OFFSET_EX_IDC,     CHERI_FRAME_SIZE + (3 * CAP_SIZE)
+.set CONTEXT_OFFSET_EX_SAVED_IDC, CHERI_FRAME_SIZE + (4 * CAP_SIZE)
 .set N_CONTEXTS,         64             # We never reallocate these, so its currently a huge limitation
 
 #struct res_t {
@@ -2508,6 +2530,160 @@ tres_revoke:
     CRETURN
     nop
 
+############################################################
+# void exception_subscribe(void)
+.global exception_subscribe
+exception_subscribe:
+############################################################
+
+    # Just set the user_handle bit in CONTEXT_EX_STATE
+    clcbi   $c3, current_context($kr1c)
+    cincoffset  $c3, $c3,  INC_IM_MAX
+    cld     $t0, $zero, (CONTEXT_OFFSET_EX_STATE-INC_IM_MAX)($c3)
+    ori     $t0, $t0, EX_STATE_UH
+    csd     $t0, $zero, (CONTEXT_OFFSET_EX_STATE-INC_IM_MAX)($c3)
+    CRETURN
+    cclearlo EN1(c3)
+
+############################################################
+# user_exception_cause_t exception_getcause(void)
+.global
+exception_getcause:
+############################################################
+
+    clcbi   $c3, current_context($kr1c)
+    cincoffset  $c3, $c3,  INC_IM_MAX
+    cld     $v0, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($c3)
+    cld     $v1, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($c3)
+    CRETURN
+    cclearlo EN1(c3)
+
+############################################################
+# void, exception_replay(void)
+.global exception_replay
+exception_replay:
+############################################################
+
+    csetoffset  $c1, $kdc, $t1 # Got to save t1
+    dmfc0   $t1, $12
+    ori     $t1, 2                                      # set SR(EXL)
+    mtc0    $t1, $12
+    cgetoffset  $t1, $c1
+
+    clcbi       $kr2c, current_context($kr1c)              # Our current context
+    clcbi       $c1, CONTEXT_OFFSET_EX_SAVED_IDC($kr2c)    # The idc to swap with
+    cincoffset  $kr2c, $kr2c, INC_IM_MAX
+
+     # store exception_ccause for replay
+    cld         $k0, $zero, (CONTEXT_OFFSET_CCAUSE-INC_IM_MAX)($kr2c)
+    csd         $k0, $zero, exception_ccause($kr1c)
+    # get cause as well
+    b           exception_return_main
+    cld         $k0, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($kr2c)
+
+
+############################################################
+# void exception_return(void)
+.global exception_return
+exception_return:
+############################################################
+
+    csetoffset  $c1, $kdc, $t1 # Got to save t1
+    dmfc0   $t1, $12
+    ori     $t1, 2                                      # set SR(EXL)
+    mtc0    $t1, $12
+    cgetoffset  $t1, $c1
+
+    clcbi       $kr2c, current_context($kr1c)              # Our current context
+    clcbi       $c1, CONTEXT_OFFSET_EX_SAVED_IDC($kr2c)    # The idc to swap with
+    cincoffset  $kr2c, $kr2c, INC_IM_MAX
+
+    li      $k0, 0                                         # Signal to do non exceptional return
+
+exception_return_main:
+
+    # Check we were actually in exception level
+
+    cld         $k1, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    andi        $k1, $k1, EX_STATE_EL
+    daddiu      $k1, $k1, -(EX_STATE_EL)
+    bnez        $k1, bad_use_of_return
+    cld         $k1, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    daddiu      $k1, $k1, -(EX_STATE_EL)
+    csd         $k1, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+
+    # Swap pcc
+    clcbi       $epcc, CTLP_OFFSET_EX_PCC($c1)
+    clcbi       $idc, (CONTEXT_OFFSET_EX_PCC-INC_IM_MAX)($kr2c)          # idc used as tmp here
+    cscbi       $idc, CTLP_OFFSET_EX_PCC($c1)
+
+    # Swap idc
+    clcbi       $idc, CTLP_OFFSET_EX_IDC($c1)
+    clcbi       $kr2c, (CONTEXT_OFFSET_EX_IDC-INC_IM_MAX)($kr2c)
+    cscbi       $kr2c, CTLP_OFFSET_EX_IDC($c1)
+
+    # Load c1 - if this is a replay go on to do a normal exception
+    bnez        $k0, context_switch_exception_entry
+    clcbi       $c1, CTLP_OFFSET_EX_C1($c1)
+
+    # Otherwise eret
+    ERET_BUGLESS
+
+bad_use_of_return:
+
+############################################################
+# void, exception_signal(context_t other_context, register_t code)
+.global exception_signal
+exception_signal:
+############################################################
+
+    # We need 2 paths here. If the context is running, we trigger an exception.
+    # If not, we just modify its saved context so next time it restores the exception will have happened
+    # TODO
+    CRETURN
+    nop
+
+exception_user_handle:
+
+    # idc is USER idc - we look for exception pcc and idc
+    # kr1c is a good context array
+    # kr2c is our context
+    # k0 is cause
+    # ccause already stored
+
+    # Store causes for when the user requests them
+    csd         $k0, $zero, (CONTEXT_OFFSET_CAUSE - INC_IM_MAX)($kr2c)
+    cgetcause   $k0
+    csd         $k0, $zero, (CONTEXT_OFFSET_CCAUSE - INC_IM_MAX)($kr2c)
+
+    # Set User Exception Level - this is not re-entrant
+    cld         $k0, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    ori         $k0, $k0, EX_STATE_EL
+    csd         $k0, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+
+# FIXME need ctlp offsets
+    # Store out c1
+    cscbi       $c1, CTLP_OFFSET_EX_C1($idc)
+    clcbi       $c1, CTLP_OFFSET_EX_PCC($idc)
+    cbtu        $c1, exception_user_handle_abort
+    nop
+
+    cscbi       $epcc, CTLP_OFFSET_EX_PCC($idc)
+    cscbi       $c1, (CONTEXT_OFFSET_EX_PCC - INC_IM_MAX)($kr2c)
+    cmove       $epcc, $c1
+
+    clcbi       $c1, CTLP_OFFSET_EX_IDC($idc)
+    cscbi       $idc, CTLP_OFFSET_EX_IDC($idc)
+    cscbi       $c1, (CONTEXT_OFFSET_EX_IDC - INC_IM_MAX)($kr2c)
+    cscbi       $idc, (CONTEXT_OFFSET_EX_SAVED_IDC - INC_IM_MAX)($kr2c)
+    cmove       $idc, $c1
+
+    ERET_BUGLESS
+
+exception_user_handle_abort:
+    clcbi   $c1, CTLP_OFFSET_EX_C1($idc)
+    b context_switch_exception_entry
+    dmfc0   $k0, $13
 
 #########################################
 # type_res_bitfield_t* tres_get_ro_bitfield(void)
@@ -2570,9 +2746,7 @@ get_interface:
 skip_and_return:
     cincoffset  $epcc, $epcc, 4
 
-    cgetoffset $k1, $epcc                                # counters an eret bug
-    dmtc0      $k1, $14
-    eret
+    ERET_BUGLESS
 
 .section .trampoline_exc, "ax"
 
@@ -2587,15 +2761,14 @@ kernel_exception_trampoline:
 # cancel if we are in critical section.
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
-# TODO if an exception happens between nano begin and nano end we should just die.
-# FIXME: only check a0 after syscall trap!!!
+# TODO if an exception happens in something like context switch we should die more nicely
         bnez      $a0, 1f
         dmfc0     $k0, $13
         andi      $k1, $k0, 0xFF
         daddiu    $k1, $k1, -(8 << 2) # syscall with a0 = 0 results in getting nano kernel IF
         beqz      $k1, get_interface
-        cgetcause $k0
 1:
+        cgetcause $k0       # Meant to be in delay slot - but should be executed on both paths
         cld $k1, $zero, exception_level($kr1c)
         beqz $k1, take_exception
         csd     $k0, $zero, exception_ccause($kr1c)
@@ -2609,11 +2782,25 @@ skip_exception:
         and     $k1, $k1, $k0 # As interrupts had to be enabled
         mtc0    $k1, $12      # Disable interrupts, we are happy to take the hit as this is rare
         eret
+
 take_exception:
-		b context_switch_exception_entry
-		dmfc0 $k0, $13
-kernel_exception_trampoline_end:
+
+        dmfc0   $k0, $13
+        andi    $k1, $k0, 0xFF
+        beqz    $k1, context_switch_exception_entry # Timer/HW Interrupt
+        clc     $kr2c, $zero, current_context($kr1c)
+        cbtu    $idc, context_switch_exception_entry # No IDC = no user interrupts
+        cincoffset  $kr2c, $kr2c, INC_IM_MAX
+        cld     $k1, $zero, (CONTEXT_OFFSET_EX_STATE-INC_IM_MAX)($kr2c)
+        daddiu  $k1, $k1, -EX_STATE_UH
+        bnez    $k1, context_switch_exception_entry # Must have user bit set, and not already be in an exception
+        nop
+        TRACE_ON
+        TRACE_OFF
+		b exception_user_handle # All of the above pass - user can take his own exception
 		nop
+
+kernel_exception_trampoline_end:
 		.global kernel_exception_trampoline_end
 		.end kernel_exception_trampoline
 		.size kernel_exception_trampoline, kernel_exception_trampoline_end - kernel_exception_trampoline

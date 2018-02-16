@@ -137,7 +137,17 @@
 /* Revokes a range of types */\
     ITEM(tres_revoke, capability, (register_t, start, register_t, end), __VA_ARGS__)\
 /* Gets a capability to a bit vector representing the state of the type space */\
-    ITEM(tres_get_ro_bitfield, type_res_bitfield_t*, (void), __VA_ARGS__)
+    ITEM(tres_get_ro_bitfield, type_res_bitfield_t*, (void), __VA_ARGS__)\
+/* Subscribe user to handle its own exceptions. */\
+    ITEM(exception_subscribe, void, (void), __VA_ARGS__)\
+/* Return from an exception (pcc, idc and c1 are allowed to have been changed */\
+    ITEM(exception_return, void, (void), __VA_ARGS__)\
+/*Same as return. But ALSO replay exception that the user handled to the exception context */\
+    ITEM(exception_replay, void, (void), __VA_ARGS__)\
+/* Send a user generated signal to another context\ */\
+    ITEM(exception_signal, void, (context_t, other_context, register_t, code), __VA_ARGS__)\
+/* Get the last user exception */\
+    ITEM(exception_getcause, user_exception_cause_t, (void), __VA_ARGS__)
 
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
 

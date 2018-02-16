@@ -18,6 +18,7 @@ set(KERNEL_SRCS
 )
 set(KERNEL_ASM_SRCS
     src/init.S
+    src/message_send.S
     ${PLT_ASM}
 )
 

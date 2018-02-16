@@ -305,7 +305,9 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 			// Only needs new TLS
 			if(out_im->tls_index != 0) {
 				out_im->tls_num++;
-                out_im->seg_table[out_im->tls_index] = env->alloc(out_im->tls_size, env).data;
+                capability seg_tls = env->alloc(out_im->tls_size, env).data;
+                assert(seg_tls != NULL);
+                out_im->seg_table[out_im->tls_index] = seg_tls;
                 // We dont memcpy from proto here as fixups may need to occur
 			}
 	}

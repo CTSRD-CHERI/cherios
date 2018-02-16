@@ -150,7 +150,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 
     /* init has put its thread locals somewhere sensible (base + 0x100) */
     frame.mf_user_loc = 0x7000 + init_tls_base;
-
+    frame.mf_t0 = cheri_getbase(frame.cf_pcc); // Hacky way to indicate a program base
 	act_t * init_act = &kernel_acts[namespace_num_init];
 	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL, NULL, 0);
 
@@ -300,7 +300,7 @@ act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const cha
 	// FIXME Only the caller really knows what base to use.
 	// FIXME The reason this is going wrong is that we really should be sending an address to proc_man to query
 	// FIXME what image it is in. This is hard to do when the system is dying however.
-	act_t* act = act_register(frame, queue, name, create_in_status, parent, (size_t)cheri_getbase(frame->cf_pcc), res);
+	act_t* act = act_register(frame, queue, name, create_in_status, parent, frame->mf_t0, res);
 	act->context = create_context(frame);
     /* set scheduling status */
 

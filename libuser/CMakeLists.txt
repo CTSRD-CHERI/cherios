@@ -13,6 +13,7 @@ set(LIBCRT_SRCS
 set(LIBUSER_ASM_SRCS
     src/init.S
     src/msg.S
+    src/exceptions.S
     ${PLT_ASM}
 )
 
@@ -37,6 +38,7 @@ set(LIBUSER_SRCS
     src/thread.c
     src/act_events.c
     src/type_man.c
+    src/exceptions.c
 )
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})

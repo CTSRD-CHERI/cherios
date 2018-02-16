@@ -116,6 +116,8 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
     queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size, process->mop);
 
+	frame.mf_t0 = cheri_getbase(im->seg_table[im->code_index]);
+
     if(queue == NULL) {
         cap_pair pair = env.alloc(0x100, &env);
         CHERI_PRINT_CAP(pair.data);
@@ -153,7 +155,7 @@ act_control_kt create_thread(process_t * process, const char* name, register_t a
 
 	assert(process->n_threads != MAX_THREADS);
 
-    reg_frame_t frame;
+	env.handle = process->mop;
 
 	create_image(&env, &process->im, &process->im, storage_thread);
 

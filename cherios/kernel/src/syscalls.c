@@ -165,35 +165,6 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
                              register_t a0, register_t a1, register_t a2, register_t a3,
                              act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret);
 
-// Message send is still a bit funky because of how it returns, should probably fix this
-// This does the normal cross domain stuff, but creates a struct to contain both possible return registers and
-// loads them before returning to the caller
-__asm__ (
-    SANE_ASM
-    ".text \n"
-    ".global __cross_domain_kernel_message_send         \n"
-    "__cross_domain_kernel_message_send:                \n"
-    "clcbi  $c14, (32 * 4)($idc)                        \n"
-    "cjalr  $c14, $c12                                  \n"
-    "clcbi  $c11, (32 * 1)($idc)                        \n"
-    "clcbi  $c10, (32 * 2)($idc)                        \n"
-    "clcbi  $c25, (32 * 5)($idc)                        \n"
-    "cincoffset  $c11, $c11, -(64 + 64)                 \n"
-    "cmove       $c8, $c11                              \n"
-	"csc	$c17, $zero, 64($c11)						\n"
-	"csc	$c18, $zero, (64 + 32)($c11)				\n"
-    "clcbi  $c12, %capcall20(kernel_message_send_ret)($c25) \n"
-    "cjalr  $c12, $c17                                  \n"
-    "cmove  $c18, $idc                                  \n"
-	"clc	$c17, $zero, 64($c11)						\n"
-	"clc	$c18, $zero, (64 + 32)($c11)				\n"
-	"clc	$c3, $zero, 0($c11)                         \n"
-	"cld    $v0, $zero, 32($c11)                        \n"
-	"cld    $v1, $zero, 40($c11)                        \n"
-    "ccall  $c17, $c18, 2                               \n"
-    "cincoffset $c11, $c11, (64 + 64)                   \n"
-);
-
 
 
 DECLARE_WITH_CD(int, kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token));

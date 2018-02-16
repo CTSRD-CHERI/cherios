@@ -49,11 +49,19 @@ DECLARE_ENUM(domain_type_t, DOMAIN_TYPE_LIST)
 #define DOMAIN_TYPE_MASK    0xff
 #define DOMAIN_INFO_SHIFT   8
 
-#define CTLP_OFFSET_CSP  (CAP_SIZE)
-#define CTLP_OFFSET_CUSP (CAP_SIZE*2)
-#define CTLP_OFFSET_CDS  (CAP_SIZE*3)
-#define CTLP_OFFSET_CDL  (CAP_SIZE*4)
-#define CTLP_OFFSET_CGP  (CAP_SIZE*5)
+// These offsets are required by the nano-kernel. An exception will SWAP pcc/idc and STORE c1
+// An exception restore call will RESTORE pcc/idc/c1, and write the previous values of pcc and idc
+#define CTLP_OFFSET_EX_PCC  (CAP_SIZE)
+#define CTLP_OFFSET_EX_IDC  (CAP_SIZE * 2)
+#define CTLP_OFFSET_EX_C1   (CAP_SIZE * 3)
+
+// These are our own
+#define CTLP_OFFSET_CSP  (CAP_SIZE*4)
+#define CTLP_OFFSET_CUSP (CAP_SIZE*5)
+#define CTLP_OFFSET_CDS  (CAP_SIZE*6)
+#define CTLP_OFFSET_CDL  (CAP_SIZE*7)
+#define CTLP_OFFSET_CGP  (CAP_SIZE*8)
+
 
 #define CSP_OFF_NEXT    (-2 * CAP_SIZE)
 #define CSP_OFF_PREV    (-1 * CAP_SIZE)
@@ -69,8 +77,18 @@ typedef struct guard_t {
 
 typedef void entry_stub_t(void);
 
+typedef void ex_pcc_t(void);
+
 typedef struct CTL_t {
     guard_t guard;
+    // On exception pcc/idc will do set to these.
+    // All 3 will have the exceptional pcc/idc/c1 saved in them
+    // On restore all 3 will be restored, and ex_pcc/_exidc will be what they originally were
+    // BEFORE the exception (i.e. the handler is unchanged)
+    // Note c1 is a SCRATCH register on entry to your exception routine
+    ex_pcc_t* ex_pcc;
+    capability ex_idc;
+    capability ex_c1;
     capability csp;
     capability cusp;
     capability cds;
@@ -80,6 +98,9 @@ typedef struct CTL_t {
 } CTL_t;
 
 _Static_assert(offsetof(CTL_t, guard) == 0,             "CGP offsets need to match assembly assumptions");
+_Static_assert(offsetof(CTL_t, ex_pcc) == CTLP_OFFSET_EX_PCC,  "CGP offsets need to match assembly assumptions");
+_Static_assert(offsetof(CTL_t, ex_idc) == CTLP_OFFSET_EX_IDC,  "CGP offsets need to match assembly assumptions");
+_Static_assert(offsetof(CTL_t, ex_c1) == CTLP_OFFSET_EX_C1,  "CGP offsets need to match assembly assumptions");
 _Static_assert(offsetof(CTL_t, csp) == CTLP_OFFSET_CSP,  "CGP offsets need to match assembly assumptions");
 _Static_assert(offsetof(CTL_t, cusp) == CTLP_OFFSET_CUSP, "CGP offsets need to match assembly assumptions");
 _Static_assert(offsetof(CTL_t, cds) == CTLP_OFFSET_CDS,  "CGP offsets need to match assembly assumptions");

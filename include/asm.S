@@ -45,6 +45,7 @@
 .set FRAME_C3_OFFSET, MIPS_FRAME_SIZE + (3 * CAP_SIZE)
 .set FRAME_a0_OFFSET, 3 * REG_RIZE
 
+.set INC_IM_MAX, 0x3E0
 
 .ifeq MIPS_SZCAP-256
 .set CAP_SIZE_BITS, 5
@@ -128,6 +129,13 @@ li  $zero, 0xdead
 .macro call_func_reg
     cjalr   $c12, $c17
     cmove   $c18, $idc
+.endm
+
+.macro ERET_BUGLESS
+    cgetoffset $k1, $epcc                                # counters an eret bug
+    dmtc0      $k1, $14
+    eret
+    nop
 .endm
 
 .macro START_LOCALS align
