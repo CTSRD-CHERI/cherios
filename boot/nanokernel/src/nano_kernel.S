@@ -2795,8 +2795,6 @@ take_exception:
         daddiu  $k1, $k1, -EX_STATE_UH
         bnez    $k1, context_switch_exception_entry # Must have user bit set, and not already be in an exception
         nop
-        TRACE_ON
-        TRACE_OFF
 		b exception_user_handle # All of the above pass - user can take his own exception
 		nop
 
