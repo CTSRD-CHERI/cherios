@@ -62,7 +62,7 @@ __asm__ (                       \
     "clc         $c1, $zero, (1*32)($c12)  \n"        \
     "clc         $c12, $zero, (2*32)($c12)\n"         \
     "cjr         $c12                                 \n"   \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")("tls_reg")\n"     \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
     ".space (1 * 16) \n"        \
     ".global " #name "_data\n"  \
     "" #name "_data:\n"         \
@@ -82,7 +82,7 @@ __asm__ (                       \
     "" #name ":\n"              \
     alias                       \
     "clc         $c1, $zero, (1*32)($c12)  \n"        \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")("tls_reg")\n"     \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
     "ccall       $c1, $c2, 2 \n"\
     "nop\n"                     \
     ".space (1 * 16) \n"        \
@@ -124,11 +124,11 @@ struct pltstub256 {
 
     #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
     static inline void init_ ## type (type* plt_if, capability data, common_t* mode, capability auth) {      \
-        __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)("tls_reg")\n"::[d]"C"(data):); \
+        __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
         LIST(INIT_OBJ, mode, auth)                                                                \
     }\
     static inline void init_ ## type ##_new_thread(type* plt_if, capability data, common_t* mode, capability auth) {      \
-            __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)("tls_reg")\n"::[d]"C"(data):); \
+            __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
     }
 
     #define PLT_common(type, LIST, per_thr, tls_reg, tls)    \

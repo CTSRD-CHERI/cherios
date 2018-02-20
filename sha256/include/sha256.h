@@ -30,7 +30,7 @@
 #ifndef CHERIOS_SHA256_H
 #define CHERIOS_SHA256_H
 
-// Both of these will only work for lengths that are multiples of 2!
+// Both of these will only work for lengths that are multiples of 2 WORDS!
 // Also must have source buffer aligned to 64 bits
 
 #ifdef SHA_COPY
@@ -38,9 +38,9 @@
     void sha256_copy(size_t length, char* in, char* out);
 #else
 
-    struct sha256_hash {
+    typedef struct sha256_hash {
         uint64_t doublewords[4];
-    };
+    } sha256_hash;
 
     void sha256(size_t length, uint64_t * in, sha256_hash* hash);
 #endif

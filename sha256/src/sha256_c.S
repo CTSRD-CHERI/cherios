@@ -1,1 +1,1 @@
-.include "sha256.S"
+#include "sha256.S"

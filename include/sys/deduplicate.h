@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,34 +27,35 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_DEDUPLICATE_H_H
+#define CHERIOS_DEDUPLICATE_H_H
 
-#ifndef CHERIOS_NAMESPACE_H
-#define CHERIOS_NAMESPACE_H
-
+#include "cheric.h"
+#include "nano/nanotypes.h"
+#include "sha256.h"
 #include "types.h"
 
-int     namespace_rdy(void);
-void	namespace_init(act_kt ns_ref);
-int	namespace_register(int nb, act_kt ref);
-act_kt	namespace_get_ref(int nb);
-int	namespace_get_num_services(void);
+#define DEDUP_ERROR_LENGTH_NOT_EVEN (-1)
+#define DEDUP_ERROR_BAD_ALIGNMENT   (-2)
 
-extern act_kt namespace_ref;
+DEC_ERROR_T(entry_t);
 
-// TODO this is not a good way to handle names, we probably want string ids, or a string to integer id
-static const int namespace_num_kernel = 0;
-static const int namespace_num_init = 1;
-static const int namespace_num_namespace = 2;
-static const int namespace_num_proc_manager = 3;
-static const int namespace_num_memmgt = 4;
-static const int namespace_num_tman = 5;
+ERROR_T(entry_t)    deduplicate(uint64_t* data, size_t length);
+ERROR_T(entry_t)    deduplicate_dont_create(uint64_t* data, size_t length);
+entry_t             deduplicate_find(sha256_hash hash);
 
-static const int namespace_num_uart = 0x40;
-static const int namespace_num_zlib = 0x41;
-static const int namespace_num_sockets = 0x42;
-static const int namespace_num_virtio = 0x43;
+// Tries to deduplicate every function. Bit extreme.
 
-static const int namespace_num_event_service = 0x61;
-static const int namespace_num_dedup_service = 0x62;
+void deduplicate_all_functions(int allow_create);
+capability deduplicate_cap(capability cap, int allow_create);
+act_kt get_dedup(void);
 
-#endif
+#define DEDUPLICATE_CAPCALL(F, allow)                                                           \
+{                                                                                               \
+    capability to_replace;                                                                      \
+    __asm__ ("clcbi %[to_rep], %%capcall20(" #F ")($c25)\n" : [to_rep]"=C"(to_replace) ::);   \
+    capability res = deduplicate_cap(to_replace, allow);                                        \
+    __asm__ ("cscbi %[res], %%capcall20(" #F ")($c25)\n" : [res]"=C"(res) ::);                    \
+}
+
+#endif //CHERIOS_DEDUPLICATE_H_H

@@ -1088,8 +1088,8 @@ take_sub:
 
     # set bit or error if already set
     clb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
-    and         $a3, $t8, $t9
-    bnez        $a3, take_er
+    and         $a7, $t8, $t9
+    bnez        $a7, take_er
     or          $t9, $t9, $t8
     csb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
 
@@ -2093,12 +2093,12 @@ foundation_create:
 ###########################################################################################
 
     beqz        $a2, found_er                       # must have at least 1 entry slot
-    andi        $t0, $a0, (CAP_SIZE-1)
-    bnez        $t0, found_er                       # make sure we copying a multiple of a cap
+    andi        $t0, $a0, (REG_SIZE-1)
+    bnez        $t0, found_er                       # make sure we copying a multiple of a double
     cgetbase    $t0, $c4
     cgetoffset  $t1, $c4
     daddu       $t0, $t0, $t1
-    andi        $t0, $t0, (CAP_SIZE-1)
+    andi        $t0, $t0, (REG_SIZE-1)
     bnez        $t0, found_er                       # check source alignment
     nop
 
@@ -2113,7 +2113,7 @@ foundation_create:
 
     # calculate meta size
     dsll        $t1, $a2, CAP_SIZE_BITS
-    daddiu      $t1, $t1, FOUNDATION_ID_SIZE
+    daddiu      $t1, $t1, (FOUNDATION_ID_SIZE + CAP_SIZE)
 
     # check meta+image <= res size
     daddu       $t2, $t1, $a0
@@ -2126,15 +2126,16 @@ foundation_create:
     csd         $a2, $zero, FOUNDATION_ID_NENT_OFFSET($c4)                  # if nentries field
 
     cmove       $c14, $c4                           # save c4 for later
-    # store data we will get on entry
-    bnez        $a3, 1f
-    cnull       $c4
 
     cincoffset  $c4, $c14, $t1                       # c4 is the start of the user code/data
     dli         $t0, DEF_DATA_PERMS
     csetbounds  $c4, $c4, $a0                       # c4 is users data
+    # store data we will get on entry
+    bnez        $a3, 1f
     candperm    $c4, $c4, $t0
-1:  csc         $c4, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
+    csc         $c4, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
+
+1:
 
     # create first entry point
     cincoffset  $c3, $c3, $t1                       # skip over metadata
@@ -2153,19 +2154,17 @@ foundation_create:
     cseal       $c15, $c15, $c3
 
     # memcpy into image calculating sha256 as we go. c3 = source. c4 = dest. a0 = size.
-    # Normal ABI, but saves c13 to c16 for us (how kind)
+    # Normal ABI, but saves c14 to c16 for us (how kind)
     cmove       $c3, $c13
-    cmove       $c13, $c17          # save c17
-    cmove       $c16, $c12          # save c12
+    cmove       $c16, $c17          # save c17
 
     dla         $t0, sha256_copy    # jump to sha256 routine
     cgetpccsetoffset $c12, $t0
     cjalr       $c12, $c17
     nop
 
-    # restore c17/c12
-    cmove       $c17, $c13
-    cmove       $c12, $c16
+    # restore c17
+    cmove       $c17, $c16
 
     # store hash
     csd         $v0, $zero, 0($c14)
@@ -2176,12 +2175,12 @@ foundation_create:
     # get back return value we calculated before the hash
     cmove       $c3, $c15
 
-    cclearlo    EN5(c4,c5,c13,c14,c15)
+    cclearlo    EN11(c4,c5,c6,c7,c8,c9,c12,c13,c14,c15,c16)
     CRETURN
     nop
 
     found_er:
-    cclearlo    EN6(c3,c4,c5,c13,c14,c15)
+    cclearlo    EN12(c3,c4,c5,c6,c7,c8,c9,c12,c13,c14,c15,c16)
     CRETURN
     nop
 
@@ -2216,11 +2215,11 @@ foundation_entry_expose:
     cincoffset  $c4, $kdc, FOUND_ENTRY_TYPE
     cunseal     $c3, $c3, $c4                           # unseal foundation
     csetoffset  $c4, $c3, $zero
-    clc         $c4, $zero, (FOUNDATION_ID_SIZE)($c4)   # check is public
+    clc         $c4, $zero, (FOUNDATION_META_DATA_OFFSET)($c4)   # check is public
     cbts        $c4, nano_er
     clc         $c3, $zero, 0($c3)                      # get pcc
     CRETURN
-    cnull       $c4
+    cclearlo    EN1(c4)
 
 ###########################################################################################
 # found_id_t* foundation_entry_get_id(entry_t entry)
@@ -2235,7 +2234,7 @@ foundation_entry_get_id:
     dli         $t0, Perm_Load
     candperm    $c3, $c3, $t0                           # read only
     CRETURN
-    cnull       $c4
+    cclearlo    EN1(c4)
 
 ###########################################################################################
 # void foundation_exit(void)

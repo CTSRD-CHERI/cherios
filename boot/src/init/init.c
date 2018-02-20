@@ -104,6 +104,7 @@ init_elem_t init_list[] = {
     B_DENTRY(m_proc,     "proc.elf", 0, 1)
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
+    B_DENTRY(m_user,    "dedup.elf", 0 ,1)
     B_DENTRY(m_user, "type_manager.elf",0,1)
     B_FENCE
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
@@ -123,6 +124,7 @@ init_elem_t init_list[] = {
 	B_PENTRY(m_user,	"test2a.elf",		0,	B_T2)
 	B_PENTRY(m_user,	"test2b.elf",		0,	B_T2)
     B_PENTRY(m_user,    "exception_test.elf", 0, 1)
+    B_PENTRY(m_user,    "dedup_test.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
 

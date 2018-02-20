@@ -8,6 +8,7 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
     ${CMAKE_SOURCE_DIR}/libcrt/cp0.c
     ${CMAKE_SOURCE_DIR}/libcrt/strcmp.c
+    ${CMAKE_SOURCE_DIR}/libcrt/mem_cmp.c
 )
 
 set(LIBUSER_ASM_SRCS
@@ -39,6 +40,7 @@ set(LIBUSER_SRCS
     src/act_events.c
     src/type_man.c
     src/exceptions.c
+    src/dedup.c
 )
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})

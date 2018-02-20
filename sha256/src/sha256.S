@@ -130,6 +130,7 @@ k_words:
 sha256_copy:
 #else
 .global sha256
+.ent sha256
 sha256:
 #endif
 
@@ -140,16 +141,11 @@ sha256:
 
 # save the registers we use
 
-csetoffset  $c6, $c6, $s0
-csetoffset  $c7, $c7, $s1
-csetoffset  $c8, $c8, $s2
-csetoffset  $c9, $c9, $s3
-csetoffset  $c10, $c10, $s4
-
-dla         tmp0, k_words
-dli         tmp1, 64 * 4
-csetoffset  K_CAP, $kdc, tmp0
-csetbounds  K_CAP, K_CAP, tmp1
+csetoffset  $c6, $c0, $s0
+csetoffset  $c7, $c0, $s1
+csetoffset  $c8, $c0, $s2
+csetoffset  $c9, $c0, $s3
+csetoffset  $c13, $c0, $s4
 
 ##########
 # Init H #
@@ -184,9 +180,10 @@ li          w10_11, 0
 li          w12_13, 0
 li          w14_15, 0
 
-dla         tmp1, (set1_table_start-16)     # -16: 8 for the length. 8 for a '1'. The rest are zeros (done above)
-dadd        tmp1, tmp1, tmp0                # All the shifts for the jump table just work out. Honestly.
-jr          tmp1
+# Get pcc NEEDS to be 16 bytes before the start of the table
+cgetpcc     K_CAP                           # -16: 8 for the length. 8 for a '1'. The rest are zeros (done above)
+cincoffset  K_CAP, K_CAP, tmp0
+cjr         K_CAP
 dneg        tmp1, tmp0                      # hoisted from set1_table_end
 
 set1_table_start: # each of these is 8 bytes long. So shift by 3 to get correct index
@@ -213,12 +210,13 @@ cincoffset  IN_CAP, IN_CAP, tmp1                  # Offset by non input bytes so
 #ifdef SHA_COPY
 cincoffset  OUT_CAP, OUT_CAP, tmp1
 #else
-dsrl        tmp0, tmp0, 1
+dsrl        tmp0, tmp0, 1                           # Each entry half the size
+daddiu      tmp0, tmp0, 8                           # Offset of cgetpcc still -16 bytes from table
 #endif
 
-dla         tmp1, (chunk_table_begin-16)
-dadd        tmp1, tmp1, tmp0
-jr          tmp1
+cgetpcc     K_CAP
+cincoffset  K_CAP, K_CAP, tmp0
+cjr          K_CAP
 nop
 
 chunk_table_begin:
@@ -242,6 +240,15 @@ cld         w8_9, $zero, 0x20(IN_CAP)
 cld         w10_11, $zero, 0x28(IN_CAP)
 cld         w12_13, $zero, 0x30(IN_CAP)
 cld         w14_15, $zero, 0x38(IN_CAP)
+#endif
+
+#ifdef SHA_COPY
+dla         tmp0, k_words
+dli         tmp1, 64 * 4
+csetoffset  K_CAP, $kdc, tmp0
+csetbounds  K_CAP, K_CAP, tmp1
+#else
+clcbi       K_CAP, %captab20(k_words)($c25)
 #endif
 
 ##############
@@ -450,20 +457,22 @@ or          out_h6_7, out_h6_7, tmp1
 cgetoffset  $s0, $c6
 cgetoffset  $s1, $c7
 cgetoffset  $s2, $c8
-cgetoffset  $s4, $c10
+cgetoffset  $s3, $c9
+
 
 #ifdef SHA_COPY
 cjr         $c17
-cgetoffset  $s3, $c9
+cgetoffset  $s4, $c13
 # results how in the 4 return registers
 
 #else
 
-cgetoffset  $s3, $c9
+cgetoffset  $s4, $c13
 csd         $v0, $zero, 0(OUT_CAP)
 csd         $v1, $zero, 8(OUT_CAP)
 csd         $t0, $zero, 16(OUT_CAP)
-cjr         $c17
+ccall       $c17, $c18, 2
 csd         $t1, $zero, 24(OUT_CAP)
 
+.end sha256
 #endif
