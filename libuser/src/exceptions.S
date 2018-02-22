@@ -48,11 +48,16 @@
     $t8, $t9,                               \
     $gp, $sp, $fp, $ra
 
+.set V0_index, 1
+.set V1_index, 2
+.set AT_index, 0
+.set c18_index, 14
+.set c17_index, 13
 
 .set CAP_START, (24 * REG_SIZE)
 
 #define CAP_LIST     \
-    $c2, $c2, $c3, $c4, $c5, $c6, $c7, $c8, \
+    $c2, $c3, $c4, $c5, $c6, $c7, $c8, \
     $c9, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c25
 
 .macro save_cap reg, index, b
@@ -62,12 +67,26 @@
     csd \reg, $zero, (\index * REG_SIZE)($c11)
 .endm
 
+.macro save_other_reg reg, index, b
+    .if \index != V0_index
+        .if  \index != V1_index
+            .if \index != AT_index
+                save_reg \reg, \index, \b
+            .endif
+        .endif
+    .endif
+.endm
+
+.macro save_other_cap reg, index, b
+    .if \index != c18_index && \index != c17_index
+        save_cap \reg, \index, \b
+    .endif
+.endm
+
 .macro load_cap reg, index, b
     clcbi \reg, (CAP_START + (CAP_SIZE * \index))($c11)
 .endm
 
-
-.set V0_index, 1
 .macro load_reg reg, index, b
     .if \index != V0_index
         cld \reg, $zero, (\index * REG_SIZE)($c11)
@@ -82,40 +101,85 @@
 
 .text
 
-.global user_exception_trampoline
-.ent user_exception_trampoline
-user_exception_trampoline:
+.global user_exception_trampoline_vector
+.ent user_exception_trampoline_vector
 
-# On entry here c1 is a scratch, and idc will be our local cap table
-# We will assume the stack is somewhat available.
+user_exception_trampoline_vector:
 
-# TODO we may not be able to trust the stack is non null. We might have to load it from idc
+cincoffset  $c11, $c11, -(STACK_INC)
 
-cincoffset $c11, $c11, -(STACK_INC)
+# Need to save something for scratch space
+save_cap    $c18, c18_index, 0
+save_cap    $c17, c17_index, 0
+save_reg    $v0, V0_index, 0
+save_reg    $v1, V1_index, 0
+save_reg    $at, AT_index, 0
 
-# Save everything
+cmove       $c18, $idc
+clcbi       $c1, CTLP_OFFSET_CGP($idc)
+clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)
+clcbi       $c1, %captab20(exception_getcause)($c1)
+clcbi       $c1, (32)($c1) # Get the code capability directly from the plt stub
 
-foreachi    save_cap, 0, 0, CAP_LIST
-foreachi    save_reg, 0, 0, REG_LIST
+# Call get cause
+# Gets v0 (cause) and v1(ccause). clobers c1. Restores idc. 18 now available as tmp.
+ccall       $c1, $idc, 2
+cgetpcc     $c17
+
+
+clcbi       $c1, CTLP_OFFSET_CGP($idc)                          # $c1 is now our globals
+
+andi        $at, $v0, (MIPS_CP0_CAUSE_EXCCODE)
+daddiu      $at, $at, -(MIPS_CP0_EXCODE_C2E << MIPS_CP0_CAUSE_EXCODE_SHIFT)
+bnez        $at, vector_cap_exc_failed
+daddiu      $at, $at, (MIPS_CP0_EXCODE_C2E << MIPS_CP0_CAUSE_EXCODE_SHIFT)
+
+andi        $at, $v1, 0x1F00
+dsrl        $at, $at, (8 - CAP_SIZE_BITS)
+clcbi       $c18, %captab20(chandle_vector)($c1)
+clc         $c18, $at, 0($c18)
+cbts        $c18, user_c_exception_common_entry
+daddiu      $at, $zero, (MIPS_CP0_EXCODE_C2E << MIPS_CP0_CAUSE_EXCODE_SHIFT)
+
+// It wasnt a cap exception or no cap at correct entry in cap exception vector
+vector_cap_exc_failed:
+
+dsll        $at, $at, (CAP_SIZE_BITS - MIPS_CP0_CAUSE_EXCODE_SHIFT)
+clcbi       $c18, %captab20(handle_vector)($c1)
+clc         $c18, $at, 0($c18)
+cbts        $c18, user_c_exception_common_entry
+nop
+
+trampoline_not_set:
+
+load_cap    $c18, c18_index, 0
+load_cap    $c17, c17_index, 0
+load_reg    $v1, V1_index, 0
+load_reg    $at, AT_index, 0
+clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)
+cincoffset $c11, $c11, (STACK_INC)
+b           replay_return
+cld         $v0, $zero, (-STACK_INC + (V0_index * REG_SIZE))($c11)
+
+user_c_exception_common_entry:
+
+foreachi    save_other_cap, 0, 0, CAP_LIST
+foreachi    save_other_reg, 0, 0, REG_LIST
 mfhi        $t0
 save_reg    $t0, 21, 0
 mflo        $t0
 save_reg    $t0, 22, 0
 
-# Load globals
-clcbi       $c25, CTLP_OFFSET_CGP($idc)
-
-# Call get cause - gets v0 and v1
-
-call_func exception_getcause
+# Put globals in a conventional register
+cmove   $c25, $c1
 
 move    $a0, $v0
 move    $a1, $v1
 cmove   $c3, $c11
+cmove   $c12, $c18
 
 # Call users exception routine
 
-get_sym_val $c12, current_handler, c, $c12
 call_func_reg
 
 # Restore everything (but v0 which contains what to do next)
@@ -154,9 +218,9 @@ nop
 
 replay_return:
 
-clcbi       $c1, %captab20(exception_replay)($idc)
+clcbi       $c1, %captab20(exception_replay)($c1)
 clcbi       $c1, (32)($c1) # Get the code capability directly from the plt stub
 ccall       $c1, $idc, 2
 nop
 
-.end user_exception_trampoline
+.end user_exception_trampoline_vector

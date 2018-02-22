@@ -69,4 +69,5 @@
 
 DECLARE_ENUM(cap_cause_exception_t, CAP_CAUSE_LIST)
 
+#define CAP_CAUSE_NUM 32
 #endif //CHERIOS_EXCEPTION_CAUSE_H

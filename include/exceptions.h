@@ -48,13 +48,20 @@ typedef struct {
 
 typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
 
-void user_exception_trampoline(void);
+void user_exception_trampoline_vector(void);
 
-//  friendly wrapper for the nano kernel interface. Will do all your stack restoring for you.
+//  friendly wrappers for the nano kernel interface. Will do all your stack restoring for you.
 //  Return non-zero to replay the exception
 //  If you want a fast trampoline that spills fewer registers write a custom one and use raw
 
-void register_exception(handler_t* handler);
+// Handle specific excode. Capability exception only handled if cap_vector entry not set.
+// Will default to replay
+void register_vectored_exception(handler_t* handler, register_t excode);
+
+// Handle specific capability exception. Will default to normal exception if null
+void register_vectored_cap_exception(handler_t* handler, register_t excode);
+
+// Raw register. Will override all other usages
 void register_exception_raw(ex_pcc_t* exception_pcc, capability exception_idc);
 
 #endif //CHERIOS_EXCEPTIONS_H

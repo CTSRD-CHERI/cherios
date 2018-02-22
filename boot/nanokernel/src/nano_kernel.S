@@ -2544,18 +2544,19 @@ exception_subscribe:
     CRETURN
     cclearlo EN1(c3)
 
+# WARN: Trying to guarentee this only clobers c1/v0/v1 so exception handlers can be fast #
 ############################################################
 # user_exception_cause_t exception_getcause(void)
 .global
 exception_getcause:
 ############################################################
 
-    clcbi   $c3, current_context($kr1c)
-    cincoffset  $c3, $c3,  INC_IM_MAX
-    cld     $v0, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($c3)
-    cld     $v1, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($c3)
+    clcbi   $c1, current_context($kr1c)
+    cincoffset  $c1, $c1,  INC_IM_MAX
+    cld     $v0, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($c1)
+    cld     $v1, $zero, (CONTEXT_OFFSET_CCAUSE-INC_IM_MAX)($c1)
     CRETURN
-    cclearlo EN1(c3)
+    cclearlo EN1(c1)
 
 ############################################################
 # void, exception_replay(void)

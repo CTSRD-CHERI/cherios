@@ -32,24 +32,35 @@
 #include "exceptions.h"
 #include "nano/usernano.h"
 #include "dylink.h"
+#include "assert.h"
+#include "exception_cause.h"
 
 int trampoline_registered = 0;
-handler_t * current_handler = NULL;
 
-void register_exception(handler_t* handler) {
-    current_handler = handler;
-    if(trampoline_registered == 0) {
-        get_ctl()->ex_pcc = &user_exception_trampoline;
-        get_ctl()->ex_idc = get_idc();
-        exception_subscribe();
-        trampoline_registered = 1;
-    }
+handler_t* handle_vector[MIPS_CP0_EXCODE_NUM];
+handler_t* chandle_vector[CAP_CAUSE_NUM];
+
+
+void register_vectored_exception(handler_t* handler, register_t excode) {
+    assert(excode < MIPS_CP0_EXCODE_NUM);
+
+    handle_vector[excode] = handler;
+    register_exception_raw(&user_exception_trampoline_vector, get_idc());
+}
+
+void register_vectored_cap_exception(handler_t* handler, register_t excode) {
+    assert(excode < CAP_CAUSE_NUM);
+
+    chandle_vector[excode] = handler;
+    register_exception_raw(&user_exception_trampoline_vector, get_idc());
 }
 
 void register_exception_raw(ex_pcc_t* exception_pcc, capability exception_idc) {
     get_ctl()->ex_pcc = exception_pcc;
     get_ctl()->ex_idc = exception_idc;
+
     if(trampoline_registered == 0) {
+
         exception_subscribe();
         trampoline_registered = 1;
     }

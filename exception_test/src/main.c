@@ -31,6 +31,7 @@
 #include "cheric.h"
 #include "exceptions.h"
 #include "stdio.h"
+#include "exception_cause.h"
 
 int exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
     CTL_t* ctl = get_ctl();
@@ -46,7 +47,7 @@ int exception_handle(register_t cause, register_t ccause, exception_restore_fram
 int main(register_t arg, capability carg) {
     printf("Exception test hello world!\n");
 
-    register_exception(&exception_handle);
+    register_vectored_cap_exception(&exception_handle, Tag_Violation);
 
     // Our exception handler will skip this
     __asm__ __volatile("cfromptr    $c3, $c3, $zero; clc $c3, $zero, 0($c3);nop;":::"$c3");

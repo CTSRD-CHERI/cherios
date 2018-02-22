@@ -53,6 +53,9 @@
 #include "cherireg.h"
 #include "mips.h"
 
+#define _safe __attribute__((temporal_safe))
+#define _unsafe __attribute__((temporal_unsafe))
+
 /*
  * Canonical C-language representation of a capability.
  */

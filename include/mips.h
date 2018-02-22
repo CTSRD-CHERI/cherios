@@ -289,6 +289,7 @@ INT_SIZES(define_intypes)
 #define	MIPS_CP0_EXCODE_RES13	30	/* Reserved */
 #define	MIPS_CP0_EXCODE_VCED	31	/* Virtual coherency data exception */
 
+#define MIPS_CP0_EXCODE_NUM 32
 /*
  * Hard-coded MIPS interrupt bits from MIPS_CP0_CAUSE_IP.
  */
