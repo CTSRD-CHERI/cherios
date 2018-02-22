@@ -61,7 +61,7 @@
 
 # Layout of globals table:
 
-###########
+###########  FIXME: There are now ABI requirements for exception handler pcc/idc/c1 here
 # Guard   # <-- $ctlp, a guard with type and state
 # csp     # the stack to use on entry
 # cusp    # the unsafe stack to use on entry, currently must update this in every prolog as we may be exiting
@@ -101,7 +101,7 @@
 
 #########
 # Guard # <- idc (only unsafe thing, padded to one cap)
-#########
+######### # FIXME: There are now ABI requirements for exception handler pcc/idc/c1 here
 # Saves #
 #########
 

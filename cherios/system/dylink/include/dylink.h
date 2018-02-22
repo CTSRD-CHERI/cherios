@@ -62,9 +62,10 @@ DECLARE_ENUM(domain_type_t, DOMAIN_TYPE_LIST)
 #define CTLP_OFFSET_CDL  (CAP_SIZE*7)
 #define CTLP_OFFSET_CGP  (CAP_SIZE*8)
 
-
-#define CSP_OFF_NEXT    (-2 * CAP_SIZE)
-#define CSP_OFF_PREV    (-1 * CAP_SIZE)
+// From unsafe stack base
+#define CSP_OFF_NEXT    (-1 * CAP_SIZE)
+// From unsafe stack end
+#define CSP_OFF_PREV    (-2 * CAP_SIZE)
 
 #ifndef __ASSEMBLY__
 
