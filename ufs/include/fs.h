@@ -33,7 +33,7 @@
 #ifndef _UFS_FFS_FS_H_
 #define	_UFS_FFS_FS_H_
 
-#include "init/ufs/dinode.h"
+#include "dinode.h"
 
 /*
  * Each disk drive contains some number of filesystems.

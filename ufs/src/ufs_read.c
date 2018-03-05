@@ -43,9 +43,9 @@
  * purpose.
  */
 
-#include "init/ufs/dinode.h"
-#include "init/ufs/dir.h"
-#include "init/ufs/fs.h"
+#include "dinode.h"
+#include "dir.h"
+#include "fs.h"
 #include "string.h"
 #include "stdio.h"
 

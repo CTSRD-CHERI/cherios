@@ -2,6 +2,7 @@ include_directories(include)
 include_directories(${DRIVERS_DIR}/uart/include)
 include_directories(${CMAKE_SOURCE_DIR}/elf/include)
 include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
+include_directories(${UFS_DIR}/include)
 
 set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
@@ -48,7 +49,7 @@ set(INIT_SRCS
     ${CMAKE_SOURCE_DIR}/elf/src/cprogram.c
     src/init/stats.c
     src/init/ufs_module.c
-    src/init/ufs_read.c
+    ${UFS_DIR}/src/ufs_read.c
 )
 
 set(INIT_ASM_SRCS
