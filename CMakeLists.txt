@@ -359,6 +359,8 @@ add_subdirectory(foundation_test)
 add_subdirectory(exception_test)
 add_subdirectory(unsafe_test)
 add_subdirectory(dedup_test)
+add_subdirectory(socket_test)
+
 #add_subdirectory(prga)
 #add_subdirectory(sockets)
 #add_subdirectory(test1a)

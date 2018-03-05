@@ -126,6 +126,7 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user,    "exception_test.elf", 0, 1)
     B_PENTRY(m_user, "unsafe_test.elf", 0, 1)
     B_PENTRY(m_user,    "dedup_test.elf", 0, 1)
+    B_PENTRY(m_user,    "socket_test.elf", 0 ,1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
 
