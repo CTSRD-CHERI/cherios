@@ -42,6 +42,7 @@ set(LIBUSER_SRCS
     src/exceptions.c
     src/dedup.c
     src/temporal.c
+        src/sockets.c
 )
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
