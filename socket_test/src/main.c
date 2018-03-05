@@ -89,6 +89,25 @@ void connector_start(register_t arg, capability carg) {
         assert(buf[2] == (char)((i>>16) & 0xFF));
     }
 
+    // Test copying capabilities
+
+    capability cap_rec;
+
+    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NONE);
+    assert(rec = sizeof(capability));
+    assert(cheri_gettag(cap_rec));
+    rec = socket_recv(sock, buf, 1, MSG_NONE);
+    assert(rec == 1);
+    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NONE);
+    assert(rec = sizeof(capability));
+    assert(cheri_gettag(cap_rec));
+    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NONE);
+    assert(rec = sizeof(capability));
+    assert(!cheri_gettag(cap_rec));
+    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NO_CAPS);
+    assert(rec = sizeof(capability));
+    assert(!cheri_gettag(cap_rec));
+
     // Test the closing mechanic
 
     res = socket_internal_close(&sock->socket);
@@ -150,6 +169,19 @@ int main(register_t arg, capability carg) {
         assert(sent == 3);
     }
 
+    // Test copying capabilities
+
+    capability cap = act_self_ref;
+    sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
+    assert(sent == sizeof(capability));
+    sent = socket_send(sock, buf, 1, MSG_NONE);
+    assert(sent == 1);
+    sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
+    assert(sent == sizeof(capability));
+    sent = socket_send(sock, &cap, sizeof(capability), MSG_NO_CAPS);
+    assert(sent == sizeof(capability));
+    sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
+    assert(sent == sizeof(capability));
     // Test the closing mechanic
 
     rec = socket_recv(sock, buf, 1, MSG_NONE);

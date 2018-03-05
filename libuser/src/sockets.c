@@ -255,12 +255,24 @@ static uint16_t socket_internal_data_buffer_reclaim(data_ring_buffer* data_buffe
 
 static ssize_t socket_internal_data_buffer_write(const char* buf, size_t size,
                                                  data_ring_buffer* data_buffer, uni_dir_socket_writer* writer,
-                                                 int dont_wait) {
+                                                 int dont_wait, register_t perms) {
     int res;
 
     size_t mask = data_buffer->buffer_size-1;
 
-    size_t copy_from = (data_buffer->write_ptr) & mask;
+    size_t copy_from = (data_buffer->write_ptr);
+
+    size_t align_mask = sizeof(capability)-1;
+    size_t buf_align = ((size_t)buf) & align_mask;
+    size_t data_buf_align = copy_from & align_mask;
+    size_t extra_to_align = 0;
+
+    if(size >= sizeof(capability)) {
+        extra_to_align = (buf_align - data_buf_align) & align_mask;
+    }
+
+    copy_from = (copy_from + extra_to_align) & mask;
+
     size_t part_1 = data_buffer->buffer_size - copy_from;
 
     int two_parts = part_1 < size;
@@ -274,6 +286,7 @@ static ssize_t socket_internal_data_buffer_write(const char* buf, size_t size,
 
     size_t data_space = data_buf_space(data_buffer);
 
+    size += extra_to_align;
     // Can't write this message because the data buffer does not have enough space
     if(data_space < size && dont_wait) return E_AGAIN;
 
@@ -294,13 +307,15 @@ static ssize_t socket_internal_data_buffer_write(const char* buf, size_t size,
         data_space = data_buf_space(data_buffer);
     }
 
+    size-=extra_to_align;
+    data_buffer->write_ptr += extra_to_align;
+
     // We are okay to make a write. First copy to buffer and then send those bytes.
-    // TODO we could allow socket sending of capabilities / faster memcpy if we ensured alignment in the ring buffer
     part_1 = two_parts ? part_1 : size;
 
     memcpy(data_buffer->buffer + copy_from, buf, part_1);
     char* cap1 = cheri_setbounds(data_buffer->buffer + copy_from, part_1);
-    cap1 = cheri_andperm(cap1, CHERI_PERM_LOAD);
+    cap1 = cheri_andperm(cap1, perms);
     res = socket_internal_write(writer, cap1, dont_wait);
     if(res < 0) return res;
     data_buffer->write_ptr+=part_1;
@@ -309,7 +324,7 @@ static ssize_t socket_internal_data_buffer_write(const char* buf, size_t size,
         size_t part_2 = size - part_1;
         memcpy(data_buffer->buffer, buf + part_1, part_2);
         char* cap2 = cheri_setbounds(data_buffer->buffer, part_2);
-        cap2 = cheri_andperm(cap2, CHERI_PERM_LOAD);
+        cap2 = cheri_andperm(cap2, perms);
         res = socket_internal_write(writer, cap2, dont_wait);
         if(res < 0) return res;
         data_buffer->write_ptr+=part_2;
@@ -457,9 +472,12 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
     uni_dir_socket_writer* writer = &sock->socket.writer;
 
+    register_t perms = CHERI_PERM_LOAD;
+    if(!((flags | sock->flags) & MSG_NO_CAPS)) perms |= CHERI_PERM_LOAD_CAP;
+
     return socket_internal_data_buffer_write(buf, length,
                                       &sock->copy_buffer, writer,
-                                             (sock->flags | flags) & MSG_DONT_WAIT);
+                                             (sock->flags | flags) & MSG_DONT_WAIT, perms);
 }
 
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags) {
@@ -490,6 +508,11 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         }
 
         char* cap = writer->indirect_ring_buffer[read_ptr & mask];
+
+        if((flags | sock->flags) & MSG_NO_CAPS) {
+            cap = cheri_andperm(cap, CHERI_PERM_LOAD);
+        }
+
         size_t cap_len = cheri_getlen(cap);
 
         size_t effective_length = cap_len - partial_bytes;

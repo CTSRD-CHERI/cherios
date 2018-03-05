@@ -42,6 +42,7 @@
 enum SOCKET_FLAGS {
     MSG_NONE = 0,
     MSG_DONT_WAIT = 1,
+    MSG_NO_CAPS
 };
 
 // Uni-directional socket.
