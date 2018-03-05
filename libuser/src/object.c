@@ -47,6 +47,7 @@
 
 __thread act_control_kt act_self_ctrl = NULL;
 __thread act_kt act_self_ref  = NULL;
+__thread act_notify_kt act_self_notify_ref = NULL;
 __thread queue_t * act_self_queue = NULL;
 
 kernel_if_t kernel_if;
@@ -73,7 +74,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     }
 
 	act_self_ref  = syscall_act_ctrl_get_ref(self_ctrl);
-
+    act_self_notify_ref = syscall_act_ctrl_get_notify_ref(self_ctrl);
 	act_self_queue = queue;
 
     sync_state = (sync_state_t){.sync_caller = NULL, .sync_token = NULL};

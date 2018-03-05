@@ -82,6 +82,7 @@ typedef struct act_t
 	/* Scheduling related */
 	struct spinlock_t sched_access_lock;
 	sched_status_e sched_status;	/* Current status */
+	uint8_t early_notify;
 	uint8_t pool_id;
 
 	context_t context;	/* Space to put saved context for restore */

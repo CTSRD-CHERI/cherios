@@ -61,8 +61,10 @@
         ITEM(syscall_interrupt_enable, int, (int number), __VA_ARGS__)                                                       \
         ITEM(syscall_shutdown, void, (shutdown_t), __VA_ARGS__)                                                              \
         ITEM(syscall_register_act_event_registrar, void, (act_kt act), __VA_ARGS__)                                          \
-        ITEM(syscall_get_name, const char*, (act_kt), __VA_ARGS__)
-
+        ITEM(syscall_get_name, const char*, (act_kt), __VA_ARGS__)\
+        ITEM(syscall_act_ctrl_get_notify_ref, act_notify_kt, (act_control_kt ctrl), __VA_ARGS__)\
+        ITEM(syscall_cond_wait, void, (void), __VA_ARGS__)\
+        ITEM(syscall_cond_notify, void, (act_kt waiter), __VA_ARGS__)
 
 #define CCALL_SELECTOR_LIST(ITEM)   \
         ITEM(SEND,1)                \

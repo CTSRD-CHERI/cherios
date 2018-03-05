@@ -54,6 +54,9 @@ void    sched_receives_sem_signal(act_t * act);
 void	sched_receives_msg(act_t * act);
 void    sched_recieve_ret(act_t * act);
 
+void sched_receives_notify(act_t * act);
+void sched_wait_for_notify(act_t* act, act_t* next_hint);
+
 size_t* sched_get_queue_fill_pointer(uint8_t pool_id);
 act_t*  sched_get_current_act_in_pool(uint8_t pool_id);
 act_t*  sched_get_current_act(void);

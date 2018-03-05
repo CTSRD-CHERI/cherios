@@ -158,6 +158,22 @@ const char* kernel_syscall_get_name(act_t * act) {
     return name;
 }
 
+DECLARE_WITH_CD(act_notify_kt, kernel_syscall_act_ctrl_get_notify_ref(act_control_kt ctrl));
+act_notify_kt kernel_syscall_act_ctrl_get_notify_ref(act_control_kt ctrl) {
+	return act_seal_for_call(act_unseal_callable((act_t*)ctrl, ctrl_ref_sealer), notify_ref_sealer);
+}
+
+DECLARE_WITH_CD(void, kernel_syscall_cond_wait(void));
+void kernel_syscall_cond_wait(void) {
+	sched_wait_for_notify(NULL, NULL);
+}
+
+DECLARE_WITH_CD(void, kernel_syscall_cond_notify(act_t* act));
+void kernel_syscall_cond_notify(act_t* act) {
+	act = act_unseal_callable(act, notify_ref_sealer);
+	sched_receives_notify(act);
+}
+
 DECLARE_WITH_CD (void, kernel_message_send(capability c3, capability c4, capability c5, capability c6,
         register_t a0, register_t a1, register_t a2, register_t a3,
         act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret));

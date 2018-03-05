@@ -72,13 +72,14 @@ sealing_cap ref_sealer;
 sealing_cap ctrl_ref_sealer;
 sealing_cap sync_ref_sealer;
 sealing_cap sync_token_sealer;
+sealing_cap notify_ref_sealer;
 
-static capability act_seal_for_call(act_t * act, sealing_cap sealer) {
+capability act_seal_for_call(act_t * act, sealing_cap sealer) {
 	return cheri_seal(act, sealer);
 }
 
-static capability act_unseal_callable(act_t * act, sealing_cap sealer) {
-	return cheri_unseal(act, sealer);
+act_t* act_unseal_callable(act_t * act, sealing_cap sealer) {
+	return (act_t*)cheri_unseal(act, sealer);
 }
 
 act_t * act_create_sealed_ref(act_t * act) {
@@ -118,6 +119,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
     ctrl_ref_sealer = get_sealing_cap_from_nano(act_ctrl_ref_type);
     sync_ref_sealer = get_sealing_cap_from_nano(act_sync_ref_type);
     sync_token_sealer = get_sealing_cap_from_nano(act_sync_type);
+	notify_ref_sealer = get_sealing_cap_from_nano(act_notify_ref_type);
 
 	setup_syscall_interface(&internel_if);
 

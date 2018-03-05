@@ -49,6 +49,7 @@ typedef enum sched_status_e
 {
     sched_waiting,      /* Waiting on its message queue*/
     sched_sem,          /* Waiting on a kernel semaphore */
+    sched_wait_notify,  /* Waiting on a notify */
     sched_runnable,
     sched_running,
     sched_sync_block,
@@ -72,6 +73,7 @@ typedef struct cap_pair {
 typedef capability act_kt;
 typedef capability act_control_kt;
 typedef capability act_reply_kt;
+typedef capability act_notify_kt;
 
 typedef capability sync_token_t;
 #endif

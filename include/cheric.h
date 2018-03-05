@@ -162,6 +162,7 @@ typedef intptr_t er_t;
 #define MAKE_ER(T, code) (ERROR_T(T)){.er = code}
 #define MAKE_VALID(T, valid) (ERROR_T(T)){.val = valid}
 #define IS_VALID(error_or_valid) cheri_gettag(error_or_valid.val)
+#define ER_T_FROM_CAP(T, v) MAKE_VALID(T, v)
 
 #define cheri_unseal_2(cap, sealing_cap) \
     ((cheri_gettag(cap) == 0 || cheri_gettype(cap) != cheri_getcursor(sealing_cap)) ? NULL : cheri_unseal(cap, sealing_cap))

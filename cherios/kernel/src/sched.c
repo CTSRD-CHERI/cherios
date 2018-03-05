@@ -213,6 +213,38 @@ void sched_receives_sem_signal(act_t * act) {
 	CRITICAL_LOCKED_END(&act->sched_access_lock);
 }
 
+void sched_receives_notify(act_t * act) {
+	// We may end up notifying BEFORE act has actually waited. If this happens note it and just return.
+	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
+	if(act->sched_status == sched_wait_notify) {
+		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
+	} else {
+		act->early_notify = 1;
+	}
+	CRITICAL_LOCKED_END(&act->sched_access_lock);
+}
+
+void sched_wait_for_notify(act_t* act, act_t* next_hint) {
+	if(act == NULL) act = sched_get_current_act();
+
+	// We may wait for a notify AFTER the notify arrived. In which case just return.
+	if(act->early_notify == 1) {
+		act->early_notify = 0;
+		return;
+	}
+
+	int need_resched = 0;
+
+	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
+	if(act->early_notify != 1) {
+		sched_block(act, sched_wait_notify);
+		need_resched = 1;
+	}
+	CRITICAL_LOCKED_END(&act->sched_access_lock);
+
+	if(need_resched) sched_reschedule(next_hint, 0);
+}
+
 void sched_receives_msg(act_t * act) {
     // WARN: Assume critical lock for acts sched status is taken
 	if(act->sched_status == sched_waiting) {
@@ -254,12 +286,7 @@ void sched_block_until_ret(act_t * act, act_t * next_hint) {
 void sched_block_until_msg(act_t * act, act_t * next_hint) {
 	/* Act = NULL means current act */
 
-	if(act == NULL) {
-		uint8_t pool_id = fast_critical_enter();
-		act = sched_pools[pool_id].current_act;
-	} else {
-		kernel_assert(act->sched_status == sched_running);
-	}
+	if(act == NULL) act = sched_get_current_act();
 
     CRITICAL_LOCKED_BEGIN(&act->writer_spinlock);
 
@@ -280,7 +307,7 @@ void sched_block_until_msg(act_t * act, act_t * next_hint) {
 
 void sched_block(act_t *act, sched_status_e status) {
 	KERNEL_TRACE("sched", "blocking %s", act->name);
-	kernel_assert((status == sched_sync_block) || (status == sched_waiting) || (status == sched_sem));
+	kernel_assert((status == sched_sync_block) || (status == sched_waiting) || (status == sched_sem) || (status == sched_wait_notify));
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
 		delete_act_from_queue(&sched_pools[act->pool_id], act, status, 0);
