@@ -73,26 +73,4 @@ cp0_status_set(register_t status)
 	__asm__ __volatile__ ("dmtc0 %0, $12" : : "r" (status));
 }
 
-/*
- * Routines for managing the CP0 BadInstr register.
- */
-
-#ifndef HARDWARE_fpga
-/* A hack to make QEMU work, we expect this to be set in an exception handler if required */
-extern register_t badinstr_glob;
-#endif
-
-static inline register_t
-cp0_badinstr_get(void)
-{
-#ifdef HARDWARE_fpga
-	register_t badinstr;
-
-	__asm__ __volatile__ ("dmfc0 %0, $8, 1" : "=r" (badinstr));
-	return (badinstr);
-#else
-	return badinstr_glob;
-#endif
-}
-
 #endif /* _CHERI_CP0_H_ */
