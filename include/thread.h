@@ -33,6 +33,7 @@
 
 #include "types.h"
 #include "queue.h"
+#include "tman.h"
 
 typedef void pcc_type(void);
 typedef struct startup_desc_t {
@@ -70,4 +71,7 @@ process_kt thread_create_process(const char* name, capability file, int secure_l
 thread thread_start_process(process_kt* proc, startup_desc_t* desc);
 thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* desc);
 
+top_t get_top_for_process(process_kt proc);
+top_t get_own_top(void);
+capability get_type_owned_by_process(void);
 #endif //CHERIOS_UNISTD_H_H

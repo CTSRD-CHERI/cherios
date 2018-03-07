@@ -41,6 +41,7 @@
 #include "capmalloc.h"
 #include "crt.h"
 #include "string.h"
+#include "tman.h"
 
 act_kt proc_man_ref = NULL;
 process_kt proc_handle = NULL;
@@ -201,6 +202,32 @@ thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* 
     }
     assert(proc_man_ref != NULL);
     return message_send_c(0, 0, 0, 0, proc, name, desc, NULL, proc_man_ref, SYNC_CALL, 2);
+}
+
+top_t own_top;
+
+top_t get_own_top(void) {
+    if(!own_top) {
+        try_init_tman_ref();
+        own_top = get_top_for_process(proc_handle);
+    }
+    return own_top;
+}
+
+top_t get_top_for_process(process_kt proc) {
+    if(proc_man_ref == NULL) {
+        proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
+    }
+    assert(proc_man_ref != NULL);
+    return (top_t)message_send_c(0, 0, 0, 0, proc, NULL, NULL, NULL, proc_man_ref, SYNC_CALL, 5);
+}
+
+capability get_type_owned_by_process(void) {
+    own_top = get_own_top();
+    if(own_top == NULL)return NULL;
+    ERROR_T(tres_t) res = type_get_new(own_top);
+    // if(!IS_VALID(res)) return NULL;
+    return tres_take(res.val);
 }
 
 thread thread_new_hint(const char* name, register_t arg, capability carg, thread_start_func_t* start, uint8_t cpu_hint) {

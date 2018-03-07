@@ -49,6 +49,7 @@ typedef enum module_type {
     m_proc,
 	m_core,
 	m_user,
+	m_tman,
 	m_secure,
 	m_fence
 } module_t;

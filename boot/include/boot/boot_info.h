@@ -55,6 +55,7 @@ typedef struct boot_info {
 } boot_info_t;
 
 #define MOP_SEALING_TYPE (0x666)
+#define TOP_SEALING_TYPE (0x777)
 
 typedef struct memmgt_init_t {
 	nano_kernel_if_t* nano_if;
@@ -69,6 +70,7 @@ typedef struct procman_init_t {
 	cap_pair pool_from_init;
 	nano_kernel_if_t* nano_if;
 	capability nano_default_cap;
+	capability sealer;
 } procman_init_t;
 
 #define FS_PHY_BASE 0x1e400000
@@ -85,6 +87,7 @@ typedef struct init_info {
     size_t uart_page;
 
 	capability mop_sealing_cap;
+	capability top_sealing_cap;
 
 	sched_idle_init_t idle_init;
 } init_info_t;

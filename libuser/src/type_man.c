@@ -35,7 +35,7 @@
 
 act_kt tman_ref = NULL;
 
-static act_kt try_init_tman_ref(void) {
+act_kt try_init_tman_ref(void) {
     if(tman_ref == NULL) {
         tman_ref = namespace_get_ref(namespace_num_tman);
     }

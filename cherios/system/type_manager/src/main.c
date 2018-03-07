@@ -35,6 +35,7 @@
 #include "string.h"
 #include "type_manager.h"
 #include "misc.h"
+#include "namespace.h"
 
 // We can use this to check which types have actually used
 type_res_bitfield_t* bitfield;
@@ -112,11 +113,11 @@ static ownership_tracker_t* find_free_tracker(void) {
     return freeList.first;
 }
 
-static top_internal_t* new_top(top_internal_t* from_top) {
+static top_t new_top(top_internal_t* from_top) {
     top_internal_t* top = (top_internal_t*)malloc(sizeof(top_internal_t)); // Create new top
     DLL_ADD_END(&from_top->children, top);     // set as child
     top->parent = from_top;
-    return top;
+    return seal_top(top);
 }
 
 static void release_type(top_internal_t* top, ownership_tracker_t* tracker, int remove_from_chain) {
@@ -245,7 +246,6 @@ er_t __type_return_type(top_t top, stype type) {
     return TYPE_OK;
 }
 
-/* FIXME: Any thread will accidentally run any of these. They should be thread local */
 void (*msg_methods[]) = {&__type_get_first_top, &__type_new_top, &__type_destroy_top,
                          &__type_get_new, &__type_get_new_exact, &__type_return_type};
 
@@ -258,6 +258,8 @@ int main(register_t arg, capability carg) {
     top_sealing_cap = get_sealing_cap_from_nano(TOP_SEALING_TYPE);
 
     init_tracking();
+
+    namespace_register(namespace_num_tman, act_self_ref);
 
     msg_enable = 1;
 

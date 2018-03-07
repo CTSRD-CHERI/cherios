@@ -105,7 +105,7 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
     B_DENTRY(m_user,    "dedup.elf", 0 ,1)
-    B_DENTRY(m_user, "type_manager.elf",0,1)
+    B_DENTRY(m_tman, "type_manager.elf",0,1)
     B_FENCE
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
@@ -197,6 +197,7 @@ static void * get_act_cap(module_t type, init_info_t* info) {
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;
             procman_arg.nano_if = info->nano_if;
+            procman_arg.sealer = info->top_sealing_cap;
             return &procman_arg;
         case m_namespace:
         case m_core:
@@ -362,6 +363,12 @@ static void load_modules(init_info_t * init_info) {
         be->ctrl = thread_start_process(thread_create_process(be->name, addr, be->type == m_secure), &desc);
 
 		printf("Module ready: %s\n", be->name);
+
+        if(be->type == m_tman) {
+            while(namespace_get_ref(namespace_num_tman) == NULL) {
+                nssleep(3);
+            }
+        }
 	}
 }
 

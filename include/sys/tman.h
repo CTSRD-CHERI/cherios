@@ -33,6 +33,7 @@
 
 #include "cheric.h"
 #include "nano/nanotypes.h"
+#include "sys/types.h"
 
 #define TOP_SEALING_TYPE 0x999
 
@@ -45,6 +46,7 @@ typedef capability top_t;
 DEC_ERROR_T(top_t);
 DEC_ERROR_T(tres_t);
 
+act_kt try_init_tman_ref(void);
 top_t type_get_first_top(void);
 ERROR_T(top_t) type_new_top(top_t parent);
 er_t type_destroy_top(top_t top);

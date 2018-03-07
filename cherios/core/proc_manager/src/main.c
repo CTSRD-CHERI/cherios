@@ -42,24 +42,13 @@
 #include "../../boot/include/boot/boot_info.h"
 #include "act_events.h"
 #include "capmalloc.h"
+#include "tman.h"
 
-/*Some "documentation" for the interface between the kernel and activation start                                        *
-* These fields are setup by the caller of act_register                                                                  *
-*                                                                                                                       *
-* a0    : user GP argument (goes to main)                                                                               *
-* c3    : user Cap argument (goes to main)                                                                              * *
-*                                                                                                                       *
-* These fields are setup by act_register itself. Although the queue is an argument to the function                      *
-*                                                                                                                       *
-* c21   : self control reference
-* c22   : process reference                                                                                             *
-* c23   : namespace reference (may be null for init and namespace)                                                      *
-* c24   : kernel interface table                                                                                        *
-* c25   : queue                                                                                                        */
-
+/* See init.S in libuser for conventions */
 
 process_t loaded_processes[MAX_PROCS];
 size_t processes_end = 0;
+capability sealer;
 
 Elf_Env env;
 
@@ -78,13 +67,26 @@ static process_t* alloc_process(const char* name) {
 	return &loaded_processes[processes_end++];
 }
 
-// TODO
 process_t* seal_proc_for_user(process_t* process) {
-	return process;
+	return cheri_seal(process, sealer);
 }
 
-// TODO
 process_t* unseal_proc(process_t* process) {
+	if(cheri_gettype(process) != cheri_getcursor(sealer)) return NULL;
+	return cheri_unseal(process, sealer);
+}
+
+static process_t* unseal_live_proc(process_t* process) {
+	process = unseal_proc(process);
+
+	if(process == NULL) return process;
+
+	enum process_state state;
+
+	ENUM_VMEM_SAFE_DEREFERENCE(&process->state, state, proc_zombie);
+
+	if(state == proc_zombie) return NULL;
+
 	return process;
 }
 
@@ -230,6 +232,34 @@ static void deliver_mop(mop_t mop) {
 	}
 }
 
+static top_t proc_get_own_top(void) {
+	// For now proc_man will grab the first top.
+	static top_t own_top;
+
+	if(own_top == NULL) {
+		assert(try_init_tman_ref() != NULL);
+		own_top = type_get_first_top();
+		assert(own_top != NULL);
+	}
+	return own_top;
+}
+
+static top_t __get_top_for_process(process_t* proc) {
+
+	proc = unseal_live_proc(proc);
+
+	if(proc == NULL) return NULL;
+
+	if(proc->top == NULL) {
+		top_t own_top = proc_get_own_top();
+		ERROR_T(top_t) new = type_new_top(own_top);
+		if(!IS_VALID(new)) return NULL;
+		proc->top = new.val;
+	}
+
+	return proc->top;
+}
+
 static void handle_termination(register_t thread_num, process_t* proc, act_kt target) {
 
     proc = unseal_proc(proc);
@@ -247,11 +277,15 @@ static void handle_termination(register_t thread_num, process_t* proc, act_kt ta
 		proc->state = proc_zombie;
 		int status = mem_reclaim_mop(proc->mop);
 		assert_int_ex(status, ==, MEM_OK);
+		if(proc->top) {
+			er_t er = type_destroy_top(proc->top);
+			assert_int_ex((int64_t)er, ==, TYPE_OK);
+		}
 	}
 }
 
 
-void (*msg_methods[]) = {create_process, user_start_process, user_create_thread, deliver_mop, handle_termination};
+void (*msg_methods[]) = {create_process, user_start_process, user_create_thread, deliver_mop, handle_termination, __get_top_for_process};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
@@ -278,6 +312,8 @@ int main(procman_init_t* init)
     env.printf = &printf;
     env.memcpy = &memcpy;
     env.vprintf = &vprintf;
+
+	sealer = init->sealer;
 
 	namespace_register(namespace_num_proc_manager, act_self_ref);
     msg_enable = 1;

@@ -33,6 +33,7 @@
 
 #include "elf.h"
 #include "mman.h"
+#include "tman.h"
 
 #define MAX_PROCS 20
 
@@ -43,10 +44,11 @@ enum process_state {
 };
 
 typedef struct process_t {
-    const char* name; // Or some other appropriate i.d.
     enum process_state state;
+    const char* name; // Or some other appropriate i.d.
     image im;
     mop_t mop;
+    top_t top;
     act_control_kt threads[MAX_THREADS];
     size_t n_threads;
     size_t terminated_threads;

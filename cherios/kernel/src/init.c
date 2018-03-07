@@ -118,6 +118,7 @@ int cherios_main(nano_kernel_if_t* interface,
 	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
 
 	init_info.mop_sealing_cap = get_sealing_cap_from_nano(MOP_SEALING_TYPE);
+    init_info.top_sealing_cap = get_sealing_cap_from_nano(TOP_SEALING_TYPE);
 
     kernel_printf("Initialising Scheduler\n");
 	sched_init(&init_info.idle_init);
