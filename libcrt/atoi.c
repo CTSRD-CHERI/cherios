@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,32 +28,49 @@
  * SUCH DAMAGE.
  */
 
-#ifndef __STDLIB_H__
-#define	__STDLIB_H__
+#include "cheric.h"
+#include "math.h"
 
-#include "cdefs.h"
-#include "capmalloc.h"
+#define SUPPORT_BASE_MIN 2
+#define SUPPORT_BASE_MAX 16
 
-static inline capability malloc(size_t size) {
-    res_t res = cap_malloc(size);
-    cap_pair pair;
-    rescap_take(res, &pair);
-    capability taken = pair.data;
-    taken = cheri_setbounds(taken, size);
-    return taken;
+#define SUPPORT_BASES (SUPPORT_BASE_MAX+1-SUPPORT_BASE_MIN)
+
+char base_chars[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
+uint8_t log_2[] = {0,0,1,0,2,0,0,0,3,0,0,0,0,0,0,0,4};
+
+char* itoa_p2( int value, char* str, int base) {
+    size_t ptr = 0;
+    size_t shift = log_2[base];
+    size_t mask = base-1;
+    do {
+        size_t digit = value & mask;
+        value = (value >> shift);
+        str[ptr++] = base_chars[digit];
+    } while(value != 0);
+
+    str[ptr] = '\0';
+    return ptr;
 }
 
-static inline void free(capability cap) {
-    cap_free(cap);
+char* itoa_div( int value, char * str, int base ) {
+    size_t ptr = 0;
+    do {
+        size_t digit = value % base;
+        value = (value / base);
+        str[ptr++] = base_chars[digit];
+    } while(value != 0);
+
+    str[ptr] = '\0';
+    return ptr;
 }
 
-static inline void * calloc(size_t n, size_t s) {
-    return malloc(n * s);
+char*  itoa ( int value, char * str, int base ) {
+    if(base < SUPPORT_BASE_MIN || base > SUPPORT_BASE_MAX) return NULL;
+
+    if(is_power_2(base)) {
+        return itoa_p2(value, str, base);
+    } else {
+        return itoa_div(value, str, base);
+    }
 }
-
-void 	abort(void)      __dead2;
-void	exit(int status) __dead2;
-
-char *  itoa ( int value, char * str, int base );
-
-#endif /* !__STDLIB_H__ */

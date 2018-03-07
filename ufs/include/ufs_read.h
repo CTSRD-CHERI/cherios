@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,33 +27,26 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_UFS_READ_H
+#define CHERIOS_UFS_READ_H
 
-#ifndef __STDLIB_H__
-#define	__STDLIB_H__
+#ifndef DEV_BSHIFT
+#define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
+#endif
+#define	DEV_BSIZE	(1<<DEV_BSHIFT)
+#define MAXBSIZE	65536	/* must be power of 2 */
+typedef	uint32_t	ufs_ino_t;
+typedef	ufs_ino_t	ino_t;
 
-#include "cdefs.h"
-#include "capmalloc.h"
+ufs_ino_t	lookup(const char *path);
+ssize_t
+#ifdef WRITE_SOCKET
+fsread_size(ufs_ino_t inode, unix_like_socket* sock, size_t nbyte, size_t *fsizep);
+#else
+fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep);
+#endif
+ssize_t
+fsread(ufs_ino_t inode, void *buf, size_t nbyte);
+int dskread(u8 *buf, u_int64_t lba, int nblk);
 
-static inline capability malloc(size_t size) {
-    res_t res = cap_malloc(size);
-    cap_pair pair;
-    rescap_take(res, &pair);
-    capability taken = pair.data;
-    taken = cheri_setbounds(taken, size);
-    return taken;
-}
-
-static inline void free(capability cap) {
-    cap_free(cap);
-}
-
-static inline void * calloc(size_t n, size_t s) {
-    return malloc(n * s);
-}
-
-void 	abort(void)      __dead2;
-void	exit(int status) __dead2;
-
-char *  itoa ( int value, char * str, int base );
-
-#endif /* !__STDLIB_H__ */
+#endif //CHERIOS_UFS_READ_H
