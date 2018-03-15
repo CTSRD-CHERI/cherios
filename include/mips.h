@@ -298,8 +298,20 @@ INT_SIZES(define_intypes)
 /*
  * MIPS address space layout.
  */
-#define	MIPS_XKPHYS_UNCACHED_BASE	0x9800000000000000
-#define	MIPS_XKPHYS_CACHED_NC_BASE	0x9000000000000000
+
+/* Some conflict on sources for this */
+
+#define MIPS_XKPHYS                 0x8000000000000000ULL
+#define MIPS_XKPHYS_MODE_SHIFT      59ULL
+#define MIPS_XKPHYS_UNCACHED        0b010ULL       // See mips run disagrees. Mips64 and other sources agree
+#define MIPS_XKPHYS_CACHED_C_EW     0b110ULL       // Other sources say this is better supported
+#define MIPS_XKPHYS_CACHED_NC       0b011ULL       // Mips 64 says this for cached
+#define MIPS_XKPHYS_CACHED_C        0b100ULL
+#define MIPS_XKPHYS_CACHED_C_UW     0b101ULL
+#define MIPS_XKPHYS_UNCACHED_ACCEL  0b111ULL
+
+#define	MIPS_XKPHYS_UNCACHED_BASE	(MIPS_XKPHYS | (MIPS_XKPHYS_UNCACHED << MIPS_XKPHYS_MODE_SHIFT))
+#define	MIPS_XKPHYS_CACHED_BASE     (MIPS_XKPHYS | (MIPS_XKPHYS_CACHED_NC << MIPS_XKPHYS_MODE_SHIFT))
 
 #ifndef __ASSEMBLY__
 
@@ -307,7 +319,7 @@ static inline vaddr_t
 mips_phys_to_cached(paddr_t phys)
 {
 
-	return (phys | MIPS_XKPHYS_CACHED_NC_BASE);
+	return (phys | MIPS_XKPHYS_CACHED_BASE);
 }
 
 static inline vaddr_t

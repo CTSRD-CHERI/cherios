@@ -88,8 +88,10 @@
 .set CACHE_LINE_SIZE,                64
 
 # Top bits of virtual address decide which range we are using
-.set PHY_MEM_START_TOP,             0x90
-.set PHY_MEM_START_UNCACHED_TOP,    0x98
+# FIXME these are from see mips run and are probably wrong. Use versions in mips.h
+.set PHY_MEM_START_TOP,             0x80
+.set PHY_MEM_START_UNCACHED_TOP,    ((MIPS_XKPHYS_UNCACHED << 3) | PHY_MEM_START_TOP)
+.set PHY_MEM_START_CACHED_TOP,      ((MIPS_XKPHYS_CACHED_NC << 3) | PHY_MEM_START_TOP)
 .set VIRT_MEM_START_TOP,            0x00
 .set VIRT_SUPER_TOP,                0x40
 .set VIRT_KERN_TOP,                 0xC0
@@ -104,10 +106,10 @@
 .set VIRT_MEM_SIZE,                 VIRT_MEM_END - VIRT_MEM_START
 
 # This is the physical memory we will scan in order to support revocation
-.set PHY_MEM_START,                 PHY_MEM_START_TOP << TOP_ADDR_SHIFT
-.set PHY_MEM_START_UNCACHED,        PHY_MEM_START_UNCACHED_TOP << TOP_ADDR_SHIFT
+.set PHY_MEM_START_CACHED,          (PHY_MEM_START_CACHED_TOP << TOP_ADDR_SHIFT)
+.set PHY_MEM_START_UNCACHED,        (PHY_MEM_START_UNCACHED_TOP << TOP_ADDR_SHIFT)
 
-.set PHY_MEM_END,                   PHY_MEM_START + PHY_MEM_SIZE
+.set PHY_MEM_END_CACHED,            PHY_MEM_START_CACHED + PHY_RAM_SIZE + IO_HOLE
 
 #.set NANO_SIZE, __nano_size
 .set NANO_SIZE, 0x5000000
@@ -344,46 +346,82 @@ nano_kernel_init:
     csd         $zero, $zero, exception_level($kr1c)     # Set exception level to 0
     csd         $zero, $zero, exception_cause($kr1c)     # Set exception cause to 0
 
-    # First NANO_SIZE of physical pages to nano owned. Then a0/page_size pages to system owned. The rest are free
-    # TODO check that a0 is rounded to a page
 
-    dli         $t0, phy_page_table                     # t0 is start of book
-    dli         $t1, (NANO_SIZE / PHY_PAGE_SIZE)        # t1 is number of pages for the nano
-    dli         $t2, page_nano_owned
-    dsrl        $t3, $a0, PHY_PAGE_SIZE_BITS           # t3 is number of pages for system
 
-    csw         $t2, $t0, 0($kr1c)                      # book[0].state = nano owned
-    csd         $t1, $t0, REG_SIZE($kr1c)               # book[0].len = nano pages
+    # This sets up the physical book
 
+
+    # t0 will be offset to page entry. t1 len. t2 type. t3 prev.
+.macro PHY_NEXT
     dsll        $t2, $t1, PHY_PAGE_ENTRY_SIZE_BITS
-    daddu       $t0, $t0, $t2                           # t0 is the start of the systems pages
-    dli         $t2, page_system_owned
+    daddu       $t0, $t0, $t2
+.endm
+.macro PHY_SET_STATE state
+    dli         $t2, \state
+    csw         $t2, $t0, 0($kr1c)
+.endm
+.macro PHY_LINK_LEN
+    csd         $t1, $t0, REG_SIZE($kr1c)
+.endm
+.macro PHY_LINK_LEN_N N
+    dli         $t1, \N
+    csd         $t1, $t0, REG_SIZE($kr1c)
+.endm
+.macro PHY_LINK_PREV
+    csd         $t3, $t0, (REG_SIZE * 2)($kr1c)
+.endm
+.macro PHY_NEXT_PREV
+    daddu       $t3, $t3, $t1
+.endm
 
+    # TODO check a0 is properly aligned?
+    #check a0 < RAM_PRE_IO_END - NANO_SIZE.
+    dli         $t0, (RAM_PRE_IO_END - NANO_SIZE)
+    sltu        $t0, $a0, $t0
+    beq         $t0, $zero, nano_kernel_die
+    nop
 
-    csw         $t2, $t0, 0($kr1c)                      # book[nano].state = system owned
-    csd         $t3, $t0, (REG_SIZE)($kr1c)              # book[nano].len = system
-    csd         $zero, $t0, (REG_SIZE * 2)($kr1c)       # book[nano].prev = 0
+    # First range is nano owned
+    dli             $t0, phy_page_table                 # t0 is start of book
+    PHY_SET_STATE   page_nano_owned                     # book[0].state = nano owned
+    PHY_LINK_LEN_N (NANO_SIZE / PHY_PAGE_SIZE)          # book[0].len = nano pages
 
-    dsll        $t2, $t3, PHY_PAGE_ENTRY_SIZE_BITS
-    daddu       $t0, $t0, $t2                           # t0 is the start of the free pages
-    dli         $t2, (TOTAL_PHY_PAGES - (NANO_SIZE / PHY_PAGE_SIZE))
-    dsubu       $t2, $t2, $t3
+    # Then system owned
+    dsll            $t2, $t1, PHY_PAGE_ENTRY_SIZE_BITS
+    daddu           $t0, $t0, $t2
+    PHY_SET_STATE   page_system_owned
+    move            $t3, $t1
+    dsrl            $t1, $a0, PHY_PAGE_SIZE_BITS        # system pages
+    PHY_LINK_LEN
 
-    csd         $t2, $t0, (REG_SIZE)($kr1c)             # book[nano + system].len = all - nano - system
-    csd         $t1, $t0, (REG_SIZE*2)($kr1c)           # book[nano + system].prev = nano
+    # Then free low pages
+    PHY_NEXT
+    PHY_LINK_PREV
+    PHY_NEXT_PREV
+    dli             $t2, (TOTAL_LOW_RAM_PAGES - (NANO_SIZE / PHY_PAGE_SIZE))
+    dsubu           $t1, $t2, $t1   # len = LO_PAGES - NANO_PAGES - SYSTEM_PAGES
+    PHY_LINK_LEN
 
-    # We have a cheeky extra terminal page of size 1 that doesn't really exist
-    dli         $t0, phy_page_table + (TOTAL_PHY_PAGES * PHY_PAGE_ENTRY_SIZE)
-    dli         $t1, page_nano_owned
-    daddiu      $t3, $t3, (NANO_SIZE / PHY_PAGE_SIZE)
-    dli         $t2, 1
+    # Then IO pages
+    PHY_NEXT
+    PHY_LINK_PREV
+    PHY_NEXT_PREV
+    PHY_SET_STATE   page_io
+    PHY_LINK_LEN_N  TOTAL_IO_PAGES
 
-    csw         $t1, $t0, 0($kr1c)                      # book[end].status = nano owned
-    csd         $t2, $t0, (REG_SIZE)($kr1c)             # book[end].len = 1
-    csd         $t3, $t0, (REG_SIZE*2)($kr1c)           # book[end].prev = nano+system
+    # Then free high pages
+    PHY_NEXT
+    PHY_LINK_PREV
+    PHY_NEXT_PREV
+    PHY_LINK_LEN_N  TOTAL_HIGH_RAM_PAGES
 
-    # Setup physical
+    # Then a terminal page
+    PHY_NEXT
+    PHY_LINK_PREV
+    PHY_SET_STATE   page_nano_owned
+    PHY_LINK_LEN_N  1
 
+    # Setup nano IF
     dli         $k0, NANO_KERNEL_TYPE
     csetoffset  $kr2c, $kdc, $k0                         # kr2c holds the sealing capability for our plt.got
 
@@ -413,15 +451,9 @@ nano_kernel_init:
     # a0 is the start of nano kernel secured memory. a1 is an address we should return to.
     dli         $k0, DEF_DATA_PERMS
 
-    #check a0 < PHY_MEM_SIZE - NANO_SIZE.
-    dli         $t0, (PHY_MEM_SIZE - NANO_SIZE)
-    sltu        $t0, $a0, $t0
-    beq         $t0, $zero, nano_kernel_die
-    nop
-
     # c0 will be a global data capability to the unsecured memory
     # c17 will be a global code capability to the unsecured memory, with the index passed
-    dli         $t0, (PHY_MEM_START + NANO_SIZE)          # t0 = start of mem available to system
+    dli         $t0, (PHY_MEM_START_CACHED + NANO_SIZE)          # t0 = start of mem available to system
     daddu       $t2, $a0, $t0                             # t2 = start of free physical mem
 
     csetoffset  $c13, $kdc, $t0
@@ -792,17 +824,21 @@ get_phy_page:
     cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
 
     bne         $t1, $a2, get_phy_page_end              # $t1 must be npages
-    clw         $t1, $t0, 0($idc)                       # $t1 = state
-    bnez        $t1, get_phy_page_end                   # state must be un-used
+    clw         $t3, $t0, 0($idc)                       # $t1 = state
 
     dli         $t1, page_system_owned
     dli         $t2, page_io
-    movn        $t1, $t2, $a3
 
+    beqz        $t3, 2f                                 # state must be un-used,
+    movn        $t1, $t2, $a3
+    bne         $t1, $t3, get_phy_page_end              # or equal to what was asked for
+    nop
+
+    2:
     csw         $t1, $t0, 0($idc)                       # set to system owned / io
 
     bnez        $a1, 1f                                 # 0: uncached. ow: cached
-    dli         $t1, PHY_MEM_START_TOP
+    dli         $t1, PHY_MEM_START_CACHED_TOP
     dli         $t1, PHY_MEM_START_UNCACHED_TOP
     1: dsll     $t1, $t1, TOP_ADDR_SHIFT
 
@@ -1407,8 +1443,8 @@ rescap_revoke_finish:
 
     # We are now revoking. No errors from now on.
 
-    dli         $a0, PHY_MEM_START          #a0 is the start of memory
-    dli         $a1, PHY_MEM_END            #a1 the end
+    dli         $a0, PHY_MEM_START_CACHED          #a0 is the start of memory
+    dli         $a1, PHY_MEM_END_CACHED            #a1 the end
 
 #TRACE_ON
 
@@ -1822,7 +1858,7 @@ good_level: #t2 now contains the type we will seal the next level with
 1:
 
     dsll        $t0, $a0, PHY_PAGE_SIZE_BITS
-    dli         $t1, PHY_MEM_START
+    dli         $t1, PHY_MEM_START_CACHED
     daddu       $t0, $t0, $t1                          # t0 is the address of the new page
     dsll        $t1, $a1, PAGE_TABLE_ENT_BITS          # t1 is index in the parent page to write to
 
