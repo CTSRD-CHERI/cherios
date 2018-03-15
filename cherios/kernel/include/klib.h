@@ -83,6 +83,13 @@ act_t* act_unseal_callable(act_t * act, sealing_cap sealer);
 extern sealing_cap sync_token_sealer;
 extern sealing_cap ctrl_ref_sealer;
 extern sealing_cap notify_ref_sealer;
+
+#define FPGA_BASE   			0x1f000000
+#define FPGA_SIZE   			0x900
+#define FPGA_SHUTDOWN_OFFSET	0x500
+
+extern capability fpga_cap;
+
 /*
  * Kernel library routines.
  */
@@ -92,7 +99,7 @@ void	kernel_creturn(void);
 
 void	kernel_interrupts_init(int enable_timer);
 void	kernel_interrupt(register_t cause);
-int kernel_interrupt_register(int number, act_control_t *ctrl);
+int kernel_interrupt_register(int number, act_control_t *ctrl, register_t v0, register_t arg, capability carg);
 int kernel_interrupt_enable(int number, act_control_t *ctrl);
 
 void	kernel_timer_init(void);

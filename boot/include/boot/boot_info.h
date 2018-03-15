@@ -73,8 +73,6 @@ typedef struct procman_init_t {
 	capability sealer;
 } procman_init_t;
 
-#define FS_PHY_BASE 0x1e400000
-#define FS_PHY_SIZE 0x200
 /* Information copied from the boot_info by the kernel, and given to
  * the init activation.
  */

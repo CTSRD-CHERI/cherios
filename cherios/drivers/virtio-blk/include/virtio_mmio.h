@@ -33,6 +33,8 @@
 #ifndef	_VIRTIO_MMIO_H
 #define	_VIRTIO_MMIO_H
 
+#define VIRTIO_MMIO_SIZE            0x200
+
 #define	VIRTIO_MMIO_MAGIC_VALUE		0x000
 #define	VIRTIO_MMIO_VERSION		0x004
 #define	VIRTIO_MMIO_DEVICE_ID		0x008

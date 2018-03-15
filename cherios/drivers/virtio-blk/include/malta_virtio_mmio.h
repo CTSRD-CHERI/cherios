@@ -1,5 +1,4 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
@@ -28,35 +27,12 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_MALTA_VIRTIO_MMIO_H
+#define CHERIOS_MALTA_VIRTIO_MMIO_H
 
-#include "lib.h"
-#include "thread.h"
-#include "malta_virtio_mmio.h"
-#include "misc.h"
-#include "stdio.h"
-#include "namespace.h"
-#include "object.h"
+#include "virtio_mmio.h"
 
-void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, new_session, NULL, vblk_interrupt};
-size_t ctrl_methods_nb = countof(ctrl_methods);
+#define VIRTIO_MMIO_MMAP_BASE 0x1e400000ULL
+#define VIRTIO_MMIO_IRQ       5
 
-int main(void) {
-	printf("Virtio-blk: Hello world\n");
-
-	session_sealer = get_type_owned_by_process();
-
-	/* Register ourself to the kernel as being the Virtio-blk module */
-	int ret = namespace_register(namespace_num_virtio, act_self_ref);
-	if(ret!=0) {
-		printf("Virtio-blk: register failed\n");
-		return -1;
-	}
-	printf("Virtio-blk: register OK\n");
-
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-
-	printf("Virtio-blk: Going into daemon mode\n");
-	return 0;
-}
+#endif //CHERIOS_MALTA_VIRTIO_MMIO_H

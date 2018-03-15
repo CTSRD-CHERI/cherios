@@ -78,11 +78,10 @@ struct virtq_used {
 
 struct virtq {
         unsigned int num;
-
+        le16 last_used_idx;
         struct virtq_desc *desc;
         struct virtq_avail *avail;
         struct virtq_used *used;
-        le16 last_used_idx;
 };
 
 static inline int virtq_need_event(uint16_t event_idx, uint16_t new_idx, uint16_t old_idx)

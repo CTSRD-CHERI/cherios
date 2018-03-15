@@ -28,6 +28,9 @@
  * SUCH DAMAGE.
  */
 
+#ifndef _VIRTIO_BLK_H
+#define _VIRTIO_BLK_H
+
 #include "mips.h"
 #include "object.h"
 #include "namespace.h"
@@ -59,9 +62,20 @@ static inline int virtio_read(void * buf, size_t sector) {
 	return message_send(sector, 0, 0, 0, virt_session, buf, NULL, NULL, vblk_ref, SYNC_CALL, 1);
 }
 
+static inline void virtio_async_read(void* buf, size_t sector, register_t async_no, register_t async_port) {
+	virtio_check_refs();
+	message_send(sector, async_no, async_port, 0, virt_session, buf, act_self_ref, NULL, vblk_ref, SEND, 1);
+}
+
 static inline int virtio_write(const void * buf, size_t sector) {
 	virtio_check_refs();
 	return message_send(sector, 0, 0, 0, virt_session, (void *)buf, NULL, NULL, vblk_ref, SYNC_CALL, 2);
+}
+
+
+static inline void virtio_async_write(void* buf, size_t sector, register_t async_no, register_t async_port) {
+	virtio_check_refs();
+	message_send(sector, async_no, async_port, 0, virt_session, buf, act_self_ref, NULL, vblk_ref, SEND, 2);
 }
 
 static inline int virtio_blk_status(void) {
@@ -73,3 +87,6 @@ static inline size_t virtio_blk_size(void) {
 	virtio_check_refs();
 	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 4);
 }
+
+
+#endif _VIRTIO_BLK_H

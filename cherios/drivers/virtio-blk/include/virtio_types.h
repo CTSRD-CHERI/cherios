@@ -38,6 +38,8 @@
  * - __le{16,32,64} for standard-compliant virtio devices
  */
 
+#include "mips.h"
+
 typedef uint16_t  __virtio16;
 typedef uint32_t  __virtio32;
 typedef uint64_t  __virtio64;

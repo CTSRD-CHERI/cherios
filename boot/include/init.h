@@ -50,6 +50,7 @@ typedef enum module_type {
 	m_core,
 	m_user,
 	m_tman,
+	m_virtblk,
 	m_secure,
 	m_fence
 } module_t;
