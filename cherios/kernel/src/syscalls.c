@@ -115,14 +115,16 @@ void kernel_syscall_panic(void) {
     return kernel_syscall_panic_proxy(NULL);
 }
 
-DECLARE_WITH_CD(int, kernel_syscall_interrupt_register(int number));
-int kernel_syscall_interrupt_register(int number) {
-	return kernel_interrupt_register(number, (act_control_t *)CALLER);
+DECLARE_WITH_CD(int, kernel_syscall_interrupt_register(int number, act_control_t* ctrl, register_t v0, register_t arg, capability carg));
+int kernel_syscall_interrupt_register(int number, act_control_t* ctrl, register_t v0, register_t arg, capability carg) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
+	return kernel_interrupt_register(number, ctrl, v0, arg, carg);
 }
 
-DECLARE_WITH_CD(int, kernel_syscall_interrupt_enable(int number));
-int kernel_syscall_interrupt_enable(int number) {
-	return kernel_interrupt_enable(number, (act_control_t *)CALLER);
+DECLARE_WITH_CD(int, kernel_syscall_interrupt_enable(int number, act_control_t* ctrl));
+int kernel_syscall_interrupt_enable(int number, act_control_t* ctrl) {
+	ctrl = act_unseal_ctrl_ref(ctrl);
+	return kernel_interrupt_enable(number, ctrl);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_shutdown(shutdown_t mode));

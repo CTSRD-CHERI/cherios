@@ -33,21 +33,21 @@
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"
-static act_t * int_child[7];
+
+typedef struct interrupt_register_t {
+	act_t* target;
+	register_t v0;
+	capability carg;
+	register_t arg;
+} interrupt_register_t;
+
+static interrupt_register_t int_child[7];
 
 
 /* FIXME This entire thing will break when remove access from the kernel to CP0
  * FIXME the solution will be to have the nano kernel expose a suitable interface
 
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */
-int get_others_interrupts_mask(void) {
-	register_t im;
-
-	im = cp0_status_get();
-	im >>= MIPS_CP0_STATUS_IM_SHIFT;
-	im &= 0x7F;
-	return im;
-}
 
 void kernel_interrupts_init(int enable_timer) {
 	KERNEL_TRACE("interrupts", "enabling interrupts");
@@ -64,15 +64,17 @@ void kernel_interrupts_init(int enable_timer) {
 static void kernel_interrupt_others(register_t pending) {
 	for(size_t i=0; i<7; i++) {
 		if(pending & (1<<i)) {
-			if(int_child[i] == NULL) {
-				KERNEL_ERROR("unknown interrupt %lx", i);
+			if(int_child[i].target == NULL) {
+				// This is not an error. For example UART always seems to be holding its interrupt (2) high
 				continue;
 			}
             KERNEL_TRACE("interrupt disable", "%ld", i);
 			cp0_status_im_disable(1<<i);
 			// FIXME we probabably want a seperate interrupt source from the kernel
 			// FIXME this needs locking
-			if(msg_push(NULL, NULL, NULL, NULL, i, 0, 0, 0, -3, int_child[i], &kernel_acts[0], NULL)) {
+			if(msg_push(int_child[i].carg, NULL, NULL, NULL,
+						int_child[i].arg, i, 0, 0,
+						int_child[i].v0, int_child[i].target, &kernel_acts[0], NULL)) {
 				kernel_panic("queue full (int)");
 			}
 		}
@@ -81,9 +83,9 @@ static void kernel_interrupt_others(register_t pending) {
 
 void kernel_interrupt(register_t cause) {
 	register_t ipending = cp0_cause_ipending_get(cause);
-	register_t toprocess = ipending & get_others_interrupts_mask();
-	KERNEL_TRACE("interrupt", "%lx %lx", ipending, toprocess);
-    KERNEL_TRACE("interrupt", "mask: %d\n", get_others_interrupts_mask());
+	register_t toprocess = ipending & (~MIPS_CP0_CAUSE_IP_TIMER);
+    register_t mask = cp0_status_im_get();
+	KERNEL_TRACE("interrupt", "pending: %lx cpu: d ", ipending, cp0_get_cpuid());
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
 		kernel_timer();
 	}
@@ -105,21 +107,25 @@ int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 	if(number < 0) {
 		return -1;
 	}
-	if(int_child[number] != ctrl) {
+	if(int_child[number].target != ctrl) {
 		return -1;
 	}
+    // This will eventually fail when we can no longer access cp0
 	cp0_status_im_enable(1<<number);
 	return 0;
 }
 
-int kernel_interrupt_register(int number, act_control_t * ctrl) {
+int kernel_interrupt_register(int number, act_control_t * ctrl, register_t v0, register_t arg, capability carg) {
 	number = validate_number(number);
 	if(number < 0) {
 		return -1;
 	}
-	if(int_child[number] != NULL) {
+	if(int_child[number].target != NULL && int_child[number].target != ctrl) {
 		return -1;
 	}
-	int_child[number] = (act_t*)ctrl;
+	int_child[number].target = (act_t*)ctrl;
+	int_child[number].arg = arg;
+	int_child[number].carg = carg;
+	int_child[number].v0 = v0;
 	return 0;
 }

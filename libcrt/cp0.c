@@ -106,6 +106,14 @@ cp0_status_im_enable(int mask)
 	cp0_status_set(status);
 }
 
+register_t
+cp0_status_im_get(void) {
+	register_t status;
+
+	status = cp0_status_get();
+	return (status >> MIPS_CP0_STATUS_IM_SHIFT) & 0xFF;
+}
+
 void
 cp0_status_im_disable(int mask)
 {

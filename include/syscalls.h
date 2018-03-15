@@ -57,8 +57,8 @@
         ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)                                                             \
         ITEM(syscall_panic, void, (void), __VA_ARGS__)                                                                       \
         ITEM(syscall_panic_proxy, void, (act_kt proxy), __VA_ARGS__)                                                                       \
-        ITEM(syscall_interrupt_register, int, (int number), __VA_ARGS__)                                                     \
-        ITEM(syscall_interrupt_enable, int, (int number), __VA_ARGS__)                                                       \
+        ITEM(syscall_interrupt_register, int, (int number, act_control_kt ctrl, register_t v0, register_t arg, capability carg), __VA_ARGS__)                                                     \
+        ITEM(syscall_interrupt_enable, int, (int number, act_control_kt ctrl), __VA_ARGS__)                                  \
         ITEM(syscall_shutdown, void, (shutdown_t), __VA_ARGS__)                                                              \
         ITEM(syscall_register_act_event_registrar, void, (act_kt act), __VA_ARGS__)                                          \
         ITEM(syscall_get_name, const char*, (act_kt), __VA_ARGS__)\
