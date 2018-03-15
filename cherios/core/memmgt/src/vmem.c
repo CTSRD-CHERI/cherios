@@ -293,5 +293,8 @@ size_t virtual_to_physical(size_t vaddr) {
 
     size_t PFN = RO->entries[L2_INDEX(vaddr)];
 
-    return ((PFN >> PFN_SHIFT) << UNTRANSLATED_BITS) | low_bits;
+    size_t page_no = (PFN >> PFN_SHIFT);
+
+    // This really should be plus. There is one bit of overlap between the low bits and the last bit from page_no
+    return (page_no << PHY_PAGE_SIZE_BITS) + low_bits;
 }

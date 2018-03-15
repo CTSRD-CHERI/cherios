@@ -170,6 +170,12 @@ void get_physical_capability(size_t base, size_t length, int IO, int cached, mop
 	message_send(base, length, (register_t )IO, (register_t)cached, mop, result, NULL, NULL, memmgt, SYNC_CALL, 8);
 }
 
+size_t mem_paddr_for_vaddr(size_t vaddr) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (size_t)message_send(vaddr, 0, 0, 0, NULL, NULL, NULL, NULL, memmgt, SYNC_CALL, 4);
+}
+
 void mmap_set_act(act_kt ref) {
 	memmgt_ref = ref;
 }

@@ -78,6 +78,7 @@ static void init_book(void) {
 mop_t mem_minit(capability mop_sealing_cap) {
     printf("Getting book\n");
     init_book();
+    pmem_check_book();
     printf("Starting up virtual memory and reservation system\n");
     return init_vmem(mop_sealing_cap);
 }

@@ -44,6 +44,9 @@ typedef capability mop_t;
 
 #define MOP_REQUIRED_SPACE (8 * RES_META_SIZE)
 
+// Request bases with this alignment, and sizes that are this much less than multiples of pages
+#define MEM_REQUEST_FAST_OFFSET (2 * RES_META_SIZE)
+#define MEM_REQUEST_MIN_REQUEST (UNTRANSLATED_PAGE_SIZE - MEM_REQUEST_FAST_OFFSET)
 extern mop_t own_mop;
 
 #define MEM_OK      (0)
@@ -99,6 +102,9 @@ mop_t       init_mop(capability mop_sealing_cap);
 
 /* Gets a physical capability. Can never be returned */
 void        get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop, cap_pair* result);
+
+/* Gets the paddr for vaddr */
+size_t      mem_paddr_for_vaddr(size_t vaddr);
 
 void commit_vmem(act_kt activation, size_t addr);
 

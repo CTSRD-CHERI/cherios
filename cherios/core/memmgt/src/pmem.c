@@ -41,11 +41,13 @@ page_t* book;
 void pmem_check_phy_entry(size_t pagen) {
     if(pagen != 0) {
         size_t prv = book[pagen].prev;
-        assert(book[prv].len + prv == pagen);
+        assert_int_ex(book[prv].len + prv, ==, pagen);
     }
     size_t nxt = pagen + book[pagen].len;
-    assert(nxt <= BOOK_END);
-    assert(book[nxt].prev == pagen);
+    assert_int_ex(nxt, <=, BOOK_END);
+    if(nxt != BOOK_END) {
+        assert_int_ex(book[nxt].prev, ==, pagen);
+    }
 }
 
 void pmem_check_book(void) {
@@ -56,10 +58,10 @@ void pmem_check_book(void) {
         size_t len = book[pagen].len;
         size_t prv = book[pagen].prev;
 
-        assert(len != 0);
+        assert_int_ex(len, !=, 0);
 
         if(ppagen != -1) {
-            assert(prv == ppagen);
+            assert_int_ex(prv, ==, ppagen);
         }
 
         ppagen = pagen;
@@ -69,7 +71,18 @@ void pmem_check_book(void) {
     if(pagen != BOOK_END) {
         printf("Book ended at %lx instead of %lx\n", pagen, BOOK_END);
     }
-    assert(pagen == BOOK_END);
+    assert_int_ex(pagen, ==, BOOK_END);
+}
+
+static int pmem_try_merge_after(size_t page_n) {
+    size_t after = page_n + book[page_n].len;
+    if((after != BOOK_END) && book[page_n].status == book[after].status) {
+        merge_phy_page_range(page_n);
+        pmem_check_phy_entry(page_n);
+        assert(book[after].len == 0);
+        return 1;
+    }
+    return 0;
 }
 
 void pmem_try_merge(size_t page_n) {
@@ -107,6 +120,9 @@ void pmem_print_book(page_t *book, size_t page_n, size_t times) {
 }
 
 void pmem_break_page_to(size_t page_n, size_t len) {
+    assert_int_ex(len, >, 0);
+    assert_int_ex(len, <, TOTAL_PHY_PAGES);
+
     if(book[page_n].len == len) return;
 
     if(book[page_n].len > len && len != 0) {
@@ -177,11 +193,14 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
             goto er;
         }
     } else {
-        pmem_get_valid_page_entry(page_len);
-
+        page_n = pmem_get_valid_page_entry(page_n);
         if(book[page_n].len < page_len) {
-            pmem_try_merge(page_n);
-            goto er;
+            while(pmem_try_merge_after(page_n)) {
+                if(book[page_n].len >= page_len) break;
+            }
+            if(book[page_n].len < page_len) {
+                goto er;
+            }
         }
 
         if(book[page_n].len > page_len) {
@@ -202,6 +221,7 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
     result->data = cheri_setbounds(pair.data, length);
     result->code = cheri_setbounds(pair.code, length);
 
+    return;
     er:
     result->data = result->code = NULL;
     return;
