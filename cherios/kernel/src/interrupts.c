@@ -43,6 +43,7 @@ typedef struct interrupt_register_t {
 
 static interrupt_register_t int_child[7];
 
+register_t handle_mask = 0;
 
 /* FIXME This entire thing will break when remove access from the kernel to CP0
  * FIXME the solution will be to have the nano kernel expose a suitable interface
@@ -62,13 +63,14 @@ void kernel_interrupts_init(int enable_timer) {
 }
 
 static void kernel_interrupt_others(register_t pending) {
-	for(size_t i=0; i<7; i++) {
+	for(uint8_t i=0; i<7; i++) {
 		if(pending & (1<<i)) {
 			if(int_child[i].target == NULL) {
-				// This is not an error. For example UART always seems to be holding its interrupt (2) high
+				KERNEL_ERROR("Interrupt with no handle %d",i);
 				continue;
 			}
             KERNEL_TRACE("interrupt disable", "%ld", i);
+			handle_mask = (handle_mask & ~(1<<i));
 			cp0_status_im_disable(1<<i);
 			// FIXME we probabably want a seperate interrupt source from the kernel
 			// FIXME this needs locking
@@ -83,9 +85,9 @@ static void kernel_interrupt_others(register_t pending) {
 
 void kernel_interrupt(register_t cause) {
 	register_t ipending = cp0_cause_ipending_get(cause);
-	register_t toprocess = ipending & (~MIPS_CP0_CAUSE_IP_TIMER);
+	register_t toprocess = ipending & (~MIPS_CP0_CAUSE_IP_TIMER) & handle_mask;
     register_t mask = cp0_status_im_get();
-	KERNEL_TRACE("interrupt", "pending: %lx cpu: d ", ipending, cp0_get_cpuid());
+	KERNEL_TRACE("interrupt", "pending: %lx, to_process: %lx cpu: %d ", ipending, toprocess, cp0_get_cpuid());
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
 		kernel_timer();
 	}
@@ -111,6 +113,7 @@ int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 		return -1;
 	}
     // This will eventually fail when we can no longer access cp0
+	handle_mask |= (1 << number);
 	cp0_status_im_enable(1<<number);
 	return 0;
 }
