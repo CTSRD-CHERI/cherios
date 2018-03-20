@@ -42,6 +42,8 @@
 #ifdef HARDWARE_qemu
     #define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
     #define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
+	#define ASM_TRACE_ON 	"li $zero, 0xbeef\n"
+	#define ASM_TRACE_OFF 	"li $zero, 0xdead\n"
 
     #ifdef SMP_ENABLED
     #define HW_YIELD __asm__ __volatile__ ("nop; li  $zero, 0xea1d")
