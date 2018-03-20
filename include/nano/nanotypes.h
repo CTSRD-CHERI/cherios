@@ -144,7 +144,8 @@
     ITEM(page_ptable, 4)                           \
     ITEM(page_ptable_free, 5)                      \
     ITEM(page_transaction, 6)                      \
-    ITEM(page_io, 7)
+    ITEM(page_io, 7)                               \
+    ITEM(page_dirty, 8)
 
 #define NANO_KERNEL_RES_STATUS_ENUM_LIST(ITEM) \
     ITEM(res_open,          0)                  \

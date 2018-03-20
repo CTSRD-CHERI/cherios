@@ -2058,7 +2058,7 @@ free_mapping:
     beq         $t0, $t3, free_er
 
     dli         $t9, 2
-    dli         $a3, 0
+    dli         $a3, page_dirty
     beqz        $t1, 1f
     dsrl        $t8, $t3, PFN_SHIFT                     # the last level has a PFN entry for the TLB
     dli         $a3, page_ptable_free
