@@ -38,6 +38,7 @@ void ssleep(int n) {
 
 void nssleep(int n) {
 	for(int i=0; i<n; i++) {
+		HW_YIELD;
 		ssleep(0);
 	}
 }

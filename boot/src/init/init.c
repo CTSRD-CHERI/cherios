@@ -465,8 +465,7 @@ int main(init_info_t * init_info, capability pool_auth_cap) {
     printf("All modules loaded! waiting for finish...\n");
 
 	while(acts_alive(init_list, init_list_len)) {
-        HW_YIELD;
-        nssleep(10);
+        nssleep(100);
 	}
 
 	printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
