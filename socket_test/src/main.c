@@ -39,10 +39,10 @@
 #define INDIR_SIZE 16
 #define PORT 777
 
-#define BIG_TEST_SIZE 0x2000
+#define BIG_TEST_SIZE (1 << 12)
 
-struct unix_like_socket_stack {
-    unix_like_socket socket;
+struct stack_request {
+    uni_dir_socket_requester r;
     char* pad[INDIR_SIZE];
 };
 
@@ -57,22 +57,35 @@ const char* str4 = "Some more bytes in parts\n";
 
 void connector_start(register_t arg, capability carg) {
     char data_buffer[DATA_SIZE];
-    struct unix_like_socket_stack on_stack;
-    unix_like_socket* sock = &on_stack.socket;
 
-    int res = socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, INDIR_SIZE);
-    assert(res == 0);
+    unix_like_socket socket;
 
-    int result = socket_internal_connect(carg, PORT, &sock->socket);
-    assert(result == 0);
+    unix_like_socket* sock = &socket;
+
+    int res;
+
+    res = socket_internal_fulfiller_init(&sock->write.pull_writer, SOCK_TYPE_PULL);
+    assert_int_ex(res, ==, 0);
+    res = socket_internal_fulfiller_init(&sock->read.push_reader, SOCK_TYPE_PUSH);
+    assert_int_ex(res, ==, 0);
+    res = socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_READ | CONNECT_PULL_WRITE);
+    assert_int_ex(res, ==, 0);
+
+
+    int result = socket_internal_connect(carg, PORT, NULL, &sock->read.push_reader);
+    assert_int_ex(result, ==, 0);
+    result = socket_internal_connect(carg, PORT+1, NULL, &sock->write.pull_writer);
+    assert_int_ex(result, ==, 0);
 
     char buf[100];
 
     ssize_t rec = socket_recv(sock, buf, size1, MSG_NONE);
-    assert(rec == size1);
+    assert_int_ex(rec, ==, size1);
 
     // Test a basic send
     assert(strcmp(buf, str1) == 0);
+
+    // Test sending a message in parts
 
     ssize_t sent = socket_send(sock, str2, size2, MSG_NONE);
 
@@ -110,19 +123,10 @@ void connector_start(register_t arg, capability carg) {
 
     // Test the closing mechanic
 
-    res = socket_internal_close(&sock->socket);
-
-    assert(res == 0);
-    assert(sock->socket.reader.writer->access->reader_closed);
-    assert(sock->socket.writer.writer_closed);
-
-    rec = socket_recv(sock, buf, 1, MSG_NONE);
-
-    assert(rec == E_SOCKET_CLOSED);
-
-    sent = socket_send(sock, buf, 1, MSG_NONE);
-
-    assert(sent == E_SOCKET_CLOSED);
+    res = socket_internal_close_fulfiller(&sock->write.pull_writer);
+    assert_int_ex(res, ==, 0);
+    res = socket_internal_close_fulfiller(&sock->read.push_reader);
+    assert_int_ex(res, ==, 0);
 
     printf("Socket test part2 finished\n");
 }
@@ -134,14 +138,25 @@ int main(register_t arg, capability carg) {
     thread t = thread_new("socket_part2", 0, act_self_ref, &connector_start);
 
     char data_buffer[DATA_SIZE];
-    struct unix_like_socket_stack on_stack;
-    unix_like_socket* sock = &on_stack.socket;
+    struct stack_request on_stack1;
+    struct stack_request on_stack2;
+    unix_like_socket socket;
 
-    int res = socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, INDIR_SIZE);
-    assert(res == 0);
+    unix_like_socket* sock = &socket;
+    sock->write.push_writer = &on_stack1.r;
+    sock->read.pull_reader = &on_stack2.r;
 
-    int result = socket_internal_listen(PORT, &sock->socket);
-    assert(result == 0);
+    int res = socket_internal_requester_init(sock->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH);
+    assert_int_ex(res, ==, 0);
+    socket_internal_requester_init(sock->read.pull_reader, INDIR_SIZE, SOCK_TYPE_PULL);
+    assert_int_ex(res, ==, 0);
+    socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_WRITE | CONNECT_PULL_READ);
+    assert_int_ex(res, ==, 0);
+
+    int result = socket_internal_listen(PORT, sock->write.push_writer,NULL);
+    assert_int_ex(res, ==, 0);
+    result = socket_internal_listen(PORT+1, sock->read.pull_reader,NULL);
+    assert_int_ex(res, ==, 0);
 
     ssize_t sent = socket_send(sock, str1, size1, MSG_NONE);
     assert(sent == size1);
@@ -151,10 +166,10 @@ int main(register_t arg, capability carg) {
     size_t p1 = 13;
     size_t p2 = size2 + size3 - p1;
 
-    ssize_t rec = socket_recv(sock, buf, p1, MSG_NONE);
-    assert(rec == p1);
-    rec = socket_recv(sock, buf + p1, p2, MSG_NONE);
-    assert(rec == p2);
+    ssize_t rec = socket_recv(sock, buf, p1, MSG_NO_COPY);
+    assert_int_ex(rec, ==, p1);
+    rec = socket_recv(sock, buf + p1, p2, MSG_NO_COPY);
+    assert_int_ex(rec, ==, p2);
 
     // Test multiple sends with partial reads
     assert(strcmp(buf, str4) == 0);
@@ -182,27 +197,13 @@ int main(register_t arg, capability carg) {
     assert(sent == sizeof(capability));
     sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
     assert(sent == sizeof(capability));
+
     // Test the closing mechanic
 
-    rec = socket_recv(sock, buf, 1, MSG_NONE);
-
-    assert(rec == E_SOCKET_CLOSED);
-
-    assert(!sock->socket.reader.writer->access->reader_closed);
-    assert(sock->socket.reader.writer->writer_closed);
-
-    sent = socket_send(sock, buf, 1, MSG_NONE);
-
-    assert(sent == E_SOCKET_CLOSED);
-
-    assert(sock->socket.writer.reader_component.reader_closed);
-    assert(!sock->socket.writer.writer_closed);
-
-    res = socket_internal_close(&sock->socket);
-
-    assert(res == 0);
-    assert(sock->socket.reader.writer->access->reader_closed);
-    assert(sock->socket.writer.writer_closed);
+    rec = socket_recv(sock, buf, 1, MSG_NO_COPY);
+    assert_int_ex(rec, ==, E_SOCKET_CLOSED);
+    rec = socket_send(sock, buf, 1, MSG_NONE);
+    assert_int_ex(rec, ==, E_SOCKET_CLOSED);
 
     printf("Socket test finished\n");
 }

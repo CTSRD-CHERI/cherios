@@ -28,51 +28,53 @@
  * SUCH DAMAGE.
  */
 
+#include <queue.h>
+#include <sockets.h>
 #include "object.h"
 #include "string.h"
 #include "sockets.h"
 #include "stdio.h"
 
-static int is_empty(uni_dir_socket_writer* writer) {
-    return (writer->reader_component.read_ptr == writer->write_ptr);
+static int is_empty(uni_dir_socket_requester* requester) {
+    return (requester->fulfiller_component.fulfill_ptr == requester->requeste_ptr);
 }
 
-static int is_full(uni_dir_socket_writer* writer) {
-    return ((writer->write_ptr - writer->reader_component.read_ptr) == writer->buffer_size);
+static int is_full(uni_dir_socket_requester* requester) {
+    return ((requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr) == requester->buffer_size);
 }
 
-static uint16_t fill_level(uni_dir_socket_writer* writer) {
-    return (writer->write_ptr - writer->reader_component.read_ptr);
+static uint16_t fill_level(uni_dir_socket_requester* requester) {
+    return (requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr);
 }
 
-static uint16_t space(uni_dir_socket_writer* writer) {
-    return (writer->buffer_size - (writer->write_ptr - writer->reader_component.read_ptr));
+static uint16_t space(uni_dir_socket_requester* requester) {
+    return (requester->buffer_size - (requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr));
 }
 
-static uint16_t space_from_read_ptr(uni_dir_socket_writer* writer, uint16_t read_ptr) {
-    return (writer->buffer_size - (writer->write_ptr - read_ptr));
+static uint16_t space_from_fulfill_ptr(uni_dir_socket_requester* requester, uint16_t fulfill_ptr) {
+    return (requester->buffer_size - (requester->requeste_ptr - fulfill_ptr));
 }
 
 static size_t data_buf_space(data_ring_buffer* data_buffer) {
-    return (data_buffer->buffer_size - (data_buffer->write_ptr - data_buffer->read_ptr));
+    return (data_buffer->buffer_size - (data_buffer->requeste_ptr - data_buffer->fulfill_ptr));
 }
 
-static int socket_internal_write_space_wait(uni_dir_socket_writer* writer, uint16_t need_space, int dont_wait) {
+int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait) {
 
-    if(writer->reader_component.reader_closed || writer->writer_closed) {
+    if(requester->fulfiller_component.fulfiller_closed || requester->requester_closed) {
         return E_SOCKET_CLOSED;
     }
 
-    int full = space(writer) <= need_space;
+    int full = space(requester) <= need_space;
 
     if(!full) return 0;
 
     if(full && dont_wait) return E_AGAIN;
 
-    volatile uint16_t* read_ptr_cap = &(writer->reader_component.read_ptr);
-    volatile act_kt* writer_waiting_cap = &writer->reader_component.writer_waiting;
-    uint16_t write_ptr = writer->write_ptr;
-    uint16_t check = write_ptr + need_space - (writer->buffer_size);
+    volatile uint16_t* fulfill_ptr_cap = &(requester->fulfiller_component.fulfill_ptr);
+    volatile act_kt* requester_waiting_cap = &requester->fulfiller_component.requester_waiting;
+    uint16_t requeste_ptr = requester->requeste_ptr;
+    uint16_t check =  (requester->buffer_size) - need_space; // This much allowed to be taken
 
     while(full) {
         // Gives 1 if full (and sets waiting), 2 if closed, 0 otherwise
@@ -80,22 +82,25 @@ static int socket_internal_write_space_wait(uni_dir_socket_writer* writer, uint1
         SANE_ASM
         "2:      cllc    $c1, %[waiting_cap]        \n"     // Load linked waiting
                 "clb    $at, $zero, 0(%[cc])        \n"
-                "bnez   $at, 1f                     \n"     // Check reader didn't close the socket
+                "bnez   $at, 1f                     \n"     // Check fulfiller didn't close the socket
                 "li     %[res], 2                   \n"
-                "clh    $at, $zero, 0(%[read_ptr_cap])\n"   // Load read ptr
-                "sltu   $at, %[check_val], $at      \n"     // 1 if not full
-                "bnez   $at, 1f                     \n"     // If not full go to next step
+                "clhu   $at, $zero, 0(%[fulfill_ptr_cap])\n"   // Load fulfill ptr
+                "subu   $at, %[req], $at            \n"
+                "andi   $at, $at, (1<<16)-1         \n"     // How much space is taken
+                "sltu   $at, %[check_val], $at      \n"     // 0 if enough space
+                "beqz   $at, 1f                     \n"     // If not full go to next step
                 "li     %[res], 0                   \n"
                 "cscc   $at, %[self], %[waiting_cap] \n" // Try set in waiting state
-                "beqz   $at, 2b                     \n"     // If we failed to write the cap, try all this again
+                "beqz   $at, 2b                     \n"     // If we failed to requeste the cap, try all this again
                 "li     %[res], 1                   \n"
                 "1:                                 \n"
         : [res]"=r"(full)
-        : [waiting_cap]"C"(writer_waiting_cap),
+        : [waiting_cap]"C"(requester_waiting_cap),
         [self]"C"(act_self_notify_ref),
-        [read_ptr_cap]"C"(read_ptr_cap),
+        [fulfill_ptr_cap]"C"(fulfill_ptr_cap),
         [check_val]"r"(check),
-        [cc]"C"(&writer->reader_component.reader_closed)
+        [req]"r"(requeste_ptr),
+        [cc]"C"(&requester->fulfiller_component.fulfiller_closed)
         : "$c1", "at"
         );
 
@@ -108,56 +113,57 @@ static int socket_internal_write_space_wait(uni_dir_socket_writer* writer, uint1
     return 0;
 }
 
-static int socket_internal_write(uni_dir_socket_writer* writer, char* buffer, int dont_wait) {
+// Call space wait first!
 
-    socket_internal_write_space_wait(writer, 1, dont_wait);
+int socket_internal_requester_request(uni_dir_socket_requester* requester, char* buffer, int dont_wait) {
 
-    uint16_t write_ptr = writer->write_ptr;
+    uint16_t requester_ptr = requester->requeste_ptr;
 
     // Put a cap in the buffer
-    writer->indirect_ring_buffer[write_ptr & (writer->buffer_size-1)] = buffer;
+    requester->indirect_ring_buffer[requester_ptr & (requester->buffer_size-1)] = buffer;
 
 
-    uint16_t write_ptr_new = (write_ptr + 1);
-
-    // Updates write_ptr. Will cause reader to fail setting waiting on race. Returns the waiter (if any)
+    uint16_t requester_ptr_new = (requester_ptr + 1);
+    volatile uint16_t* request_cap = &requester->requeste_ptr;
+    // Updates requeste_ptr. Will cause fulfiller to fail setting waiting on race. Returns the waiter (if any)
     act_kt waiter;
+    volatile act_kt* waiter_cap = &requester->fulfiller_component.fulfiller_waiting;
     __asm__ __volatile(
             "cllc   %[res], %[waiting_cap]                     \n"
-            "csh    %[new_write], $zero, 0(%[new_write_cap])   \n"
+            "csh    %[new_requeste], $zero, 0(%[new_cap])      \n"
             "cscc   $at, %[res], %[waiting_cap]                \n"
             "clc    %[res], $zero, 0(%[waiting_cap])           \n"
-    : [res]"=C"(waiter)
-    : [waiting_cap]"C"(&writer->reader_component.reader_waiting),
-    [new_write_cap]"C"(&writer->write_ptr),
-    [new_write]"r"(write_ptr_new)
+    : [res]"=C"(waiter),
+    [new_cap]"+C"(request_cap) // This is listed as an output because otherwise it seems to get clobered...
+    : [waiting_cap]"C"(waiter_cap),
+    [new_requeste]"r"(requester_ptr_new)
     : "at"
     );
 
     if(waiter) {
-        writer->reader_component.reader_waiting = NULL;
+        *waiter_cap = NULL;
         syscall_cond_notify(waiter);
     }
 
     return 0;
 }
 
-static int socket_internal_read_peek(uni_dir_socket_reader* reader, uint16_t amount, int dont_wait) {
-    uni_dir_socket_writer_reader_component* access = reader->writer->access;
+int socket_internal_fulfill_peek(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait) {
+    uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
 
-    if(reader->writer->writer_closed || access->reader_closed) {
+    if(fulfiller->requester->requester_closed || access->fulfiller_closed) {
         return E_SOCKET_CLOSED;
     }
 
-    int empty = fill_level(reader->writer) < amount;
+    int empty = fill_level(fulfiller->requester) < amount;
 
     if(!empty) return 0;
 
     if(dont_wait) return E_AGAIN;
 
-    volatile act_kt* reader_waiting_cap = &access->reader_waiting;
-    volatile uint16_t* write_ptr_cap = &(reader->writer->write_ptr);
-    uint16_t check = amount + access->read_ptr;
+    volatile act_kt* fulfiller_waiting_cap = &access->fulfiller_waiting;
+    volatile uint16_t* requeste_ptr_cap = &(fulfiller->requester->requeste_ptr);
+    uint16_t check = amount;
 
     while(empty) {
         // Gives 1 if not full enough and sets waiting
@@ -165,22 +171,25 @@ static int socket_internal_read_peek(uni_dir_socket_reader* reader, uint16_t amo
         SANE_ASM
         "2:      cllc   $c1, %[waiting_cap]                 \n" // Load linked waiting
                 "clb    $at, $zero, 0(%[cc])                \n"
-                "bnez   $at, 1f                             \n" // Check writer didn't close the socket
+                "bnez   $at, 1f                             \n" // Check requester didn't close the socket
                 "li     %[res], 2                           \n"
-                "clh    %[res], $zero, 0(%[write_ptr_cap])  \n" // Load read ptr
-                "sltu   %[res], %[res], %[check_val]        \n" // Check if there is enough stuff
+                "clhu   %[res], $zero, 0(%[requeste_ptr_cap])  \n" // Load request ptr
+                "subu   %[res], %[res], %[fulfi]            \n"
+                "andi   %[res], %[res], (1<<16)-1           \n"     // How much has been requested
+                "sltu   %[res], %[res], %[check_val]        \n" // 1 if: requested < amount
                 "beqz   %[res], 1f                          \n" // If enough go to next step
                 "nop                                        \n"
                 "cscc   %[res], %[self], %[waiting_cap]     \n"  // Try set in waiting state
-                "beqz   %[res], 2b                          \n"     // If we failed to write the cap, try all this again
+                "beqz   %[res], 2b                          \n"     // If we failed to requeste the cap, try all this again
                 "li     %[res], 1                           \n"
         "1:\n"
-        : [res]"=r"(empty)
-        : [waiting_cap]"C"(reader_waiting_cap),
+        : [res]"+r"(empty)
+        : [waiting_cap]"C"(fulfiller_waiting_cap),
         [self]"C"(act_self_notify_ref),
-        [write_ptr_cap]"C"(write_ptr_cap),
+        [requeste_ptr_cap]"C"(requeste_ptr_cap),
+        [fulfi]"r"(access->fulfill_ptr),
         [check_val]"r"(check),
-        [cc]"C"(&reader->writer->writer_closed)
+        [cc]"C"(&fulfiller->requester->requester_closed)
         : "$c1"
         );
 
@@ -194,73 +203,163 @@ static int socket_internal_read_peek(uni_dir_socket_reader* reader, uint16_t amo
     return 0;
 }
 
-// Progresses read_ptr. Call peek FIRST.
+// Progresses fulfill_ptr. Call peek FIRST.
 
-static int socket_internal_read_progress(uni_dir_socket_reader* reader, uint16_t amount, int dont_wait) {
+int socket_internal_fulfill_progress(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait) {
 
-    uni_dir_socket_writer_reader_component* access = reader->writer->access;
+    uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
 
-    uint16_t read_ptr_new = access->read_ptr + amount;
+    uint16_t fulfill_ptr_new = access->fulfill_ptr + amount;
 
-    // Updates read_ptr. Will cause writer to fail setting waiting on race. Returns the waiter (if any)
+    // Updates fulfill_ptr. Will cause requester to fail setting waiting on race. Returns the waiter (if any)
     act_kt waiter;
     __asm__ __volatile(
         "cllc   %[res], %[waiting_cap]                     \n"
-        "csh    %[new_read], $zero, 0(%[new_read_cap])     \n"
+        "csh    %[new_fulfill], $zero, 0(%[new_fulfill_cap])     \n"
         "cscc   $at, %[res], %[waiting_cap]                \n"
         "clc    %[res], $zero, 0(%[waiting_cap])           \n"
     : [res]"=C"(waiter)
-    : [waiting_cap]"C"(&access->writer_waiting),
-      [new_read_cap]"C"(&access->read_ptr),
-      [new_read]"r"(read_ptr_new)
+    : [waiting_cap]"C"(&access->requester_waiting),
+      [new_fulfill_cap]"C"(&access->fulfill_ptr),
+      [new_fulfill]"r"(fulfill_ptr_new)
     : "at"
     );
 
     if(waiter) {
-        access->writer_waiting = NULL;
+        access->requester_waiting = NULL;
         syscall_cond_notify(waiter);
     }
 
     return 0;
 }
 
-// Brings the data buffer read pointer back in line.
-static uint16_t socket_internal_data_buffer_reclaim(data_ring_buffer* data_buffer, uni_dir_socket_writer* writer) {
+ssize_t socket_internal_fulfill(uni_dir_socket_fulfiller* fulfiller, char* buf, size_t length, enum SOCKET_FLAGS flags) {
+    int res;
+
+    uni_dir_socket_requester* requester = fulfiller->requester;
+    uint16_t mask = requester->buffer_size - 1;
+    uint16_t fulfill_ptr = requester->fulfiller_component.fulfill_ptr;
+    int socket_is_pull = requester->socket_type == SOCK_TYPE_PULL;
+
+    if(requester->requester_closed || requester->fulfiller_component.fulfiller_closed) {
+        return E_SOCKET_CLOSED;
+    }
+
+    if(length == 0) return 0;
+
+    register_t force_request_type;
+
+    if(socket_is_pull) {
+        if((flags & MSG_NO_CAPS)) {
+            buf = cheri_andperm(buf, CHERI_PERM_LOAD);
+        }
+        force_request_type = CHERI_PERM_STORE | CHERI_PERM_STORE_CAP;
+    } else {
+        if((flags & MSG_NO_CAPS)) {
+            force_request_type = CHERI_PERM_LOAD;
+        } else {
+            force_request_type = CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP;
+        }
+    }
+
+    size_t bytes_left = length;
+
+    size_t partial_bytes = fulfiller->partial_fulfill_bytes;
+
+    while(bytes_left != 0) {
+
+        // If this is non zero then we will have at least one capability usable
+        if(partial_bytes == 0) {
+            res = socket_internal_fulfill_peek(fulfiller, 1, flags & MSG_DONT_WAIT);
+            if(res < 0) break;
+        }
+
+        char* cap = requester->indirect_ring_buffer[fulfill_ptr & mask];
+
+        cap = cheri_andperm(cap, force_request_type);
+
+        size_t cap_len = cheri_getlen(cap);
+
+        size_t effective_length = cap_len - partial_bytes;
+
+        size_t to_copy;
+        size_t new_partial;
+
+        if(effective_length > bytes_left) {
+            to_copy = bytes_left;
+            new_partial = partial_bytes + bytes_left;
+        } else {
+            to_copy = effective_length;
+            new_partial = 0;
+        }
+
+        char* cap1 = buf + length - bytes_left;
+        char* cap2 = cap + partial_bytes;
+
+        char* dest = socket_is_pull ? cap2 : cap1;
+        char* src = socket_is_pull ? cap1 : cap2;
+
+        memcpy(dest, src, to_copy);
+
+        bytes_left -= to_copy;
+        partial_bytes = new_partial;
+
+        if(partial_bytes == 0) {
+            fulfill_ptr++;
+            // TODO we really could progress multiple caps at a time, but for a large request this might fill up the buffer
+            res = socket_internal_fulfill_progress(fulfiller, 1, (flags & MSG_DONT_WAIT));
+            if(res < 0) break;
+        }
+    }
+
+    fulfiller->partial_fulfill_bytes = partial_bytes;
+    ssize_t actually_fulfill = length - bytes_left;
+
+    return (actually_fulfill == 0) ? res : actually_fulfill;
+}
+
+// Brings the data buffer fulfill pointer back in line.
+static uint16_t socket_internal_data_buffer_progress(data_ring_buffer* data_buffer, uni_dir_socket_requester* requester) {
 
     // TODO need a sync here?
-    uint16_t process_to = writer->reader_component.read_ptr;
+    uint16_t process_to = requester->fulfiller_component.fulfill_ptr;
 
-    if(data_buffer->last_processed_read_ptr != process_to) {
+    if(data_buffer->last_processed_fulfill_ptr != process_to) {
         // We need to reclaim up to this capability
 
-        uint16_t last_read = (process_to - 1) & (writer->buffer_size-1);
+        uint16_t last_fulfill = (process_to - 1) & (requester->buffer_size-1);
 
-        volatile char* last_read_cap = writer->indirect_ring_buffer[last_read];
+        volatile char* last_fulfill_cap = requester->indirect_ring_buffer[last_fulfill];
 
         size_t mask = data_buffer->buffer_size-1;
 
-        size_t ends_at = (cheri_getbase(last_read_cap) + cheri_getlen(last_read_cap)) - cheri_getbase(data_buffer->buffer);
+        size_t ends_at = (cheri_getbase(last_fulfill_cap) + cheri_getlen(last_fulfill_cap)) - cheri_getbase(data_buffer->buffer);
 
-        size_t old_read_ptr = data_buffer->read_ptr;
-        size_t new_read_ptr = (old_read_ptr & ~mask) | ends_at;
+        size_t old_fulfill_ptr = data_buffer->fulfill_ptr;
+        size_t new_fulfill_ptr = (old_fulfill_ptr & ~mask) | ends_at;
 
-        if(new_read_ptr <= old_read_ptr) new_read_ptr+= data_buffer->buffer_size;
+        if(new_fulfill_ptr <= old_fulfill_ptr) new_fulfill_ptr+= data_buffer->buffer_size;
 
-        data_buffer->read_ptr = new_read_ptr;
-        data_buffer->last_processed_read_ptr = process_to;
+        data_buffer->fulfill_ptr = new_fulfill_ptr;
+        data_buffer->last_processed_fulfill_ptr = process_to;
     }
 
     return process_to;
 }
 
-static ssize_t socket_internal_data_buffer_write(const char* buf, size_t size,
-                                                 data_ring_buffer* data_buffer, uni_dir_socket_writer* writer,
-                                                 int dont_wait, register_t perms) {
+static ssize_t socket_internal_data_buffer_to_push_request
+        (const char* buf, size_t size,
+        data_ring_buffer* data_buffer, uni_dir_socket_requester* requester,
+        int dont_wait, register_t perms) {
     int res;
+
+    if(requester->socket_type == SOCK_TYPE_PULL) return E_SOCKET_WRONG_TYPE;
+
+    if(size == 0) return 0;
 
     size_t mask = data_buffer->buffer_size-1;
 
-    size_t copy_from = (data_buffer->write_ptr);
+    size_t copy_from = (data_buffer->requeste_ptr);
 
     size_t align_mask = sizeof(capability)-1;
     size_t buf_align = ((size_t)buf) & align_mask;
@@ -277,116 +376,183 @@ static ssize_t socket_internal_data_buffer_write(const char* buf, size_t size,
 
     int two_parts = part_1 < size;
 
-    res = socket_internal_write_space_wait(writer, two_parts ? 2 : 1, dont_wait);
+    res = socket_internal_requester_space_wait(requester, two_parts ? 2 : 1, dont_wait);
 
     if(res < 0 ) return res;
 
-    // The two write buffers keep falling out of sync. Bring back in line.
-    uint16_t proc_to = socket_internal_data_buffer_reclaim(data_buffer, writer);
+    // The request buffer and data buffer keep falling out of sync. Bring back in line.
+    uint16_t proc_to = socket_internal_data_buffer_progress(data_buffer, requester);
 
     size_t data_space = data_buf_space(data_buffer);
 
     size += extra_to_align;
-    // Can't write this message because the data buffer does not have enough space
+    // Can't requeste this message because the data buffer does not have enough space
     if(data_space < size && dont_wait) return E_AGAIN;
 
     // Reclaim data buffer space until there is enough to copy
-    uint16_t write_ptr = writer->write_ptr;
+    uint16_t requeste_ptr = requester->requeste_ptr;
     while (data_space <= size) {
-        uint16_t read_ptr = writer->reader_component.read_ptr;
+        uint16_t fulfill_ptr = requester->fulfiller_component.fulfill_ptr;
 
-        if(read_ptr == proc_to) {
-            uint16_t proc_space = write_ptr - read_ptr;
+        if(fulfill_ptr == proc_to) {
+            uint16_t proc_space = requeste_ptr - fulfill_ptr;
             // Wait for space to increase by at least 1
-            res = socket_internal_write_space_wait(writer, proc_space+1, dont_wait);
+            res = socket_internal_requester_space_wait(requester, proc_space+1, dont_wait);
 
             if(res < 0) return res;
         }
 
-        proc_to = socket_internal_data_buffer_reclaim(data_buffer, writer);
+        proc_to = socket_internal_data_buffer_progress(data_buffer, requester);
         data_space = data_buf_space(data_buffer);
     }
 
     size-=extra_to_align;
-    data_buffer->write_ptr += extra_to_align;
+    data_buffer->requeste_ptr += extra_to_align;
 
-    // We are okay to make a write. First copy to buffer and then send those bytes.
+    // We are okay to make a requeste. First copy to buffer and then send those bytes.
     part_1 = two_parts ? part_1 : size;
 
     memcpy(data_buffer->buffer + copy_from, buf, part_1);
     char* cap1 = cheri_setbounds(data_buffer->buffer + copy_from, part_1);
     cap1 = cheri_andperm(cap1, perms);
-    res = socket_internal_write(writer, cap1, dont_wait);
+    res = socket_internal_requester_request(requester, cap1, dont_wait);
     if(res < 0) return res;
-    data_buffer->write_ptr+=part_1;
+    data_buffer->requeste_ptr+=part_1;
 
     if(two_parts) {
         size_t part_2 = size - part_1;
         memcpy(data_buffer->buffer, buf + part_1, part_2);
         char* cap2 = cheri_setbounds(data_buffer->buffer, part_2);
         cap2 = cheri_andperm(cap2, perms);
-        res = socket_internal_write(writer, cap2, dont_wait);
+        res = socket_internal_requester_request(requester, cap2, dont_wait);
         if(res < 0) return res;
-        data_buffer->write_ptr+=part_2;
+        data_buffer->requeste_ptr+=part_2;
     }
 
     return size;
 }
 
-int socket_internal_init(bi_dir_socket* sock, uint16_t buffer_size) {
+int socket_internal_fulfiller_init(uni_dir_socket_fulfiller* fulfiller, uint8_t socket_type) {
+    fulfiller->requester = NULL;
+    fulfiller->partial_fulfill_bytes = 0;
+    fulfiller->socket_type = socket_type;
+    return 0;
+}
+
+int socket_internal_requester_init(uni_dir_socket_requester* requester, uint16_t buffer_size, uint8_t socket_type) {
     if(!is_power_2(buffer_size)) return E_BUFFER_SIZE_NOT_POWER_2;
 
-    bzero(sock, sizeof(bi_dir_socket));
-    sock->writer.buffer_size = buffer_size;
-    uni_dir_socket_writer_reader_component* access = &(sock->writer.reader_component);
-    access = cheri_setbounds(access, sizeof(uni_dir_socket_writer_reader_component));
-    sock->writer.access = access;
+    bzero(requester, SIZE_OF_request(buffer_size));
+    requester->buffer_size = buffer_size;
+    requester->socket_type = socket_type;
+    uni_dir_socket_requester_fulfiller_component* access = &(requester->fulfiller_component);
+    access = cheri_setbounds(access, sizeof(uni_dir_socket_requester_fulfiller_component));
+    requester->access = access;
 
     return 0;
 }
 
-int socket_internal_listen(register_t port, bi_dir_socket* sock) {
+
+int socket_internal_listen(register_t port,
+                           uni_dir_socket_requester* requester,
+                           uni_dir_socket_fulfiller* fulfiller) {
+
+    if(requester == NULL && fulfiller == NULL) return E_SOCKET_NO_DIRECTION;
+
+    // THEIR connection type
+    enum socket_connect_type con_type = CONNECT_NONE;
+    capability ro_req = NULL;
+    if(requester) {
+        ro_req = (capability)cheri_andperm(requester, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
+        if(requester->socket_type == SOCK_TYPE_PULL) {
+            con_type |= CONNECT_PULL_WRITE;
+        } else {
+            con_type |= CONNECT_PUSH_READ;
+        }
+    }
+
+    if(fulfiller) {
+        if(fulfiller->socket_type == SOCK_TYPE_PULL) {
+            con_type |= CONNECT_PULL_READ;
+        } else {
+            con_type |= CONNECT_PUSH_WRITE;
+        }
+    }
+
     msg_t msg;
     pop_msg(&msg);
 
-    if(msg.c5 == NULL) return (E_CONNECT_FAIL);
-
-    if(msg.v0 != port || msg.c3 == NULL) {
-        // Send failure
-        message_reply((capability)E_CONNECT_FAIL,0,0,msg.c2, msg.c1);
-        return (E_CONNECT_FAIL);
+    if(msg.v0 != SOCKET_CONNECT_IPC_NO) {
+        return E_CONNECT_FAIL;
     }
 
-    // Get socket struct from connector
-    act_kt sender = msg.c5;
-    sock->reader.writer = (uni_dir_socket_writer*) msg.c3;
+    if(msg.a0 != port) {
+        message_reply((capability)E_CONNECT_FAIL_WRONG_PORT,0,0,msg.c2, msg.c1);
+        return (E_CONNECT_FAIL_WRONG_PORT);
+    }
 
-    // Construct our own socket struct
-    write_ptr_t read_only_writer = (write_ptr_t)cheri_andperm(&(sock->writer), CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
+    if(msg.a1 != con_type) {
+        // Send failure
+        message_reply((capability)E_CONNECT_FAIL_WRONG_TYPE,0,0,msg.c2, msg.c1);
+        return (E_CONNECT_FAIL_WRONG_TYPE);
+    }
+
+    if(fulfiller) {
+        if(msg.c3 == NULL) {
+            message_reply((capability)E_CONNECT_FAIL,0,0,msg.c2, msg.c1);
+            return (E_CONNECT_FAIL);
+        }
+        fulfiller->requester = (uni_dir_socket_requester*) msg.c3;
+    }
 
     // ACK receipt
-    message_reply((capability)read_only_writer,0,0,msg.c2, msg.c1);
+    message_reply((capability)ro_req,0,0,msg.c2, msg.c1);
 
     // TODO should we add an extra ack?
 
     return 0;
 }
 
-int socket_internal_connect(act_kt target, register_t port, bi_dir_socket* sock) {
+int socket_internal_connect(act_kt target, register_t port,
+                            uni_dir_socket_requester* requester,
+                            uni_dir_socket_fulfiller* fulfiller) {
+    if(requester == NULL && fulfiller == NULL) return E_SOCKET_NO_DIRECTION;
+
     msg_t msg;
 
-    // Construct our own socket struct
-    capability read_only_writer = (capability)cheri_andperm(&(sock->writer), CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
-    // Send socket details
+    enum socket_connect_type con_type = CONNECT_NONE;
+    capability ro_req = NULL;
 
-    capability cap_result = message_send_c(0,0,0,0,read_only_writer, NULL, act_self_ref, NULL, target, SYNC_CALL, port);
+    if(requester) {
+        ro_req = (capability)cheri_andperm(requester, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
+        if(requester->socket_type == SOCK_TYPE_PULL) {
+            con_type |= CONNECT_PULL_READ;
+        } else {
+            con_type |= CONNECT_PUSH_WRITE;
+        }
+    }
 
-    ERROR_T(write_ptr_t) res = ER_T_FROM_CAP(write_ptr_t, cap_result);
+    if(fulfiller) {
+        if(fulfiller->socket_type == SOCK_TYPE_PULL) {
+            con_type |= CONNECT_PULL_WRITE;
+        } else {
+            con_type |= CONNECT_PUSH_READ;
+        }
+    }
+
+    capability cap_result = message_send_c(port,con_type,0,0,(capability)ro_req, NULL, NULL, NULL, target, SYNC_CALL, SOCKET_CONNECT_IPC_NO);
+
+    ERROR_T(requester_ptr_t) res = ER_T_FROM_CAP(requester_ptr_t, cap_result);
 
     // Check ACK
     if(!IS_VALID(res)) return (int)res.er;
 
-    sock->reader.writer = (uni_dir_socket_writer*) res.val;
+    if(fulfiller) {
+        if(res.val == NULL) {
+            return E_CONNECT_FAIL;
+        }
+        fulfiller->requester = (uni_dir_socket_requester*) res.val;
+    }
 
     return 0;
 }
@@ -402,7 +568,7 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
         return 0; // If the other has closed on their end they won't expect a signal
     }
 
-    // Otherwise the reader may be about to sleep / already be asleep.
+    // Otherwise the fulfiller may be about to sleep / alfulfilly be asleep.
 
     act_notify_kt waiter;
 
@@ -424,127 +590,125 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
     return 0;
 }
 
-int socket_internal_close_writer(uni_dir_socket_writer* writer) {
-    return socket_internal_close_safe(&writer->writer_closed,
-                                      &writer->reader_component.reader_closed,
-                                      &writer->reader_component.reader_waiting);
+int socket_internal_close_requester(uni_dir_socket_requester* requester) {
+    return socket_internal_close_safe(&requester->requester_closed,
+                                      &requester->fulfiller_component.fulfiller_closed,
+                                      &requester->fulfiller_component.fulfiller_waiting);
 }
 
-int socket_internal_close_reader(uni_dir_socket_reader* reader) {
-    uni_dir_socket_writer_reader_component* access = reader->writer->access;
-    return socket_internal_close_safe(&access->reader_closed,
-                                      &reader->writer->writer_closed,
-                                      &access->writer_waiting);
+int socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller) {
+    uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
+    return socket_internal_close_safe(&access->fulfiller_closed,
+                                      &fulfiller->requester->requester_closed,
+                                      &access->requester_waiting);
 }
 
-int socket_internal_close(bi_dir_socket* sock) {
-    int res;
-    res = socket_internal_close_reader(&sock->reader);
-    int res2;
-    res2 = socket_internal_close_writer(&sock->writer);
 
-    return (res | res2);
-}
-
-int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags, char* data_buffer, size_t data_buffer_size, uint16_t internal_buffer_size) {
+static int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, size_t data_buffer_size) {
     if(!is_power_2(data_buffer_size)) return E_BUFFER_SIZE_NOT_POWER_2;
 
-    int res = socket_internal_init(&sock->socket, internal_buffer_size);
-    if(res < 0) return res;
-
-    sock->flags = flags;
-
-    sock->copy_buffer.buffer_size = data_buffer_size;
-    sock->copy_buffer.buffer = cheri_setbounds(data_buffer, data_buffer_size);
-    sock->copy_buffer.read_ptr = 0;
-    sock->copy_buffer.write_ptr = 0;
-    sock->copy_buffer.last_processed_read_ptr = 0;
+    buffer->buffer_size = data_buffer_size;
+    buffer->buffer = cheri_setbounds(char_buffer, data_buffer_size);
+    buffer->fulfill_ptr = 0;
+    buffer->requeste_ptr = 0;
+    buffer->last_processed_fulfill_ptr = 0;
 
     return 0;
 }
 
+int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
+                char* data_buffer, size_t data_buffer_size,
+                enum socket_connect_type con_type) {
+
+    sock->con_type = con_type;
+
+    sock->flags = flags;
+
+    if(data_buffer) {
+        return init_data_buffer(&sock->write_copy_buffer, data_buffer, data_buffer_size);
+    } else {
+
+        // If no data buffer is provided we may very well wait and cannot perform a copy
+        if((flags & MSG_DONT_WAIT)) return E_SOCKET_WRONG_TYPE;
+        if((con_type & CONNECT_PUSH_WRITE) && !(flags & MSG_NO_COPY)) return E_COPY_NEEDED;
+
+        return 0;
+    }
+}
+
+ssize_t socket_requester_request_wait_for_fulfill(uni_dir_socket_requester* requester, char* buf) {
+    int ret;
+
+    ret = socket_internal_requester_space_wait(requester, 1, 0);
+
+    if(ret < 0) return ret;
+
+    socket_internal_requester_request(requester, buf, 0);
+
+    // Wait for everything to be consumed
+    return socket_internal_requester_space_wait(requester, requester->buffer_size, 0);
+}
+
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags) {
     // Need to copy to buffer in order not to expose buf
+    if(sock->con_type & CONNECT_PUSH_WRITE) {
+        uni_dir_socket_requester* requester = sock->write.push_writer;
+        int dont_wait;
 
-    if(length == 0) return 0;
+        dont_wait = (flags | sock->flags) & MSG_DONT_WAIT;
 
-    if(length > sock->copy_buffer.buffer_size) return E_MSG_SIZE;
+        if((sock->flags | flags) & MSG_NO_COPY) {
+            if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 
-    uni_dir_socket_writer* writer = &sock->socket.writer;
+            return socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length));
+        } else {
+            if(length > sock->write_copy_buffer.buffer_size) return E_MSG_SIZE;
 
-    register_t perms = CHERI_PERM_LOAD;
-    if(!((flags | sock->flags) & MSG_NO_CAPS)) perms |= CHERI_PERM_LOAD_CAP;
+            register_t perms = CHERI_PERM_LOAD;
+            if(!((flags | sock->flags) & MSG_NO_CAPS)) perms |= CHERI_PERM_LOAD_CAP;
 
-    return socket_internal_data_buffer_write(buf, length,
-                                      &sock->copy_buffer, writer,
-                                             (sock->flags | flags) & MSG_DONT_WAIT, perms);
+            return socket_internal_data_buffer_to_push_request(buf, length,
+                                                               &sock->write_copy_buffer, requester,
+                                                               dont_wait, perms);
+        }
+
+    } else if(sock->con_type & CONNECT_PULL_WRITE) {
+        uni_dir_socket_fulfiller* fulfiller = &sock->write.pull_writer;
+
+        return socket_internal_fulfill(fulfiller, buf, length, sock->flags | flags);
+    } else {
+        return E_SOCKET_WRONG_TYPE;
+    }
+
 }
+
+
 
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags) {
 
-    int res;
-    uni_dir_socket_writer* writer = sock->socket.reader.writer;
-    uint16_t mask = writer->buffer_size - 1;
-    uint16_t read_ptr = writer->reader_component.read_ptr;
+    if(sock->con_type & CONNECT_PULL_READ) {
+        uni_dir_socket_requester* requester = sock->read.pull_reader;
+        int dont_wait;
 
-    if(writer->writer_closed || writer->reader_component.reader_closed) {
-        return E_SOCKET_CLOSED;
-    }
+        dont_wait = (flags | sock->flags) & MSG_DONT_WAIT;
 
-    if(length == 0) return 0;
+        if((sock->flags | flags) & MSG_NO_COPY) {
+            if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 
-    size_t bytes_left = length;
-
-
-
-    size_t partial_bytes = sock->socket.reader.partial_read_bytes;
-
-    while(bytes_left != 0) {
-
-        // If this is non zero then we will have at least one capability usable
-        if(partial_bytes == 0) {
-            res = socket_internal_read_peek(&sock->socket.reader, 1, (sock->flags | flags) & MSG_DONT_WAIT);
-            if(res < 0) break;
-        }
-
-        char* cap = writer->indirect_ring_buffer[read_ptr & mask];
-
-        if((flags | sock->flags) & MSG_NO_CAPS) {
-            cap = cheri_andperm(cap, CHERI_PERM_LOAD);
-        }
-
-        size_t cap_len = cheri_getlen(cap);
-
-        size_t effective_length = cap_len - partial_bytes;
-
-        size_t to_copy;
-        size_t new_partial;
-
-        if(effective_length > bytes_left) {
-            to_copy = bytes_left;
-            new_partial = partial_bytes + bytes_left;
+            int ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length));
+            if(ret < 0) return ret;
+            return length;
         } else {
-            to_copy = effective_length;
-            new_partial = 0;
+            // TODO Should I put this in adata  buffer? Probably, or when a flag is given, but
+            // TODO need to re-write data buffer management a little bit for that For now this just blocks
+
+            return E_UNSUPPORTED;
         }
 
-        memcpy(buf + length - bytes_left, cap + partial_bytes, to_copy);
-        bytes_left -= to_copy;
-        partial_bytes = new_partial;
-
-        if(partial_bytes == 0) {
-            read_ptr++;
-            // TODO we really could progress multiple caps at a time, but for a large request this might fill up the buffer
-            res = socket_internal_read_progress(&sock->socket.reader, 1, (sock->flags | flags) & MSG_DONT_WAIT);
-            if(res < 0) break;
-        }
+    } else if(sock->con_type & CONNECT_PUSH_READ) {
+        uni_dir_socket_fulfiller* fulfiller = &sock->read.push_reader;
+        return socket_internal_fulfill(fulfiller, buf, length, (flags | sock->flags));
+    } else {
+        return E_SOCKET_WRONG_TYPE;
     }
-
-    sock->socket.reader.partial_read_bytes = partial_bytes;
-    ssize_t actually_read = length - bytes_left;
-
-
-    // FIXME: Need to somehow convey res as we may have had an error
-    if(actually_read == 0) return res;
-    return actually_read;
 }
