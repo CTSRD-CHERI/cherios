@@ -43,7 +43,7 @@ typedef struct {
 
     register_t  padding;
 
-    capability c2,c3,c4,c5,c6,c7,c8,c9, c12, c13,c14,c16,c17,c18;
+    capability c2,c3,c4,c5,c6,c7,c8,c9, c12, c13,c14,c15,c16,c17,c18,c25;
 } exception_restore_frame;
 
 typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
