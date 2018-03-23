@@ -49,15 +49,44 @@
 #define E_SOCKET_WRONG_TYPE         (-7)
 #define E_SOCKET_NO_DIRECTION       (-8)
 
+#define E_IN_PROXY                  (-13)
+#define E_NO_DATA_BUFFER            (-14)
+
 enum SOCKET_FLAGS {
     MSG_NONE = 0,
     MSG_DONT_WAIT = 1,
     MSG_NO_CAPS = 2,
     MSG_NO_COPY = 4,
+    MSG_PEEK = 8,
 };
 
 #define SOCK_TYPE_PUSH 0
 #define SOCK_TYPE_PULL 1
+
+typedef enum {
+    REQUEST_IM = 0,
+    REQUEST_IND = 1,
+    REQUEST_PROXY = 2,
+    REQUEST_OUT_BAND = 3,
+} request_type_e;
+
+/* A socket is formed of a single requester and fulfiller. Between them they manage a ring buffer. The requester
+ * enqueues requests, which are to remain valid until the fulfiller marks them as fulfilled, at which point the
+ * fulfiller should no longer use them. There are currently 3 types of request. IM has some immediate data.
+ * IND points to a buffer of data. Proxy points to another fulfiller, and asks to fulfill for them instead */
+
+typedef struct request {
+    request_type_e type;
+    uint64_t length;
+    uint32_t drb_fullfill_inc; // When this request is fulfilled, automagically bump a fulfillment for a data buffer
+    union {
+        struct uni_dir_socket_fulfiller* proxy_for;
+        char* ind;
+        char im[CHERICAP_SIZE];
+    } request;
+} request_t;
+
+_Static_assert(sizeof(request_t) ==  2*sizeof(capability), "Make sure each request type is small enough");
 
 // Uni-directional socket.
 typedef struct uni_dir_socket_requester_fulfiller_component  {
@@ -71,26 +100,29 @@ typedef struct uni_dir_socket_requester {
     uni_dir_socket_requester_fulfiller_component fulfiller_component;
     volatile uint8_t requester_closed;
     uint8_t socket_type;
-    uint16_t buffer_size;
+    uint16_t buffer_size;           // Power of 2
     volatile uint16_t requeste_ptr;
+    volatile uint64_t* drb_fulfill_ptr;      // a pointer to a fulfilment pointer for a data buffer
     uni_dir_socket_requester_fulfiller_component* access;
-    char* volatile   indirect_ring_buffer[];
+    request_t request_ring_buffer[]; // Variable sized, is buffer_size.
 } uni_dir_socket_requester;
 
-#define SIZE_OF_request(buffer_size) ((sizeof(char*) * buffer_size) + sizeof(uni_dir_socket_requester))
+#define SIZE_OF_request(buffer_size) ((sizeof(request_t) * buffer_size) + sizeof(uni_dir_socket_requester))
 
 typedef struct uni_dir_socket_fulfiller {
     uni_dir_socket_requester* requester;  // Read only
-    size_t partial_fulfill_bytes;
+    uint64_t partial_fulfill_bytes;
     uint8_t socket_type;
+
+    volatile uint16_t proxy_state;          // 0, not proxied, 1 proxied
+    uni_dir_socket_requester* proxyied_in;  // set if proxied
 } uni_dir_socket_fulfiller;
 
 // Ring buffer for copy in for unix abstraction
 typedef struct data_ring_buffer {
-    size_t requeste_ptr;
-    size_t fulfill_ptr;
-    size_t buffer_size;
-    uint16_t last_processed_fulfill_ptr; // From the indirect buffer. Can fall out of sync.
+    volatile uint64_t requeste_ptr;
+    volatile uint64_t fulfill_ptr;
+    uint32_t buffer_size;
     char* buffer;
 } data_ring_buffer;
 
@@ -126,12 +158,12 @@ typedef uni_dir_socket_requester* requester_ptr_t;
 DEC_ERROR_T(requester_ptr_t);
 
 
-// Init
+// Init //
 int socket_internal_fulfiller_init(uni_dir_socket_fulfiller* fulfiller, uint8_t socket_type);
-int socket_internal_requester_init(uni_dir_socket_requester* requester, uint16_t buffer_size, uint8_t socket_type);
+int socket_internal_requester_init(uni_dir_socket_requester* requester, uint16_t buffer_size, uint8_t socket_type, data_ring_buffer* paired_drb);
 
 
-// Connection
+// Connection //
 int socket_internal_listen(register_t port,
                            uni_dir_socket_requester* requester,
                            uni_dir_socket_fulfiller* fulfiller);
@@ -139,35 +171,77 @@ int socket_internal_connect(act_kt target, register_t port,
                             uni_dir_socket_requester* requester,
                             uni_dir_socket_fulfiller* fulfiller);
 
-// Closing
+// Closing //
 int socket_internal_close_requester(uni_dir_socket_requester* requester);
 int socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller);
 
-// Request/Fulfill
 
-// Call these first to ensure space/requests outstanding
+// Call these to check number of REQUESTS (not bytes) //
+
+// Wait for enough space for 'need_space' requests
 int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait);
-int socket_internal_fulfill_peek(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait);
-
-// Then do stuff with the buffer
-ssize_t socket_internal_fulfill(uni_dir_socket_fulfiller* fulfiller, char* buf, size_t length, enum SOCKET_FLAGS flags);
-
-// Call these after to request/progress
-int socket_internal_requester_request(uni_dir_socket_requester* requester, char* buffer, int dont_wait);
-int socket_internal_fulfill_progress(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait);
+// Wait for 'amount' requests to be outstanding
+int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait);
+// Wait for all requests to be marked as fulfilled
+ssize_t socket_internal_requester_wait_all_finish(uni_dir_socket_requester* requester, int dont_wait);
 
 
 
 
-// Unix like interface. Either copies or waits for fulfill to return.
+// These all enqueue requests. All lengths in BYTES //
+
+// Request length (< cap_size) number of bytes. Bytes will be copied in from buf_in, and *buf_out will return the buffer
+ssize_t socket_internal_request_im(uni_dir_socket_requester* requester, uint8_t length, char** buf_out, char* buf_in, uint32_t drb_off);
+// Requests length bytes, bytes are put in / taken from buf
+ssize_t socket_internal_request_ind(uni_dir_socket_requester* requester, char* buf, uint64_t length, uint32_t drb_off);
+// Requests length bytes to be proxied as fulfillment to fulfiller
+ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_dir_socket_fulfiller* fulfiller, uint64_t, uint32_t drb_off);
+// Requests length bytes as an ind request, but uses a data buffer instead of the provided buf.
+// Will call space_wait itself.
+// For a write this does what you expect, copying the source buffer
+// For a read this will only use your buffer as an alignment hint. Copying of data back is still a TODO
+ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, const char* buf, uint32_t size,
+                                       data_ring_buffer* data_buffer,
+                                       int dont_wait, register_t perms);
+
+
+// This is for fulfilling requests //
+
+// Call this to fulfill and / or progress. ful_func will be called on every char* to be fulfilled, providing its length
+// an offset that is offset plus all previous lengths. arg is a user argument that is passed through
+typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
+                                               int check, int progress, int dont_wait, int in_proxy,
+                                               ful_func* visit, capability arg, uint64_t offset);
+
+
+
+// Unix like interface. Either copies or waits for fulfill to return //
 
 // This only inits the unix_socket struct. Up to you to provide underlying.
 int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
-                char* data_buffer, size_t data_buffer_size,
+                char* data_buffer, uint32_t data_buffer_size,
                 enum socket_connect_type con_type);
 
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags);
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags);
 
+ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count);
+
+enum poll_events {
+    POLL_NONE = 0,
+    POLL_IN = 1,
+    POLL_OUT = 2,
+    POLL_ER = 4,
+    POLL_HUP = 8
+};
+
+typedef struct poll_sock {
+    unix_like_socket* sock;
+    enum poll_events events;
+    enum poll_events revents;
+} poll_sock_t;
+
+int socket_poll(poll_sock_t* socks, size_t nsocks);
 
 #endif //CHERIOS_SOCKETS_H

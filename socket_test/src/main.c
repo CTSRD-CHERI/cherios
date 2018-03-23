@@ -43,7 +43,7 @@
 
 struct stack_request {
     uni_dir_socket_requester r;
-    char* pad[INDIR_SIZE];
+    request_t pad[INDIR_SIZE];
 };
 
 const char* str1 = "Hello World!\n";
@@ -94,12 +94,26 @@ void connector_start(register_t arg, capability carg) {
 
     assert(sent == size3);
 
+    // Test sending a large amount of data in small parts
     for(size_t i = 0; i != BIG_TEST_SIZE; i++) {
         rec = socket_recv(sock, buf, 3, MSG_NONE);
         assert(rec == 3);
         assert(buf[0] == (char)(i & 0xFF));
         assert(buf[1] == (char)((i>>8) & 0xFF));
         assert(buf[2] == (char)((i>>16) & 0xFF));
+    }
+
+    // Test sending a large amount of data in large parts
+
+    char big_buf[DATA_SIZE/2];
+    // Test sending a large number of bytes in large chunks
+
+    for(size_t i = 0; i != 3; i++) {
+        sent = socket_recv(sock, big_buf, DATA_SIZE/2, MSG_NONE);
+        assert(sent == DATA_SIZE/2);
+        for(size_t j = 0; j < DATA_SIZE/2; j++) {
+            assert(big_buf[j] == (char)j);
+        }
     }
 
     // Test copying capabilities
@@ -146,9 +160,9 @@ int main(register_t arg, capability carg) {
     sock->write.push_writer = &on_stack1.r;
     sock->read.pull_reader = &on_stack2.r;
 
-    int res = socket_internal_requester_init(sock->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH);
+    int res = socket_internal_requester_init(sock->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH, &sock->write_copy_buffer);
     assert_int_ex(res, ==, 0);
-    socket_internal_requester_init(sock->read.pull_reader, INDIR_SIZE, SOCK_TYPE_PULL);
+    socket_internal_requester_init(sock->read.pull_reader, INDIR_SIZE, SOCK_TYPE_PULL, NULL);
     assert_int_ex(res, ==, 0);
     socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_WRITE | CONNECT_PULL_READ);
     assert_int_ex(res, ==, 0);
@@ -174,7 +188,7 @@ int main(register_t arg, capability carg) {
     // Test multiple sends with partial reads
     assert(strcmp(buf, str4) == 0);
 
-    // Test sending a large number bytes
+    // Test sending a large number bytes in small chunks
 
     for(size_t i = 0; i != BIG_TEST_SIZE; i++) {
         buf[0] = (char)(i & 0xFF);
@@ -182,6 +196,17 @@ int main(register_t arg, capability carg) {
         buf[2] = (char)((i >> 16) & 0xFF);
         sent = socket_send(sock, buf, 3, MSG_NONE);
         assert(sent == 3);
+    }
+
+    char big_buf[DATA_SIZE/2];
+    // Test sending a large number of bytes in large chunks
+    for(size_t i = 0; i < DATA_SIZE/2; i++) {
+        big_buf[i] = (char)i;
+    }
+
+    for(size_t i = 0; i != 3; i++) {
+        sent = socket_send(sock, big_buf, DATA_SIZE/2, MSG_NONE);
+        assert(sent == DATA_SIZE/2);
     }
 
     // Test copying capabilities
