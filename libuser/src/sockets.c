@@ -28,8 +28,8 @@
  * SUCH DAMAGE.
  */
 
-#include <queue.h>
 #include <sockets.h>
+#include <queue.h>
 #include "object.h"
 #include "string.h"
 #include "sockets.h"
@@ -165,7 +165,9 @@ int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller
 
 // Wait for all requests to be marked as fulfilled
 ssize_t socket_internal_requester_wait_all_finish(uni_dir_socket_requester* requester, int dont_wait) {
-    return socket_internal_requester_space_wait(requester, requester->buffer_size, dont_wait);
+    ssize_t ret = socket_internal_requester_space_wait(requester, requester->buffer_size, dont_wait);
+    if(ret != 0 && fill_level(requester) == 0) ret = 0;
+    return ret;
 }
 
 // Wait for proxying to be finished
@@ -174,9 +176,10 @@ ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller
     if(fulfiller->proxy_state) {
         if(dont_wait) return E_IN_PROXY;
         uni_dir_socket_requester* proxying = fulfiller->proxyied_in;
-        return socket_internal_sleep_for_condition(&proxying->fulfiller_component.requester_waiting,
+        int ret = socket_internal_sleep_for_condition(&proxying->fulfiller_component.requester_waiting,
                                                    &proxying->fulfiller_component.fulfiller_closed,
                                                    &fulfiller->proxy_state, 1, 1);
+        return (fulfiller->proxy_state) ? ret : 0; // Ignore errors from the requester if the proxy has finished
     }
     return 0;
 }
@@ -225,6 +228,8 @@ ssize_t socket_internal_request_ind(uni_dir_socket_requester* requester, char* b
 // Requests length bytes to be proxied as fulfillment to fulfiller
 ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_dir_socket_fulfiller* fulfiller, uint64_t length, uint32_t drb_off) {
     if(fulfiller->proxy_state) return E_IN_PROXY;
+    if(fulfiller->socket_type != requester->socket_type) return E_SOCKET_WRONG_TYPE;
+
     fulfiller->proxyied_in = requester;
     fulfiller->proxy_state = 1;
 
@@ -344,6 +349,21 @@ ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, cons
     return size;
 }
 
+void socket_internal_dump_requests(uni_dir_socket_requester* requester) {
+    for(uint16_t i = requester->fulfiller_component.fulfill_ptr; i != requester->requeste_ptr; i++) {
+        request_t* req = &requester->request_ring_buffer[i & (requester->buffer_size-1)];
+        const char* type_s = (req->type == REQUEST_IM) ? "Immediate" :
+                             (req->type == REQUEST_IND ? "Indirect" :
+                              (req->type == REQUEST_PROXY) ? "Proxy" :
+                              "other");
+        if(req->type == REQUEST_IND) {
+            CHERI_PRINT_CAP(req->request.ind);
+        }
+
+        printf("Type: %10s. Length %8lx. DB_add %8x\n", type_s, req->length, req->drb_fullfill_inc);
+    }
+}
+
 static ssize_t copy_in(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
     memcpy(req_buf,(char*)user_buf+offset, length);
     return (ssize_t)length;
@@ -379,6 +399,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
     if(!in_proxy) {
         ret = socket_internal_fulfiller_wait_proxy(fulfiller, dont_wait);
         if(ret < 0) return ret;
+        assert_int_ex(fulfiller->proxy_state, ==, 0);
     }
 
     uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
@@ -477,8 +498,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
 }
 
 int socket_internal_fulfiller_init(uni_dir_socket_fulfiller* fulfiller, uint8_t socket_type) {
-    fulfiller->requester = NULL;
-    fulfiller->partial_fulfill_bytes = 0;
+    bzero(fulfiller, sizeof(uni_dir_socket_fulfiller));
     fulfiller->socket_type = socket_type;
     return 0;
 }
@@ -510,6 +530,7 @@ int socket_internal_listen(register_t port,
     enum socket_connect_type con_type = CONNECT_NONE;
     capability ro_req = NULL;
     if(requester) {
+        if(requester->connected) return E_ALREADY_CONNECTED;
         ro_req = (capability)cheri_andperm(requester, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
         if(requester->socket_type == SOCK_TYPE_PULL) {
             con_type |= CONNECT_PULL_WRITE;
@@ -519,6 +540,7 @@ int socket_internal_listen(register_t port,
     }
 
     if(fulfiller) {
+        if(fulfiller->connected) return E_ALREADY_CONNECTED;
         if(fulfiller->socket_type == SOCK_TYPE_PULL) {
             con_type |= CONNECT_PULL_READ;
         } else {
@@ -637,19 +659,48 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
     return 0;
 }
 
-int socket_internal_close_requester(uni_dir_socket_requester* requester) {
+ssize_t socket_internal_close_requester(uni_dir_socket_requester* requester, int wait_finish, int dont_wait) {
+    if(wait_finish) {
+        ssize_t ret = socket_internal_requester_wait_all_finish(requester, dont_wait);
+        // Its O.K for the other end to close if all requests are done
+        if(ret < 0) return ret;
+    }
     return socket_internal_close_safe(&requester->requester_closed,
                                       &requester->fulfiller_component.fulfiller_closed,
                                       &requester->fulfiller_component.fulfiller_waiting);
 }
 
-int socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller) {
+ssize_t socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller, int wait_finish, int dont_wait) {
     uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
+    if(wait_finish) {
+        ssize_t ret = socket_internal_fulfiller_wait_proxy(fulfiller, dont_wait);
+        if(ret < 0) return ret;
+    }
     return socket_internal_close_safe(&access->fulfiller_closed,
                                       &fulfiller->requester->requester_closed,
                                       &access->requester_waiting);
 }
 
+ssize_t socket_close(unix_like_socket* sock) {
+    int dont_wait = sock->flags & MSG_DONT_WAIT;
+    ssize_t ret;
+
+    if(sock->con_type & CONNECT_PULL_READ) {
+        ret = socket_internal_close_requester(sock->read.pull_reader, 1, dont_wait);
+    } else if(sock->con_type & CONNECT_PUSH_READ) {
+        ret = socket_internal_close_fulfiller(&sock->read.push_reader, 1, dont_wait);
+    }
+
+    if(ret < 0) return  ret;
+
+    if(sock->con_type & CONNECT_PUSH_WRITE) {
+        ret = socket_internal_close_requester(sock->write.push_writer, 1, dont_wait);
+    } else if(sock->con_type & CONNECT_PULL_WRITE) {
+        ret = socket_internal_close_fulfiller(&sock->write.pull_writer, 1, dont_wait);
+    }
+
+    return ret;
+}
 
 static int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size) {
     if(!is_power_2(data_buffer_size)) return E_BUFFER_SIZE_NOT_POWER_2;
@@ -759,5 +810,73 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
                                                       ff, (capability)buf, 0);
     } else {
         return E_SOCKET_WRONG_TYPE;
+    }
+}
+
+struct fwf_args {
+    uni_dir_socket_fulfiller* writer;
+    int dont_wait;
+};
+
+static ssize_t socket_internal_fulfill_with_fulfill(capability arg, char* buf, uint64_t offset, uint64_t length) {
+    struct fwf_args* args = (struct fwf_args*)arg;
+    socket_internal_fulfill_progress_bytes(args->writer, length, 1, 1, args->dont_wait, 0, &copy_in, (capability)buf, 0);
+}
+
+static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, uni_dir_socket_requester* push_req,
+                                            uint64_t align, data_ring_buffer* drb,
+                                            int dont_wait) {
+    return E_UNSUPPORTED;
+}
+
+ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count) {
+    uint8_t in_type;
+    uint8_t out_type;
+
+    if(sockin->con_type & CONNECT_PULL_READ) in_type = SOCK_TYPE_PULL;
+    else if(sockin->con_type & CONNECT_PUSH_READ) in_type = SOCK_TYPE_PUSH;
+    else return E_SOCKET_WRONG_TYPE;
+
+    if(sockout->con_type & CONNECT_PULL_WRITE) out_type = SOCK_TYPE_PULL;
+    else if(sockout->con_type & CONNECT_PUSH_WRITE) out_type = SOCK_TYPE_PUSH;
+    else return E_SOCKET_WRONG_TYPE;
+
+    int dont_wait = (sockin->flags | sockout->flags) & MSG_DONT_WAIT;
+    int no_caps = (sockin->flags | sockout->flags) & MSG_NO_CAPS;
+
+    if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PULL) {
+        // Proxy
+        uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
+        uni_dir_socket_fulfiller* pull_write = &sockout->write.pull_writer;
+
+        ssize_t ret = socket_internal_request_proxy(pull_read, pull_write, count, 0);
+        return (ret < 0) ? ret : count;
+
+    } else if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PUSH) {
+        // Create custom buffer and generate a request (or few) for each
+        uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
+        uni_dir_socket_requester* push_write = sockout->write.push_writer;
+
+        return socket_internal_request_join(pull_read, push_write, 0, &sockout->write_copy_buffer, dont_wait);
+
+    } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PULL) {
+        // fullfill one read with a function that fulfills write
+        uni_dir_socket_fulfiller* push_read = &sockin->read.push_reader;
+        uni_dir_socket_fulfiller* pull_write = &sockout->write.pull_writer;
+
+        struct fwf_args args;
+        args.writer = pull_write;
+        args.dont_wait = dont_wait;
+
+        return socket_internal_fulfill_progress_bytes(push_read, count, 1, 1, dont_wait, 0,
+                                                      &socket_internal_fulfill_with_fulfill, (capability)&args, 0);
+
+    } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PUSH) {
+        // Proxy
+        uni_dir_socket_fulfiller* push_read = &sockin->read.push_reader;
+        uni_dir_socket_requester* push_write = sockout->write.push_writer;
+
+        ssize_t ret = socket_internal_request_proxy(push_write, push_read, count, 0);
+        return (ret < 0) ? ret : count;
     }
 }

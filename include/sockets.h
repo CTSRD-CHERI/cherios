@@ -51,6 +51,8 @@
 
 #define E_IN_PROXY                  (-13)
 #define E_NO_DATA_BUFFER            (-14)
+#define E_ALREADY_CONNECTED         (-15)
+#define E_NOT_CONNECTED             (-16)
 
 enum SOCKET_FLAGS {
     MSG_NONE = 0,
@@ -76,9 +78,9 @@ typedef enum {
  * IND points to a buffer of data. Proxy points to another fulfiller, and asks to fulfill for them instead */
 
 typedef struct request {
-    request_type_e type;
     uint64_t length;
     uint32_t drb_fullfill_inc; // When this request is fulfilled, automagically bump a fulfillment for a data buffer
+    request_type_e type;
     union {
         struct uni_dir_socket_fulfiller* proxy_for;
         char* ind;
@@ -100,6 +102,7 @@ typedef struct uni_dir_socket_requester {
     uni_dir_socket_requester_fulfiller_component fulfiller_component;
     volatile uint8_t requester_closed;
     uint8_t socket_type;
+    uint8_t connected;
     uint16_t buffer_size;           // Power of 2
     volatile uint16_t requeste_ptr;
     volatile uint64_t* drb_fulfill_ptr;      // a pointer to a fulfilment pointer for a data buffer
@@ -111,8 +114,9 @@ typedef struct uni_dir_socket_requester {
 
 typedef struct uni_dir_socket_fulfiller {
     uni_dir_socket_requester* requester;  // Read only
-    uint64_t partial_fulfill_bytes;
+    volatile uint64_t partial_fulfill_bytes;
     uint8_t socket_type;
+    uint8_t connected;
 
     volatile uint16_t proxy_state;          // 0, not proxied, 1 proxied
     uni_dir_socket_requester* proxyied_in;  // set if proxied
@@ -172,8 +176,8 @@ int socket_internal_connect(act_kt target, register_t port,
                             uni_dir_socket_fulfiller* fulfiller);
 
 // Closing //
-int socket_internal_close_requester(uni_dir_socket_requester* requester);
-int socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller);
+ssize_t socket_internal_close_requester(uni_dir_socket_requester* requester, int wait_finish, int dont_wait);
+ssize_t socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller, int wait_finish, int dont_wait);
 
 
 // Call these to check number of REQUESTS (not bytes) //
@@ -204,6 +208,7 @@ ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, cons
                                        data_ring_buffer* data_buffer,
                                        int dont_wait, register_t perms);
 
+void socket_internal_dump_requests(uni_dir_socket_requester* requester);
 
 // This is for fulfilling requests //
 
@@ -213,7 +218,7 @@ typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t le
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                int check, int progress, int dont_wait, int in_proxy,
                                                ful_func* visit, capability arg, uint64_t offset);
-
+ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait);
 
 
 // Unix like interface. Either copies or waits for fulfill to return //
@@ -222,7 +227,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
 int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
                 char* data_buffer, uint32_t data_buffer_size,
                 enum socket_connect_type con_type);
-
+ssize_t socket_close(unix_like_socket* sock);
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags);
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags);
 
