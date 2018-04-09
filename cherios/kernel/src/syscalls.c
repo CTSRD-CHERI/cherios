@@ -170,6 +170,11 @@ void kernel_syscall_cond_wait(void) {
 	sched_wait_for_notify(NULL, NULL);
 }
 
+DECLARE_WITH_CD(void, kernel_syscall_cond_cancel(void));
+void kernel_syscall_cond_cancel(void) {
+	sched_get_current_act()->early_notify = 0;
+}
+
 DECLARE_WITH_CD(void, kernel_syscall_cond_notify(act_t* act));
 void kernel_syscall_cond_notify(act_t* act) {
 	act = act_unseal_callable(act, notify_ref_sealer);
