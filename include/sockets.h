@@ -183,9 +183,9 @@ ssize_t socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller, int
 // Call these to check number of REQUESTS (not bytes) //
 
 // Wait for enough space for 'need_space' requests
-int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait);
+int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait, int delay_sleep);
 // Wait for 'amount' requests to be outstanding
-int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait);
+int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait, int delay_sleep);
 // Wait for all requests to be marked as fulfilled
 ssize_t socket_internal_requester_wait_all_finish(uni_dir_socket_requester* requester, int dont_wait);
 
@@ -218,7 +218,7 @@ typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t le
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                int check, int progress, int dont_wait, int in_proxy,
                                                ful_func* visit, capability arg, uint64_t offset);
-ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait);
+ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 
 
 // Unix like interface. Either copies or waits for fulfill to return //
@@ -238,7 +238,8 @@ enum poll_events {
     POLL_IN = 1,
     POLL_OUT = 2,
     POLL_ER = 4,
-    POLL_HUP = 8
+    POLL_HUP = 8,
+    POLL_NVAL = 16,
 };
 
 typedef struct poll_sock {

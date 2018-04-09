@@ -56,6 +56,9 @@ const int size3 = 22;
 
 const char* str4 = "Some more bytes in parts\n";
 
+// For the poll test
+int order[] = {0,0,1,1,0,1};
+
 static void big_test_recv(unix_like_socket* sock) {
     // Test sending a large amount of data in small parts (all proxied from the first requester */
 
@@ -287,6 +290,40 @@ void connector_start(register_t arg, capability carg) {
     assert(rec = sizeof(capability));
     assert(!cheri_gettag(cap_rec));
 
+    // Test poll. Re-use 3
+    res = socket_internal_fulfiller_init(&sock3->read.push_reader, SOCK_TYPE_PUSH);
+    assert_int_ex(res, ==, 0);
+
+    res = socket_init(sock3, MSG_NONE, NULL, 0, CONNECT_PUSH_READ);
+    assert_int_ex(res, ==, 0);
+
+    res = socket_internal_connect(carg, PORT+4, NULL, &sock3->read.push_reader);
+    assert_int_ex(res, ==, 0);
+
+    poll_sock_t socks[2];
+    socks[0].sock = sock;
+    socks[0].events = POLL_IN;
+    socks[1].sock = sock3;
+    socks[1].events = POLL_IN;
+
+    for(int i = 0; i != 6; i++) {
+        int use_sock = order[i];
+        unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
+
+        int poll_r = socket_poll(socks, 2);
+
+        assert_int_ex(poll_r, ==, 1);
+        assert_int_ex(socks[use_sock].revents, ==, POLL_IN);
+        assert_int_ex(socks[1-use_sock].revents, ==, POLL_NONE);
+
+        rec = socket_recv(socks[use_sock].sock, buf, size1, MSG_NONE);
+        assert_int_ex(rec, ==, size1);
+
+        // Test a basic send
+        assert(strcmp(buf, str1) == 0);
+    }
+
+
     // Test the closing mechanic
 
     rec = socket_close(sock);
@@ -315,9 +352,9 @@ int main(register_t arg, capability carg) {
     socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_WRITE | CONNECT_PULL_READ);
     assert_int_ex(res, ==, 0);
 
-    int result = socket_internal_listen(PORT, sock->write.push_writer,NULL);
+    res = socket_internal_listen(PORT, sock->write.push_writer,NULL);
     assert_int_ex(res, ==, 0);
-    result = socket_internal_listen(PORT+1, sock->read.pull_reader,NULL);
+    res = socket_internal_listen(PORT+1, sock->read.pull_reader,NULL);
     assert_int_ex(res, ==, 0);
 
     ssize_t sent = socket_send(sock, str1, size1, MSG_NONE);
@@ -358,6 +395,35 @@ int main(register_t arg, capability carg) {
     assert(sent == sizeof(capability));
     sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
     assert(sent == sizeof(capability));
+
+    // Test polling
+
+    struct stack_request on_stack3;
+    unix_like_socket socket2;
+
+    unix_like_socket* sock2 = &socket2;
+
+    sock2->write.push_writer = &on_stack3.r;
+
+    res = socket_internal_requester_init(sock2->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH, &sock2->write_copy_buffer);
+    assert_int_ex(res, ==, 0);
+
+    char data_buffer2[DATA_SIZE];
+
+    socket_init(sock2, MSG_NONE, data_buffer2, DATA_SIZE, CONNECT_PUSH_WRITE);
+    assert_int_ex(res, ==, 0);
+
+    res = socket_internal_listen(PORT+4, sock2->write.push_writer,NULL);
+    assert_int_ex(res, ==, 0);
+
+    for(int i = 0; i != 6; i++) {
+        int use_sock = order[i];
+        unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
+
+        // No copy will result in block until finishing so we can get good testing of select where one socket is blocked and the other is not
+        sent = socket_send(ssock, str1, size1, MSG_NO_COPY);
+        assert_int_ex(sent, ==, size1);
+    }
 
     // Test the closing mechanic
 
