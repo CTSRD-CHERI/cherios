@@ -81,11 +81,11 @@ static inline int spinlock_try_acquire(spinlock_t* lock, register_t times) {
             "li     %[tmp], 1                   \n"
             "cscb   %[result], %[tmp], %[lock]  \n"
             "beqz   %[result], 1b               \n"
-            "nop"
+            "nop                                \n"
     "2:"
     :  [result]"=r"(result), [tmp]"=r"(tmp0)
     : [lock]"C"(&lock->lock), [times]"r"(times)
-    : "t0"
+    :
     );
 
     return result;
