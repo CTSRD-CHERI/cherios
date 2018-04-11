@@ -96,7 +96,7 @@ static act_t* get_act_for_address(size_t address) {
                 base_act = act;
             }
         }
-    }
+    }}
 
     return base_act;
 }
@@ -316,7 +316,7 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	printf("\nLoaded images:\n");
 	FOR_EACH_ACT(act) {
 		printf("%16s: %lx\n", act->name, act->image_base);
-	}
+	}}
     printf("%16s: %lx\n", "nano", MIPS_KSEG0);
 
 	printf("\nAttempting backtrace:\n\n");

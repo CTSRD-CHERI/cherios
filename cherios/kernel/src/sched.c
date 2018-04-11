@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <queue.h>
 #include "sched.h"
 #include "mutex.h"
 #include "activations.h"
@@ -205,8 +206,10 @@ void sched_delete(act_t * act) {
     fast_critical_exit();
 }
 
+/* These should be called when an event is generated */
+
 void sched_receives_sem_signal(act_t * act) {
-	kernel_assert(act->sched_status == sched_sem);
+	kernel_assert(act->sched_status & sched_sem);
 	KERNEL_TRACE("sched", "now unblocked on sempahore%s", act->name);
 	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
 	add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
@@ -216,7 +219,7 @@ void sched_receives_sem_signal(act_t * act) {
 void sched_receives_notify(act_t * act) {
 	// We may end up notifying BEFORE act has actually waited. If this happens note it and just return.
 	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-	if(act->sched_status == sched_wait_notify) {
+	if(act->sched_status & sched_wait_notify) {
 		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
 	} else {
 		act->early_notify = 1;
@@ -224,30 +227,9 @@ void sched_receives_notify(act_t * act) {
 	CRITICAL_LOCKED_END(&act->sched_access_lock);
 }
 
-void sched_wait_for_notify(act_t* act, act_t* next_hint) {
-	if(act == NULL) act = sched_get_current_act();
-
-	// We may wait for a notify AFTER the notify arrived. In which case just return.
-	if(act->early_notify == 1) {
-		act->early_notify = 0;
-		return;
-	}
-
-	int need_resched = 0;
-
-	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-	if(act->early_notify != 1) {
-		sched_block(act, sched_wait_notify);
-		need_resched = 1;
-	}
-	CRITICAL_LOCKED_END(&act->sched_access_lock);
-
-	if(need_resched) sched_reschedule(next_hint, 0);
-}
-
 void sched_receives_msg(act_t * act) {
     // WARN: Assume critical lock for acts sched status is taken
-	if(act->sched_status == sched_waiting) {
+	if(act->sched_status & sched_waiting) {
 		KERNEL_TRACE("sched", "now unblocked %s", act->name);
 		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
 	}
@@ -256,58 +238,46 @@ void sched_receives_msg(act_t * act) {
 void sched_recieve_ret(act_t * act) {
 	KERNEL_TRACE("sched", "now unblocked %s", act->name);
 	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-    if(act->sched_status == sched_sync_block) {
+    if(act->sched_status & sched_sync_block) {
         add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
     } // We might be responding before the other party has actually de-scheduled
 	CRITICAL_LOCKED_END(&act->sched_access_lock);
 }
 
-void sched_block_until_ret(act_t * act, act_t * next_hint) {
+/* This will block until ANY of the events specified by events occurs */
 
-    HW_SYNC;
+void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events) {
 
-    int need_resched = 0;
-    if(act->sync_state.sync_condition != 0) {
-        // TODO: We might try spin a while if the person we are waiting on is currently scheduled on another core.
-        // Message has not arrived. Block.
-        CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-        HW_SYNC;
-        if(act->sync_state.sync_condition != 0) {
-            // Message definitely not arrived. Also, if it does arrive we now have the lock
-            sched_block(act, sched_sync_block);
-            need_resched = 1;
-        }
-        CRITICAL_LOCKED_END(&act->sched_access_lock);
+    if(act == NULL) act = sched_get_current_act();
+
+    int got_event = 0;
+
+    if(events & sched_waiting) { CRITICAL_LOCKED_BEGIN(&act->writer_spinlock); }
+
+    CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
+
+    if((events & sched_sync_block) && !act->sync_state.sync_condition) got_event = 1;
+    if((events & sched_waiting) && !msg_queue_empty(act)) got_event = 1;
+    if((events & sched_wait_notify) && act->early_notify) {
+        act->early_notify = 0;
+        got_event = 1;
+    }
+    if(events & sched_sem) kernel_panic("Not implemented");
+
+    if(!got_event) {
+        sched_block(act, events);
     }
 
-    if(need_resched) sched_reschedule(next_hint, 0);
-}
+    CRITICAL_LOCKED_END(&act->sched_access_lock);
 
-void sched_block_until_msg(act_t * act, act_t * next_hint) {
-	/* Act = NULL means current act */
+    if(events & sched_waiting) { CRITICAL_LOCKED_END(&act->writer_spinlock); }
 
-	if(act == NULL) act = sched_get_current_act();
-
-    CRITICAL_LOCKED_BEGIN(&act->writer_spinlock);
-
-    int need_block = msg_queue_empty(act);
-
-    if(need_block) {
-        spinlock_acquire(&act->sched_access_lock);
-        sched_block(act, sched_waiting);
-        spinlock_release(&act->sched_access_lock);
-    }
-
-    CRITICAL_LOCKED_END(&act->writer_spinlock);
-
-    if(need_block) {
-        sched_reschedule(next_hint, 0);
-    }
+    if(!got_event) sched_reschedule(next_hint, 0);
 }
 
 void sched_block(act_t *act, sched_status_e status) {
 	KERNEL_TRACE("sched", "blocking %s", act->name);
-	kernel_assert((status == sched_sync_block) || (status == sched_waiting) || (status == sched_sem) || (status == sched_wait_notify));
+	kernel_assert(status >= sched_waiting);
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
 		delete_act_from_queue(&sched_pools[act->pool_id], act, status, 0);
@@ -348,8 +318,8 @@ static act_t * sched_picknext(sched_pool* pool) {
 
 	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
 		kernel_printf("Activation %s is in the queue and is not runnable\n", next->name);
-        kernel_printf("%p: guard %lx. nxt %p. prev %p. status %d. queue %p, mask %lx\n", next, next->ctl.guard.guard, next->list_next,
-         next->list_prev, next->sched_status, next->msg_queue, next->queue_mask);
+        kernel_printf("%p: guard %lx. nxt %p. status %d. queue %p, mask %lx\n", next, next->ctl.guard.guard, next->list_next,
+                      next->sched_status, next->msg_queue, next->queue_mask);
 		kernel_assert(0);
 	}
 

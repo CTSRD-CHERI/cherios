@@ -69,7 +69,7 @@ static void kernel_interrupt_others(register_t pending) {
 				KERNEL_ERROR("Interrupt with no handle %d",i);
 				continue;
 			}
-            KERNEL_TRACE("interrupt disable", "%ld", i);
+            KERNEL_TRACE("interrupt disable", "%d", i);
 			handle_mask = (handle_mask & ~(1<<i));
 			cp0_status_im_disable(1<<i);
 			// FIXME we probabably want a seperate interrupt source from the kernel

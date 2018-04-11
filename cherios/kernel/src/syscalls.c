@@ -52,7 +52,7 @@ void kernel_sleep(int time) {
 DECLARE_WITH_CD(void, kernel_wait(void));
 void kernel_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
-	sched_block_until_msg(NULL, NULL);
+    sched_block_until_event(NULL, NULL, sched_waiting);
 }
 
 DECLARE_WITH_CD(act_control_t *, kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint));
@@ -165,9 +165,11 @@ act_notify_kt kernel_syscall_act_ctrl_get_notify_ref(act_control_kt ctrl) {
 	return act_seal_for_call(act_unseal_callable((act_t*)ctrl, ctrl_ref_sealer), notify_ref_sealer);
 }
 
-DECLARE_WITH_CD(void, kernel_syscall_cond_wait(void));
-void kernel_syscall_cond_wait(void) {
-	sched_wait_for_notify(NULL, NULL);
+DECLARE_WITH_CD(void, kernel_syscall_cond_wait(int notify_on_message));
+void kernel_syscall_cond_wait(int notify_on_message) {
+    sched_status_e events = sched_wait_notify;
+    if(notify_on_message) events |= sched_waiting;
+    sched_block_until_event(NULL, NULL, events);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_cond_cancel(void));

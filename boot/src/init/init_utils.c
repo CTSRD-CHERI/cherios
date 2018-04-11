@@ -66,7 +66,7 @@ int acts_alive(init_elem_t * init_list, size_t  init_list_len) {
 		init_elem_t * be = init_list + i;
 		if((!be->daemon) && act_alive(be->ctrl)) {
             sched_status_e sched = syscall_act_ctrl_get_sched_status(be->ctrl);
-            printf("%s is alive (%d)\n", be->name, sched);
+            printf("%s is alive (%x)\n", be->name, sched);
 			nb++;
             // break;
 		}

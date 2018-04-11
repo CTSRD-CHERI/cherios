@@ -47,13 +47,13 @@ typedef enum status_e
  */
 typedef enum sched_status_e
 {
-    sched_waiting,      /* Waiting on its message queue*/
-    sched_sem,          /* Waiting on a kernel semaphore */
-    sched_wait_notify,  /* Waiting on a notify */
-    sched_runnable,
-    sched_running,
-    sched_sync_block,
-    sched_terminated
+    sched_runnable = 0,
+    sched_running = 1,
+    sched_terminated = 2,
+    sched_waiting       = 0x10,      /* Waiting on a message */
+    sched_sync_block    = 0x20,      /* Waiting on a return  */
+    sched_sem           = 0x40,      /* Waiting on a kernel semaphore */
+    sched_wait_notify   = 0x80,      /* Waiting on a notify */
 } sched_status_e;
 
 typedef struct
