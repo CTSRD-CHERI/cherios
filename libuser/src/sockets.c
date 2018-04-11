@@ -118,7 +118,7 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
 
         if(delay_sleep) return result;
 
-        if(result) syscall_cond_wait();
+        if(result) syscall_cond_wait(0);
 
     } while(result);
 
@@ -384,10 +384,12 @@ static ssize_t copy_out_no_caps(capability user_buf, char* req_buf, uint64_t off
 
 // This will fulfill n bytes, progress if progress is set (otherwise this is a peek), and check if check is set.
 // Visit will be called on each buffer, with arguments arg, length (for the buffer) and offset + previous lengths
+// oob_visit will be called on out of band requests. If oob_visit is null, fulfill stops and E_OOB is returned if
+// no fulfillment was made
 
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                int check, int progress, int dont_wait, int in_proxy,
-                                               ful_func* visit, capability arg, uint64_t offset) {
+                                               ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit) {
 
     uni_dir_socket_requester* requester = fulfiller->requester;
 
@@ -446,22 +448,31 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
 
         uni_dir_socket_fulfiller* proxy;
 
+        // Bytes to progress can be 0, this might very well be the case for an oob request
         ret = bytes_to_process;
 
-        assert(bytes_to_process != 0);
         // Try process this many bytes
         if(req->type == REQUEST_PROXY) {
             proxy = req->request.proxy_for;
             ret = socket_internal_fulfill_progress_bytes(proxy, bytes_to_process,
                                                          check, progress, dont_wait, 1,
-                                                         visit, arg, offset);
-        } else if(visit) {
-            if(req->type == REQUEST_IM) {
-                char* buf = req->request.im + partial_bytes;
-                ret = visit(arg, buf, offset, bytes_to_process);
-            } else if(req->type == REQUEST_IND) {
-                char* buf = req->request.ind + partial_bytes;
-                ret = visit(arg, buf, offset, bytes_to_process);
+                                                         visit, arg, offset, oob_visit);
+        } else {
+            if(visit) {
+                if (req->type == REQUEST_IM) {
+                    char *buf = req->request.im + partial_bytes;
+                    ret = visit(arg, buf, offset, bytes_to_process);
+                } else if (req->type == REQUEST_IND) {
+                    char *buf = req->request.ind + partial_bytes;
+                    ret = visit(arg, buf, offset, bytes_to_process);
+                }
+            }
+            if (req->type == REQUEST_OUT_BAND) {
+                if(oob_visit) {
+                    ret = oob_visit(req, offset, partial_bytes, bytes_to_process);
+                } else {
+                    ret = E_OOB;
+                }
             }
         }
 
@@ -784,7 +795,7 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
         ful_func * ff = &copy_in;
         return socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       1, ~((sock->flags | flags) & MSG_PEEK), dont_wait, 0,
-                                                      ff, (capability)buf, 0);
+                                                      ff, (capability)buf, 0, NULL);
     } else {
         return E_SOCKET_WRONG_TYPE;
     }
@@ -817,7 +828,7 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         ful_func * ff = ((sock->flags | flags) & MSG_NO_CAPS) ? &copy_out_no_caps : copy_out;
         return socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       1, ~((sock->flags | flags) & MSG_PEEK), dont_wait, 0,
-                                                      ff, (capability)buf, 0);
+                                                      ff, (capability)buf, 0, NULL);
     } else {
         return E_SOCKET_WRONG_TYPE;
     }
@@ -830,7 +841,7 @@ struct fwf_args {
 
 static ssize_t socket_internal_fulfill_with_fulfill(capability arg, char* buf, uint64_t offset, uint64_t length) {
     struct fwf_args* args = (struct fwf_args*)arg;
-    socket_internal_fulfill_progress_bytes(args->writer, length, 1, 1, args->dont_wait, 0, &copy_in, (capability)buf, 0);
+    socket_internal_fulfill_progress_bytes(args->writer, length, 1, 1, args->dont_wait, 0, &copy_in, (capability)buf, 0, NULL);
 }
 
 static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, uni_dir_socket_requester* push_req,
@@ -879,7 +890,7 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
         args.dont_wait = dont_wait;
 
         return socket_internal_fulfill_progress_bytes(push_read, count, 1, 1, dont_wait, 0,
-                                                      &socket_internal_fulfill_with_fulfill, (capability)&args, 0);
+                                                      &socket_internal_fulfill_with_fulfill, (capability)&args, 0, NULL);
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PUSH) {
         // Proxy
@@ -977,7 +988,7 @@ static enum poll_events be_waiting_for_event(unix_like_socket* sock, enum poll_e
     return ret;
 }
 
-static int sockets_scan(poll_sock_t* socks, size_t nsocks, int sleep) {
+static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg_queue_poll, int sleep) {
 
     int any_event = 0;
 
@@ -992,6 +1003,15 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, int sleep) {
 
     restart:
     do {
+        if(msg_queue_poll) {
+            *msg_queue_poll = POLL_NONE;
+            if(!msg_queue_empty()) {
+                *msg_queue_poll = POLL_IN;
+                sleep = 0;
+                any_event++;
+            }
+        }
+
         for(size_t i = 0; i != nsocks; i++) {
             poll_sock_t* sock_poll = socks+i;
             enum poll_events asked_events = (events_forced | sock_poll->events);
@@ -1011,7 +1031,7 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, int sleep) {
         }
 
         if(sleep) {
-            syscall_cond_wait();
+            syscall_cond_wait(msg_queue_poll != 0);
         }
 
     } while(sleep);
@@ -1019,11 +1039,15 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, int sleep) {
     return any_event;
 }
 
-int socket_poll(poll_sock_t* socks, size_t nsocks) {
+int socket_poll(poll_sock_t* socks, size_t nsocks, enum poll_events* msg_queue_poll) {
     int ret;
 
-    if(!(ret = sockets_scan(socks, nsocks, 0))) {
-        ret = sockets_scan(socks, nsocks, 1);
+    if(nsocks < 0) return 0;
+
+    if(nsocks == 0 && !msg_queue_poll) return 0;
+
+    if(!(ret = sockets_scan(socks, nsocks, msg_queue_poll, 0))) {
+        ret = sockets_scan(socks, nsocks, msg_queue_poll, 1);
     }
 
     return ret;

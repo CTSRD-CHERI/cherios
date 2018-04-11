@@ -28,7 +28,6 @@
  * SUCH DAMAGE.
  */
 
-#include <sockets.h>
 #include "cheric.h"
 #include "sockets.h"
 #include "thread.h"
@@ -57,7 +56,7 @@ const int size3 = 22;
 const char* str4 = "Some more bytes in parts\n";
 
 // For the poll test
-int order[] = {0,0,1,1,0,1};
+int order[] = {0,0,1,1,0,1,2};
 
 static void big_test_recv(unix_like_socket* sock) {
     // Test sending a large amount of data in small parts (all proxied from the first requester */
@@ -306,11 +305,21 @@ void connector_start(register_t arg, capability carg) {
     socks[1].sock = sock3;
     socks[1].events = POLL_IN;
 
-    for(int i = 0; i != 6; i++) {
+    for(int i = 0; i != 7; i++) {
         int use_sock = order[i];
+
+        if(use_sock == 2) {
+            enum poll_events events;
+            int poll_r = socket_poll(NULL, 0, &events);
+            assert_int_ex(poll_r, ==, 1);
+            assert_int_ex(events, ==, POLL_IN);
+            next_msg();
+            continue;
+        }
+
         unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
 
-        int poll_r = socket_poll(socks, 2);
+        int poll_r = socket_poll(socks, 2, 0);
 
         assert_int_ex(poll_r, ==, 1);
         assert_int_ex(socks[use_sock].revents, ==, POLL_IN);
@@ -416,8 +425,15 @@ int main(register_t arg, capability carg) {
     res = socket_internal_listen(PORT+4, sock2->write.push_writer,NULL);
     assert_int_ex(res, ==, 0);
 
-    for(int i = 0; i != 6; i++) {
+    act_kt t_act = syscall_act_ctrl_get_ref(get_control_for_thread(t));
+
+    for(int i = 0; i != 7; i++) {
         int use_sock = order[i];
+
+        if(use_sock == 2) {
+            message_send(0,0,0,0,NULL,NULL,NULL,NULL, t_act, SEND, 0);
+            continue;
+        }
         unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
 
         // No copy will result in block until finishing so we can get good testing of select where one socket is blocked and the other is not

@@ -35,6 +35,7 @@
 #define SOCKET_CONNECT_IPC_NO       (0xbeef)
 
 #define E_AGAIN                     (-1)
+#define E_OOB                       (-17)
 #define E_MSG_SIZE                  (-2)
 #define E_COPY_NEEDED               (-11)
 #define E_UNSUPPORTED               (-12)
@@ -85,6 +86,7 @@ typedef struct request {
         struct uni_dir_socket_fulfiller* proxy_for;
         char* ind;
         char im[CHERICAP_SIZE];
+        capability oob;
     } request;
 } request_t;
 
@@ -215,9 +217,11 @@ void socket_internal_dump_requests(uni_dir_socket_requester* requester);
 // Call this to fulfill and / or progress. ful_func will be called on every char* to be fulfilled, providing its length
 // an offset that is offset plus all previous lengths. arg is a user argument that is passed through
 typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t length);
+typedef ssize_t ful_oob_func(request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                int check, int progress, int dont_wait, int in_proxy,
-                                               ful_func* visit, capability arg, uint64_t offset);
+                                               ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit);
 ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 
 
@@ -248,6 +252,6 @@ typedef struct poll_sock {
     enum poll_events revents;
 } poll_sock_t;
 
-int socket_poll(poll_sock_t* socks, size_t nsocks);
+int socket_poll(poll_sock_t* socks, size_t nsocks, enum poll_events* msg_queue_poll);
 
 #endif //CHERIOS_SOCKETS_H
