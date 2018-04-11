@@ -182,6 +182,10 @@ void secure_c_thread_start(locked_t locked_start, queue_t* queue, act_control_kt
     // c_thread_start(start->arg, start->carg, queue, self_ctrl, start->start);
 }
 
+act_control_kt get_control_for_thread(thread t) {
+    return (act_control_kt)t;
+}
+
 process_kt thread_create_process(const char* name, capability file, int secure_load) {
     if(proc_man_ref == NULL) {
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);

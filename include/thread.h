@@ -65,6 +65,8 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
 void thread_init(void);
 
+act_control_kt get_control_for_thread(thread t);
+
 /* These are wrappers for messages to the process manager */
 
 process_kt thread_create_process(const char* name, capability file, int secure_load);
