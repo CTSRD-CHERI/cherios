@@ -36,9 +36,18 @@
 #define SUF_16 "h"
 #define SUF_32 "w"
 #define SUF_64 "d"
+#define SUF_c  "c"
+
+#define OUT_8   "r"
+#define OUT_16  "r"
+#define OUT_32  "r"
+#define OUT_64  "r"
+#define OUT_c   "C"
 
 #define LOAD(type)  "cll" SUF_ ## type
 #define STORE(type) "csc" SUF_ ## type
+#define OUT(type) "=" OUT_ ## type
+#define IN(type) OUT_ ## type
 
 #define ATOMIC_ADD(pointer, type, val, result)      \
 {                                                   \
@@ -55,5 +64,10 @@ __asm__ __volatile__ (                              \
 : [ptr] "C" (pointer), [v] "i" (val)                \
 :)    ;                                             \
 }                                                   \
+
+#define LOAD_LINK(ptr, type, result) __asm__ __volatile(LOAD(type) " %[res], %[pt]" : [res] OUT(type) (result) : [pt] IN(c) (ptr):)
+#define STORE_COND(ptr, type, val, suc) __asm__ __volatile(STORE(type) " %[sc], %[vl], %[pt]" : \
+                    [sc] OUT(64) (suc) : \
+                    [pt] IN(c) (ptr), [vl] IN(type) (val) :)
 
 #endif //CHERIOS_ATOMIC_H
