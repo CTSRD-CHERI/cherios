@@ -49,17 +49,14 @@
 act_t				kernel_acts[MAX_STATIC_ACTIVATIONS]  __sealable;
 aid_t				kernel_next_act;
 
-/* Really belongs to the sched, we will eventually seperate out the activation manager */
-act_t * 			kernel_curr_act;
-
 // TODO: Put these somewhere sensible;
 static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
 static act_t* ns_ref = NULL;
 
 struct spinlock_t 	act_list_lock;
-act_t* act_list_start;
-act_t* act_list_end;
+act_t* volatile act_list_start;
+act_t* volatile act_list_end;
 
 act_t* memgt_ref = NULL;
 act_t* event_ref = NULL;
@@ -162,44 +159,74 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	return init_act->context;
 }
 
-// FIXME: Locking is a bit heavy here. Better to use a transaction so we can keep pre-emption
-
 static void add_act_to_end_of_list(act_t* act) {
-	CRITICAL_LOCKED_BEGIN(&act_list_lock);
-
-	act->list_prev = act_list_end;
-
-	if(act_list_end == NULL) {
-		act_list_start = act;
-	} else {
-		act_list_end->list_next = act;
+	// If empty then no concurrency needed
+	if(act_list_start == NULL) {
+		act_list_start = act_list_end = act;
+		act->list_next = NULL;
+		return;
 	}
 
-	act_list_end = act;
-	act->list_next = NULL;
+	register_t  success;
 
-	CRITICAL_LOCKED_END(&act_list_lock);
+	act->list_next = NULL;
+	act->list_del_prog = 0;
+
+	act_t* trial_last = act_list_end;
+	act_t* end;
+
+	// Inserts into chain, fast forwards if act_list_end is wrong
+	do {
+		act_t* volatile * last_link = &trial_last->list_next;
+		LOAD_LINK(last_link, c, end);
+		if(end != NULL) {
+			trial_last = end;
+			continue;
+		}
+		STORE_COND(last_link, c, act, success);
+	} while(!success);
+
+	// Sets act_list_end if need be, might not need to be done if something else inserts concurrently
+    // Does not matter if this has a race, end is a hint
+    if(act->list_next == NULL) act_list_end = act;
 }
 
 static void remove_from_list(act_t* act) {
-	CRITICAL_LOCKED_BEGIN(&act_list_lock);
 
-	act_t* prev = act->list_prev;
-	act_t* next = act->list_next;
+    kernel_assert(act != act_list_start); // This means we are deleting the kernel. This is bad.
 
-	if(prev == NULL) {
-		act_list_start = next;
-	} else {
-		prev->list_next = next;
-	}
+    // We just mark ourselves for deletion and wait for a cleanup
+    act->list_del_prog = 1;
 
-	if(next == NULL) {
-		act_list_end = prev;
-	} else {
-		next->list_prev = prev;
-	}
+    if(spinlock_try_acquire(&act_list_lock, 2)) { // Else another sweep will do it
 
-	CRITICAL_LOCKED_END(&act_list_lock);
+        register_t success;
+
+        act_t* prev = act_list_start;
+        act_t* cur = prev->list_next;
+
+        while(cur != NULL) {
+            if(cur->list_del_prog) {
+                // delete cur
+                act_t* next;
+                act_t* volatile * last_link = &cur->list_next;
+                again:
+                LOAD_LINK(last_link, c, next);
+                prev->list_next = next;
+                if(!next) {
+                    act_list_end = prev;
+                    STORE_COND(last_link, c, next, success);
+                    if(!success) goto again;
+                }
+                cur = next;
+            } else {
+                prev = cur;
+                cur = prev->list_next;
+            }
+        }
+
+        spinlock_release(&act_list_lock);
+    }
 }
 
 static act_t* alloc_static_act(aid_t* aid_used) {

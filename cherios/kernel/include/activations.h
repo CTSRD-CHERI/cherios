@@ -62,8 +62,8 @@ typedef struct act_t
 
 	/* Activation related */
 
-	struct act_t* list_next;
-	struct act_t* list_prev;
+	volatile uint8_t list_del_prog;
+	struct act_t *volatile list_next;
 
 	status_e status;		/* Activation status flags */
 
@@ -104,7 +104,7 @@ typedef struct act_t
 
 _Static_assert(ACT_REQUIRED_SPACE >= sizeof(act_t), "Increase the size of act required space");
 
-#define FOR_EACH_ACT(act) for(act_t* act = act_list_start; act != NULL; act = act->list_next)
+#define FOR_EACH_ACT(act) for(act_t* act = act_list_start; act != NULL; act = act->list_next) { if(!act->list_del_prog)
 
 /* Assumed by assembly */
 _Static_assert(offsetof(act_t, ctl) == 0,
@@ -119,8 +119,8 @@ extern act_t		kernel_acts[];
 extern aid_t 		kernel_next_act;
 
 extern struct spinlock_t 	act_list_lock;
-extern act_t*		act_list_start;
-extern act_t*		act_list_end;
+extern act_t* volatile		act_list_start;
+extern act_t* volatile		act_list_end; // may not be the end
 
 extern act_t* memgt_ref;
 
