@@ -104,7 +104,11 @@ static mop_t make_mop_for_process(void) {
 	if(bootstrapping) return NULL;
 	res_t  space = cap_malloc(MOP_REQUIRED_SPACE);
 	assert(space != NULL);
-	mop_t mop = mem_makemop(space, own_mop).val;
+	ERROR_T(mop_t) mop_or_er = mem_makemop(space, own_mop);
+	mop_t mop = mop_or_er.val;
+	if(!IS_VALID(mop_or_er)) {
+		assert_int_ex(-mop_or_er.er, ==, 0);
+	}
 	assert(mop != NULL);
 	return mop;
 }
