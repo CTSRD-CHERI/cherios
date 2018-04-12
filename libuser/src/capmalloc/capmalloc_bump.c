@@ -386,6 +386,6 @@ void init_cap_malloc(void) {
         size_t allocs_in_pool = (page_size - (fields_per_page * RES_META_SIZE)) >> i;
 
         /* How many allocations we can make in a pool of this size */
-        pools[i].total_ndx = allocs_in_pool;
+        pools[i].pool_size = allocs_in_pool;
     }
 }
