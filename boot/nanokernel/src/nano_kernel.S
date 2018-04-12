@@ -187,10 +187,6 @@ END_LOCALS
 .text
 .section .init
 
-.macro CRETURN
-    ccall $c17, $c18, 2 # FIXME: should be ccall $c17, $c18. But caller not setting $c18 yet.
-.endm
-
 .set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal))
 .set DEF_SEALING_PERMS, Perm_Seal
 

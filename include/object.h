@@ -80,5 +80,6 @@ void next_msg(void);
 msg_t* get_message(void);
 void pop_msg(msg_t * msg);
 int msg_queue_empty(void);
+extern void msg_entry(int return_if_empty);
 
 #endif

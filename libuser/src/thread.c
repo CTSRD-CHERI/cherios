@@ -48,7 +48,6 @@ process_kt proc_handle = NULL;
 
 extern void thread_start(void);
 extern void secure_thread_start(void);
-extern void msg_entry(void);
 
 struct start_stack_args {
     thread_start_func_t* start;
@@ -151,7 +150,7 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
     start(arg, carg);
 
     if(msg_enable) {
-        msg_entry();
+        msg_entry(0);
     } else {
         syscall_act_terminate(self_ctrl);
     }

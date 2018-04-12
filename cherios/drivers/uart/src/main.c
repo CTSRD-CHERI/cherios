@@ -41,7 +41,6 @@ static void user_puts(const void * s) {
 	printf(KGRN KBLD"%s"KRST, s);
 }
 
-extern void msg_entry;
 void (*msg_methods[]) = {user_putc, user_puts};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};

@@ -43,7 +43,6 @@ void * new_identifier(void) {
 	return object;
 }
 
-extern void msg_entry;
 void (*msg_methods[]) = {deflateInit_, deflate, deflateEnd};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, new_identifier, dtor_null};

@@ -40,8 +40,6 @@
 
 __thread int worker_id = 0;
 
-extern void msg_entry;
-
 /* FIXME: Any thread will accidentally run any of these. They should be thread local */
 void (*msg_methods[]) = {__mem_request, __mem_release, vmem_commit_vmem, full_dump, virtual_to_physical, __mem_claim,
 						 NULL, __mem_makemop, __get_physical_capability, __mem_reclaim_mop, __revoke, __revoke_finish};

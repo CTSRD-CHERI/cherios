@@ -316,3 +316,77 @@ li  $zero, 0xdead
 .macro cnull reg
     cfromptr    \reg, $idc, $zero
 .endm
+
+.macro CRETURN
+    ccall $c17, $c18, 2
+.endm
+
+
+.macro for_each_reg caps_rem, macro index, global, head, save_ls:vararg
+    .if \caps_rem == 0
+        foreachi \macro, \index, \global, \save_ls
+    .else
+        for_each_reg "(\caps_rem-1)", \macro, \index, \global, \save_ls
+    .endif
+.endm
+
+.macro for_each_cap caps_rem, macro, index, global, head, tail:vararg
+    .if \caps_rem > 0
+        \macro \head, \index, \global
+        for_each_cap "(\caps_rem-1)", \macro, "(\index+1)", \global, \tail
+	.endif
+.endm
+
+.macro count reg, index, global
+    .set counter, counter+1
+.endm
+
+.macro calc_frame n_caps save_ls:vararg
+    .set cap_count, \n_caps
+    .set counter, 0
+    foreachi count, 0, 0, \save_ls
+    .set reg_count, counter - \n_caps
+
+    .set cap_sz, (cap_count * CAP_SIZE)
+    .set mask, (CAP_SIZE-1)
+    .set reg_sz, ((reg_count * REG_SIZE) + mask) & ~mask
+
+    .set frame_sz, cap_sz + reg_sz
+.endm
+
+.macro push_cap item, index, global
+    csc \item, $zero, (\global + (\index * CAP_SIZE))($c11)
+.endm
+.macro push_reg item, index, global
+    csd \item, $zero, (\global + (\index * REG_SIZE))($c11)
+.endm
+.macro pop_cap item, index, global
+    clc \item, $zero, (\global + (\index * CAP_SIZE))($c11)
+.endm
+.macro pop_reg item, index, global
+    cld \item, $zero, (\global + (\index * REG_SIZE))($c11)
+.endm
+
+
+.macro FRAME_PUSH n_caps, save_ls:vararg
+    calc_frame \n_caps, \save_ls
+    cincoffset $c11, $c11, -(frame_sz)
+    for_each_cap \n_caps, push_cap, 0, 0, \save_ls
+    for_each_reg \n_caps, push_reg, 0, (cap_sz), \save_ls
+.endm
+
+
+.macro FRAME_POP n_caps, save_ls:vararg
+    calc_frame \n_caps, \save_ls
+    for_each_cap \n_caps, pop_cap, 0, 0, \save_ls
+    for_each_reg \n_caps, pop_reg, 0, (cap_sz), \save_ls
+    cincoffset $c11, $c11, (frame_sz)
+.endm
+
+.macro POP_AND_RETURN n_caps, save_ls:vararg
+    calc_frame \n_caps, \save_ls
+    for_each_cap \n_caps, pop_cap, 0, 0, \save_ls
+    for_each_reg \n_caps, pop_reg, 0, (cap_sz), \save_ls
+    ccall $c17, $c18, 2
+    cincoffset $c11, $c11, (frame_sz)
+.endm

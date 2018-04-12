@@ -54,6 +54,11 @@
 #define ctrl_methods_nb_g   $s1
 
 #define start_g             $s2
+#define return              $s3
+
+#define STACK_LAYOUT 7 \
+    $c17, $c18, queue, self_ctrl_cap, sync_state_cap, msg_table, ctrl_table, \
+    msg_methods_nb_g, ctrl_methods_nb_g, start_g, return
 
 # Message read loop
 
@@ -67,12 +72,12 @@
 .type sync_state, "tls_object"
 .type act_self_ctrl, "tls_object"
 
+.global msg_entry
 msg_entry:
 
-# Standard function prolog so regdump stops here nicely
-# We dont bother saving anything as we never return to our caller
-    cincoffset  $c11, $c11, -0x20
-    csc         $c17, $sp, 0($c11)
+    FRAME_PUSH  STACK_LAYOUT
+
+    move        return, $a0
 
     get_tls_sym_cap queue, act_self_queue
     get_tls_sym sync_state_cap, sync_state
@@ -94,6 +99,7 @@ msg_entry_loop:
     bne     start_g, $t1, pop                             # start_g != $t1
     nop
 
+    bnez    return, return_to_caller
 # TODO in a multicore world we may wish to spin a few times before resorting to WAIT
     call_func wait
 
@@ -186,6 +192,9 @@ make_return:
 
     b msg_entry_loop
     nop
+
+return_to_caller:
+    POP_AND_RETURN STACK_LAYOUT
 
 msg_entry_end:
 	.end msg_entry

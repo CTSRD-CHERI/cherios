@@ -180,7 +180,7 @@ start_common:
 	# main() done. Go to msg_entry if msg_enable, call terminate otherwise
 	get_tls_sym_val	$t0, msg_enable, d, $c17
 	bne		$t0, $zero, msg_entry
-	nop
+	li      $a0, 0
 	get_tls_sym_val $c2, act_self_ctrl, c, $c17
 	cmove   $c3, $c2
 
