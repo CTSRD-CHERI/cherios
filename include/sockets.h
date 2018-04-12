@@ -177,6 +177,8 @@ int socket_internal_connect(act_kt target, register_t port,
                             uni_dir_socket_requester* requester,
                             uni_dir_socket_fulfiller* fulfiller);
 
+int socket_internal_fulfiller_connect(uni_dir_socket_fulfiller* fulfiller, uni_dir_socket_requester* requester);
+int socket_internal_requester_connect(uni_dir_socket_requester* requester);
 // Closing //
 ssize_t socket_internal_close_requester(uni_dir_socket_requester* requester, int wait_finish, int dont_wait);
 ssize_t socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller, int wait_finish, int dont_wait);

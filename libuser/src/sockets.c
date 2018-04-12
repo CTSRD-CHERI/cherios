@@ -644,6 +644,15 @@ int socket_internal_connect(act_kt target, register_t port,
     return 0;
 }
 
+int socket_internal_fulfiller_connect(uni_dir_socket_fulfiller* fulfiller, uni_dir_socket_requester* requester) {
+    fulfiller->requester = requester;
+    fulfiller->connected = 1;
+}
+
+int socket_internal_requester_connect(uni_dir_socket_requester* requester) {
+    requester->connected = 1;
+}
+
 static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint8_t* other_close, volatile act_notify_kt * waiter_cap) {
     if(*own_close) return E_ALREADY_CLOSED;
 
