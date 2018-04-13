@@ -324,7 +324,7 @@ li  $zero, 0xdead
 
 .macro for_each_reg caps_rem, macro index, global, head, save_ls:vararg
     .if \caps_rem == 0
-        foreachi \macro, \index, \global, \save_ls
+        foreachi \macro, \index, \global, \head, \save_ls
     .else
         for_each_reg "(\caps_rem-1)", \macro, \index, \global, \save_ls
     .endif
