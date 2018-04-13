@@ -361,6 +361,7 @@ add_subdirectory(exception_test)
 add_subdirectory(unsafe_test)
 add_subdirectory(dedup_test)
 add_subdirectory(socket_test)
+add_subdirectory(fs_test)
 
 #add_subdirectory(prga)
 #add_subdirectory(sockets)

@@ -49,14 +49,13 @@ size_t n_files = 0;
 
 int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester* write_requester, const char* file_name) {
 
-    printf("Trying to open %s", file_name);
     if(!read_requester && !write_requester) return -1;
 
     struct sessions_t* session = sessions + n_files;
 
     FIL * fp = &session->fil;
 
-    BYTE mode = FA_CREATE_NEW;
+    BYTE mode = FA_OPEN_EXISTING;
 
     enum socket_connect_type con_type = CONNECT_NONE;
     enum poll_events events = POLL_NONE;
@@ -80,7 +79,6 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
 
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
         if(f_open(fp, file_name, mode) == 0) {
-            printf("Open on %s\n", file_name);
             n_files++;
             return 0;
         }
@@ -93,6 +91,71 @@ void (*msg_methods[]) = {new_file};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
+
+//typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t length);
+//typedef ssize_t ful_oob_func(request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+
+ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+    FIL* fil = (FIL*)arg;
+    request_type_e req = request->type;
+
+    if(req == REQUEST_SEEK) {
+
+        int64_t seek_offset = request->request.seek_desc.v.offset;
+        int whence = request->request.seek_desc.v.whence;
+
+        FSIZE_t target_offset;
+
+        switch (whence) {
+            case SEEK_CUR:
+                target_offset = seek_offset + fil->fptr;
+                break;
+            case SEEK_SET:
+                if(seek_offset < 0) return E_OOB;
+                target_offset = (uint64_t)seek_offset;
+                break;
+            case SEEK_END:
+            default:
+                return E_OOB;
+        }
+
+        f_lseek(fil, target_offset);
+
+        return length;
+    }
+
+    return E_OOB;
+}
+
+ssize_t ful_push_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+    FIL* fil = (FIL*)arg;
+    UINT count;
+    ssize_t total = 0;
+    do {
+        UINT len = length > ULONG_MAX ? (UINT)UINT_MAX : (UINT)length;
+        FRESULT res =  f_write(fil, buf, len, &count);
+        length -= count;
+        buf+=count;
+        total += count;
+        if(res != 0) break;
+    } while(length);
+    return total;
+}
+
+ssize_t ful_pull_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+    FIL* fil = (FIL*)arg;
+    UINT count;
+    ssize_t total = 0;
+    do {
+        UINT len = length > ULONG_MAX ? (UINT)UINT_MAX : (UINT)length;
+        FRESULT res = f_read(fil, buf, len, &count);
+        length -= count;
+        buf+=count;
+        total += count;
+        if(res != 0) break;
+    } while(length);
+    return total;
+}
 
 void request_loop(void) {
 
@@ -116,11 +179,18 @@ void request_loop(void) {
             poll_sock_t* poll_sock = poll_socks+i;
             if(poll_sock->revents & POLL_IN) {
                 // service write
-                assert(0 && "TODO");
+                uni_dir_socket_fulfiller* read_fulfill = &poll_sock->sock->read.push_reader;
+                ssize_t res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
+                                                       1, 1, 1, 0,
+                                                       ful_push_ff, (capability)&sessions[i].fil, 0, full_oob);
             }
             if(poll_sock->revents & POLL_OUT) {
                 // service read
-                assert(0 && "TODO");
+                // service write
+                uni_dir_socket_fulfiller* read_fulfill = &poll_sock->sock->write.pull_writer;
+                ssize_t res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
+                                                                    1, 1, 1, 0,
+                                                                    ful_pull_ff, (capability)&sessions[i].fil, 0, full_oob);
             }
             if(poll_sock->revents & POLL_HUP) {
                 // a close happened

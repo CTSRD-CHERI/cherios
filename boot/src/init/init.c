@@ -113,7 +113,7 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	"virtio-blk.elf",	0,	1)
 	B_FENCE
-	B_PENTRY(m_fs,		"fatfs.elf",		0,	1)
+	B_DENTRY(m_fs,		"fatfs.elf",		0,	1)
 	B_FENCE
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
 	B_FENCE
@@ -128,6 +128,7 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user, "unsafe_test.elf", 0, 1)
     B_PENTRY(m_user,    "dedup_test.elf", 0, 1)
     B_PENTRY(m_user,    "socket_test.elf", 0 ,1)
+    B_PENTRY(m_user, "fs_test.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
 

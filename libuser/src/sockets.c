@@ -351,6 +351,22 @@ ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, cons
     return size;
 }
 
+ssize_t socket_internal_request_oob(uni_dir_socket_requester* requester, request_type_e r_type, intptr_t oob_val, uint64_t length, uint32_t drb_off) {
+    uint16_t request_ptr = requester->requeste_ptr;
+    uint16_t mask = requester->buffer_size-1;
+
+    request_t* req = &requester->request_ring_buffer[request_ptr & mask];
+
+    req->type = r_type;
+    req->length = length;
+    req->request.oob = oob_val;
+    req->drb_fullfill_inc = drb_off;
+
+    return socket_internal_set_and_notify(&requester->requeste_ptr,
+                                          request_ptr+1,
+                                          &requester->fulfiller_component.fulfiller_waiting);
+}
+
 void socket_internal_dump_requests(uni_dir_socket_requester* requester) {
     for(uint16_t i = requester->fulfiller_component.fulfill_ptr; i != requester->requeste_ptr; i++) {
         request_t* req = &requester->request_ring_buffer[i & (requester->buffer_size-1)];
@@ -467,9 +483,9 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
                     ret = visit(arg, buf, offset, bytes_to_process);
                 }
             }
-            if (req->type == REQUEST_OUT_BAND) {
+            if (req->type >= REQUEST_OUT_BAND) {
                 if(oob_visit) {
-                    ret = oob_visit(req, offset, partial_bytes, bytes_to_process);
+                    ret = oob_visit(arg, req, offset, partial_bytes, bytes_to_process);
                 } else {
                     ret = E_OOB;
                 }
@@ -753,7 +769,7 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
     } else {
 
         // If no data buffer is provided we may very well wait and cannot perform a copy
-        if((flags & MSG_DONT_WAIT)) return E_SOCKET_WRONG_TYPE;
+        if((con_type & (CONNECT_PUSH_WRITE | CONNECT_PULL_READ)) && (flags & MSG_DONT_WAIT)) return E_SOCKET_WRONG_TYPE;
         if((con_type & CONNECT_PUSH_WRITE) && !(flags & MSG_NO_COPY)) return E_COPY_NEEDED;
 
         return 0;
@@ -840,6 +856,29 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
                                                       ff, (capability)buf, 0, NULL);
     } else {
         return E_SOCKET_WRONG_TYPE;
+    }
+}
+
+static ssize_t socket_internal_requester_lseek(uni_dir_socket_requester* requester, int64_t offset, int whence, int dont_wait) {
+    ssize_t ret;
+    if((ret = socket_internal_requester_space_wait(requester, 1, dont_wait, 0)) != 0) return ret;
+    struct seek_desc desc;
+    desc.v.offset = offset;
+    desc.v.whence = whence;
+
+    if((ret = socket_internal_request_oob(requester, REQUEST_SEEK, desc.as_intptr_t, 0, 0)) != 0) return ret;
+
+    // FIXME: ignores don't wait, but we have problems if we don't as there are two request queues
+    return socket_internal_requester_wait_all_finish(requester, 0);
+}
+
+ssize_t socket_seek(unix_like_socket* sock, int64_t offset, int whence) {
+    int dont_wait = sock->flags & MSG_DONT_WAIT;
+    ssize_t ret;
+    if(sock->con_type & CONNECT_PUSH_WRITE) {
+        return socket_internal_requester_lseek(sock->write.push_writer, offset, whence, dont_wait);
+    } else if(sock->con_type & CONNECT_PULL_READ) {
+        return socket_internal_requester_lseek(sock->read.pull_reader, offset, whence, dont_wait);
     }
 }
 

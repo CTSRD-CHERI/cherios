@@ -55,6 +55,8 @@
 #define E_ALREADY_CONNECTED         (-15)
 #define E_NOT_CONNECTED             (-16)
 
+#define SOCK_INF                    (uint64_t)(0xFFFFFFFFFFFFFFFULL)
+
 enum SOCKET_FLAGS {
     MSG_NONE = 0,
     MSG_DONT_WAIT = 1,
@@ -71,12 +73,30 @@ typedef enum {
     REQUEST_IND = 1,
     REQUEST_PROXY = 2,
     REQUEST_OUT_BAND = 3,
+    // ALL of the following are handled as out of band. But some of these are pretty common so included here
+    REQUEST_FLUSH = 4,
+    REQUEST_SEEK = 5,
 } request_type_e;
 
 /* A socket is formed of a single requester and fulfiller. Between them they manage a ring buffer. The requester
  * enqueues requests, which are to remain valid until the fulfiller marks them as fulfilled, at which point the
  * fulfiller should no longer use them. There are currently 3 types of request. IM has some immediate data.
  * IND points to a buffer of data. Proxy points to another fulfiller, and asks to fulfill for them instead */
+
+#define SEEK_SET    0
+#define SEEK_CUR    1
+#define SEEK_END    2
+
+struct seek_desc {
+    union {
+        intptr_t as_intptr_t;
+        struct v_t {
+            int64_t offset;
+            int whence;
+        } v;
+    };
+
+};
 
 typedef struct request {
     uint64_t length;
@@ -86,7 +106,8 @@ typedef struct request {
         struct uni_dir_socket_fulfiller* proxy_for;
         char* ind;
         char im[CHERICAP_SIZE];
-        capability oob;
+        struct seek_desc seek_desc;
+        intptr_t oob;
     } request;
 } request_t;
 
@@ -211,6 +232,7 @@ ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_d
 ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, const char* buf, uint32_t size,
                                        data_ring_buffer* data_buffer,
                                        int dont_wait, register_t perms);
+ssize_t socket_internal_request_oob(uni_dir_socket_requester* requester, request_type_e r_type, intptr_t oob_val, uint64_t length, uint32_t drb_off);
 
 void socket_internal_dump_requests(uni_dir_socket_requester* requester);
 
@@ -219,7 +241,7 @@ void socket_internal_dump_requests(uni_dir_socket_requester* requester);
 // Call this to fulfill and / or progress. ful_func will be called on every char* to be fulfilled, providing its length
 // an offset that is offset plus all previous lengths. arg is a user argument that is passed through
 typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t length);
-typedef ssize_t ful_oob_func(request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+typedef ssize_t ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
 
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                int check, int progress, int dont_wait, int in_proxy,
@@ -236,6 +258,7 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
 ssize_t socket_close(unix_like_socket* sock);
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags);
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags);
+ssize_t socket_seek(unix_like_socket* sock, int64_t offset, int whence);
 
 ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count);
 
