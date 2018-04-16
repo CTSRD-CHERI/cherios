@@ -41,17 +41,25 @@ FATFS fs;
 struct sessions_t {
     unix_like_socket sock;
     FIL fil;
-};
+    size_t ndx;
+} sessions[MAX_HANDLES];
 
-struct sessions_t sessions[MAX_HANDLES];
+size_t first_free = 0;
+
 poll_sock_t poll_socks[MAX_HANDLES];
+size_t session_ndx[MAX_HANDLES];
 size_t n_files = 0;
 
 int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester* write_requester, const char* file_name) {
 
     if(!read_requester && !write_requester) return -1;
 
-    struct sessions_t* session = sessions + n_files;
+    if(first_free == MAX_HANDLES) {
+        return -1;
+    }
+
+    size_t next = sessions[first_free].ndx;
+    struct sessions_t* session = &sessions[first_free];
 
     FIL * fp = &session->fil;
 
@@ -76,15 +84,41 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
     }
 
     poll_socks[n_files].events = events;
+    poll_socks[n_files].sock = &session->sock;
+    session_ndx[n_files] = first_free;
+    session->ndx = n_files;
 
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
         if(f_open(fp, file_name, mode) == 0) {
             n_files++;
+            first_free = next;
             return 0;
         }
     }
 
     return -1;
+}
+
+void close_file(size_t sndx, struct sessions_t* session) {
+    // First close the unix socket
+    socket_close(&session->sock);
+
+    // Then compact poll_socks
+    size_t poll_ndx = session->ndx;
+    size_t poll_to_move = n_files-1;
+
+    if(poll_ndx != poll_to_move) {
+        size_t session_ndx_to_move = session_ndx[poll_to_move];
+        poll_socks[poll_ndx] = poll_socks[poll_to_move];
+        session_ndx[poll_ndx] = session_ndx_to_move;
+        sessions[session_ndx_to_move].ndx = poll_ndx;
+    }
+
+    n_files--;
+
+    // Then free struct
+    session->ndx = first_free;
+    first_free = sndx;
 }
 
 void (*msg_methods[]) = {new_file};
@@ -122,6 +156,8 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
         f_lseek(fil, target_offset);
 
         return length;
+    } else if(req == REQUEST_FLUSH) {
+        assert(0 && "TODO");
     }
 
     return E_OOB;
@@ -161,10 +197,8 @@ void request_loop(void) {
 
     enum poll_events msg_event;
 
-
-
     for(size_t i = 0; i != MAX_HANDLES; i++) {
-        poll_socks[i].sock = &sessions[i].sock;
+        sessions[i].ndx = i+1;
     }
 
 
@@ -175,14 +209,16 @@ void request_loop(void) {
             msg_entry(1);
         }
 
-        for(size_t i = 0; i != n_files; i++) {
+        for(size_t i = 0; i < n_files; i++) {
             poll_sock_t* poll_sock = poll_socks+i;
+            size_t sndx = session_ndx[i];
+            struct sessions_t* session = &sessions[sndx];
             if(poll_sock->revents & POLL_IN) {
                 // service write
                 uni_dir_socket_fulfiller* read_fulfill = &poll_sock->sock->read.push_reader;
                 ssize_t res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
                                                        1, 1, 1, 0,
-                                                       ful_push_ff, (capability)&sessions[i].fil, 0, full_oob);
+                                                       ful_push_ff, (capability)&session->fil, 0, full_oob);
             }
             if(poll_sock->revents & POLL_OUT) {
                 // service read
@@ -190,11 +226,11 @@ void request_loop(void) {
                 uni_dir_socket_fulfiller* read_fulfill = &poll_sock->sock->write.pull_writer;
                 ssize_t res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
                                                                     1, 1, 1, 0,
-                                                                    ful_pull_ff, (capability)&sessions[i].fil, 0, full_oob);
+                                                                    ful_pull_ff, (capability)&session->fil, 0, full_oob);
             }
             if(poll_sock->revents & POLL_HUP) {
                 // a close happened
-                assert(0 && "TODO");
+                close_file(sndx, session);
             }
             if(poll_sock->revents & POLL_ER) {
                 assert(0 && "TODO");

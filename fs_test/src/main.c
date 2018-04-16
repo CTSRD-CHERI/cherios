@@ -71,5 +71,9 @@ int main(register_t arg, capability carg) {
 
     assert_int_ex(result, == , 0);
 
+    result = close(file);
+
+    assert_int_ex(result, ==, 0);
+
     printf("Fs test success!\n");
 }
