@@ -50,7 +50,7 @@ char* itoa_p2( int value, char* str, int base) {
     } while(value != 0);
 
     str[ptr] = '\0';
-    return ptr;
+    return str;
 }
 
 char* itoa_div( int value, char * str, int base ) {
@@ -62,7 +62,7 @@ char* itoa_div( int value, char * str, int base ) {
     } while(value != 0);
 
     str[ptr] = '\0';
-    return ptr;
+    return str;
 }
 
 char*  itoa ( int value, char * str, int base ) {
