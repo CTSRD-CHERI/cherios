@@ -15,10 +15,11 @@
 / by use of this software.
 /----------------------------------------------------------------------------*/
 
-#include "lib.h"	
+#include <unistd.h>
+#include "lib.h"
 #include "ff.h"			/* Declarations of FatFs API */
 #include "diskio.h"		/* Declarations of disk I/O functions */
-
+#include "sockets.h"
 
 /*--------------------------------------------------------------------------
 
@@ -3368,8 +3369,34 @@ FRESULT f_open (
 	LEAVE_FF(dj.obj.fs, res);
 }
 
+extern __thread size_t r_socket_sector;
+extern __thread size_t w_socket_sector;
+extern __thread struct requester_32 sr_read;
+extern __thread struct requester_32 sr_write;
 
+static ssize_t proxy_amount(uni_dir_socket_requester* requester, size_t* ss, uni_dir_socket_fulfiller* fulfill, DWORD sect, uint64_t length) {
+	// TODO fulfill using a proxy to the block devices sectors [sect,sect+count)
+	ssize_t res;
 
+	// 1: Emit seek if not at the correct sector
+	if(*ss != sect) {
+		res = socket_internal_requester_lseek(requester, sect, SEEK_SET, 0);
+		assert_int_ex(-res, ==, 0);
+		*ss = sect;
+	}
+
+    // 2: Wait for enough request space
+	res = socket_internal_requester_space_wait(requester, 1, 0, 0);
+	assert_int_ex(-res, ==, 0);
+
+    // 3: Send proxy request
+	res = socket_internal_request_proxy(requester, fulfill, length, 0);
+	assert_int_ex(-res, ==, 0);
+
+    (*ss)++;
+
+	return 0;
+}
 
 /*-----------------------------------------------------------------------*/
 /* Read File                                                             */
@@ -3377,7 +3404,7 @@ FRESULT f_open (
 
 FRESULT f_read (
 	FIL* fp, 	/* Pointer to the file object */
-	void* buff,	/* Pointer to data buffer */
+	uni_dir_socket_fulfiller* fulfill,
 	UINT btr,	/* Number of bytes to read */
 	UINT* br	/* Pointer to number of bytes read */
 )
@@ -3387,8 +3414,7 @@ FRESULT f_read (
 	DWORD clst, sect;
 	FSIZE_t remain;
 	UINT rcnt, cc, csect;
-	BYTE *rbuff = (BYTE*)buff;
-
+	ssize_t sret;
 
 	*br = 0;	/* Clear read byte counter */
 	res = validate(fp, &fs);
@@ -3398,7 +3424,7 @@ FRESULT f_read (
 	if (btr > remain) btr = (UINT)remain;		/* Truncate btr by remaining bytes */
 
 	for ( ;  btr;								/* Repeat until all data read */
-		rbuff += rcnt, fp->fptr += rcnt, *br += rcnt, btr -= rcnt) {
+		fp->fptr += rcnt, *br += rcnt, btr -= rcnt) {
 		if ((fp->fptr % SS(fs)) == 0) {			/* On the sector boundary? */
 			csect = (UINT)(fp->fptr / SS(fs) & (fs->csize - 1));	/* Sector offset in the cluster */
 			if (csect == 0) {					/* On the cluster boundary? */
@@ -3426,7 +3452,7 @@ FRESULT f_read (
 				if (csect + cc > fs->csize) {	/* Clip at cluster boundary */
 					cc = fs->csize - csect;
 				}
-				if (disk_read(fs->drv, rbuff, sect, cc) != RES_OK) {
+				if (proxy_amount(&sr_read.r,&r_socket_sector, fulfill, sect, cc * SS(fs)) < 0) {
 					ABORT(fs, FR_DISK_ERR);
 				}
 #if !_FS_READONLY && _FS_MINIMIZE <= 2			/* Replace one of the read sectors with cached data if it contains a dirty sector */
@@ -3436,7 +3462,8 @@ FRESULT f_read (
 				}
 #else
 				if ((fp->flag & _FA_DIRTY) && fp->sect - sect < cc) {
-					mem_cpy(rbuff + ((fp->sect - sect) * SS(fs)), fp->buf, SS(fs));
+					assert(0 && "TODO");
+					//mem_cpy(rbuff + ((fp->sect - sect) * SS(fs)), fp->buf, SS(fs));
 				}
 #endif
 #endif
@@ -3468,7 +3495,10 @@ FRESULT f_read (
 		}
 		mem_cpy(rbuff, &fs->win[fp->fptr % SS(fs)], rcnt);	/* Pick partial sector */
 #else
-		mem_cpy(rbuff, &fp->buf[fp->fptr % SS(fs)], rcnt);	/* Pick partial sector */
+		/* Pick partial sector */
+        sret = socket_internal_fulfill_progress_bytes(fulfill, rcnt, 0, 1, 0, 0,
+													  &copy_in, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL);
+		if(sret >=0 ) rcnt = (UINT)sret;
 #endif
 	}
 
@@ -3485,7 +3515,7 @@ FRESULT f_read (
 
 FRESULT f_write (
 	FIL* fp,			/* Pointer to the file object */
-	const void* buff,	/* Pointer to the data to be written */
+	uni_dir_socket_fulfiller* fulfill,
 	UINT btw,			/* Number of bytes to write */
 	UINT* bw			/* Pointer to number of bytes written */
 )
@@ -3494,8 +3524,7 @@ FRESULT f_write (
 	FATFS *fs;
 	DWORD clst, sect;
 	UINT wcnt, cc, csect;
-	const BYTE *wbuff = (const BYTE*)buff;
-
+	ssize_t sret;
 
 	*bw = 0;	/* Clear write byte counter */
 	res = validate(fp, &fs);
@@ -3509,7 +3538,7 @@ FRESULT f_write (
 	}
 
 	for ( ;  btw;							/* Repeat until all data written */
-		wbuff += wcnt, fp->fptr += wcnt, fp->obj.objsize = (fp->fptr > fp->obj.objsize) ? fp->fptr : fp->obj.objsize, *bw += wcnt, btw -= wcnt) {
+		fp->fptr += wcnt, fp->obj.objsize = (fp->fptr > fp->obj.objsize) ? fp->fptr : fp->obj.objsize, *bw += wcnt, btw -= wcnt) {
 		if ((fp->fptr % SS(fs)) == 0) {		/* On the sector boundary? */
 			csect = (UINT)(fp->fptr / SS(fs)) & (fs->csize - 1);	/* Sector offset in the cluster */
 			if (csect == 0) {				/* On the cluster boundary? */
@@ -3554,7 +3583,7 @@ FRESULT f_write (
 				if (csect + cc > fs->csize) {	/* Clip at cluster boundary */
 					cc = fs->csize - csect;
 				}
-				if (disk_write(fs->drv, wbuff, sect, cc) != RES_OK) {
+				if (proxy_amount(&sr_write.r,&w_socket_sector, fulfill, sect, cc * SS(fs)) < 0) {
 					ABORT(fs, FR_DISK_ERR);
 				}
 #if _FS_MINIMIZE <= 2
@@ -3565,7 +3594,8 @@ FRESULT f_write (
 				}
 #else
 				if (fp->sect - sect < cc) { /* Refill sector cache if it gets invalidated by the direct write */
-					mem_cpy(fp->buf, wbuff + ((fp->sect - sect) * SS(fs)), SS(fs));
+					assert(0 && "TODO");
+					// mem_cpy(fp->buf, wbuff + ((fp->sect - sect) * SS(fs)), SS(fs));
 					fp->flag &= ~_FA_DIRTY;
 				}
 #endif
@@ -3597,7 +3627,10 @@ FRESULT f_write (
 		mem_cpy(&fs->win[fp->fptr % SS(fs)], wbuff, wcnt);	/* Fit partial sector */
 		fs->wflag = 1;
 #else
-		mem_cpy(&fp->buf[fp->fptr % SS(fs)], wbuff, wcnt);	/* Fit partial sector */
+		/* Pick partial sector */
+		sret = socket_internal_fulfill_progress_bytes(fulfill, wcnt, 0, 1, 0, 0,
+													  &copy_out, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL);
+		if(sret >=0 ) wcnt = (UINT)sret;
 		fp->flag |= _FA_DIRTY;
 #endif
 	}

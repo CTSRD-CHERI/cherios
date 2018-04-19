@@ -28,10 +28,14 @@
  * SUCH DAMAGE.
  */
 
+
+#include <sockets.h>
 #include "unistd.h"
 #include "stdlib.h"
 #include "namespace.h"
 #include "stdio.h"
+#include "sockets.h"
+#include "assert.h"
 
 act_kt fs_act;
 
@@ -70,13 +74,13 @@ FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
     if(r32_read) socket_internal_requester_connect(&r32_read->r);
     if(r32_write) socket_internal_requester_connect(&r32_write->r);
 
-    unix_like_socket* sock = (unix_like_socket*)(malloc(sizeof(unix_like_socket)));
+    struct socket_seek_manager* sock = (struct socket_seek_manager*)(malloc(sizeof(struct socket_seek_manager)));
 
     if((result = socket_init(sock, flags | MSG_NO_COPY, NULL, 0, con_type))) goto er2;
 
-    sock->write.push_writer = &r32_write->r;
-    sock->read.pull_reader = &r32_read->r;
-
+    sock->sock.write.push_writer = &r32_write->r;
+    sock->sock.read.pull_reader = &r32_read->r;
+    sock->read_behind = sock->read_behind = 0;
     return sock;
 
     er2:
@@ -88,23 +92,69 @@ FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
 }
 
 ssize_t close(FILE_t file) {
-    ssize_t result = socket_close(file);
+    ssize_t result = socket_close(&file->sock);
     if(result == 0) {
-        if(file->con_type | CONNECT_PULL_READ) free(file->read.pull_reader);
-        if(file->con_type | CONNECT_PUSH_WRITE) free(file->write.push_writer);
+        if(file->sock.con_type | CONNECT_PULL_READ) free(file->sock.read.pull_reader);
+        if(file->sock.con_type | CONNECT_PUSH_WRITE) free(file->sock.write.push_writer);
         free(file);
     }
     return result;
 }
 
 ssize_t write(FILE_t file, const void* buf, size_t nbyte) {
-    return socket_send(file, buf, nbyte, MSG_NONE);
+    ssize_t ret;
+
+    if(file->write_behind) {
+        ret = socket_internal_requester_lseek(file->sock.write.push_writer,
+                                              file->write_behind, SEEK_CUR, file->sock.flags & MSG_DONT_WAIT);
+        file->write_behind = 0;
+    }
+    ret = socket_send(&file->sock, buf, nbyte, MSG_NONE);
+    if(ret > 0) file->read_behind+=ret;
+    return ret;
 }
 
 ssize_t read(FILE_t file, void* buf, size_t nbyte) {
-    return socket_recv(file, buf, nbyte, MSG_NONE);
+    ssize_t ret;
+
+    if(file->read_behind) {
+        ret = socket_internal_requester_lseek(file->sock.read.pull_reader,
+                                              file->read_behind, SEEK_CUR, file->sock.flags & MSG_DONT_WAIT);
+        file->read_behind = 0;
+    }
+
+    ret = socket_recv(&file->sock, buf, nbyte, MSG_NONE);
+    if(ret > 0) file->write_behind+=ret;
+    return ret;
 }
 
 ssize_t lseek(FILE_t file, int64_t offset, int whence) {
-    return socket_seek(file, offset, whence);
+
+    unix_like_socket* sock = &file->sock;
+
+    int dont_wait = sock->flags & MSG_DONT_WAIT;
+    ssize_t ret;
+
+    if(sock->con_type & CONNECT_PUSH_WRITE) {
+        int64_t offset_w = offset;
+        if(whence == SEEK_CUR) offset_w+=file->write_behind;
+        if(whence != SEEK_CUR || offset_w) {
+            ret = socket_internal_requester_lseek(sock->write.push_writer, offset_w, whence, dont_wait);
+            if(ret < 0) return ret;
+        }
+        file->write_behind = 0;
+    }
+    if(sock->con_type & CONNECT_PULL_READ) {
+        int64_t offset_r = offset;
+        if(whence == SEEK_CUR) offset_r+=file->read_behind;
+        if(whence != SEEK_CUR || offset_r) {
+            ret = socket_internal_requester_lseek(sock->read.pull_reader, offset_r, whence, dont_wait);
+            if(ret < 0) return ret;
+        }
+        file->read_behind = 0;
+    }
+
+    if(sock->con_type & (CONNECT_PUSH_READ | CONNECT_PULL_WRITE)) assert(0 && "TODO\n");
+
+    return 0;
 }

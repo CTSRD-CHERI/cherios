@@ -38,6 +38,9 @@
 #include "virtio_queue.h"
 #include "types.h"
 #include "nano/nanotypes.h"
+#include "sockets.h"
+
+#define VIRTIO_MAX_SOCKS 8
 
 // This request structure also needs an inhdr and outhdr, but they are kept seperate for alignment
 typedef struct req_s {
@@ -63,6 +66,8 @@ typedef struct session_s {
 	struct virtq queue;
 	size_t req_nb;
 
+    le16 free_head;
+
 	// Physical start address' for everything in the virtq and hdrs
 	size_t outhdrs_phy;
 	size_t inhdrs_phy;
@@ -80,7 +85,9 @@ capability session_sealer;
 
 void mmio_disk(void*);
 
+void handle_loop(void);
 void * new_session(void * mmio_cap);
+int new_socket(session_t* session, uni_dir_socket_requester* requester, enum socket_connect_type);
 int	vblk_init(session_t* session);
 int	vblk_read(session_t* session, void * buf, size_t sector, act_kt async_caller, register_t asyc_no, register_t async_port);
 int	vblk_write(session_t* session, void * buf, size_t sector, act_kt async_caller, register_t asyc_no, register_t async_port);

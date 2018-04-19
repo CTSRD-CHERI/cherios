@@ -36,6 +36,7 @@
 #include "namespace.h"
 #include "assert.h"
 #include "cheric.h"
+#include "sockets.h"
 
 extern void * vblk_ref;
 capability virt_session;
@@ -45,6 +46,17 @@ static inline void virtio_check_refs(void) {
 		vblk_ref = namespace_get_ref(namespace_num_virtio);
 	}
 	assert(vblk_ref != NULL);
+}
+
+static inline int virtio_new_socket(uni_dir_socket_requester* requester, enum socket_connect_type type) {
+    virtio_check_refs();
+    int res = message_send(type, 0, 0, 0, virt_session, requester, NULL, NULL, vblk_ref, SYNC_CALL, 5);
+
+	if(res == 0) {
+		socket_internal_requester_connect(requester);
+	}
+
+	return res;
 }
 
 static inline void virtio_blk_session(void * mmio_cap) {

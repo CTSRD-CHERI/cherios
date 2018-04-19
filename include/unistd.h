@@ -37,7 +37,13 @@ struct requester_32 {
     request_t pad[32];
 };
 
-typedef unix_like_socket* FILE_t;
+struct socket_seek_manager {
+    unix_like_socket sock;
+    uint64_t read_behind;
+    uint64_t write_behind;
+};
+
+typedef struct socket_seek_manager* FILE_t;
 
 FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags);
 ssize_t close(FILE_t file);

@@ -37,6 +37,7 @@
 #include "assert.h"
 #include "stdlib.h"
 #include "object.h"
+#include "sockets.h"
 
 #define PADDR_LO(X) ((uint32_t)(X))
 #define PADDR_HI(X) (uint32_t)((((uint64_t)(X) >> 32)) & 0xFFFFFFFF)
@@ -44,9 +45,28 @@
 #define SECTOR_SIZE         512
 #define MAX_REQS            4
 #define DESC_PER_REQ        4
-#define QUEUE_SIZE          (MAX_REQS * DESC_PER_REQ)
+
+#define FLEX_QUEUE_SIZE     0x100
+#define SIMPLE_QUEUE_SIZE   (MAX_REQS * DESC_PER_REQ)
+#define QUEUE_SIZE          (FLEX_QUEUE_SIZE + SIMPLE_QUEUE_SIZE)
 
 capability session_sealer;
+
+size_t n_socks = 0;
+
+struct session_sock {
+    session_t* session;
+    uni_dir_socket_fulfiller ff;
+    uint16_t in_sector_prog;
+    le16 req_tail;
+    le16 req_head;
+    le16 mid_flag_type;
+    size_t out_paddr;
+    size_t in_paddr;
+    struct virtio_blk_outhdr out;
+    struct virtio_blk_inhdr in;
+
+} socks[VIRTIO_MAX_SOCKS];
 
 static u32 mmio_read32(session_t* session, size_t offset) {
 	return mips_cap_ioread_uint32(session->mmio_cap, offset);
@@ -151,7 +171,12 @@ void * new_session(void * mmio_cap) {
         queue->desc[DESC_PER_REQ*i+3].next  = 0;
     }
 
+    // Create a free chain out of the flexible entries
+    for(le16 i = 0; i != FLEX_QUEUE_SIZE; i++) {
+        queue->desc[SIMPLE_QUEUE_SIZE + i].next = SIMPLE_QUEUE_SIZE + i + 1;
+    }
 
+    session->free_head = SIMPLE_QUEUE_SIZE;
 
     int res = syscall_interrupt_register(VIRTIO_MMIO_IRQ, act_self_ctrl, -3, 0, sealed);
     assert_int_ex(res, == , 0);
@@ -161,7 +186,206 @@ void * new_session(void * mmio_cap) {
 	return sealed;
 }
 
+static void add_desc(session_t* session, le16 desc_no) {
+    struct virtq * queue = &(session->queue);
+    queue->avail->ring[queue->avail->idx % queue->num] = desc_no;
+    HW_SYNC;
+    queue->avail->idx += 1;
+    HW_SYNC;
+    /* notify device */
+    mmio_write32(session, VIRTIO_MMIO_QUEUE_NOTIFY, 0x0);
+}
 
+static ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+    struct session_sock* ss = (struct session_sock*)arg;
+    request_type_e req = request->type;
+
+    if(req == REQUEST_SEEK) {
+        assert(ss->in_sector_prog == 0);
+        int64_t seek_offset = request->request.seek_desc.v.offset;
+        int whence = request->request.seek_desc.v.whence;
+
+        size_t target_offset;
+
+        switch (whence) {
+            case SEEK_CUR:
+                target_offset = seek_offset + ss->out.sector;
+                break;
+            case SEEK_SET:
+                if(seek_offset < 0) return E_OOB;
+                target_offset = (size_t)seek_offset;
+                break;
+            case SEEK_END:
+            default:
+                return E_OOB;
+        }
+
+        ss->out.sector = target_offset;
+
+        return length;
+    } else if(req == REQUEST_FLUSH) {
+        assert(0 && "TODO");
+    }
+
+    return E_OOB;
+}
+
+static le16 alloc_from_session(session_t* session) {
+    le16 head = session->free_head;
+    if(head != QUEUE_SIZE) {
+        session->free_head = session->queue.desc[head].next;
+    } else assert(0 && "Not enough free descriptors");
+    return head;
+}
+
+static void free_from_session(session_t* session, le16 head, le16 tail) {
+    session->queue.desc[tail].next = session->free_head;
+    session->free_head = head;
+}
+
+static void add_to_chain(struct session_sock* ss, size_t addr, le16 length, le16 flags) {
+
+    le16 new = alloc_from_session(ss->session);
+
+    ss->session->queue.desc[ss->req_tail].next = new;
+
+    ss->req_tail = new;
+    struct virtq_desc* desc = ss->session->queue.desc + new;
+
+    desc->len = (le32)length;
+    desc->addr = addr;
+    desc->flags = flags;
+
+}
+
+static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+    struct session_sock* ss = (struct session_sock*)arg;
+
+    assert(length <= SECTOR_SIZE);
+
+    size_t start = mem_paddr_for_vaddr((size_t)buf);
+    size_t end = mem_paddr_for_vaddr((size_t)buf + length - 1);
+
+    if(end - start == length-1) {
+        add_to_chain(ss, start, (le16)length, ss->mid_flag_type);
+    } else {
+        size_t len1 = PHY_PAGE_SIZE - (start & (PHY_PAGE_SIZE-1));
+        add_to_chain(ss, start, (le16)len1, ss->mid_flag_type);
+        size_t len2 = length - len1;
+        size_t addr2 = end & ~(PHY_PAGE_SIZE-1);
+        add_to_chain(ss, addr2, (le16)len2,ss->mid_flag_type);
+    }
+
+    ss->in_sector_prog+=length;
+
+    assert(ss->in_sector_prog <= SECTOR_SIZE);
+
+    return length;
+}
+
+static void translate_sock(struct session_sock* ss) {
+    uint64_t bytes = socket_internal_requester_bytes_requested(ss->ff.requester);
+
+    ss->in_sector_prog = 0;
+
+    if(bytes == 0) {
+        // Just an oob
+        ssize_t ret = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF,
+                                               1, 1, 1, 0, &ful_func_cancel_non_oob, (capability)ss,0,full_oob);
+        return;
+    }
+
+    assert_int_ex(bytes, >=, SECTOR_SIZE);
+
+    ss->req_head = ss->req_tail = alloc_from_session(ss->session);
+
+    struct virtq_desc* desc_head = ss->session->queue.desc + ss->req_head;
+    desc_head->len = sizeof(struct virtio_blk_outhdr);
+    desc_head->addr = ss->out_paddr;
+    desc_head->flags = VIRTQ_DESC_F_NEXT;
+
+    ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&ss->ff, SECTOR_SIZE,
+                                                                      1, 0, 1, 0, ful_ff, (capability)ss,0,full_oob);
+    assert(bytes_translated == SECTOR_SIZE);
+    assert(ss->in_sector_prog == SECTOR_SIZE);
+
+    add_to_chain(ss, ss->in_paddr, sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
+
+    add_desc(ss->session, ss->req_head);
+}
+
+int new_socket(session_t* session, uni_dir_socket_requester* requester, enum socket_connect_type type) {
+    session = unseal_session(session);
+    assert(session != NULL);
+
+    if(n_socks == VIRTIO_MAX_SOCKS) return -1;
+
+    struct session_sock* sock = &socks[n_socks];
+
+    uint8_t sock_type;
+    if(type == CONNECT_PUSH_WRITE) {
+        sock_type = SOCK_TYPE_PUSH;
+    } else if(type == CONNECT_PULL_READ) {
+        sock_type = SOCK_TYPE_PULL;
+    } else return -1;
+
+    ssize_t res;
+    if((res = socket_internal_fulfiller_init(&sock->ff, sock_type)) < 0) return (int)res;
+    if((res = socket_internal_fulfiller_connect(&sock->ff, requester)) < 0) return (int)res;
+
+    sock->session = session;
+    sock->out.ioprio = 0;
+    sock->out.sector = 0;
+    sock->out.type = (sock_type == SOCK_TYPE_PUSH) ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
+    sock->mid_flag_type = (sock_type == SOCK_TYPE_PUSH) ?  VIRTQ_DESC_F_NEXT : (VIRTQ_DESC_F_NEXT |  VIRTQ_DESC_F_WRITE);
+    sock->in_sector_prog = 0;
+    sock->req_head = sock->req_tail = QUEUE_SIZE;
+    sock->out_paddr = mem_paddr_for_vaddr((size_t)&sock->out);
+    size_t diff = sizeof(struct virtio_blk_outhdr) - 1;
+    // Check we don't cross a page boundry. This is just really unlucky.
+    assert(mem_paddr_for_vaddr((size_t)&sock->out + diff) - diff == sock->out_paddr);
+    sock->in_paddr = mem_paddr_for_vaddr((size_t)&sock->in);
+
+    n_socks++;
+
+    return 0;
+}
+
+void handle_loop(void) {
+
+    int anything;
+    int set_waiting = 0;
+
+    while(1) {
+
+        if(!msg_queue_empty()) {
+            msg_entry(1);
+        }
+
+        // Try to avoid late notifies from last poll
+        if(set_waiting) syscall_cond_cancel();
+
+        anything = 0;
+
+        for(size_t i = 0; i < n_socks;i++) {
+            if(socks[i].req_head == QUEUE_SIZE) {
+                enum poll_events event = socket_internal_fulfill_poll(&socks[i].ff, POLL_IN, set_waiting);
+                if(event) {
+                    if(event & (POLL_HUP | POLL_ER | POLL_NVAL)) assert(0 && "Socket error in block device");
+                    translate_sock(socks+i);
+                    anything = 1;
+                    set_waiting = 0;
+                }
+            }
+        }
+
+        if(!anything) {
+            if(set_waiting) syscall_cond_wait(1);
+            // On the next loop we will set up notifications on the sockets
+            set_waiting = 1;
+        }
+    }
+}
 
 int vblk_init(session_t* session) {
     // printf(KBLU"%s\n"KRST, __func__);
@@ -264,22 +488,35 @@ static void vblk_rw_ret(session_t* session) {
 
     /* Process everything since last used to used index */
     for(le16 ndx = queue->last_used_idx; ndx != queue->used->idx; ndx++) {
-
-        le16 i = (queue->used->ring[ndx % queue->num].id / DESC_PER_REQ);
-
         le32 used_desc_id =  queue->used->ring[ndx % queue->num].id;
         le32 used_len = queue->used->ring[ndx % queue->num].len;
+        //printf(KMAJ"Used %x (%x)- %x %x\n"KRST, queue->used->idx, queue->last_used_idx, used_desc_id, used_len);
 
-        //printf(KBLU"Used %x (%x)- %x %x\n"KRST, queue->used->idx, queue->last_used_idx, used_desc_id, used_len);
+        if(used_desc_id < SIMPLE_QUEUE_SIZE) { // simple directly mapped
+            le16 i = (used_desc_id / DESC_PER_REQ);
+            assert_int_ex(used_desc_id, ==, DESC_PER_REQ * i);
+            assert_int_ex(used_len, >, 0);
+            assert_int_ex(session->inhdrs[i].status, ==, VIRTIO_BLK_S_OK);
 
-        assert_int_ex(used_desc_id, ==, DESC_PER_REQ * i);
-        assert_int_ex(used_len, >, 0);
-        assert_int_ex(session->inhdrs[i].status, ==, VIRTIO_BLK_S_OK);
+            vblk_send_result(reqs+i, 0);
 
-        vblk_send_result(reqs+i, 0);
+            reqs[i].used = 0;
+        } else { // more complex - requires us to find out which socket this came from
+            for(size_t i = 0; i < n_socks; i++) {
+                if(socks[i].req_head == used_desc_id) {
+                    // This sockets request has finished
+                    ssize_t ret = socket_internal_fulfill_progress_bytes(&socks[i].ff, SECTOR_SIZE, 0, 1, 1, 0, NULL, NULL, 0, ful_oob_func_skip_oob);
+                    assert_int_ex(-ret, ==, -SECTOR_SIZE);
+                    assert_int_ex(socks[i].in.status, ==, VIRTIO_BLK_S_OK);
+                    free_from_session(socks[i].session, socks[i].req_head, socks[i].req_tail);
+                    socks[i].req_head = QUEUE_SIZE;
+                    socks[i].out.sector++;
+                    break;
+                }
+            }
+        }
 
         queue->last_used_idx++;
-        reqs[i].used = 0;
     }
 
     /* ack used ring update */
@@ -366,11 +603,7 @@ int vblk_rw(session_t* session, void * buf, size_t sector,
         queue->desc[DESC_PER_REQ*i+2].len  = len_2*sizeof(u8);
     }
 
-    queue->avail->ring[queue->avail->idx % DESC_PER_REQ] = (le16)DESC_PER_REQ*i;
-    queue->avail->idx += 1;
-
-    /* notify device */
-    mmio_write32(session, VIRTIO_MMIO_QUEUE_NOTIFY, 0x0);
+    add_desc(session, (le16)DESC_PER_REQ*i);
 
     //return vblk_rw_ret(i);
     return vblk_delay_return(session, i);

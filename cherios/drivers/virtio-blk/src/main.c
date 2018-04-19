@@ -36,8 +36,9 @@
 #include "stdio.h"
 #include "namespace.h"
 #include "object.h"
+#include "assert.h"
 
-void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size};
+void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size, new_socket};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, new_session, NULL, vblk_interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);
@@ -55,8 +56,9 @@ int main(void) {
 	}
 	printf("Virtio-blk: register OK\n");
 
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-
 	printf("Virtio-blk: Going into daemon mode\n");
-	return 0;
+
+	handle_loop();
+
+	assert(0 && "Should not reach here");
 }

@@ -34,6 +34,11 @@
 #include "stdio.h"
 #include "string.h"
 
+#define BIG_SIZE 0x1000
+
+char source[BIG_SIZE];
+char dest[BIG_SIZE];
+
 int main(register_t arg, capability carg) {
 
     while(try_get_fs() == NULL) {
@@ -46,11 +51,9 @@ int main(register_t arg, capability carg) {
 
     assert(file != NULL);
 
-    CHERI_PRINT_CAP(file);
-
     char buf[100];
 
-    const char message[] = "Hello World!";
+    const char message[] = "Hello World! Yay a message!\n";
     size_t ms = sizeof(message);
 
     ssize_t result;
@@ -73,6 +76,30 @@ int main(register_t arg, capability carg) {
 
     result = close(file);
 
+    assert_int_ex(result, ==, 0);
+
+    for(size_t i = 0; i < BIG_SIZE; i++) {
+        source[i] = 'A';
+    }
+
+    file = open("bigtest", 1, 1, MSG_NONE);
+
+    assert(file != NULL);
+
+    result = write(file, source, BIG_SIZE);
+
+    assert_int_ex(-result, ==, -BIG_SIZE);
+
+    result = lseek(file, 0, SEEK_SET);
+    assert_int_ex(result, ==, 0);
+
+    result = read(file, dest, BIG_SIZE);
+    assert_int_ex(result, ==, BIG_SIZE);
+
+    for(size_t i = 0; i < BIG_SIZE; i++) {
+        assert_int_ex('A', ==, dest[i]);
+    }
+    result = close(file);
     assert_int_ex(result, ==, 0);
 
     printf("Fs test success!\n");

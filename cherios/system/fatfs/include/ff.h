@@ -19,6 +19,8 @@
 #ifndef _FATFS
 #define _FATFS	88100	/* Revision ID */
 
+#include "sockets.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -244,8 +246,8 @@ typedef enum {
 
 FRESULT f_open (FIL* fp, const TCHAR* path, BYTE mode);				/* Open or create a file */
 FRESULT f_close (FIL* fp);											/* Close an open file object */
-FRESULT f_read (FIL* fp, void* buff, UINT btr, UINT* br);			/* Read data from a file */
-FRESULT f_write (FIL* fp, const void* buff, UINT btw, UINT* bw);	/* Write data to a file */
+FRESULT f_read (FIL* fp, uni_dir_socket_fulfiller* fulfill, UINT btr, UINT* br);			/* Read data from a file */
+FRESULT f_write (FIL* fp, uni_dir_socket_fulfiller* fulfill, UINT btw, UINT* bw);	/* Write data to a file */
 FRESULT f_lseek (FIL* fp, FSIZE_t ofs);								/* Move file pointer of a file object */
 FRESULT f_truncate (FIL* fp);										/* Truncate file */
 FRESULT f_sync (FIL* fp);											/* Flush cached data of a writing file */

@@ -31,6 +31,7 @@
 #define CHERIOS_SOCKETS_H
 
 #include "object.h"
+#include "string.h"
 
 #define SOCKET_CONNECT_IPC_NO       (0xbeef)
 
@@ -72,10 +73,12 @@ typedef enum {
     REQUEST_IM = 0,
     REQUEST_IND = 1,
     REQUEST_PROXY = 2,
-    REQUEST_OUT_BAND = 3,
+    REQUEST_BARRIER_TARGET = 3,
+    REQUEST_BARRIER = (1 << 16),
     // ALL of the following are handled as out of band. But some of these are pretty common so included here
-    REQUEST_FLUSH = 4,
-    REQUEST_SEEK = 5,
+    REQUEST_OUT_BAND = (2 << 16),
+    REQUEST_FLUSH = (2 << 16) + 1,
+    REQUEST_SEEK = (2 << 16) + 1,
 } request_type_e;
 
 /* A socket is formed of a single requester and fulfiller. Between them they manage a ring buffer. The requester
@@ -106,6 +109,8 @@ typedef struct request {
         struct uni_dir_socket_fulfiller* proxy_for;
         char* ind;
         char im[CHERICAP_SIZE];
+        volatile act_notify_kt barrier_waiting;
+        struct request* barrier_target;
         struct seek_desc seek_desc;
         intptr_t oob;
     } request;
@@ -117,6 +122,7 @@ _Static_assert(sizeof(request_t) ==  2*sizeof(capability), "Make sure each reque
 typedef struct uni_dir_socket_requester_fulfiller_component  {
     volatile act_kt fulfiller_waiting;
     volatile act_kt requester_waiting;
+    volatile uint64_t fulfilled_bytes;
     volatile uint16_t fulfill_ptr;
     volatile uint8_t  fulfiller_closed;
 } uni_dir_socket_requester_fulfiller_component;
@@ -128,6 +134,7 @@ typedef struct uni_dir_socket_requester {
     uint8_t connected;
     uint16_t buffer_size;           // Power of 2
     volatile uint16_t requeste_ptr;
+    volatile uint64_t requested_bytes;
     volatile uint64_t* drb_fulfill_ptr;      // a pointer to a fulfilment pointer for a data buffer
     uni_dir_socket_requester_fulfiller_component* access;
     request_t request_ring_buffer[]; // Variable sized, is buffer_size.
@@ -141,7 +148,8 @@ typedef struct uni_dir_socket_fulfiller {
     uint8_t socket_type;
     uint8_t connected;
 
-    volatile uint16_t proxy_state;          // 0, not proxied, 1 proxied
+    volatile uint16_t proxy_times;          // how many times proxied (can wrap)
+    volatile uint16_t proxy_fin_times;      // how many times proxies have finished (can wrap)
     uni_dir_socket_requester* proxyied_in;  // set if proxied
 } uni_dir_socket_fulfiller;
 
@@ -214,7 +222,9 @@ int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller
 // Wait for all requests to be marked as fulfilled
 ssize_t socket_internal_requester_wait_all_finish(uni_dir_socket_requester* requester, int dont_wait);
 
-
+static uint64_t socket_internal_requester_bytes_requested(uni_dir_socket_requester* requester) {
+    return requester->requested_bytes - requester->fulfiller_component.fulfilled_bytes;
+}
 
 
 // These all enqueue requests. All lengths in BYTES //
@@ -234,6 +244,8 @@ ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, cons
                                        int dont_wait, register_t perms);
 ssize_t socket_internal_request_oob(uni_dir_socket_requester* requester, request_type_e r_type, intptr_t oob_val, uint64_t length, uint32_t drb_off);
 
+ssize_t socket_internal_requester_lseek(uni_dir_socket_requester* requester, int64_t offset, int whence, int dont_wait);
+
 void socket_internal_dump_requests(uni_dir_socket_requester* requester);
 
 // This is for fulfilling requests //
@@ -243,11 +255,36 @@ void socket_internal_dump_requests(uni_dir_socket_requester* requester);
 typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t length);
 typedef ssize_t ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
 
+static ssize_t ful_oob_func_skip_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+    return length;
+}
+
+static ssize_t ful_func_cancel_non_oob(capability arg, char* buf, uint64_t offset, uint64_t length) {
+    return 0;
+}
+static ssize_t copy_in(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
+    memcpy(req_buf,(char*)user_buf+offset, length);
+    return (ssize_t)length;
+}
+
+static ssize_t copy_out(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
+    memcpy((char*)user_buf+offset, req_buf, length);
+    return (ssize_t)length;
+}
+
+static ssize_t copy_out_no_caps(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
+    req_buf = cheri_andperm(req_buf, CHERI_PERM_LOAD);
+    memcpy((char*)user_buf+offset, req_buf, length);
+    return (ssize_t)length;
+}
+
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                int check, int progress, int dont_wait, int in_proxy,
                                                ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit);
 ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 
+enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting);
+enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting);
 
 // Unix like interface. Either copies or waits for fulfill to return //
 
@@ -258,7 +295,6 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
 ssize_t socket_close(unix_like_socket* sock);
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags);
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags);
-ssize_t socket_seek(unix_like_socket* sock, int64_t offset, int whence);
 
 ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count);
 
