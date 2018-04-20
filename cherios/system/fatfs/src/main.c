@@ -28,7 +28,6 @@
  * SUCH DAMAGE.
  */
 
-#include <ff.h>
 #include "ff.h"
 #include "misc.h"
 #include "virtioblk.h"
@@ -113,9 +112,9 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
 }
 
 void handle(enum poll_events events, struct sessions_t* session) {
-    FRESULT fresult;
+    FRESULT fresult = 0;
     ssize_t res;
-    UINT bytes_handled;
+    UINT bytes_handled = 0;
     UINT bytes_to_push;
 
     if(events & POLL_IN) {
@@ -129,7 +128,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             session->current = 1;
             res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
                                                                  1, 1, 1, 0,
-                                                                 &ful_func_cancel_non_oob, (capability)&session->fil, 0, full_oob);
+                                                                 &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
             if(session->fil.fptr != session->write_fptr) {
                 f_lseek(&session->fil, session->write_fptr);
             }
@@ -149,7 +148,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             session->current = 0;
             res = socket_internal_fulfill_progress_bytes(write_fulfill, SOCK_INF,
                                                          1, 1, 1, 0,
-                                                         &ful_func_cancel_non_oob, (capability)&session->fil, 0, full_oob);
+                                                         &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
             if(session->fil.fptr != session->read_fptr) {
                 f_lseek(&session->fil, session->read_fptr);
             }

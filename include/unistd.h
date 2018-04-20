@@ -50,6 +50,8 @@ ssize_t close(FILE_t file);
 ssize_t write(FILE_t file, const void* buf, size_t nbyte);
 ssize_t read(FILE_t file, void* buf, size_t nbyte);
 ssize_t lseek(FILE_t file, int64_t offset, int whence);
+ssize_t sendfile(FILE_t f_out, FILE_t f_in, size_t count);
+ssize_t flush(FILE_t file);
 act_kt try_get_fs(void);
 
 #endif //CHERIOS_UNISTD_H

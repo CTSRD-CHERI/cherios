@@ -286,6 +286,8 @@ ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller
 enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting);
 enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting);
 
+int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size);
+
 // Unix like interface. Either copies or waits for fulfill to return //
 
 // This only inits the unix_socket struct. Up to you to provide underlying.

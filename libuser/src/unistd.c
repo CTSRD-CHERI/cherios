@@ -46,6 +46,13 @@ act_kt try_get_fs(void) {
     return fs_act;
 }
 
+#define DEFAULT_DRB_SIZE 0x800
+
+void alloc_drb(FILE_t file) {
+    char* buffer = (char*)malloc(DEFAULT_DRB_SIZE);
+    init_data_buffer(&file->sock.write_copy_buffer, buffer, DEFAULT_DRB_SIZE);
+}
+
 FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
     if(!read && !write) return NULL;
 
@@ -96,19 +103,32 @@ ssize_t close(FILE_t file) {
     if(result == 0) {
         if(file->sock.con_type | CONNECT_PULL_READ) free(file->sock.read.pull_reader);
         if(file->sock.con_type | CONNECT_PUSH_WRITE) free(file->sock.write.push_writer);
+        if(file->sock.write_copy_buffer.buffer) free(file->sock.write_copy_buffer.buffer);
         free(file);
     }
     return result;
 }
 
-ssize_t write(FILE_t file, const void* buf, size_t nbyte) {
-    ssize_t ret;
-
+static void catch_up_write(FILE_t file) {
     if(file->write_behind) {
-        ret = socket_internal_requester_lseek(file->sock.write.push_writer,
+        socket_internal_requester_lseek(file->sock.write.push_writer,
                                               file->write_behind, SEEK_CUR, file->sock.flags & MSG_DONT_WAIT);
         file->write_behind = 0;
     }
+}
+
+static void catch_up_read(FILE_t file) {
+    if(file->read_behind) {
+        socket_internal_requester_lseek(file->sock.read.pull_reader,
+                                              file->read_behind, SEEK_CUR, file->sock.flags & MSG_DONT_WAIT);
+        file->read_behind = 0;
+    }
+}
+
+ssize_t write(FILE_t file, const void* buf, size_t nbyte) {
+    ssize_t ret;
+
+    catch_up_write(file);
     ret = socket_send(&file->sock, buf, nbyte, MSG_NONE);
     if(ret > 0) file->read_behind+=ret;
     return ret;
@@ -117,12 +137,7 @@ ssize_t write(FILE_t file, const void* buf, size_t nbyte) {
 ssize_t read(FILE_t file, void* buf, size_t nbyte) {
     ssize_t ret;
 
-    if(file->read_behind) {
-        ret = socket_internal_requester_lseek(file->sock.read.pull_reader,
-                                              file->read_behind, SEEK_CUR, file->sock.flags & MSG_DONT_WAIT);
-        file->read_behind = 0;
-    }
-
+    catch_up_read(file);
     ret = socket_recv(&file->sock, buf, nbyte, MSG_NONE);
     if(ret > 0) file->write_behind+=ret;
     return ret;
@@ -157,4 +172,32 @@ ssize_t lseek(FILE_t file, int64_t offset, int whence) {
     if(sock->con_type & (CONNECT_PUSH_READ | CONNECT_PULL_WRITE)) assert(0 && "TODO\n");
 
     return 0;
+}
+
+ssize_t sendfile(FILE_t f_out, FILE_t f_in, size_t count) {
+    catch_up_write(f_out);
+    catch_up_read(f_in);
+
+    if(!f_out->sock.write_copy_buffer.buffer) {
+        alloc_drb(f_out);
+    }
+
+    ssize_t ret = socket_sendfile(&f_out->sock, &f_in->sock, count);
+
+    if(ret > 0) {
+        f_out->read_behind+=ret;
+        f_in->write_behind+=ret;
+    }
+
+    return ret;
+}
+
+ssize_t flush(FILE_t file) {
+    if(file->sock.con_type & CONNECT_PUSH_WRITE) {
+        socket_internal_requester_wait_all_finish(file->sock.write.push_writer, 0);
+    }
+    if(file->sock.con_type & CONNECT_PULL_READ) {
+        socket_internal_requester_wait_all_finish(file->sock.read.pull_reader, 0);
+    }
+    // TODO send a flush on the socket.
 }

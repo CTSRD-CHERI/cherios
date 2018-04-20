@@ -98,8 +98,35 @@ int main(register_t arg, capability carg) {
 
     for(size_t i = 0; i < BIG_SIZE; i++) {
         assert_int_ex('A', ==, dest[i]);
+        dest[i] = 0;
     }
+
+    FILE_t file2 = open("Target", 1, 1, MSG_NONE);
+
+    result = lseek(file, 0, SEEK_SET);
+    assert_int_ex(result, ==, 0);
+
+    result = sendfile(file2, file, BIG_SIZE);
+    assert_int_ex(result, ==, BIG_SIZE);
+
+    flush(file);
+
     result = close(file);
+    assert_int_ex(result, ==, 0);
+
+    flush(file2);
+
+    result = lseek(file2, 0, SEEK_SET);
+    assert_int_ex(result, ==, 0);
+
+    result = read(file2, dest, BIG_SIZE);
+    assert_int_ex(result, ==, BIG_SIZE);
+
+    for(size_t i = 0; i < BIG_SIZE; i++) {
+        assert_int_ex('A', ==, dest[i]);
+    }
+
+    result = close(file2);
     assert_int_ex(result, ==, 0);
 
     printf("Fs test success!\n");

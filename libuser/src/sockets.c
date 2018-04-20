@@ -259,59 +259,48 @@ ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_d
                                           &requester->fulfiller_component.fulfiller_waiting);
 }
 
-ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, const char* buf, uint32_t size,
-                                       data_ring_buffer* data_buffer,
-                                       int dont_wait, register_t perms) {
-    ssize_t res;
+ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t align, uint64_t size, int dont_wait,
+                                        char** c1, char**c2, uni_dir_socket_requester* requester) {
+    ssize_t res = 0;
 
-    if(!data_buffer->buffer) return E_NO_DATA_BUFFER;
-
-    if(size + sizeof(capability) > data_buffer->buffer_size) return E_MSG_SIZE;
-
-    if(size == 0) return 0;
-
-    size_t mask = data_buffer->buffer_size-1;
-
-    size_t copy_from = (data_buffer->requeste_ptr);
-
-    size_t extra_to_align = 0;
-
-    // If a buffer is provided we skip a few bytes in the data buffer to match alignment
-    if(buf) {
-        size_t align_mask = sizeof(capability)-1;
-        size_t buf_align = ((size_t)buf) & align_mask;
-        size_t data_buf_align = copy_from & align_mask;
+    uint64_t extra_to_align = 0;
+    uint64_t mask = data_buffer->buffer_size-1;
+    uint64_t copy_from = (data_buffer->requeste_ptr);
 
 
-        if(size >= sizeof(capability)) {
-            extra_to_align = (buf_align - data_buf_align) & align_mask;
-        }
+    uint64_t align_mask = sizeof(capability)-1;
+    uint64_t buf_align = (align) & align_mask;
+    uint64_t data_buf_align = copy_from & align_mask;
+
+
+    if(size >= sizeof(capability)) {
+        extra_to_align = (buf_align - data_buf_align) & align_mask;
     }
 
-
     copy_from = (copy_from + extra_to_align) & mask;
-
     size_t part_1 = data_buffer->buffer_size - copy_from;
-
     int two_parts = part_1 < size;
 
-    // We will need one or two requests depending if we are wrapping round the buffer
-    res = socket_internal_requester_space_wait(requester, two_parts ? 2 : 1, dont_wait, 0);
+    if(requester) {
+        // We will need one or two requests depending if we are wrapping round the buffer
+        res = socket_internal_requester_space_wait(requester, two_parts ? 2 : 1, dont_wait, 0);
+    }
 
-    if(res < 0 ) return res;
+    if(res < 0) return res;
 
-    uint16_t requeste_ptr = requester->requeste_ptr;
-    uint16_t fulfill_ptr = requester->fulfiller_component.fulfill_ptr;
+    uint16_t requeste_ptr;
+    uint16_t fulfill_ptr;
+    if(requester) {
+        requeste_ptr = requester->requeste_ptr;
+        fulfill_ptr = requester->fulfiller_component.fulfill_ptr;
+    }
+
     size_t data_space = data_buf_space(data_buffer);
-
     size += extra_to_align;
 
-    // Can't requeste this message because the data buffer does not have enough space
-    if(data_space < size && dont_wait) return E_AGAIN;
+    if(data_space < size && (dont_wait || requester == NULL)) return E_AGAIN;
 
-    // Reclaim data buffer space until there is enough to copy
-
-    while (data_space < size) {
+    while(data_space < size) {
         uint16_t space = requester->buffer_size - (requeste_ptr - fulfill_ptr);
 
         if(space == requester->buffer_size) {
@@ -327,36 +316,64 @@ ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, cons
         data_space = data_buf_space(data_buffer);
     }
 
-    assert(data_space >= size);
+    data_buffer->requeste_ptr += size;
+    size -=extra_to_align;
 
-    size-=extra_to_align;
-    data_buffer->requeste_ptr += extra_to_align;
-
-    // We are okay to make a requeste. First copy to buffer and then send those bytes.
     part_1 = two_parts ? part_1 : size;
 
     char* cap1 = cheri_setbounds(data_buffer->buffer + copy_from, part_1);
+    *c1 = cap1;
+    char* cap2 = NULL;
+    if(two_parts) {
+        size_t part_2 = size - part_1;
+        cap2 = cheri_setbounds(data_buffer->buffer, part_2);
+    }
+    *c2 = cap2;
+
+    return extra_to_align;
+}
+
+ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, const char* buf, uint32_t size,
+                                       data_ring_buffer* data_buffer,
+                                       int dont_wait, register_t perms) {
+    ssize_t res;
+
+    if(!data_buffer->buffer) return E_NO_DATA_BUFFER;
+
+    if(size + sizeof(capability) > data_buffer->buffer_size) return E_MSG_SIZE;
+
+    if(size == 0) return 0;
+
+    char* cap1;
+    char* cap2;
+
+    res = socket_internal_drb_space_alloc(data_buffer, (uint64_t)buf, size, dont_wait, &cap1, &cap2, requester);
+
+    if(res < 0) return res;
+
+    uint64_t part_1 = cheri_getlen(cap1);
+    uint64_t align_off = res;
 
     if(requester->socket_type == SOCK_TYPE_PUSH) {
         memcpy(cap1, buf, part_1);
     }
     cap1 = cheri_andperm(cap1, perms);
-    res = socket_internal_request_ind(requester, cap1, part_1, part_1 + extra_to_align);
-    if(res < 0) return res;
-    data_buffer->requeste_ptr+=part_1;
 
-    if(two_parts) {
-        size_t part_2 = size - part_1;
-        char* cap2 = cheri_setbounds(data_buffer->buffer, part_2);
+    res = socket_internal_request_ind(requester, cap1, part_1, part_1 + align_off);
+    if(res < 0) return res;
+
+    if(cap2) {
+        size_t part_2 = cheri_getlen(cap2);
         if(requester->socket_type == SOCK_TYPE_PUSH) {
             memcpy(cap2, buf + part_1, part_2);
         }
         cap2 = cheri_andperm(cap2, perms);
         res = socket_internal_request_ind(requester, cap2, part_2, part_2);
         if(res < 0) return res;
-        data_buffer->requeste_ptr+=part_2;
+        part_1+=part_2;
     }
 
+    assert_int_ex(part_1, ==, size);
     return size;
 }
 
@@ -404,6 +421,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
     uni_dir_socket_requester* requester = fulfiller->requester;
 
     if(requester->requester_closed || requester->fulfiller_component.fulfiller_closed) {
+        printf("Something closed\n");
         return E_SOCKET_CLOSED;
     }
 
@@ -751,7 +769,7 @@ ssize_t socket_close(unix_like_socket* sock) {
     return ret;
 }
 
-static int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size) {
+int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size) {
     if(!is_power_2(data_buffer_size)) return E_BUFFER_SIZE_NOT_POWER_2;
 
     buffer->buffer_size = data_buffer_size;
@@ -887,8 +905,54 @@ static ssize_t socket_internal_fulfill_with_fulfill(capability arg, char* buf, u
 
 static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, uni_dir_socket_requester* push_req,
                                             uint64_t align, data_ring_buffer* drb,
-                                            int dont_wait) {
-    return E_UNSUPPORTED;
+                                            size_t count, int dont_wait) {
+    if(!drb->buffer) return E_NO_DATA_BUFFER;
+    if(dont_wait) return E_UNSUPPORTED;
+
+    ssize_t res;
+
+    // Chunks of this size on in the steady size (one being written, one being read)
+    size_t chunk_size = drb->buffer_size / 2;
+    size_t bytes_to_send = count;
+
+    while(bytes_to_send) {
+        uint64_t req_size = (chunk_size > bytes_to_send) ? bytes_to_send : chunk_size;
+
+        char* cap1;
+        char* cap2;
+
+        res = socket_internal_drb_space_alloc(drb, align, req_size, dont_wait, &cap1, &cap2, pull_req);
+
+        if(res < 0) return res;
+
+        uint64_t align_off = res;
+        uint64_t size1 = cheri_getlen(cap1);
+        uint64_t size2 = 0;
+
+        socket_internal_request_ind(pull_req, cap1, size1, 0);
+
+        if(cap2) {
+            size2 = cheri_getlen(cap2);
+            socket_internal_request_ind(pull_req, cap2, size2, 0);
+        }
+
+        res = socket_internal_requester_wait_all_finish(pull_req, dont_wait);
+
+        if(res < 0) return res;
+
+        // Make 2 requests
+
+        res = socket_internal_requester_space_wait(push_req, size2 ? 2 : 1, dont_wait, 0);
+
+        if(res < 0) return res;
+
+        socket_internal_request_ind(push_req, cap1, size1, size1+align_off);
+        if(cap2) socket_internal_request_ind(pull_req, cap2, size2, size2);
+
+        bytes_to_send -=req_size;
+    }
+
+    return count;
 }
 
 ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count) {
@@ -919,7 +983,7 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
         uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
         uni_dir_socket_requester* push_write = sockout->write.push_writer;
 
-        return socket_internal_request_join(pull_read, push_write, 0, &sockout->write_copy_buffer, dont_wait);
+        return socket_internal_request_join(pull_read, push_write, 0, &sockout->write_copy_buffer, count, dont_wait);
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PULL) {
         // fullfill one read with a function that fulfills write

@@ -306,7 +306,15 @@ static void translate_sock(struct session_sock* ss) {
 
     ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&ss->ff, SECTOR_SIZE,
                                                                       1, 0, 1, 0, ful_ff, (capability)ss,0,full_oob);
-    assert(bytes_translated == SECTOR_SIZE);
+
+    if(bytes_translated == E_AGAIN) {
+        // The number of bytes above where misleading. Undo head.
+        free_from_session(ss->session, ss->req_head, ss->req_head);
+        ss->req_head = QUEUE_SIZE;
+        return;
+    }
+
+    assert_int_ex(-bytes_translated, ==, -SECTOR_SIZE);
     assert(ss->in_sector_prog == SECTOR_SIZE);
 
     add_to_chain(ss, ss->in_paddr, sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
@@ -522,7 +530,7 @@ static void vblk_rw_ret(session_t* session) {
     /* ack used ring update */
     if(mmio_read32(session, VIRTIO_MMIO_INTERRUPT_STATUS) == 0x1) {
         mmio_write32(session, VIRTIO_MMIO_INTERRUPT_ACK, 0x1);
-        assert(mmio_read32(session, VIRTIO_MMIO_INTERRUPT_STATUS) == 0x0);
+        //assert(mmio_read32(session, VIRTIO_MMIO_INTERRUPT_STATUS) == 0x0);
     }
 }
 
