@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,36 +27,33 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_NETSOCKET_H
+#define CHERIOS_NETSOCKET_H
 
-#ifndef CHERIOS_NAMESPACE_H
-#define CHERIOS_NAMESPACE_H
+#include "sockets.h"
 
-#include "types.h"
+typedef struct netsocket {
+    unix_like_socket sock;
+    struct requester_32 write_req;
+    char drb[0x200];
+} netsocket;
 
-int     namespace_rdy(void);
-void	namespace_init(act_kt ns_ref);
-int	namespace_register(int nb, act_kt ref);
-act_kt	namespace_get_ref(int nb);
-int	namespace_get_num_services(void);
+static inline int netsocket_init(netsocket* netsock) {
+    socket_init(&netsock->sock, MSG_NONE, netsock->drb, sizeof(netsock->drb), CONNECT_PUSH_WRITE | CONNECT_PUSH_READ);
+    netsock->sock.write.push_writer = &netsock->write_req.r;
+    socket_internal_requester_init(&netsock->write_req.r, 32, SOCK_TYPE_PUSH, &netsock->sock.write_copy_buffer);
+    socket_internal_fulfiller_init(&netsock->sock.read.push_reader, SOCK_TYPE_PUSH);
+    return 0;
+}
 
-extern act_kt namespace_ref;
+static inline int netsocket_listen(netsocket* netsock, register_t port) {
+    // TODO registeron some lower layer that we are listening on port
+    return socket_internal_listen(port, &netsock->write_req.r, &netsock->sock.read.push_reader);
+}
 
-// TODO this is not a good way to handle names, we probably want string ids, or a string to integer id
-static const int namespace_num_kernel = 0;
-static const int namespace_num_init = 1;
-static const int namespace_num_namespace = 2;
-static const int namespace_num_proc_manager = 3;
-static const int namespace_num_memmgt = 4;
-static const int namespace_num_tman = 5;
+// TODO connect to IP. Also the ref should be an ip handler, which should then perform a loopback
+static inline int netsocket_connect(netsocket* netsock, register_t port, act_kt ref) {
+    return socket_internal_connect(ref, port, &netsock->write_req.r, &netsock->sock.read.push_reader);
+}
 
-static const int namespace_num_uart = 0x40;
-static const int namespace_num_zlib = 0x41;
-static const int namespace_num_sockets = 0x42;
-static const int namespace_num_virtio = 0x43;
-static const int namespace_num_fs = 0x44;
-
-static const int namespace_num_event_service = 0x61;
-static const int namespace_num_dedup_service = 0x62;
-
-static const int namespace_num_webserver = 0x70;
-#endif
+#endif //CHERIOS_NETSOCKET_H

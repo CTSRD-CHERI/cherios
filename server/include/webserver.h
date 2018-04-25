@@ -1,10 +1,9 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,35 +28,37 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_NAMESPACE_H
-#define CHERIOS_NAMESPACE_H
+#ifndef CHERIOS_TEMPLATE_H
+#define CHERIOS_TEMPLATE_H
 
-#include "types.h"
+#include "sockets.h"
 
-int     namespace_rdy(void);
-void	namespace_init(act_kt ns_ref);
-int	namespace_register(int nb, act_kt ref);
-act_kt	namespace_get_ref(int nb);
-int	namespace_get_num_services(void);
+enum http_method {
+    ER = 0,
+    CONNNECT = 1,
+    GET = 2,
+    HEAD = 3,
+    OPTIONS = 4,
+    PATCH = 5,
+    POST = 6,
+    PUT = 7,
+    TRACE = 8
+};
 
-extern act_kt namespace_ref;
+struct initial {
+    enum http_method method;
+    char* file;
+};
 
-// TODO this is not a good way to handle names, we probably want string ids, or a string to integer id
-static const int namespace_num_kernel = 0;
-static const int namespace_num_init = 1;
-static const int namespace_num_namespace = 2;
-static const int namespace_num_proc_manager = 3;
-static const int namespace_num_memmgt = 4;
-static const int namespace_num_tman = 5;
+struct header {
+    char header[100];
+    char value[100];
+};
 
-static const int namespace_num_uart = 0x40;
-static const int namespace_num_zlib = 0x41;
-static const int namespace_num_sockets = 0x42;
-static const int namespace_num_virtio = 0x43;
-static const int namespace_num_fs = 0x44;
 
-static const int namespace_num_event_service = 0x61;
-static const int namespace_num_dedup_service = 0x62;
+int parse_initial(uni_dir_socket_fulfiller* push_read, struct initial* initial, char* name_to, size_t name_to_length);
+ssize_t parse_header(uni_dir_socket_fulfiller* push_read, struct header* header);
 
-static const int namespace_num_webserver = 0x70;
-#endif
+void handle_loop(void);
+
+#endif //CHERIOS_TEMPLATE_H

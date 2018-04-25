@@ -287,7 +287,11 @@ void close_file(size_t sndx, struct sessions_t* session) {
     first_free = sndx;
 }
 
-void (*msg_methods[]) = {new_file};
+int make_dir(const char* name) {
+    return f_mkdir(name);
+}
+
+void (*msg_methods[]) = {new_file, make_dir};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);

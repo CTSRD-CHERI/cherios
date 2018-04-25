@@ -56,6 +56,8 @@
 #define E_ALREADY_CONNECTED         (-15)
 #define E_NOT_CONNECTED             (-16)
 
+#define E_USER_FULFILL_ERROR        (-20)
+
 #define SOCK_INF                    (uint64_t)(0xFFFFFFFFFFFFFFFULL)
 
 enum SOCKET_FLAGS {
@@ -64,6 +66,7 @@ enum SOCKET_FLAGS {
     MSG_NO_CAPS = 2,
     MSG_NO_COPY = 4,
     MSG_PEEK = 8,
+    MSG_EMULATE_SINGLE_PTR = 16,
 };
 
 #define SOCK_TYPE_PUSH 0
@@ -141,6 +144,11 @@ typedef struct uni_dir_socket_requester {
 } uni_dir_socket_requester;
 
 #define SIZE_OF_request(buffer_size) ((sizeof(request_t) * buffer_size) + sizeof(uni_dir_socket_requester))
+
+struct requester_32 {
+    uni_dir_socket_requester r;
+    request_t pad[32];
+};
 
 typedef struct uni_dir_socket_fulfiller {
     uni_dir_socket_requester* requester;  // Read only

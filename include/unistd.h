@@ -32,11 +32,6 @@
 
 #include "sockets.h"
 
-struct requester_32 {
-    uni_dir_socket_requester r;
-    request_t pad[32];
-};
-
 struct socket_seek_manager {
     unix_like_socket sock;
     uint64_t read_behind;
@@ -51,6 +46,7 @@ ssize_t write(FILE_t file, const void* buf, size_t nbyte);
 ssize_t read(FILE_t file, void* buf, size_t nbyte);
 ssize_t lseek(FILE_t file, int64_t offset, int whence);
 ssize_t sendfile(FILE_t f_out, FILE_t f_in, size_t count);
+int mkdir(const char* name);
 ssize_t flush(FILE_t file);
 act_kt try_get_fs(void);
 

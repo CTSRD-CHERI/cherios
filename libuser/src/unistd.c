@@ -29,7 +29,6 @@
  */
 
 
-#include <sockets.h>
 #include "unistd.h"
 #include "stdlib.h"
 #include "namespace.h"
@@ -51,6 +50,14 @@ act_kt try_get_fs(void) {
 void alloc_drb(FILE_t file) {
     char* buffer = (char*)malloc(DEFAULT_DRB_SIZE);
     init_data_buffer(&file->sock.write_copy_buffer, buffer, DEFAULT_DRB_SIZE);
+}
+
+int mkdir(const char* name) {
+    act_kt dest = try_get_fs();
+
+    if(!dest) return -1;
+    return (int)message_send(0,0,0,0,name,NULL,NULL,NULL,dest, SYNC_CALL, 1);
+
 }
 
 FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
@@ -83,7 +90,7 @@ FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
 
     struct socket_seek_manager* sock = (struct socket_seek_manager*)(malloc(sizeof(struct socket_seek_manager)));
 
-    if((result = socket_init(sock, flags | MSG_NO_COPY, NULL, 0, con_type))) goto er2;
+    if((result = socket_init(sock, flags | MSG_NO_COPY | MSG_EMULATE_SINGLE_PTR, NULL, 0, con_type))) goto er2;
 
     sock->sock.write.push_writer = &r32_write->r;
     sock->sock.read.pull_reader = &r32_read->r;
@@ -99,6 +106,7 @@ FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
 }
 
 ssize_t close(FILE_t file) {
+    flush(file);
     ssize_t result = socket_close(&file->sock);
     if(result == 0) {
         if(file->sock.con_type | CONNECT_PULL_READ) free(file->sock.read.pull_reader);
@@ -127,46 +135,49 @@ static void catch_up_read(FILE_t file) {
 
 ssize_t write(FILE_t file, const void* buf, size_t nbyte) {
     ssize_t ret;
+    int em = file->sock.flags & MSG_EMULATE_SINGLE_PTR;
 
-    catch_up_write(file);
+    if(em) catch_up_write(file);
     ret = socket_send(&file->sock, buf, nbyte, MSG_NONE);
-    if(ret > 0) file->read_behind+=ret;
+    if(em && ret > 0) file->read_behind+=ret;
     return ret;
 }
 
 ssize_t read(FILE_t file, void* buf, size_t nbyte) {
     ssize_t ret;
+    int em = file->sock.flags & MSG_EMULATE_SINGLE_PTR;
 
-    catch_up_read(file);
+    if(em) catch_up_read(file);
     ret = socket_recv(&file->sock, buf, nbyte, MSG_NONE);
-    if(ret > 0) file->write_behind+=ret;
+    if(em && ret > 0) file->write_behind+=ret;
     return ret;
 }
 
 ssize_t lseek(FILE_t file, int64_t offset, int whence) {
 
     unix_like_socket* sock = &file->sock;
+    int em = file->sock.flags & MSG_EMULATE_SINGLE_PTR;
 
     int dont_wait = sock->flags & MSG_DONT_WAIT;
     ssize_t ret;
 
     if(sock->con_type & CONNECT_PUSH_WRITE) {
         int64_t offset_w = offset;
-        if(whence == SEEK_CUR) offset_w+=file->write_behind;
+        if(em && whence == SEEK_CUR) offset_w+=file->write_behind;
         if(whence != SEEK_CUR || offset_w) {
             ret = socket_internal_requester_lseek(sock->write.push_writer, offset_w, whence, dont_wait);
             if(ret < 0) return ret;
         }
-        file->write_behind = 0;
+        if(em) file->write_behind = 0;
     }
     if(sock->con_type & CONNECT_PULL_READ) {
         int64_t offset_r = offset;
-        if(whence == SEEK_CUR) offset_r+=file->read_behind;
+        if(em && whence == SEEK_CUR) offset_r+=file->read_behind;
         if(whence != SEEK_CUR || offset_r) {
             ret = socket_internal_requester_lseek(sock->read.pull_reader, offset_r, whence, dont_wait);
             if(ret < 0) return ret;
         }
-        file->read_behind = 0;
+        if(em) file->read_behind = 0;
     }
 
     if(sock->con_type & (CONNECT_PUSH_READ | CONNECT_PULL_WRITE)) assert(0 && "TODO\n");
@@ -175,8 +186,12 @@ ssize_t lseek(FILE_t file, int64_t offset, int whence) {
 }
 
 ssize_t sendfile(FILE_t f_out, FILE_t f_in, size_t count) {
-    catch_up_write(f_out);
-    catch_up_read(f_in);
+
+    int em_w = f_out->sock.flags & MSG_EMULATE_SINGLE_PTR;
+    int em_r = f_in->sock.flags & MSG_EMULATE_SINGLE_PTR;
+
+    if(em_w) catch_up_write(f_out);
+    if(em_r) catch_up_read(f_in);
 
     if(!f_out->sock.write_copy_buffer.buffer) {
         alloc_drb(f_out);
@@ -185,8 +200,8 @@ ssize_t sendfile(FILE_t f_out, FILE_t f_in, size_t count) {
     ssize_t ret = socket_sendfile(&f_out->sock, &f_in->sock, count);
 
     if(ret > 0) {
-        f_out->read_behind+=ret;
-        f_in->write_behind+=ret;
+        if(em_w) f_out->read_behind+=ret;
+        if(em_r) f_in->write_behind+=ret;
     }
 
     return ret;
