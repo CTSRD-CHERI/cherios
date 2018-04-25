@@ -30,6 +30,7 @@
 
 #include "cheric.h"
 #include "math.h"
+#include "stdio.h"
 
 #define SUPPORT_BASE_MIN 2
 #define SUPPORT_BASE_MAX 16
@@ -39,38 +40,77 @@
 char base_chars[] = {'0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'};
 uint8_t log_2[] = {0,0,1,0,2,0,0,0,3,0,0,0,0,0,0,0,4};
 
-char* itoa_p2( int value, char* str, int base) {
+size_t itoa_p2( int value, char* str, int base) {
     size_t ptr = 0;
     size_t shift = log_2[base];
     size_t mask = base-1;
+    size_t n = 0;
     do {
         size_t digit = value & mask;
         value = (value >> shift);
         str[ptr++] = base_chars[digit];
+        n++;
     } while(value != 0);
 
     str[ptr] = '\0';
-    return str;
+    return n;
 }
 
-char* itoa_div( int value, char * str, int base ) {
+size_t itoa_div( int value, char * str, int base ) {
     size_t ptr = 0;
+    size_t n = 0;
     do {
         size_t digit = value % base;
         value = (value / base);
         str[ptr++] = base_chars[digit];
+        n++;
     } while(value != 0);
 
     str[ptr] = '\0';
-    return str;
+    n;
 }
 
 char*  itoa ( int value, char * str, int base ) {
     if(base < SUPPORT_BASE_MIN || base > SUPPORT_BASE_MAX) return NULL;
 
+    size_t n;
     if(is_power_2(base)) {
-        return itoa_p2(value, str, base);
+        n = itoa_p2(value, str, base);
     } else {
-        return itoa_div(value, str, base);
+        n = itoa_div(value, str, base);
     }
+
+    for(size_t i = 0; i != n / 2; i++) {
+        char c1 = str[i];
+        str[i] = str[n-1-i];
+        str[n-1-i] = c1;
+    }
+
+    return str;
+}
+
+int atoi(const char* str) {
+
+    unsigned const char* s = (unsigned const char*)str;
+
+    int result = 0;
+    int sign = 1;
+    unsigned char c;
+
+    while((c = *(s++)) == ' ' || c == '\t');
+
+    if(c == '-' || c == '+') {
+        if (c == '-') {
+            sign = -1;
+        }
+        c = *(s++);
+    }
+
+    c = (c - (unsigned char)'0');
+    while(c < 10) {
+        result = (result*10) + c;
+        c = (*(s++) - (unsigned char)'0');
+    }
+
+    return (result * sign);
 }

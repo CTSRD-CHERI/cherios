@@ -55,5 +55,6 @@ void 	abort(void)      __dead2;
 void	exit(int status) __dead2;
 
 char *  itoa ( int value, char * str, int base );
+int     atoi(const char* str);
 
 #endif /* !__STDLIB_H__ */
