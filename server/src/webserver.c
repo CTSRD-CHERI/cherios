@@ -136,9 +136,16 @@ int handle_get_post(struct session* s, struct initial* ini) {
 
     if(ini->method == POST && file_size == 0) ER_R("POST should include a file size\n");
 
-    if(ini->method == GET && file_size == 0) ER_R("My shitty FS has no way go get file size currently so plz say\n");
-
     FILE_t f = open(ini->file, 1, 1, MSG_NONE);
+
+    if(ini->method == GET && file_size == 0) {
+        result = filesize(f);
+        if(result < 0) {
+            close(f);
+            ER_R("Error in getting file size\n");
+        }
+        file_size = (size_t)result;
+    }
 
     if(f == NULL) {
         send_response_initial(s, 404, NOT_FOUND "\n", sizeof(NOT_FOUND));

@@ -41,7 +41,6 @@
                 "\n" \
                 "Hello World!\n"
 #define REQ2    "GET somefile.txt HTTP/1.0\n" \
-                "Content-Length: 14\n" \
                 "\n" \
 
 static ssize_t ful_print(capability arg, char* buf, uint64_t offset, uint64_t length) {
