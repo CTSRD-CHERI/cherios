@@ -78,10 +78,11 @@ typedef enum {
     REQUEST_PROXY = 2,
     REQUEST_BARRIER_TARGET = 3,
     REQUEST_BARRIER = (1 << 16),
-    // ALL of the following are handled as out of band. But some of these are pretty common so included here
+    // Anything with 2 << 16 set are OOB and handled by the user. But some of these are pretty common so included here.
     REQUEST_OUT_BAND = (2 << 16),
     REQUEST_FLUSH = (2 << 16) + 1,
-    REQUEST_SEEK = (2 << 16) + 1,
+    REQUEST_SEEK = (2 << 16) + 2,
+    REQUEST_SIZE = (2 << 16) + 3,
 } request_type_e;
 
 /* A socket is formed of a single requester and fulfiller. Between them they manage a ring buffer. The requester

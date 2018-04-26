@@ -216,3 +216,17 @@ ssize_t flush(FILE_t file) {
     }
     // TODO send a flush on the socket.
 }
+
+ssize_t filesize(FILE_t file) {
+    _unsafe ssize_t fsize;
+    uni_dir_socket_requester* req = file->sock.con_type & CONNECT_PUSH_WRITE ?
+                                    file->sock.write.push_writer :
+                                    file->sock.read.pull_reader;
+
+    ssize_t res = socket_internal_requester_space_wait(req,1,0,0);
+    if(res < 0) return res;
+    socket_internal_request_oob(req, REQUEST_SIZE, (intptr_t)&fsize, 0, 0);
+    res = socket_internal_requester_wait_all_finish(req, 0);
+    if(res < 0) return res;
+    return fsize;
+}

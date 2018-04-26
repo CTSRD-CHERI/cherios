@@ -48,6 +48,7 @@ ssize_t lseek(FILE_t file, int64_t offset, int whence);
 ssize_t sendfile(FILE_t f_out, FILE_t f_in, size_t count);
 int mkdir(const char* name);
 ssize_t flush(FILE_t file);
+ssize_t filesize(FILE_t file);
 act_kt try_get_fs(void);
 
 #endif //CHERIOS_UNISTD_H

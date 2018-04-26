@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <sockets.h>
 #include "ff.h"
 #include "misc.h"
 #include "virtioblk.h"
@@ -106,6 +107,12 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
         return length;
     } else if(req == REQUEST_FLUSH) {
         assert(0 && "TODO");
+    } else if(req == REQUEST_SIZE) {
+
+        ssize_t * size_ptr = (size_t*)request->request.oob;
+        *size_ptr = f_size(&fil->fil);
+
+        return length;
     }
 
     return E_OOB;
