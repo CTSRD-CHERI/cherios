@@ -242,9 +242,9 @@
 /      lock control is independent of re-entrancy. */
 
 
-#define _FS_REENTRANT	0
+#define _FS_REENTRANT	1
 #define _FS_TIMEOUT		1000
-#define	_SYNC_t			HANDLE
+#define	_SYNC_t			ff_sync_t
 /* The option _FS_REENTRANT switches the re-entrancy (thread safe) of the FatFs
 /  module itself. Note that regardless of this option, file access to different
 /  volume is always re-entrant and volume control functions, f_mount(), f_mkfs()

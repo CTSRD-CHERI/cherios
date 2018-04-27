@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include <sockets.h>
+#include "spinlock.h"
 #include "ff.h"
 #include "misc.h"
 #include "virtioblk.h"
@@ -50,6 +50,7 @@ struct sessions_t {
     uint64_t read_fptr;
     uint64_t write_fptr;
     uint8_t current;
+    spinlock_t session_lock;
 } sessions[MAX_HANDLES];
 
 size_t first_free = 0;
@@ -127,6 +128,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
     if(events & POLL_IN) {
         // service write (we read)
         uni_dir_socket_fulfiller* read_fulfill = &session->sock.read.push_reader;
+        assert_int_ex(read_fulfill->proxy_times, ==, read_fulfill->proxy_fin_times);
         uint64_t btp = socket_internal_requester_bytes_requested(read_fulfill->requester);
         do {
 
@@ -147,6 +149,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
     if(events & POLL_OUT) {
         // service read (we write)
         uni_dir_socket_fulfiller* write_fulfill = &session->sock.write.pull_writer;
+        assert_int_ex(write_fulfill->proxy_times, ==, write_fulfill->proxy_fin_times);
         uint64_t btp = socket_internal_requester_bytes_requested(write_fulfill->requester);
         do {
 
@@ -166,8 +169,10 @@ void handle(enum poll_events events, struct sessions_t* session) {
     }
 
 
-    // FIXME: Race between this and closing. This happens because poll has a bad interface.
+    // The index might be moved so we must acquire the lock
+    spinlock_acquire(&session->session_lock);
     poll_socks[session->ndx].events = POLL_IN | POLL_OUT;
+    spinlock_release(&session->session_lock);
 }
 
 void worker_loop(register_t r, capability c) {
@@ -257,13 +262,14 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
     session_ndx[n_files] = first_free;
     session->ndx = n_files;
     session->read_fptr = session->write_fptr = 0;
-
+    spinlock_init(&session->session_lock);
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
-        if(f_open(fp, file_name, mode) == 0) {
+        FRESULT fres;
+        if((fres = f_open(fp, file_name, mode)) == 0) {
             n_files++;
             first_free = next;
             return 0;
-        }
+        } else printf("Error opening file %d", fres);
     }
 
     return -1;
@@ -282,9 +288,11 @@ void close_file(size_t sndx, struct sessions_t* session) {
 
     if(poll_ndx != poll_to_move) {
         size_t session_ndx_to_move = session_ndx[poll_to_move];
+        spinlock_acquire(&sessions[session_ndx_to_move].session_lock);
         poll_socks[poll_ndx] = poll_socks[poll_to_move];
         session_ndx[poll_ndx] = session_ndx_to_move;
         sessions[session_ndx_to_move].ndx = poll_ndx;
+        spinlock_release(&sessions[session_ndx_to_move].session_lock);
     }
 
     n_files--;
@@ -332,7 +340,7 @@ void request_loop(void) {
                 if(poll_sock->revents & POLL_HUP) {
                     // a close happened
                     close_file(sndx, session);
-                    continue; // closing may move things around. re-poll
+                    break; // closing may move things around. re-poll
                 }
                 if(poll_sock->revents & POLL_ER) {
                     assert(0 && "TODO");

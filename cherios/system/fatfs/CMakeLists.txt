@@ -6,6 +6,7 @@ set(FATFS_SRCS
     src/main.c
     src/diskio.c
     src/ff.c
+    src/ff_sync.c
 )
 
 add_cherios_executable(fatfs ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${FATFS_SRCS})
