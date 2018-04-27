@@ -50,6 +50,7 @@ act_kt try_get_fs(void) {
 void alloc_drb(FILE_t file) {
     char* buffer = (char*)malloc(DEFAULT_DRB_SIZE);
     init_data_buffer(&file->sock.write_copy_buffer, buffer, DEFAULT_DRB_SIZE);
+    file->sock.write.push_writer->drb_fulfill_ptr = &file->sock.write_copy_buffer.fulfill_ptr;
 }
 
 int mkdir(const char* name) {
