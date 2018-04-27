@@ -306,13 +306,7 @@ static void translate_sock(struct session_sock* ss) {
 
     ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&ss->ff, SECTOR_SIZE,
                                                                       1, 0, 1, 0, ful_ff, (capability)ss,0,full_oob);
-
-    if(bytes_translated == E_AGAIN) {
-        // The number of bytes above where misleading. Undo head.
-        free_from_session(ss->session, ss->req_head, ss->req_head);
-        ss->req_head = QUEUE_SIZE;
-        return;
-    }
+    assert_int_ex(bytes_translated, ==, SECTOR_SIZE);
 
     assert_int_ex(-bytes_translated, ==, -SECTOR_SIZE);
     assert(ss->in_sector_prog == SECTOR_SIZE);
