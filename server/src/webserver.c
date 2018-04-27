@@ -138,6 +138,11 @@ int handle_get_post(struct session* s, struct initial* ini) {
 
     FILE_t f = open(ini->file, 1, 1, MSG_NONE);
 
+    if(f == NULL) {
+        send_response_initial(s, 404, NOT_FOUND "\n", sizeof(NOT_FOUND));
+        ER_R("Error opening file %s\n", ini->file);
+    }
+
     if(ini->method == GET && file_size == 0) {
         result = filesize(f);
         if(result < 0) {
@@ -146,12 +151,6 @@ int handle_get_post(struct session* s, struct initial* ini) {
         }
         file_size = (size_t)result;
     }
-
-    if(f == NULL) {
-        send_response_initial(s, 404, NOT_FOUND "\n", sizeof(NOT_FOUND));
-        ER_R("Error opening file %s\n", ini->file);
-    }
-
 
     if(ini->method == GET) {
         send_ok(s);
