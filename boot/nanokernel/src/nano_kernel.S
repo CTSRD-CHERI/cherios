@@ -2159,6 +2159,10 @@ foundation_create:
 
     cmove       $c14, $c4                           # save c4 for later
 
+    # Make sure this is null for a public foundation
+    cnull       $c4
+    csc         $c4, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
+
     cincoffset  $c4, $c14, $t1                       # c4 is the start of the user code/data
     dli         $t0, DEF_DATA_PERMS
     csetbounds  $c4, $c4, $a0                       # c4 is users data
