@@ -149,7 +149,11 @@ int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, ui
 
 // Wait for 'amount' requests to be outstanding
 int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait, int delay_sleep) {
-    uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
+    uni_dir_socket_requester_fulfiller_component* access = NULL;
+    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
+    if(access == NULL) {
+        return E_SOCKET_CLOSED;
+    }
 
     if(fulfiller->requester->requester_closed || access->fulfiller_closed) {
         return E_SOCKET_CLOSED;
@@ -316,6 +320,8 @@ ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t 
         data_space = data_buf_space(data_buffer);
     }
 
+    // This means the DRB is not being managed properly
+    assert_int_ex(data_buf_space(data_buffer), >=, size);
     data_buffer->requeste_ptr += size;
     size -=extra_to_align;
 
@@ -395,6 +401,7 @@ ssize_t socket_internal_request_oob(uni_dir_socket_requester* requester, request
 }
 
 void socket_internal_dump_requests(uni_dir_socket_requester* requester) {
+    CHERI_PRINT_CAP(requester);
     for(uint16_t i = requester->fulfiller_component.fulfill_ptr; i != requester->requeste_ptr; i++) {
         request_t* req = &requester->request_ring_buffer[i & (requester->buffer_size-1)];
         const char* type_s = (req->type == REQUEST_IM) ? "Immediate" :
@@ -405,10 +412,28 @@ void socket_internal_dump_requests(uni_dir_socket_requester* requester) {
             CHERI_PRINT_CAP(req->request.ind);
         }
 
-        printf("Type: %10s. Length %8lx. DB_add %8x\n", type_s, req->length, req->drb_fullfill_inc);
+        printf("Type: %10s(%x). Length %8lx. DB_add %8x\n", type_s, req->type, req->length, req->drb_fullfill_inc);
     }
 }
 
+void dump_socket(unix_like_socket* sock) {
+    if(sock->con_type & CONNECT_PUSH_WRITE) {
+        printf("Push writer:\n");
+        socket_internal_dump_requests(sock->write.push_writer);
+    }
+    if(sock->con_type & CONNECT_PUSH_READ) {
+        printf("Push read:\n");
+        socket_internal_dump_requests(sock->read.push_reader.requester);
+    }
+    if(sock->con_type & CONNECT_PULL_WRITE) {
+        printf("pull writer:\n");
+        socket_internal_dump_requests(sock->write.pull_writer.requester);
+    }
+    if(sock->con_type & CONNECT_PULL_READ) {
+        printf("pull read:\n");
+        socket_internal_dump_requests(sock->read.pull_reader);
+    }
+}
 // This will fulfill n bytes, progress if progress is set (otherwise this is a peek), and check if check is set.
 // Visit will be called on each buffer, with arguments arg, length (for the buffer) and offset + previous lengths
 // oob_visit will be called on out of band requests. If oob_visit is null, fulfill stops and E_OOB is returned if
@@ -421,7 +446,6 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
     uni_dir_socket_requester* requester = fulfiller->requester;
 
     if(requester->requester_closed || requester->fulfiller_component.fulfiller_closed) {
-        printf("Something closed\n");
         return E_SOCKET_CLOSED;
     }
 
@@ -434,7 +458,11 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
         assert_int_ex(fulfiller->proxy_times, ==, fulfiller->proxy_fin_times);
     }
 
-    uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
+    uni_dir_socket_requester_fulfiller_component* access = NULL;
+    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
+    if(access == NULL) {
+        return E_SOCKET_CLOSED;
+    }
 
     size_t bytes_remain = bytes;
     uint64_t partial_bytes = fulfiller->partial_fulfill_bytes;
@@ -700,6 +728,10 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
 
     *own_close = 1;
 
+    uint8_t other_close_val = 1;
+
+    VMEM_SAFE_DEREFERENCE(other_close, other_close_val, 8);
+
     if(*other_close) {
         return 0; // If the other has closed on their end they won't expect a signal
     }
@@ -738,7 +770,11 @@ ssize_t socket_internal_close_requester(uni_dir_socket_requester* requester, int
 }
 
 ssize_t socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller, int wait_finish, int dont_wait) {
-    uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
+    uni_dir_socket_requester_fulfiller_component* access = NULL;
+    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
+    if(access == NULL) {
+        return 0;
+    }
     if(wait_finish) {
         ssize_t ret = socket_internal_fulfiller_wait_proxy(fulfiller, dont_wait, 0);
         if(ret < 0) return ret;
@@ -909,6 +945,8 @@ static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, 
     if(!drb->buffer) return E_NO_DATA_BUFFER;
     if(dont_wait) return E_UNSUPPORTED;
 
+    assert(push_req->drb_fulfill_ptr != NULL);
+
     ssize_t res;
 
     // Chunks of this size on in the steady size (one being written, one being read)
@@ -921,7 +959,7 @@ static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, 
         char* cap1;
         char* cap2;
 
-        res = socket_internal_drb_space_alloc(drb, align, req_size, dont_wait, &cap1, &cap2, pull_req);
+        res = socket_internal_drb_space_alloc(drb, align, req_size, dont_wait, &cap1, &cap2, push_req);
 
         if(res < 0) return res;
 
@@ -1008,6 +1046,9 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
 }
 
 static void socket_internal_fulfill_cancel_wait(uni_dir_socket_fulfiller* fulfiller) {
+    uni_dir_socket_requester_fulfiller_component* access = NULL;
+    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
+    if(access == NULL) return;
     fulfiller->requester->access->fulfiller_waiting = NULL;
     if(fulfiller->proxy_times != fulfiller->proxy_fin_times) fulfiller->proxyied_in->fulfiller_component.requester_waiting = NULL;
 }
