@@ -253,6 +253,16 @@ typedef register_t cause_t;
     :                                                           \
     )
 
+#define VMEM_SAFE_DEREFERENCE(var, result, type)                \
+__asm__ (                                                       \
+        SANE_ASM                                                \
+        LOAD(type)" %[res], $zero, 0(%[loc])   \n"              \
+        "ori    $zero, $zero, 0xd00d            \n"             \
+    : [res]INOUT(type)(result)                                  \
+    : [loc]"C"(var)                                             \
+    :                                                           \
+    )
+
 #endif // __ASSEMBLY__
 
 #endif //CHERIOS_NANOTYPES_H

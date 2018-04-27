@@ -56,6 +56,27 @@
 #define _safe __attribute__((temporal_safe))
 #define _unsafe __attribute__((temporal_unsafe))
 
+#define SUF_8  "b"
+#define SUF_16 "h"
+#define SUF_32 "w"
+#define SUF_64 "d"
+#define SUF_c  "c"
+#define SUF_256 "c"
+
+#define OUT_8   "r"
+#define OUT_16  "r"
+#define OUT_32  "r"
+#define OUT_64  "r"
+#define OUT_c   "C"
+#define OUT_256 "C"
+
+#define LOADL(type)  "cll" SUF_ ## type
+#define LOAD(type) "cl" SUF_ ## type
+#define STOREC(type) "csc" SUF_ ## type
+#define STORE(type) "cs" SUF_ ## type
+#define OUT(type) "=" OUT_ ## type
+#define IN(type) OUT_ ## type
+#define INOUT(type) "+" OUT_ ## type
 /*
  * Canonical C-language representation of a capability.
  */
