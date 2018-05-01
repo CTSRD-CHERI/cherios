@@ -118,7 +118,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
             CHERI_PRINT_CAP(activation);
             panic_proxy("Someone tried to use a virtual address (%lx) that was already freed!\n", activation);
         }
-        printf("spurious commit by %s at vaddr %lx!\n", name, addr);
+        printf("spurious commit by %s at vaddr %lx -> %lx!\n", name, addr, ro->entries[ndx]);
     }
     else vmem_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
 
