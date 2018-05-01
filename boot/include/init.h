@@ -72,6 +72,7 @@ typedef struct init_elem_s {
 extern Elf_Env env;
 
 int	acts_alive(init_elem_t * init_list, size_t  init_list_len);
+void acts_wait_for_finish(init_elem_t * init_list, size_t  init_list_len);
 
 int	num_registered_modules(void);
 

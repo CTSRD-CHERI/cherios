@@ -43,6 +43,7 @@ void try_set_event_source(void) {
 
 #define EVENT_IF_BOILERPLATE_subsrcibe(name, ...)                                                                       \
 int subscribe_ ## name (act_kt target, act_kt notify, capability carg, register_t arg, register_t port) {               \
+    try_set_event_source(); \
     if(event_act == NULL) return SUBSCRIBE_NO_SERVICE;                                                                  \
     return message_send(arg, port, 0, 0, target, notify, carg, NULL, event_act, SYNC_CALL, subscribe_ ## name ## _port); \
 }
