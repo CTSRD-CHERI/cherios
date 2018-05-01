@@ -2682,12 +2682,24 @@ exception_signal:
 exception_user_handle:
 
     # idc is USER idc - we look for exception pcc and idc
-    # kr1c is a good context array
+    # kr1c is the per physical cpu state (can't clobber)
     # kr2c is our context
     # k0 is cause
     # ccause already stored
 
-    # Store causes for when the user requests them
+    # Can't write to any user registers while in exception as a TLB abort will kill us.
+    clcbi       $kr2c, CTLP_OFFSET_EX_PCC($idc)          # kr2c = uex_pcc
+    cbtu        $kr2c, context_switch_exception_entry    # if(untagged(uex_pcc))
+    nop # By point we are definately going propagate to the user. But we need to take any TLB faults now.
+    clcbi       $kr2c, CTLP_OFFSET_EX_IDC($idc)          # (cause TLB fault for idc store)
+    cscbi       $c1, CTLP_OFFSET_EX_C1($idc)             # saved_c1 = c1
+
+    # At this point we can no longer take a TLB fault. Safe to clobber user registers.
+    # restore kr2c to our context
+    clc     $kr2c, $zero, current_context($kr1c)
+    cincoffset  $kr2c, $kr2c, INC_IM_MAX
+
+    # Store causes for when the user requests them.
     csd         $k0, $zero, (CONTEXT_OFFSET_CAUSE - INC_IM_MAX)($kr2c)
     cgetcause   $k0
     csd         $k0, $zero, (CONTEXT_OFFSET_CCAUSE - INC_IM_MAX)($kr2c)
@@ -2697,22 +2709,19 @@ exception_user_handle:
     ori         $k0, $k0, EX_STATE_EL
     csd         $k0, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
 
-# FIXME need ctlp offsets
-    # Store out c1
-    cscbi       $c1, CTLP_OFFSET_EX_C1($idc)
-    clcbi       $c1, CTLP_OFFSET_EX_PCC($idc)
-    cbtu        $c1, exception_user_handle_abort
-    nop
+    # Swap idc,pcc with uex. Save uex somewhere else for the next exception. Save eidc for restore help.
+    # None of the below can take a TLB exception as we loaded all of them above.
 
-    cscbi       $epcc, CTLP_OFFSET_EX_PCC($idc)
-    cscbi       $c1, (CONTEXT_OFFSET_EX_PCC - INC_IM_MAX)($kr2c)
-    cmove       $epcc, $c1
+    clcbi       $c1, CTLP_OFFSET_EX_PCC($idc)       # c1 = uex_pcc
+    cscbi       $epcc, CTLP_OFFSET_EX_PCC($idc)     # saved_pcc = epcc
+    cscbi       $c1, (CONTEXT_OFFSET_EX_PCC - INC_IM_MAX)($kr2c)    # uex_pcc_to_next = uex_pcc (for next ex)
+    cmove       $epcc, $c1                          # epcc = uex_pcc
 
-    clcbi       $c1, CTLP_OFFSET_EX_IDC($idc)
-    cscbi       $idc, CTLP_OFFSET_EX_IDC($idc)
-    cscbi       $c1, (CONTEXT_OFFSET_EX_IDC - INC_IM_MAX)($kr2c)
-    cscbi       $idc, (CONTEXT_OFFSET_EX_SAVED_IDC - INC_IM_MAX)($kr2c)
-    cmove       $idc, $c1
+    clcbi       $c1, CTLP_OFFSET_EX_IDC($idc)       # c1 = uex_idc
+    cscbi       $idc, CTLP_OFFSET_EX_IDC($idc)      # uex_idc = eidc
+    cscbi       $c1, (CONTEXT_OFFSET_EX_IDC - INC_IM_MAX)($kr2c) # = uex_idc_to_next = uex_idc (for next ex)
+    cscbi       $idc, (CONTEXT_OFFSET_EX_SAVED_IDC - INC_IM_MAX)($kr2c) # saved_idc = eidc (to use for restore)
+    cmove       $idc, $c1                           # idc = uex_idc
 
     ERET_BUGLESS
 
@@ -2798,13 +2807,18 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens in something like context switch we should die more nicely
-        bnez      $a0, 1f
         dmfc0     $k0, $13
+        bnez      $a0, 1f
         andi      $k1, $k0, 0xFF
         daddiu    $k1, $k1, -(8 << 2) # syscall with a0 = 0 results in getting nano kernel IF
         beqz      $k1, get_interface
 1:
         cgetcause $k0       # Meant to be in delay slot - but should be executed on both paths
+                #  -if k1 is '8' or 'c' then this is TLB refill
+        daddiu  $k1, $k1, -8
+        beqz    $k1, tlb_trampoline
+        daddiu  $k1, $k1, -4 # = -c
+        beqz    $k1, tlb_trampoline
         cld $k1, $zero, exception_level($kr1c)
         beqz $k1, take_exception
         csd     $k0, $zero, exception_ccause($kr1c)
