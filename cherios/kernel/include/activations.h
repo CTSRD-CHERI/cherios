@@ -52,6 +52,16 @@ typedef u32 aid_t;
  */
 typedef	uint64_t sync_t;
 
+#define TRANS_N(X) (X & 0xFFFF)
+#define TRANS_F(X) ((X >> 16) & (0xFFFF))
+#define TRANS_HD(X) (X >> 32)
+
+#define N_TOP_BIT (1ULL << 15)
+#define N_INC	   1
+#define F_TOP_BIT (1ULL << 31)
+#define F_INC	  (1 << 16)
+#define HD_INC	  (1 << 32)
+
 typedef struct act_t
 {
 	/* Warning: The offset of this needs to be zero */
@@ -74,10 +84,9 @@ typedef struct act_t
 
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */
-    struct spinlock_t writer_spinlock;
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
 					   which has write access to queue) */
-
+	volatile uint64_t msg_tsx;
 
 	/* Scheduling related */
 	struct spinlock_t sched_access_lock;

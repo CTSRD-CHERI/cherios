@@ -37,6 +37,7 @@
 #include "queue.h"
 #include "mutex.h"
 #include "misc.h"
+#include "atomic.h"
 
 DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
@@ -44,21 +45,8 @@ DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
  * Routines to handle the message queue
  */
 
-static inline msg_nb_t safe(msg_nb_t n, msg_nb_t qmask) {
-	return n & qmask;
-}
-
-static int full(queue_t * queue, msg_nb_t qmask) {
-	kernel_assert(qmask > 0);
-	return safe(queue->header.end+1, qmask) == queue->header.start;
-}
-
-static inline int empty(queue_t * queue) {
-	return queue->header.start == queue->header.end;
-}
-
-static msg_nb_t msg_queue_fill(queue_t* queue) {
-	return (queue->header.end - queue->header.start + queue->header.len) % queue->header.len;
+static msg_nb_t msg_queue_fill(act_t* act) {
+	return ((msg_nb_t)TRANS_HD(act->msg_tsx) - act->msg_queue->header.start);
 }
 
 int msg_push(capability c3, capability c4, capability c5, capability c6,
@@ -66,60 +54,102 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
 
-	//TODO: We might try do this without a lock at first
-
-	CRITICAL_LOCKED_BEGIN(&dest->writer_spinlock);
-
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
-	kernel_assert(qmask > 0);
-	int next_slot = queue->header.end;
-	if(full(queue, qmask)) {
-        CRITICAL_LOCKED_END(&dest->writer_spinlock);
-		return -1;
+
+	uint32_t backoff_threshold = 0x1000;
+	uint32_t backoff_ctr = 0;
+
+	volatile uint64_t * tsx_ptr = &dest->msg_tsx;
+	uint64_t msg_tsx;
+	register_t success;
+
+	uint64_t last_tsx = *tsx_ptr;
+
+    // I inlined this temporarily
+	//capability c2 = sync_token == NULL ? NULL : (capability)act_create_sealed_sync_ref(src);
+    capability c2 = sync_token == NULL ? NULL : cheri_seal(src, sync_ref_sealer);
+
+	while(1) {
+		restart:
+		LOAD_LINK(tsx_ptr, 64, msg_tsx);
+
+		uint64_t n = TRANS_N(msg_tsx);
+		uint64_t f = TRANS_N(msg_tsx);
+
+		uint64_t head = TRANS_HD(msg_tsx);
+
+		if(head == queue->header.start + qmask) return -1;
+
+		if(n == f || backoff_threshold == backoff_ctr) { // Try TSX if free (n == f) or they are taking too long.
+			backoff_ctr = 0;
+			uint64_t add_msk = msg_tsx & N_TOP_BIT;
+			uint64_t our_tsx = ((add_msk ^ msg_tsx) + N_INC) ^ add_msk; // increment n
+			STORE_COND(tsx_ptr, 64, our_tsx, success);
+			if(success) {
+				// We are now in the TSX block. If msg_tsx changes we are being pre-empted guard each store
+				msg_t* slot = &queue->msg[head & qmask];
+#define GUARD_STORE(ptr, val, type, tmp)					\
+                do {										\
+					LOAD_LINK(ptr, type, tmp);				\
+					msg_tsx = *tsx_ptr;					    \
+					if(msg_tsx != our_tsx) goto restart;	\
+					STORE_COND(ptr, type, val, success);	\
+				} while(!success)
+
+				capability tmp_c;
+
+				GUARD_STORE(&slot->c3, c3, c, tmp_c);
+				GUARD_STORE(&slot->c4, c4, c, tmp_c);
+				GUARD_STORE(&slot->c5, c5, c, tmp_c);
+				GUARD_STORE(&slot->c6, c6, c, tmp_c);
+
+				GUARD_STORE(&slot->c1, sync_token, c, tmp_c);
+				GUARD_STORE(&slot->c2, c2, c, tmp_c);
+
+				register_t tmp_r;
+
+				GUARD_STORE(&slot->a0, a0, 64, tmp_r);
+				GUARD_STORE(&slot->a1, a1, 64, tmp_r);
+				GUARD_STORE(&slot->a2, a2, 64, tmp_r);
+				GUARD_STORE(&slot->a3, a3, 64, tmp_r);
+
+				GUARD_STORE(&slot->v0, v0, 64, tmp_r);
+
+				uint64_t our_tsx_n = TRANS_N(our_tsx);
+				uint64_t tsx_fin = ((((head + 1) << 16) | our_tsx_n) << 16) | our_tsx_n;
+				do {
+					LOAD_LINK(tsx_ptr, 64, msg_tsx);
+					if(msg_tsx != our_tsx) goto restart;
+					STORE_COND(tsx_ptr, 64, tsx_fin, success);
+				} while(!success);
+
+				break;
+			}
+		}
+
+		if(last_tsx == msg_tsx) {
+			backoff_ctr++;
+		} else {
+			backoff_ctr = 0;
+			last_tsx = msg_tsx;
+		}
+		HW_YIELD; // This should look like a spin, so yield is good
 	}
-
-	msg_t* slot = &queue->msg[next_slot];
-	slot->c3 = c3;
-	slot->c4 = c4;
-	slot->c5 = c5;
-	slot->c6 = c6;
-
-	slot->c1 = sync_token;
-	slot->c2 = (sync_token == NULL) ? NULL : act_create_sealed_sync_ref(src);
-
-	slot->a0 = a0;
-	slot->a1 = a1;
-	slot->a2 = a2;
-	slot->a3 = a3;
-
-	slot->v0 = v0;
-
-	queue->header.end = safe(queue->header.end+1, qmask);
-
-	HW_SYNC;
 
 	sched_receives_msg(dest);
 
-	CRITICAL_LOCKED_END(&dest->writer_spinlock);
-
-	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(queue), dest->name);
+	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(act), dest->name);
 
 	return 0;
 }
 
 int msg_queue_empty(act_t * act) {
-	queue_t * queue = act->msg_queue;
-	if(empty(queue)) {
-		return 1;
-	}
-	return 0;
+    return act->msg_queue->header.start == TRANS_HD(act->msg_tsx);
 }
 
 void msg_queue_init(act_t * act, queue_t * queue) {
 	size_t total_length_bytes = cheri_getlen(queue);
-
-    spinlock_init(&act->writer_spinlock);
 
 #define printf kernel_printf
     if(total_length_bytes == 0) {
@@ -129,18 +159,21 @@ void msg_queue_init(act_t * act, queue_t * queue) {
     }
 	kernel_assert(total_length_bytes > sizeof(queue_t));
 
-	size_t queue_len = (total_length_bytes - sizeof(queue->header)) / sizeof(msg_t);
+	msg_nb_t queue_len = (msg_nb_t)((total_length_bytes - sizeof(queue->header)) / sizeof(msg_t));
 
 	kernel_assert(is_power_2(queue_len));
 	kernel_assert(queue_len != 0);
 
-    spinlock_init(&act->writer_spinlock);
-
 	act->msg_queue = queue;
 	act->queue_mask = queue_len-1;
+	act->msg_tsx = 0;
 
 	act->msg_queue->header.start = 0;
-	act->msg_queue->header.end = 0;
+	// On big endian machine pointer is to MSB, which is our head.
+	msg_nb_t *hd= (msg_nb_t*)&act->msg_tsx;
+	hd = cheri_setbounds(hd, sizeof(msg_nb_t));
+	hd = cheri_andperm(hd, CHERI_PERM_LOAD);
+	act->msg_queue->header.end = hd;
 	act->msg_queue->header.len = queue_len;
 	//todo: zero queue?
 }
@@ -179,25 +212,6 @@ static int token_expected(act_t* ccaller, capability token) {
 	return ccaller->sync_state.sync_token == got;
 }
 
-/* Will touch all pages covered by cap. If cap is later not mapped then it must have been unmapped (an error) and we
- * are allowed to die */
-static void touch_cap(capability cap) {
-    size_t base = cheri_getbase(cap);
-    size_t bound = base + cheri_getlen(cap);
-
-    volatile char * cha_start = cheri_setoffset(cap, 0);
-    *cha_start;
-
-    size_t first_page = align_down_to(base, UNTRANSLATED_PAGE_SIZE) + UNTRANSLATED_PAGE_SIZE;
-    cha_start = cheri_setcursor(cap, first_page);
-
-    while(first_page < bound) {
-        *cha_start;
-        cha_start += UNTRANSLATED_PAGE_SIZE;
-        first_page+= UNTRANSLATED_PAGE_SIZE;
-    }
-}
-
 /* This function 'returns' by setting the sync state ret values appropriately */
 void kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
 					 register_t a0, register_t a1, register_t a2, register_t a3,
@@ -223,11 +237,6 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 		source_activation->sync_state.sync_ret = ret;
 		sync_token = get_and_set_sealed_sync_token(source_activation);
 	}
-
-	// FIXME: We should probably touch the queue once when created. We touch it so we don't take a page fault in
-	// FIXME: a critical section.
-    touch_cap(target_activation);
-    touch_cap(target_activation->msg_queue);
 
 	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
 

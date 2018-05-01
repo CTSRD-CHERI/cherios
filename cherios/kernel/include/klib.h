@@ -83,6 +83,8 @@ act_t* act_unseal_callable(act_t * act, sealing_cap sealer);
 extern sealing_cap sync_token_sealer;
 extern sealing_cap ctrl_ref_sealer;
 extern sealing_cap notify_ref_sealer;
+extern sealing_cap sync_ref_sealer;
+extern sealing_cap ref_sealer;
 
 #define FPGA_BASE   			0x1f000000
 #define FPGA_SIZE   			0x900

@@ -94,8 +94,9 @@ msg_entry:
 msg_entry_loop:
 
 # Check for items in queue
-    cld     start_g, $zero, HEADER_START_OFFSET(queue)    # load start
-    cld     $t1, $zero, HEADER_END_OFFSET(queue)          # $t1 = end
+    clw     start_g, $zero, HEADER_START_OFFSET(queue)    # load start
+    clc     tmp_cap, $zero, HEADER_END_OFFSET(queue)
+    clw     $t1, $zero, 0(tmp_cap)                        # $t1 = *end
     bne     start_g, $t1, pop                             # start_g != $t1
     nop
 
@@ -104,7 +105,10 @@ msg_entry_loop:
     call_func wait
 
 pop:
-    dsll     $t1, start_g, (MSG_LEN_SHIFT)                 # t1 has offet of message in queue
+    clw      $t1, $zero, HEADER_LEN_OFFSET(queue)          # load length
+    daddiu   $t1, $t1, -1
+    and      $t1, $t1, start_g
+    dsll     $t1, $t1, (MSG_LEN_SHIFT)                     # t1 has offet of message in queue
 
     # pops message #
     clc     $c3, $t1,  (MSGS_START_OFFSET)(queue)
@@ -119,14 +123,11 @@ pop:
     cld     $a3, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 24)(queue)
     cld     $v0, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 32)(queue)
 
-    cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        # load length
-    addi    start_g, start_g, 1                         #
-    bne     start_g, $t1, update_start                  #
-    nop                                                 #
-    li      start_g, 0                                  # start_g = (start_g + 1) % len
+
+    addi    start_g, start_g, 1                             # increment start
 
 update_start:
-    csd     start_g, $zero, HEADER_START_OFFSET(queue)  # save start
+    csw     start_g, $zero, HEADER_START_OFFSET(queue)  # save start
 	bltz	$v0, control
 	nop
 

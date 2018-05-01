@@ -228,11 +228,12 @@ void sched_receives_notify(act_t * act) {
 }
 
 void sched_receives_msg(act_t * act) {
-    // WARN: Assume critical lock for acts sched status is taken
+	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
 	if(act->sched_status & sched_waiting) {
 		KERNEL_TRACE("sched", "now unblocked %s", act->name);
 		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
 	}
+	CRITICAL_LOCKED_END(&act->sched_access_lock);
 }
 
 void sched_recieve_ret(act_t * act) {
@@ -252,8 +253,6 @@ void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events
 
     int got_event = 0;
 
-    if(events & sched_waiting) { CRITICAL_LOCKED_BEGIN(&act->writer_spinlock); }
-
     CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
 
     if((events & sched_sync_block) && !act->sync_state.sync_condition) got_event = 1;
@@ -269,8 +268,6 @@ void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events
     }
 
     CRITICAL_LOCKED_END(&act->sched_access_lock);
-
-    if(events & sched_waiting) { CRITICAL_LOCKED_END(&act->writer_spinlock); }
 
     if(!got_event) sched_reschedule(next_hint, 0);
 }
@@ -318,7 +315,7 @@ static act_t * sched_picknext(sched_pool* pool) {
 
 	if(!(next->sched_status == sched_runnable || next->sched_status == sched_running)) {
 		kernel_printf("Activation %s is in the queue and is not runnable\n", next->name);
-        kernel_printf("%p: guard %lx. nxt %p. status %d. queue %p, mask %lx\n", next, next->ctl.guard.guard, next->list_next,
+        kernel_printf("%p: guard %lx. nxt %p. status %d. queue %p, mask %x\n", next, next->ctl.guard.guard, next->list_next,
                       next->sched_status, next->msg_queue, next->queue_mask);
 		kernel_assert(0);
 	}

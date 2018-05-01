@@ -32,25 +32,26 @@
 #ifndef _CHERIOS_QUEUE_H_
 #define	_CHERIOS_QUEUE_H_
 
+#include "cheric.h"
+
 #define MAX_MSG_B 4
 #define MAX_MSG (1 << MAX_MSG_B)
 
-#define MSG_NB_T_SIZE 8
-#define HEADER_START_OFFSET 0
-#define HEADER_END_OFFSET MSG_NB_T_SIZE
-#define HEADER_LEN_OFFSET (MSG_NB_T_SIZE * 2)
-#define MSGS_START_OFFSET 32
+#define MSG_NB_T_SIZE 4
+#define HEADER_END_OFFSET 	0
+#define HEADER_START_OFFSET (CAP_SIZE)
+#define HEADER_LEN_OFFSET (MSG_NB_T_SIZE + CAP_SIZE)
+#define MSGS_START_OFFSET (2*CAP_SIZE)
 
 // FIXME: adjust padding and this value for 128
 #define MSG_LEN_SHIFT	8
 
 #ifndef __ASSEMBLY__
 
-#include "cheric.h"
 #include "mips.h"
 #include "stddef.h"
 
-typedef size_t msg_nb_t;
+typedef uint32_t msg_nb_t;
 
 /* WARNING
  * The layout of msg_t and queue_t is depended on by libuser/src/msg.S.
@@ -77,8 +78,8 @@ typedef struct
 }  msg_t;
 
 struct header_t {
+	volatile msg_nb_t* end;
 	volatile msg_nb_t start;
-	volatile msg_nb_t end;
 	msg_nb_t len;
 };
 

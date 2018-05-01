@@ -43,25 +43,25 @@ __thread sync_state_t sync_state;
 __thread long msg_enable = 0;
 
 void next_msg(void) {
-    act_self_queue->header.start = (act_self_queue->header.start + 1) % act_self_queue->header.len;
+    act_self_queue->header.start ++;
 }
 
 void pop_msg(msg_t * msg) {
     // TODO what are the blocking semantics of pop? Fow now just do the safe thing
-    if(act_self_queue->header.start == act_self_queue->header.end) {
+    if(act_self_queue->header.start == *act_self_queue->header.end) {
         wait();
     }
-    *msg = act_self_queue->msg[act_self_queue->header.start];
+    *msg = act_self_queue->msg[act_self_queue->header.start & (act_self_queue->header.len-1)];
     next_msg();
 }
 
 int msg_queue_empty(void) {
-    return (act_self_queue->header.start == act_self_queue->header.end);
+    return (act_self_queue->header.start == *act_self_queue->header.end);
 }
 
 msg_t* get_message(void) {
     if(msg_queue_empty()) {
         wait();
     }
-    return &act_self_queue->msg[act_self_queue->header.start];
+    return &act_self_queue->msg[act_self_queue->header.start & (act_self_queue->header.len-1)];
 }
