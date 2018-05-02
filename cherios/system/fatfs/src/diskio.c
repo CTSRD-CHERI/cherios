@@ -7,8 +7,11 @@
 /* storage control modules to the FatFs module with a defined API.       */
 /*-----------------------------------------------------------------------*/
 
-#include "lib.h"
 
+#include "cheric.h"
+#include "ff.h"
+#include "assert.h"
+#include "virtioblk.h"
 #include "diskio.h"		/* FatFs lower layer API */
 //#include "usbdisk.h"	/* Example: Header file of existing USB MSD control module */
 //#include "atadrive.h"	/* Example: Header file of existing ATA harddisk control module */

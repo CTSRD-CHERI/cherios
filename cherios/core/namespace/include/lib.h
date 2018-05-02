@@ -28,8 +28,6 @@
  * SUCH DAMAGE.
  */
 
-#include "all.h"
-
 void	ns_init(void);
 
 int	ns_register(int nb, void * act_reference);

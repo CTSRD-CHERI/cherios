@@ -29,6 +29,9 @@
  */
 
 #include "lib.h"
+#include "cheric.h"
+#include "misc.h"
+#include "object.h"
 
 void (*msg_methods[]) = {ns_register, ns_get_reference, ns_get_num_services};
 size_t msg_methods_nb = countof(msg_methods);

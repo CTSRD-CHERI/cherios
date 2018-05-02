@@ -29,7 +29,6 @@
  * SUCH DAMAGE.
  */
 
-#include "all.h"
 #include "syscalls.h"
 
 void ssleep(int n) {

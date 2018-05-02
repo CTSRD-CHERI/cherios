@@ -28,10 +28,13 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
 #include "uart.h"
-
-
+#include "stdio.h"
+#include "misc.h"
+#include "syscalls.h"
+#include "object.h"
+#include "assert.h"
+#include "namespace.h"
 
 static void user_putc(char c) {
 	printf(KGRN KBLD"%c"KRST, c);

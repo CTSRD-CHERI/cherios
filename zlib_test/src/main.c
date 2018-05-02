@@ -28,8 +28,12 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
+#include "stdio.h"
+#include "assert.h"
 #include "zlib.h"
+#include "math.h"
+#include "string.h"
+#include "syscalls.h"
 
 #define MAX_CHUNK 0x4000
 static size_t CHUNK = 0;

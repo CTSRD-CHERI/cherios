@@ -1,5 +1,6 @@
-#include "lib.h"
+#include "namespace.h"
 #include "zlib.h"
+#include "syscalls.h"
 
 static void * zlib_ref = NULL;
 

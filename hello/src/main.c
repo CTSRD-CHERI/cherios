@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
+#include "syscalls.h"
 
 #define _MSG 0
 

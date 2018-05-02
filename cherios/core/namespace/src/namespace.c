@@ -32,6 +32,9 @@
 #include "sys/mman.h"
 #include "syscalls.h"
 #include "object.h"
+#include "string.h"
+#include "namespace.h"
+#include "stdio.h"
 
 typedef struct {
 	void * act_reference;

@@ -28,7 +28,8 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
+#include "stdarg.h"
+#include "stdio.h"
 #include "uart.h"
 
 /*
