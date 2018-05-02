@@ -1,5 +1,4 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
  * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
@@ -28,44 +27,49 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_VIRTIO_H
+#define CHERIOS_VIRTIO_H
 
-#include "lib.h"
-#include "thread.h"
-#include "malta_virtio_mmio.h"
-#include "misc.h"
-#include "stdio.h"
-#include "namespace.h"
-#include "object.h"
-#include "assert.h"
-#include "mman.h"
+#include "virtio_mmio.h"
+#include "virtio_queue.h"
 
-void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size, new_socket};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, new_session, NULL, vblk_interrupt};
-size_t ctrl_methods_nb = countof(ctrl_methods);
+#define DRIVER_BAD_DEVICE 					(-2)
+#define DRIVER_BAD_FEATURES 				(-3)
+#define DRIVER_QUEUE_TOO_LONG 				(-4)
+#define DRIVER_QUEUE_MISSING_FIELDS         (-7)
+#define DRIVER_QUEUE_CROSSES_PAGE_BOUNDRY 	(-5)
+#define DRIVER_DEVICE_NEEDS_RESET			(-6)
 
+enum virtio_devices {
+    reserved 			= 0,
+    net 				= 1,
+    blk 				= 2,
+    console 			= 3,
+    entropy 			= 4,
+    balloon_traditional = 5,
+    io_mem 				= 6,
+    rpmsg 				= 7,
+    scsi 				= 8,
+    transport_9p 		= 9,
+    mac80211 			= 10,
+    rproc_serial 		= 11,
+    virtio_caif 		= 12,
+    balloon 			= 13,
+    gpu 				= 16,
+    timer 				= 17,
+    input 				= 18
+};
 
+int virtio_device_init(virtio_mmio_map* map,
+                       enum virtio_devices device, u32 version, u32 vendor_id, u32 driver_features,
+                       struct virtq* queue);
+void virtio_device_ack_used(virtio_mmio_map* map);
+void virtio_device_notify(virtio_mmio_map* map);
 
-void init_net_device(void* mmio_cap) {
+void virtio_q_add_descs(struct virtq* queue, le16 head);
+void virtio_q_init_free(struct virtq* queue, le16* free_head, le16 start);
+le16 virtio_q_alloc(struct virtq* queue, le16* free_head);
+void virtio_q_free(struct virtq* queue, le16* free_head, le16 head, le16 tail);
+int virito_q_chain_add(struct virtq* queue, le16* free_head, le16* tail, le64 addr, le16 length, le16 flags);
 
-}
-
-int main(void) {
-	printf("Virtio-blk: Hello world\n");
-
-	session_sealer = get_type_owned_by_process();
-
-	/* Register ourself to the kernel as being the Virtio-blk module */
-	int ret = namespace_register(namespace_num_virtio, act_self_ref);
-	if(ret!=0) {
-		printf("Virtio-blk: register failed\n");
-		return -1;
-	}
-	printf("Virtio-blk: register OK\n");
-
-	printf("Virtio-blk: Going into daemon mode\n");
-
-	handle_loop();
-
-	assert(0 && "Should not reach here");
-}
+#endif //CHERIOS_VIRTIO_H

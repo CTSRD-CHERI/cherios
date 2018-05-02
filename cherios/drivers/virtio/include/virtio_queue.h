@@ -84,6 +84,10 @@ struct virtq {
         struct virtq_used *used;
 };
 
+#define desc_size(q) ((q)->num * 16)
+#define avail_size(q) (6 + 2 * (q)->num)
+#define used_size(q) (8 + 8 * (q)->num)
+
 static inline int virtq_need_event(uint16_t event_idx, uint16_t new_idx, uint16_t old_idx)
 {
          return (uint16_t)(new_idx - event_idx - 1) < (uint16_t)(new_idx - old_idx);

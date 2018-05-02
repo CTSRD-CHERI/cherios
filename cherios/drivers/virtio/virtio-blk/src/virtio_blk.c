@@ -38,9 +38,7 @@
 #include "stdlib.h"
 #include "object.h"
 #include "sockets.h"
-
-#define PADDR_LO(X) ((uint32_t)(X))
-#define PADDR_HI(X) (uint32_t)((((uint64_t)(X) >> 32)) & 0xFFFFFFFF)
+#include "virtio.h"
 
 #define SECTOR_SIZE         512
 #define MAX_REQS            4
@@ -123,9 +121,9 @@ void * new_session(void * mmio_cap) {
     // These are, and are put in one page each to ensure no boundry is crossed
     size_t out_size = (sizeof(struct virtio_blk_outhdr) * session->req_nb);
     size_t in_size = (sizeof(struct virtio_blk_inhdr) * session->req_nb);
-    size_t desc_size = (16*queue->num);
-    size_t avail_size = (6+2*queue->num);
-    size_t used_size = (6+8*queue->num);
+    size_t desc_size = desc_size(queue);
+    size_t avail_size = avail_size(queue);
+    size_t used_size = used_size(queue);
 
     assert(out_size < MEM_REQUEST_MIN_REQUEST);
     assert(in_size < MEM_REQUEST_MIN_REQUEST);
@@ -149,9 +147,6 @@ void * new_session(void * mmio_cap) {
 
     session->outhdrs_phy = mem_paddr_for_vaddr((size_t)session->outhdrs);
     session->inhdrs_phy = mem_paddr_for_vaddr((size_t)session->inhdrs);
-    session->desc_phy = mem_paddr_for_vaddr((size_t)session->queue.desc);
-    session->avail_phy = mem_paddr_for_vaddr((size_t)session->queue.avail);
-    session->used_phy = mem_paddr_for_vaddr((size_t)session->queue.used);
 
     session->init = 0;
     capability sealed = seal_session(session);
@@ -172,11 +167,8 @@ void * new_session(void * mmio_cap) {
     }
 
     // Create a free chain out of the flexible entries
-    for(le16 i = 0; i != FLEX_QUEUE_SIZE; i++) {
-        queue->desc[SIMPLE_QUEUE_SIZE + i].next = SIMPLE_QUEUE_SIZE + i + 1;
-    }
 
-    session->free_head = SIMPLE_QUEUE_SIZE;
+    virtio_q_init_free(queue, &session->free_head, SIMPLE_QUEUE_SIZE);
 
     int res = syscall_interrupt_register(VIRTIO_MMIO_IRQ, act_self_ctrl, -3, 0, sealed);
     assert_int_ex(res, == , 0);
@@ -187,13 +179,8 @@ void * new_session(void * mmio_cap) {
 }
 
 static void add_desc(session_t* session, le16 desc_no) {
-    struct virtq * queue = &(session->queue);
-    queue->avail->ring[queue->avail->idx % queue->num] = desc_no;
-    HW_SYNC;
-    queue->avail->idx += 1;
-    HW_SYNC;
-    /* notify device */
-    mmio_write32(session, VIRTIO_MMIO_QUEUE_NOTIFY, 0x0);
+    virtio_q_add_descs(&session->queue, desc_no);
+    virtio_device_notify((virtio_mmio_map*)session->mmio_cap);
 }
 
 static ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
@@ -230,34 +217,6 @@ static ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uin
     return E_OOB;
 }
 
-static le16 alloc_from_session(session_t* session) {
-    le16 head = session->free_head;
-    if(head != QUEUE_SIZE) {
-        session->free_head = session->queue.desc[head].next;
-    } else assert(0 && "Not enough free descriptors");
-    return head;
-}
-
-static void free_from_session(session_t* session, le16 head, le16 tail) {
-    session->queue.desc[tail].next = session->free_head;
-    session->free_head = head;
-}
-
-static void add_to_chain(struct session_sock* ss, size_t addr, le16 length, le16 flags) {
-
-    le16 new = alloc_from_session(ss->session);
-
-    ss->session->queue.desc[ss->req_tail].next = new;
-
-    ss->req_tail = new;
-    struct virtq_desc* desc = ss->session->queue.desc + new;
-
-    desc->len = (le32)length;
-    desc->addr = addr;
-    desc->flags = flags;
-
-}
-
 static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
 
@@ -266,14 +225,18 @@ static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t lengt
     size_t start = mem_paddr_for_vaddr((size_t)buf);
     size_t end = mem_paddr_for_vaddr((size_t)buf + length - 1);
 
-    if(end - start == length-1) {
-        add_to_chain(ss, start, (le16)length, ss->mid_flag_type);
-    } else {
-        size_t len1 = PHY_PAGE_SIZE - (start & (PHY_PAGE_SIZE-1));
-        add_to_chain(ss, start, (le16)len1, ss->mid_flag_type);
+    int one_part = end - start == length-1;
+    size_t len1 = one_part ? length : PHY_PAGE_SIZE - (start & (PHY_PAGE_SIZE-1));
+
+    int res = virito_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+                       start, (le16)len1, ss->mid_flag_type);
+    assert(res == 0 && "Out of descriptors");
+    if(!one_part) {
         size_t len2 = length - len1;
         size_t addr2 = end & ~(PHY_PAGE_SIZE-1);
-        add_to_chain(ss, addr2, (le16)len2,ss->mid_flag_type);
+        res = virito_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+                           addr2, (le16)len2, ss->mid_flag_type);
+        assert(res == 0 && "Out of descriptors");
     }
 
     ss->in_sector_prog+=length;
@@ -297,7 +260,9 @@ static void translate_sock(struct session_sock* ss) {
 
     assert_int_ex(bytes, >=, SECTOR_SIZE);
 
-    ss->req_head = ss->req_tail = alloc_from_session(ss->session);
+    ss->req_head = ss->req_tail = virtio_q_alloc(&ss->session->queue, &ss->session->free_head);
+
+    assert(ss->req_head != ss->session->queue.num && "No descriptors");
 
     struct virtq_desc* desc_head = ss->session->queue.desc + ss->req_head;
     desc_head->len = sizeof(struct virtio_blk_outhdr);
@@ -311,7 +276,9 @@ static void translate_sock(struct session_sock* ss) {
     assert_int_ex(-bytes_translated, ==, -SECTOR_SIZE);
     assert(ss->in_sector_prog == SECTOR_SIZE);
 
-    add_to_chain(ss, ss->in_paddr, sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
+    int res = virito_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+                       ss->in_paddr, (le16)sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
+    assert(res == 0 && "Out of descriptors");
 
     add_desc(ss->session, ss->req_head);
 }
@@ -394,59 +361,14 @@ int vblk_init(session_t* session) {
 
 	session = unseal_session(session);
 	assert(session != NULL);
+    struct virtq * queue = &(session->queue);
+    session->init = 0;
 
-	/* INIT1: reset device */
-	mmio_write32(session, VIRTIO_MMIO_STATUS, 0x0);
-	session->init = 0;
-	assert_int_ex(mmio_read32(session, VIRTIO_MMIO_MAGIC_VALUE), ==, 0x74726976);	/* magic */
-	assert(mmio_read32(session, VIRTIO_MMIO_VERSION) == 0x1);		/* legacy interface */
-	assert(mmio_read32(session, VIRTIO_MMIO_DEVICE_ID) == 0x2);		/* block device */
-	assert(mmio_read32(session, VIRTIO_MMIO_VENDOR_ID) == 0x554d4551);	/* vendor:QEMU */
-	mmio_set32(session, VIRTIO_MMIO_STATUS, STATUS_ACKNOWLEDGE); /* INIT2: set ACKNOWLEDGE status bit */
-	mmio_set32(session, VIRTIO_MMIO_STATUS, STATUS_DRIVER); /* INIT3: set DRIVER status bit */
+    int result = virtio_device_init((virtio_mmio_map*)session->mmio_cap, blk, 0x1, VIRTIO_QUEUE_VENDOR, (1U << VIRTIO_BLK_F_GEOMETRY), queue);
 
-	/* INIT4: select features */
-	mmio_write32(session, VIRTIO_MMIO_HOST_FEATURES_SEL, 0x0);
-	u32 device_features = mmio_read32(session, VIRTIO_MMIO_HOST_FEATURES);
-	u32 driver_features = (1U << VIRTIO_BLK_F_GEOMETRY);
-	mmio_write32(session, VIRTIO_MMIO_GUEST_FEATURES_SEL, 0x0);
-	mmio_write32(session, VIRTIO_MMIO_GUEST_FEATURES, device_features&driver_features);
-
-	/* INIT5 INIT6: legacy device, skipped */
-
-	/* INIT7: set virtqueues */
-
-	struct virtq * queue = &(session->queue);
-
-    // If init is called again just reset but don't allocate new buffers
-
-	assert(queue->desc != NULL);
-	assert(queue->avail != NULL);
-	assert(queue->used != NULL);
-
-	queue->avail->flags = 0;
-	queue->avail->idx = 0;
-    queue->used->idx = 0;
-    queue->last_used_idx = 0;
-
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_SEL, 0x0);
-	assert(queue->num <= mmio_read32(session, VIRTIO_MMIO_QUEUE_NUM_MAX));
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_NUM, queue->num);
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_DESC_LOW,    PADDR_LO(session->desc_phy));
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_DESC_HIGH,   PADDR_HI(session->desc_phy));
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_AVAIL_LOW,   PADDR_LO(session->avail_phy));
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_AVAIL_HIGH,  PADDR_HI(session->avail_phy));
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_USED_LOW,    PADDR_LO(session->used_phy));
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_USED_HIGH,   PADDR_HI(session->used_phy));
-
-	mmio_write32(session, VIRTIO_MMIO_QUEUE_READY, 0x1);
-
-	/* INIT8: set DRIVER_OK status bit */
-	mmio_set32(session, VIRTIO_MMIO_STATUS, STATUS_DRIVER_OK);
-	assert(!(mmio_read32(session, VIRTIO_MMIO_STATUS)&(STATUS_DEVICE_NEEDS_RESET)));
-
-	session->init = 1;
-	return 0;
+    assert_int_ex(-result, ==, 0);
+    session->init = 1;
+    return 0;
 }
 
 int vblk_status(session_t* session) {
@@ -510,7 +432,7 @@ static void vblk_rw_ret(session_t* session) {
                     ssize_t ret = socket_internal_fulfill_progress_bytes(&socks[i].ff, SECTOR_SIZE, 0, 1, 1, 0, NULL, NULL, 0, ful_oob_func_skip_oob);
                     assert_int_ex(-ret, ==, -SECTOR_SIZE);
                     assert_int_ex(socks[i].in.status, ==, VIRTIO_BLK_S_OK);
-                    free_from_session(socks[i].session, socks[i].req_head, socks[i].req_tail);
+                    virtio_q_free(&socks[i].session->queue, &session->free_head, socks[i].req_head, socks[i].req_tail);
                     socks[i].req_head = QUEUE_SIZE;
                     socks[i].out.sector++;
                     break;
@@ -522,10 +444,7 @@ static void vblk_rw_ret(session_t* session) {
     }
 
     /* ack used ring update */
-    if(mmio_read32(session, VIRTIO_MMIO_INTERRUPT_STATUS) == 0x1) {
-        mmio_write32(session, VIRTIO_MMIO_INTERRUPT_ACK, 0x1);
-        //assert(mmio_read32(session, VIRTIO_MMIO_INTERRUPT_STATUS) == 0x0);
-    }
+    virtio_device_ack_used((virtio_mmio_map*)session->mmio_cap);
 }
 
 void vblk_interrupt(void* sealed_session, register_t a0, register_t irq) {
