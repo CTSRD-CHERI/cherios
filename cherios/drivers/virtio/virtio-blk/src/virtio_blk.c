@@ -364,7 +364,7 @@ int vblk_init(session_t* session) {
     struct virtq * queue = &(session->queue);
     session->init = 0;
 
-    int result = virtio_device_init((virtio_mmio_map*)session->mmio_cap, blk, 0x1, VIRTIO_QUEUE_VENDOR, (1U << VIRTIO_BLK_F_GEOMETRY), queue);
+    int result = virtio_device_init((virtio_mmio_map*)session->mmio_cap, blk, 0x1, VIRTIO_QEMU_VENDOR, (1U << VIRTIO_BLK_F_GEOMETRY), queue);
 
     assert_int_ex(-result, ==, 0);
     session->init = 1;
