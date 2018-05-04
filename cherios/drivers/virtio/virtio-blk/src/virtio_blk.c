@@ -180,7 +180,7 @@ void * new_session(void * mmio_cap) {
 
 static void add_desc(session_t* session, le16 desc_no) {
     virtio_q_add_descs(&session->queue, desc_no);
-    virtio_device_notify((virtio_mmio_map*)session->mmio_cap);
+    virtio_device_notify((virtio_mmio_map*)session->mmio_cap, 0);
 }
 
 static ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
@@ -228,14 +228,14 @@ static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t lengt
     int one_part = end - start == length-1;
     size_t len1 = one_part ? length : PHY_PAGE_SIZE - (start & (PHY_PAGE_SIZE-1));
 
-    int res = virito_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
-                       start, (le16)len1, ss->mid_flag_type);
+    int res = virtio_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+                                 start, (le16) len1, ss->mid_flag_type);
     assert(res == 0 && "Out of descriptors");
     if(!one_part) {
         size_t len2 = length - len1;
         size_t addr2 = end & ~(PHY_PAGE_SIZE-1);
-        res = virito_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
-                           addr2, (le16)len2, ss->mid_flag_type);
+        res = virtio_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+                                 addr2, (le16) len2, ss->mid_flag_type);
         assert(res == 0 && "Out of descriptors");
     }
 
@@ -276,8 +276,8 @@ static void translate_sock(struct session_sock* ss) {
     assert_int_ex(-bytes_translated, ==, -SECTOR_SIZE);
     assert(ss->in_sector_prog == SECTOR_SIZE);
 
-    int res = virito_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
-                       ss->in_paddr, (le16)sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
+    int res = virtio_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+                                 ss->in_paddr, (le16) sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
     assert(res == 0 && "Out of descriptors");
 
     add_desc(ss->session, ss->req_head);
@@ -364,8 +364,11 @@ int vblk_init(session_t* session) {
     struct virtq * queue = &(session->queue);
     session->init = 0;
 
-    int result = virtio_device_init((virtio_mmio_map*)session->mmio_cap, blk, 0x1, VIRTIO_QEMU_VENDOR, (1U << VIRTIO_BLK_F_GEOMETRY), queue);
-
+    int result = virtio_device_init((virtio_mmio_map*)session->mmio_cap, blk, 0x1, VIRTIO_QEMU_VENDOR, (1U << VIRTIO_BLK_F_GEOMETRY));
+    assert_int_ex(-result, ==, 0);
+    result = virtio_device_queue_add((virtio_mmio_map*)session->mmio_cap, 0, queue);
+    assert_int_ex(-result, ==, 0);
+    result = virtio_device_device_ready((virtio_mmio_map*)session->mmio_cap);
     assert_int_ex(-result, ==, 0);
     session->init = 1;
     return 0;

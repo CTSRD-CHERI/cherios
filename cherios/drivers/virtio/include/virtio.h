@@ -60,16 +60,17 @@ enum virtio_devices {
     input 				= 18
 };
 
+int virtio_device_device_ready(virtio_mmio_map* map);
+int virtio_device_queue_add(virtio_mmio_map* map, u32 queue_n, struct virtq* queue);
 int virtio_device_init(virtio_mmio_map* map,
-                       enum virtio_devices device, u32 version, u32 vendor_id, u32 driver_features,
-                       struct virtq* queue);
+                       enum virtio_devices device, u32 version, u32 vendor_id, u32 driver_features);
 void virtio_device_ack_used(virtio_mmio_map* map);
-void virtio_device_notify(virtio_mmio_map* map);
+void virtio_device_notify(virtio_mmio_map* map, u32 queue);
 
 void virtio_q_add_descs(struct virtq* queue, le16 head);
 void virtio_q_init_free(struct virtq* queue, le16* free_head, le16 start);
 le16 virtio_q_alloc(struct virtq* queue, le16* free_head);
 void virtio_q_free(struct virtq* queue, le16* free_head, le16 head, le16 tail);
-int virito_q_chain_add(struct virtq* queue, le16* free_head, le16* tail, le64 addr, le16 length, le16 flags);
+int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 addr, le16 length, le16 flags);
 
 #endif //CHERIOS_VIRTIO_H

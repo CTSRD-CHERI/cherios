@@ -31,40 +31,27 @@
 #include "virtio.h"
 #include "cheric.h"
 #include "mman.h"
+#include "assert.h"
+#include "stdio.h"
 
 #define PADDR_LO(X) ((uint32_t)(X))
 #define PADDR_HI(X) (uint32_t)((((uint64_t)(X) >> 32)) & 0xFFFFFFFF)
 
 #define TOUCH(X) *((volatile char*)(X)) = *((volatile char*)(X))
 
-int virtio_device_init(virtio_mmio_map* map,
-                       enum virtio_devices device, u32 version, u32 vendor_id, u32 driver_features,
-                       struct virtq* queue) {
-    /* INIT1: reset device */
-    map->status = 0;
+int virtio_device_device_ready(virtio_mmio_map* map) {
 
-    // Check device is what we expect
-    if(map->magic_value != 0x74726976) return DRIVER_BAD_DEVICE;
-    if(map->version != version) return DRIVER_BAD_DEVICE;
-    if(map->device_id != (u32)device) return DRIVER_BAD_DEVICE;
-    if(map->vendor_id != vendor_id) return DRIVER_BAD_DEVICE;
+    map->status |= STATUS_DRIVER_OK;
 
-    /* INIT2: set ACKNOWLEDGE status bit */
-    /* INIT3: set DRIVER status bit */
+    if(map->status & STATUS_DEVICE_NEEDS_RESET) return DRIVER_DEVICE_NEEDS_RESET;
 
-    map->status |= STATUS_ACKNOWLEDGE | STATUS_DRIVER;
+    return 0;
+}
 
-    /* INIT4: select features */
-    map->host_features_sel = 0;
-    u32 device_features = map->host_features;
-    map->guest_features_sel = 0;
-    map->guest_features = device_features & driver_features;
-
-    if((device_features & driver_features) != driver_features) return DRIVER_BAD_FEATURES;
-
-    /* INIT5 INIT6: legacy device, skipped */
-
+int virtio_device_queue_add(virtio_mmio_map* map, u32 queue_n, struct virtq* queue) {
     /* INIT7: set virtqueues */
+
+    if(queue_n >= map->queue_num_max)
 
     if(queue->desc == NULL) return DRIVER_QUEUE_MISSING_FIELDS;
     if(queue->avail == NULL) return DRIVER_QUEUE_MISSING_FIELDS;
@@ -75,8 +62,7 @@ int virtio_device_init(virtio_mmio_map* map,
     queue->used->idx = 0;
     queue->last_used_idx = 0;
 
-
-    map->queue_sel = 0;
+    map->queue_sel = queue_n;
     if(queue->num > map->queue_num_max) return DRIVER_QUEUE_TOO_LONG;
     map->queue_num = queue->num;
 
@@ -95,9 +81,34 @@ int virtio_device_init(virtio_mmio_map* map,
 
     map->queue_ready = 1;
 
-    map->status |= STATUS_DRIVER_OK;
+    return 0;
+}
+int virtio_device_init(virtio_mmio_map* map,
+                       enum virtio_devices device, u32 version, u32 vendor_id, u32 driver_features) {
+    /* INIT1: reset device */
+    map->status = 0;
 
-    if(map->status & STATUS_DEVICE_NEEDS_RESET) return DRIVER_DEVICE_NEEDS_RESET;
+    // Check device is what we expect
+    if(map->magic_value != 0x74726976) return DRIVER_BAD_DEVICE;
+    if(map->version != version) return DRIVER_BAD_DEVICE;
+    if(map->device_id != (u32)device) return DRIVER_BAD_DEVICE;
+    if(map->vendor_id != vendor_id) return DRIVER_BAD_DEVICE;
+
+    /* INIT2: set ACKNOWLEDGE status bit */
+    /* INIT3: set DRIVER status bit */
+
+    map->status |= STATUS_ACKNOWLEDGE | STATUS_DRIVER;
+
+    /* INIT4: select features */
+    map->host_features_sel = 0;
+    u32 device_features = map->host_features;
+    printf("Device %d has features %x\n", device, device_features);
+    map->guest_features_sel = 0;
+    map->guest_features = device_features & driver_features;
+
+    if((device_features & driver_features) != driver_features) return DRIVER_BAD_FEATURES;
+
+    /* INIT5 INIT6: legacy device, skipped */
 
     return 0;
 }
@@ -109,9 +120,9 @@ void virtio_device_ack_used(virtio_mmio_map* map) {
 }
 
 
-void virtio_device_notify(virtio_mmio_map* map) {
+void virtio_device_notify(virtio_mmio_map* map, u32 queue) {
     HW_SYNC;
-    map->queue_notify = 0;
+    map->queue_notify = queue;
 }
 
 void virtio_q_add_descs(struct virtq* queue, le16 head) {
@@ -142,7 +153,7 @@ void virtio_q_free(struct virtq* queue, le16* free_head, le16 head, le16 tail) {
     *free_head = head;
 }
 
-int virito_q_chain_add(struct virtq* queue, le16* free_head, le16* tail, le64 addr, le16 length, le16 flags) {
+int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 addr, le16 length, le16 flags) {
     le16 new = virtio_q_alloc(queue, free_head);
     if(new == queue->num) return -1;
     queue->desc[*tail].next = new;
