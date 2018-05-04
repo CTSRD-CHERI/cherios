@@ -112,6 +112,7 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	"virtio-blk.elf",	0,	1)
+    B_DENTRY(m_virtnet, "virtio-net.elf", 0, 1)
 	B_FENCE
 	B_DENTRY(m_fs,		"fatfs.elf",		0,	1)
 	B_FENCE
@@ -197,6 +198,9 @@ static void * get_act_cap(module_t type, init_info_t* info) {
         case m_fs:{}
             cap_pair pair;
             get_physical_capability(VIRTIO_MMIO_MMAP_BASE, VIRTIO_MMIO_SIZE, 1, 0, own_mop, &pair);
+            return pair.data;
+        case m_virtnet:
+            get_physical_capability(VIRTIO_MMIO_NET_BASE, VIRTIO_MMIO_SIZE, 1, 0, own_mop, &pair);
             return pair.data;
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;
@@ -364,7 +368,7 @@ static void load_modules(init_info_t * init_info) {
         desc.stack_args_size = 0;
         desc.cpu_hint = SMP_CORES-1;
 
-        if(be->type == m_virtblk) desc.cpu_hint = 0; // Some things really like to scheduled on core0 for interrupts
+        if(be->type == m_virtblk || be->type == m_virtnet) desc.cpu_hint = 0; // Some things really like to scheduled on core0 for interrupts
 
         /* This version allows the process to spawn new threads */
         be->ctrl = thread_start_process(thread_create_process(be->name, addr, be->type == m_secure), &desc);

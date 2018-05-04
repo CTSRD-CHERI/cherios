@@ -28,16 +28,11 @@
  * SUCH DAMAGE.
  */
 
-#include "object.h"
+#include "virtio_net.h"
 #include "stdio.h"
 
-void (*msg_methods[]) = {NULL};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL};
-size_t ctrl_methods_nb = countof(ctrl_methods);
-
-int main(void) {
+int main(capability carg, register_t arg) {
 	printf("Virtio-net: Hello world\n");
 
-	return 0;
+    virtio_daemon_start();
 }
