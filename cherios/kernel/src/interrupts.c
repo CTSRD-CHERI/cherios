@@ -30,6 +30,7 @@
  * SUCH DAMAGE.
  */
 
+#include <queue.h>
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"
@@ -73,7 +74,9 @@ static void kernel_interrupt_others(register_t pending) {
 			handle_mask = (handle_mask & ~(1<<i));
 			cp0_status_im_disable(1<<i);
 			// FIXME we probabably want a seperate interrupt source from the kernel
-			// FIXME this needs locking
+
+			// FIXME this breaks as we can't take a proper TLB fault in exception levels
+			// FIXME I have added a cludge to load every slot on register but this needs fixing
 			if(msg_push(int_child[i].carg, NULL, NULL, NULL,
 						int_child[i].arg, i, 0, 0,
 						int_child[i].v0, int_child[i].target, &kernel_acts[0], NULL)) {
@@ -126,6 +129,17 @@ int kernel_interrupt_register(int number, act_control_t * ctrl, register_t v0, r
 	if(int_child[number].target != NULL && int_child[number].target != ctrl) {
 		return -1;
 	}
+
+	// Hack to make sure TLB entries exist
+	queue_t* q = ctrl->msg_queue;
+	for(size_t i = 0; i < ctrl->queue_mask+1; i++) {
+		volatile char* f = (char*)&q->msg[i].c3;
+		*f;
+		f = (char*)&q->msg[i].v0;
+		*f;
+	}
+
+
 	int_child[number].target = (act_t*)ctrl;
 	int_child[number].arg = arg;
 	int_child[number].carg = carg;
