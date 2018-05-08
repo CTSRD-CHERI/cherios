@@ -112,7 +112,8 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	"virtio-blk.elf",	0,	1)
-    B_DENTRY(m_virtnet, "virtio-net.elf", 0, 1)
+//    B_DENTRY(m_virtnet, "virtio-net.elf", 0, 1)
+    B_PENTRY(m_virtnet, "lwip.elf", VIRTIO_MMIO_NET_IRQ, 1)
 	B_FENCE
 	B_DENTRY(m_fs,		"fatfs.elf",		0,	1)
 	B_FENCE

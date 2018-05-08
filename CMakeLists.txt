@@ -347,6 +347,7 @@ set(PLT_ASM             "${CHERIOS_DIR}/system/dylink/src/stubs.S")
 set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/secure_init.S")
 set (LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lwip)
 include(lwip/src/Filelists.cmake)
+set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
 
 add_subdirectory(libuser)
 

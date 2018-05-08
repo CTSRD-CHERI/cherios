@@ -136,7 +136,7 @@ lwip_standard_chksum(const void *dataptr, int len)
   const u16_t *ps;
   u16_t t = 0;
   u32_t sum = 0;
-  int odd = ((mem_ptr_t)pb & 1);
+  int odd = ((size_t)pb & 1);
 
   /* Get aligned to u16_t */
   if (odd && len > 0) {
