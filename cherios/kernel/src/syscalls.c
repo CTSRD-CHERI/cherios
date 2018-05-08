@@ -49,6 +49,11 @@ void kernel_sleep(int time) {
 	}
 }
 
+DECLARE_WITH_CD(register_t , kernel_syscall_now(void));
+register_t kernel_syscall_now(void) {
+	return cp0_count_get();
+}
+
 DECLARE_WITH_CD(void, kernel_wait(void));
 void kernel_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient

@@ -66,6 +66,7 @@
         ITEM(syscall_cond_wait, void, (int notify_on_message), __VA_ARGS__)\
         ITEM(syscall_cond_notify, void, (act_kt waiter), __VA_ARGS__)\
         ITEM(syscall_cond_cancel, void, (void), __VA_ARGS__)\
+        ITEM(syscall_now, register_t, (void), __VA_ARGS__)
 
 #define CCALL_SELECTOR_LIST(ITEM)   \
         ITEM(SEND,1)                \
