@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2016 Robert N. M. Watson
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -28,21 +28,9 @@
  * SUCH DAMAGE.
  */
 
-#ifndef __STRING_H__
-#define	__STRING_H__
+#include "string.h"
 
-#include "mips.h"
-
-void	bzero(void *, size_t);
-void *	memcpy(void *dest, const void *src, size_t n);
-void *	memset(void *, int, size_t);
-char *	strchr(const char * s, int c);
-char *	strcpy(char * dest,const char *src);
-int	strcmp(const char *s1, const char *s2);
-size_t	strlen(const char *str);
-int	strncmp(const char * cs,const char * ct,size_t count);
-char *	strncpy(char * dest,const char *src,size_t count);
-char *  strstr(const char *s, const char *find);
-
-int memcmp ( const char * ptr1, const char * ptr2, size_t num );
-#endif /* !__STRING_H__ */
+char *	strchr(const char * s, int c) {
+    while(*s != '\0' && *s != c) s++;
+    return *s == '\0' ? NULL : s;
+}

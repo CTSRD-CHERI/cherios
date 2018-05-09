@@ -10,6 +10,8 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/strcmp.c
     ${CMAKE_SOURCE_DIR}/libcrt/mem_cmp.c
     ${CMAKE_SOURCE_DIR}/libcrt/atoi.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strchr.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strstr.c
 )
 
 set(LIBUSER_ASM_SRCS
