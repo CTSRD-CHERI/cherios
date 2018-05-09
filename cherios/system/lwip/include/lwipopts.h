@@ -59,6 +59,7 @@
 #define TCP_WND                     (4 * TCP_MSS)
 #define TCP_MSS                     1460
 #define TCP_SND_BUF                 (8 * TCP_MSS)
+#define LWIP_SINGLE_NETIF           1
 #define TCP_LISTEN_BACKLOG          1
 #define LWIP_NETIF_STATUS_CALLBACK  1
 #define LWIP_NETIF_LINK_CALLBACK    1
@@ -89,10 +90,23 @@
 #define mem_realloc(p, sz)          (p)
 */
 
+// HTTP stuffs
+
+#define LWIP_HTTPD_DYNAMIC_HEADERS  1
+#define HTTPD_SERVER_PORT           80
+
+#define LWIP_HTTPD_CUSTOM_FILES         1
+#define LWIP_HTTPD_DYNAMIC_FILE_READ    1
+#define FS_FILE_EXTENSION_T_DEFINED     1
+typedef struct socket_seek_manager      fs_file_extension;
+#define LWIP_HTTPD_MAX_REQUEST_URI_LEN  0
+#define LWIP_HTTPD_SUPPORT_11_KEEPALIVE 1
+
 #define LWIP_DEBUG                  0
 
 // Other constant is LWIP_DBG_ON
-
+#define LWIP_HTTPD_SUPPORT_EXTSTATUS 0
+#define HTTPD_DEBUG                 LWIP_DBG_OFF
 #define ETHARP_DEBUG                LWIP_DBG_OFF
 #define NETIF_DEBUG                 LWIP_DBG_OFF
 #define PBUF_DEBUG                  LWIP_DBG_OFF

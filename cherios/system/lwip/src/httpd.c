@@ -28,10 +28,30 @@
  * SUCH DAMAGE.
  */
 
-#include "arch/cc.h"
-#include "syscalls.h"
+#include "lwip/apps/fs.h"
 
-// Fudge factor >> 15 to make this roughly in ms...
-u32_t sys_now(void) {
-    return (u32_t)syscall_now() >> 15;
+// TODO move this out of the stack
+
+// A simple httpd glue
+
+int fs_open_custom(struct fs_file *file, const char *name) {
+    file->data = NULL;
+    file->index = 0;
+    file->pextension = open(name, 1, 1, MSG_NONE); // Mine
+    if(file->pextension == NULL)
+        return 0;
+    file->len = (int)filesize(file->pextension);
+    return 1;
 }
+
+void fs_close_custom(struct fs_file *file) {
+    close(file->pextension);
+}
+
+int fs_read_custom(struct fs_file *file, char *buffer, int count) {
+    ssize_t res = read(file->pextension, buffer, (size_t)count);
+    if(res < 0) return -1;
+    file->index += res;
+    return (int)res;
+}
+

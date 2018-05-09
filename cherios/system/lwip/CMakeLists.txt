@@ -12,8 +12,12 @@ set(X_SRCS
     ${LWIP_DIR}/src/netif/ethernet.c
     ${LWIP_DIR}/src/netif/bridgeif.c
     ${LWIP_DIR}/src/netif/bridgeif_fdb.c
+    ${LWIP_DIR}/src/apps/http/httpd.c
+    ${LWIP_DIR}/src/apps/http/fs.c
+    ${LWIP_DIR}/src/api/err.c
     src/sys_arch.c
     src/main.c
+    src/httpd.c
     ${DRIVERS_DIR}/virtio/src/virtio.c
 
 )
