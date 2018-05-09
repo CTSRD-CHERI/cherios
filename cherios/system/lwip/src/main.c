@@ -291,8 +291,6 @@ void interrupt(struct netif* nif) {
 
         struct virtq_used_elem used = recvq->used->ring[used_idx];
 
-        assert(used.id % 2 == 0);
-
         struct pbuf* pb = session->pbuf_recv_map[used.id];
         struct virtio_net_hdr* net_hdr = &session->net_hdrs[used.id];
 
