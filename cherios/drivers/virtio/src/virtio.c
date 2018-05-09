@@ -148,12 +148,33 @@ le16 virtio_q_alloc(struct virtq* queue, le16* free_head) {
     return head;
 }
 
+le16 virtio_q_free_length(struct virtq* queue, le16* free_head) {
+    le16 num = 0;
+    le16 head = *free_head;
+    while(head != queue->num) {
+        head = queue->desc[head].next;
+        num++;
+    }
+    return num;
+}
+
 void virtio_q_free(struct virtq* queue, le16* free_head, le16 head, le16 tail) {
     queue->desc[tail].next = *free_head;
     *free_head = head;
 }
 
-int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 addr, le16 length, le16 flags) {
+int virtio_q_free_chain(struct virtq* queue, le16* free_head, le16 head) {
+    le16 tail = head;
+    int num = 1;
+    while(queue->desc[tail].flags & VIRTQ_DESC_F_NEXT) {
+        tail = queue->desc[tail].next;
+        num++;
+    }
+    virtio_q_free(queue, free_head, head, tail);
+    return num;
+}
+
+int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 addr, le32 length, le16 flags) {
     le16 new = virtio_q_alloc(queue, free_head);
     if(new == queue->num) return -1;
     queue->desc[*tail].next = new;
@@ -167,3 +188,37 @@ int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 ad
     return 0;
 }
 
+int virtio_q_chain_add_virtual(struct virtq *queue, le16* free_head, le16 *tail, capability addr, le32 length, le16 flags) {
+    addr = cheri_setbounds(addr, length); // Force an exception here
+
+    int num = 0;
+    // This breaks the virtual range into (maybe many) physically contiguous block
+    size_t start_v = (size_t)addr;
+    size_t start_p = mem_paddr_for_vaddr(start_v);
+
+    size_t conti_len = UNTRANSLATED_PAGE_SIZE - (start_v & (UNTRANSLATED_PAGE_SIZE-1));
+    size_t conti_v = start_v + conti_len;
+    // The length that is definately contiguous
+    while (conti_len < length) {
+        // check where conti_v is
+        size_t check_p = mem_paddr_for_vaddr(conti_v);
+        if(check_p == start_p+conti_len) {
+            // Last page was physically contiguous to the last
+            conti_len += UNTRANSLATED_PAGE_SIZE;
+        } else {
+            // Break here
+            num ++;
+            int res = virtio_q_chain_add(queue, free_head, tail, start_p, (le16)conti_len, flags);
+            if(res != 0) return res; // Failed to add a link
+            length-=conti_len;
+            conti_len = UNTRANSLATED_PAGE_SIZE;
+            start_p = check_p;
+        }
+        conti_v += UNTRANSLATED_PAGE_SIZE;
+    }
+
+    int res = virtio_q_chain_add(queue, free_head, tail, start_p, (le16)length, flags);
+    if(res != 0) return res;
+
+    return num+1;
+}

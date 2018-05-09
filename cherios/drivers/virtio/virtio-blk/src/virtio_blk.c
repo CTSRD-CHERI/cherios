@@ -222,22 +222,10 @@ static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t lengt
 
     assert(length <= SECTOR_SIZE);
 
-    size_t start = mem_paddr_for_vaddr((size_t)buf);
-    size_t end = mem_paddr_for_vaddr((size_t)buf + length - 1);
+    int res = virtio_q_chain_add_virtual(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+                               (capability)buf, (le32)length, ss->mid_flag_type);
 
-    int one_part = end - start == length-1;
-    size_t len1 = one_part ? length : PHY_PAGE_SIZE - (start & (PHY_PAGE_SIZE-1));
-
-    int res = virtio_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
-                                 start, (le16) len1, ss->mid_flag_type);
-    assert(res == 0 && "Out of descriptors");
-    if(!one_part) {
-        size_t len2 = length - len1;
-        size_t addr2 = end & ~(PHY_PAGE_SIZE-1);
-        res = virtio_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
-                                 addr2, (le16) len2, ss->mid_flag_type);
-        assert(res == 0 && "Out of descriptors");
-    }
+    assert(res > 0 && "Out of descriptors");
 
     ss->in_sector_prog+=length;
 

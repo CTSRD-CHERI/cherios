@@ -70,7 +70,10 @@ void virtio_device_notify(virtio_mmio_map* map, u32 queue);
 void virtio_q_add_descs(struct virtq* queue, le16 head);
 void virtio_q_init_free(struct virtq* queue, le16* free_head, le16 start);
 le16 virtio_q_alloc(struct virtq* queue, le16* free_head);
+le16 virtio_q_free_length(struct virtq* queue, le16* free_head);
 void virtio_q_free(struct virtq* queue, le16* free_head, le16 head, le16 tail);
-int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 addr, le16 length, le16 flags);
+int virtio_q_free_chain(struct virtq* queue, le16* free_head, le16 head);
+int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 addr, le32 length, le16 flags);
+int virtio_q_chain_add_virtual(struct virtq *queue, le16* free_head, le16 *tail, capability addr, le32 length, le16 flags);
 
 #endif //CHERIOS_VIRTIO_H
