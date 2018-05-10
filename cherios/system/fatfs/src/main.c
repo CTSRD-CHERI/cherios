@@ -136,7 +136,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             // This will handle all oob requests before any data
             session->current = 1;
             res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
-                                                                 1, 1, 1, 0,
+                                                                 F_CHECK | F_PROGRESS | F_DONT_WAIT,
                                                                  &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
             if(session->fil.fptr != session->write_fptr) {
                 f_lseek(&session->fil, session->write_fptr);
@@ -157,7 +157,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             // This will handle all oob requests before any data
             session->current = 0;
             res = socket_internal_fulfill_progress_bytes(write_fulfill, SOCK_INF,
-                                                         1, 1, 1, 0,
+                                                         F_CHECK | F_PROGRESS | F_DONT_WAIT,
                                                          &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
             if(session->fil.fptr != session->read_fptr) {
                 f_lseek(&session->fil, session->read_fptr);

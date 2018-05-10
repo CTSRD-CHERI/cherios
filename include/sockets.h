@@ -55,7 +55,7 @@
 #define E_NO_DATA_BUFFER            (-14)
 #define E_ALREADY_CONNECTED         (-15)
 #define E_NOT_CONNECTED             (-16)
-
+#define E_BAD_FLAGS                 (-18)
 #define E_USER_FULFILL_ERROR        (-20)
 
 #define SOCK_INF                    (uint64_t)(0xFFFFFFFFFFFFFFFULL)
@@ -67,6 +67,16 @@ enum SOCKET_FLAGS {
     MSG_NO_COPY = 4,
     MSG_PEEK = 8,
     MSG_EMULATE_SINGLE_PTR = 16,
+};
+
+enum FULFILL_FLAGS {
+    F_NONE                  = 0x0,
+    F_DONT_WAIT             = 0x1, // Same as MSG_DONT_WAIT
+    F_CHECK                 = 0x2,
+    F_IN_PROXY              = 0x4,
+    F_PROGRESS              = 0x8, // Same bit but opposite meaning to MSG_PEEK
+    F_START_FROM_LAST_MARK  = 0x10,
+    F_SET_MARK              = 0x16
 };
 
 #define SOCK_TYPE_PUSH 0
@@ -154,6 +164,8 @@ struct requester_32 {
 typedef struct uni_dir_socket_fulfiller {
     uni_dir_socket_requester* requester;  // Read only
     volatile uint64_t partial_fulfill_bytes;
+    volatile uint64_t partial_fulfill_mark_bytes;
+    volatile uint16_t fulfill_mark_ptr;
     uint8_t socket_type;
     uint8_t connected;
 
@@ -208,6 +220,7 @@ int socket_internal_requester_init(uni_dir_socket_requester* requester, uint16_t
 
 
 // Connection //
+uni_dir_socket_requester*  socket_internal_make_read_only(uni_dir_socket_requester* requester);
 int socket_internal_listen(register_t port,
                            uni_dir_socket_requester* requester,
                            uni_dir_socket_fulfiller* fulfiller);
@@ -287,13 +300,14 @@ static ssize_t copy_out_no_caps(capability user_buf, char* req_buf, uint64_t off
     return (ssize_t)length;
 }
 
+
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
-                                               int check, int progress, int dont_wait, int in_proxy,
+                                               enum FULFILL_FLAGS flags,
                                                ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit);
 ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 
 enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting);
-enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting);
+enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting, int from_check);
 
 int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size);
 

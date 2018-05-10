@@ -242,7 +242,7 @@ static void translate_sock(struct session_sock* ss) {
     if(bytes == 0) {
         // Just an oob
         ssize_t ret = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF,
-                                               1, 1, 1, 0, &ful_func_cancel_non_oob, (capability)ss,0,full_oob);
+                                                             F_CHECK | F_PROGRESS | F_DONT_WAIT, &ful_func_cancel_non_oob, (capability)ss,0,full_oob);
         return;
     }
 
@@ -257,8 +257,9 @@ static void translate_sock(struct session_sock* ss) {
     desc_head->addr = ss->out_paddr;
     desc_head->flags = VIRTQ_DESC_F_NEXT;
 
+    // TODO can use checkpoint to allow queueing here
     ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&ss->ff, SECTOR_SIZE,
-                                                                      1, 0, 1, 0, ful_ff, (capability)ss,0,full_oob);
+                                                                      F_CHECK | F_DONT_WAIT, ful_ff, (capability)ss,0,full_oob);
     assert_int_ex(bytes_translated, ==, SECTOR_SIZE);
 
     assert_int_ex(-bytes_translated, ==, -SECTOR_SIZE);
@@ -326,7 +327,7 @@ void handle_loop(void) {
 
         for(size_t i = 0; i < n_socks;i++) {
             if(socks[i].req_head == QUEUE_SIZE) {
-                enum poll_events event = socket_internal_fulfill_poll(&socks[i].ff, POLL_IN, set_waiting);
+                enum poll_events event = socket_internal_fulfill_poll(&socks[i].ff, POLL_IN, set_waiting, 0);
                 if(event) {
                     if(event & (POLL_HUP | POLL_ER | POLL_NVAL)) assert(0 && "Socket error in block device");
                     translate_sock(socks+i);
@@ -420,7 +421,7 @@ static void vblk_rw_ret(session_t* session) {
             for(size_t i = 0; i < n_socks; i++) {
                 if(socks[i].req_head == used_desc_id) {
                     // This sockets request has finished
-                    ssize_t ret = socket_internal_fulfill_progress_bytes(&socks[i].ff, SECTOR_SIZE, 0, 1, 1, 0, NULL, NULL, 0, ful_oob_func_skip_oob);
+                    ssize_t ret = socket_internal_fulfill_progress_bytes(&socks[i].ff, SECTOR_SIZE, F_PROGRESS | F_DONT_WAIT, NULL, NULL, 0, ful_oob_func_skip_oob);
                     assert_int_ex(-ret, ==, -SECTOR_SIZE);
                     assert_int_ex(socks[i].in.status, ==, VIRTIO_BLK_S_OK);
                     virtio_q_free(&socks[i].session->queue, &session->free_head, socks[i].req_head, socks[i].req_tail);
