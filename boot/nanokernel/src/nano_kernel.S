@@ -187,8 +187,8 @@ END_LOCALS
 .text
 .section .init
 
-.set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal))
-.set DEF_SEALING_PERMS, Perm_Seal
+.set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal | Perm_Unseal))
+.set DEF_SEALING_PERMS, (Perm_Seal | Perm_Unseal)
 
 nano_kernel_start:
 
