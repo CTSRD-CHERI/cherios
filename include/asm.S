@@ -31,6 +31,7 @@
 #
 
 #define __ASSEMBLY__ 1
+#include "cheric.h"
 
 .set noreorder
 .set nobopt
@@ -75,6 +76,8 @@ li  $zero, 0xdead
 .set Perm_Store_Capability, 1 << 5
 .set Perm_Store_Local_Capability, 1 << 6
 .set Perm_Seal, 1 << 7
+.set Perm_CCall,		(1 << 8)
+.set Perm_Unseal,		(1 << 9)
 .set Perm_Access_System_Registers, 1 << 10
 .set Perm_All, (1 << (11 + U_PERM_BITS)) - 1
 
