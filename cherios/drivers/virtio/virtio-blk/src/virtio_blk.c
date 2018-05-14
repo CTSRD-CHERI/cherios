@@ -338,7 +338,7 @@ void handle_loop(void) {
         }
 
         if(!anything) {
-            if(set_waiting) syscall_cond_wait(1);
+            if(set_waiting) syscall_cond_wait(1, 0);
             // On the next loop we will set up notifications on the sockets
             set_waiting = 1;
         }

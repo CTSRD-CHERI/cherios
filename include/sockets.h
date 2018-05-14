@@ -76,7 +76,7 @@ enum FULFILL_FLAGS {
     F_IN_PROXY              = 0x4,
     F_PROGRESS              = 0x8, // Same bit but opposite meaning to MSG_PEEK
     F_START_FROM_LAST_MARK  = 0x10,
-    F_SET_MARK              = 0x16
+    F_SET_MARK              = 0x20,
 };
 
 #define SOCK_TYPE_PUSH 0
@@ -304,6 +304,7 @@ static ssize_t copy_out_no_caps(capability user_buf, char* req_buf, uint64_t off
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                enum FULFILL_FLAGS flags,
                                                ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit);
+int socket_internal_fulfiller_reset_check(uni_dir_socket_fulfiller* fulfiller);
 ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 
 enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting);

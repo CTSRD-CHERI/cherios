@@ -42,7 +42,7 @@
 int virtio_device_device_ready(virtio_mmio_map* map) {
 
     map->status |= STATUS_DRIVER_OK;
-
+    map->status |= STATUS_FEATURES_OK;
     if(map->status & STATUS_DEVICE_NEEDS_RESET) return DRIVER_DEVICE_NEEDS_RESET;
 
     return 0;
@@ -114,9 +114,9 @@ int virtio_device_init(virtio_mmio_map* map,
 }
 
 void virtio_device_ack_used(virtio_mmio_map* map) {
-    if(map->interrupt_status == 1) {
+    //if(map->interrupt_status == 1) {
         map->interrupt_ack = 1;
-    }
+    //}
 }
 
 

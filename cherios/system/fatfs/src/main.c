@@ -138,6 +138,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
                                                                  F_CHECK | F_PROGRESS | F_DONT_WAIT,
                                                                  &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
+            assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->write_fptr) {
                 f_lseek(&session->fil, session->write_fptr);
             }
@@ -159,6 +160,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             res = socket_internal_fulfill_progress_bytes(write_fulfill, SOCK_INF,
                                                          F_CHECK | F_PROGRESS | F_DONT_WAIT,
                                                          &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
+            assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->read_fptr) {
                 f_lseek(&session->fil, session->read_fptr);
             }
@@ -205,7 +207,7 @@ void assign_work(enum poll_events events, struct sessions_t* session) {
     size_t ndx = 0;
 
     while(workers[ndx].jobs_assigned - workers[ndx].jobs_done >= JOB_MAX) {
-        syscall_cond_wait(0);
+        syscall_cond_wait(0, 0);
     }
 
     message_send(events,0,0,0,(capability)session,NULL,NULL,NULL,workers[ndx].message, SEND, 0);

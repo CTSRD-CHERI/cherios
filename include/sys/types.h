@@ -54,6 +54,7 @@ typedef enum sched_status_e
     sched_sync_block    = 0x20,      /* Waiting on a return  */
     sched_sem           = 0x40,      /* Waiting on a kernel semaphore */
     sched_wait_notify   = 0x80,      /* Waiting on a notify */
+    sched_wait_timeout  = 0x100,     /* Waiting on a timeout */
 } sched_status_e;
 
 typedef struct

@@ -55,7 +55,7 @@ void semaphore_signal(semaphore_t* sem) {
         sem->first_waiter = next_waiter;
         if(next_waiter == NULL) sem->last_waiter = NULL;
         CRITICAL_LOCKED_END(&sem->lock)
-        sched_receives_sem_signal(waiter);
+        sched_receive_event(waiter, sched_sem);
     } else {
         sem->level++;
         CRITICAL_LOCKED_END(&sem->lock)
@@ -78,7 +78,7 @@ void semaphore_wait(semaphore_t* sem, act_t* waiter) {
             last->semaphore_next_waiter = waiter;
         }
 
-        sched_block(waiter, sched_sem);
+        sched_receive_event(waiter, sched_sem);
 
         CRITICAL_LOCKED_END(&sem->lock)
 

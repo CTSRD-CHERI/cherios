@@ -32,8 +32,12 @@
 
 #include "klib.h"
 #include "cp0.h"
+#include "atomic.h"
 
 static register_t		kernel_last_timer;
+// TODO everyone may wait on timeout, maybe just walk the list?
+#define MAX_WAITERS 0x10
+act_t* sleeps[MAX_WAITERS];
 
 void kernel_timer_init(void) {
 	/*
@@ -49,12 +53,57 @@ static inline register_t TMOD(register_t count) {
 	return count & 0xFFFFFFFF;
 }
 
+static void kernel_timer_check_sleepers(void) {
+
+	register_t now = cp0_count_get();
+	for(size_t i = 0; i < MAX_WAITERS; i++) {
+		act_t* act = sleeps[i];
+
+		if(act != NULL) {
+			register_t waited = now - act->timeout_start;
+			if(waited > act->timeout_length) {
+				sched_receive_event(act, sched_wait_timeout);
+			}
+		}
+	}
+}
+
+void kernel_timer_subscribe(act_t* act, register_t timeout) {
+	act->timeout_start = cp0_count_get();
+	act->timeout_length = timeout;
+
+	// Concurrent access
+	register_t success = 0;
+	for(size_t i = 0; (i < MAX_WAITERS) && !success; i++) {
+		act_t** ptr = sleeps + i;
+		act_t* a;
+		do {
+			LOAD_LINK(ptr, c, a);
+			if(a != NULL) break;
+			STORE_COND(ptr, c, act, success);
+		} while (!success);
+
+		if(success) {
+            act->timeout_indx = i;
+            kernel_assert(*ptr == act);
+        }
+	}
+
+	kernel_assert(success && "This queue is too small\n");
+}
+
+void kernel_timer_unsubcsribe(act_t* act) {
+	kernel_assert(sleeps[act->timeout_indx] == act);
+	sleeps[act->timeout_indx] = NULL;
+}
 /*
  * Kernel timer handler -- reschedule, reset timer.
  */
 void kernel_timer(void)
 {
 	KERNEL_TRACE(__func__, "in %lu", cp0_count_get());
+
+	kernel_timer_check_sleepers();
 
 	/*
 	 * Forced context switch of user process.

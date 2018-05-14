@@ -137,7 +137,7 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 		HW_YIELD; // This should look like a spin, so yield is good
 	}
 
-	sched_receives_msg(dest);
+    sched_receive_event(dest, sched_waiting);
 
 	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(act), dest->name);
 
@@ -241,7 +241,7 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
 
 	if(selector == SYNC_CALL) {
-		sched_block_until_event(source_activation, target_activation, sched_sync_block);
+		sched_block_until_event(source_activation, target_activation, sched_sync_block, 0);
 
 		KERNEL_TRACE(__func__, "%s has recieved return message from %s", source_activation->name, target_activation->name);
 		return;
@@ -299,7 +299,7 @@ int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* cal
 	HW_SYNC;
 
 	/* Make the caller runnable again */
-	sched_recieve_ret(returned_to);
+    sched_receive_event(returned_to, sched_sync_block);
 
 	// TODO have a selector. Do not assume the reply wants to be descheduled
 	sched_reschedule(returned_to, 0);

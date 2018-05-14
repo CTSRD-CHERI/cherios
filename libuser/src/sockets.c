@@ -120,7 +120,7 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
 
         if(delay_sleep) return result;
 
-        if(result) syscall_cond_wait(0);
+        if(result) syscall_cond_wait(0, 0);
 
     } while(result);
 
@@ -447,7 +447,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
 
     uni_dir_socket_requester* requester = fulfiller->requester;
 
-    if((flags & F_PROGRESS) && (flags & (F_START_FROM_LAST_MARK || F_SET_MARK))) {
+    if((flags & F_PROGRESS) && (flags & (F_START_FROM_LAST_MARK | F_SET_MARK))) {
         return E_BAD_FLAGS;
     }
 
@@ -478,6 +478,11 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
                     fulfiller->fulfill_mark_ptr : requester->fulfiller_component.fulfill_ptr;
 
     uint16_t required = 1;
+
+    // To account for the fact that we have fast forwarded
+    if(flags & F_START_FROM_LAST_MARK)
+        required +=
+                (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & mask;
 
     while(bytes_remain != 0) {
 
@@ -590,6 +595,13 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
     ssize_t actually_fulfill = bytes - bytes_remain;
 
     return (actually_fulfill == 0) ? ret : actually_fulfill;
+}
+
+int socket_internal_fulfiller_reset_check(uni_dir_socket_fulfiller* fulfiller) {
+    if(fulfiller->proxy_times != fulfiller->proxy_fin_times) return E_IN_PROXY;
+    fulfiller->partial_fulfill_mark_bytes = fulfiller->partial_fulfill_bytes;
+    fulfiller->fulfill_mark_ptr = fulfiller->requester->fulfiller_component.fulfill_ptr;
+    return 0;
 }
 
 int socket_internal_fulfiller_init(uni_dir_socket_fulfiller* fulfiller, uint8_t socket_type) {
@@ -898,7 +910,7 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
         uni_dir_socket_fulfiller* fulfiller = &sock->write.pull_writer;
         ful_func * ff = &copy_in;
-        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(~((sock->flags | flags) & MSG_PEEK) & F_PROGRESS);
+        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
         return socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       F_CHECK | progress | dont_wait,
                                                       ff, (capability)buf, 0, NULL);
@@ -932,7 +944,7 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
     } else if(sock->con_type & CONNECT_PUSH_READ) {
         uni_dir_socket_fulfiller* fulfiller = &sock->read.push_reader;
         ful_func * ff = ((sock->flags | flags) & MSG_NO_CAPS) ? &copy_out_no_caps : copy_out;
-        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(~((sock->flags | flags) & MSG_PEEK) & F_PROGRESS);
+        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
         return socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       F_CHECK | progress | dont_wait,
                                                       ff, (capability)buf, 0, NULL);
@@ -1096,7 +1108,7 @@ enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfille
             // We wait for an amount to be present such there is something past our checkpoint
             if(from_check) amount +=
                (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & (fulfiller->requester->buffer_size-1);
-            wait_res = socket_internal_fulfill_outstanding_wait(fulfiller, 1, !set_waiting, 1);
+            wait_res = socket_internal_fulfill_outstanding_wait(fulfiller, amount, !set_waiting, 1);
 
             if(wait_res == 0) ret |= io;
         }
@@ -1205,7 +1217,7 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg
         }
 
         if(sleep) {
-            syscall_cond_wait(msg_queue_poll != 0);
+            syscall_cond_wait(msg_queue_poll != 0, 0);
         }
 
     } while(sleep);

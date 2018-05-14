@@ -71,6 +71,7 @@
 #define STATUS_ACKNOWLEDGE		(1)
 #define STATUS_DRIVER			(2)
 #define STATUS_DRIVER_OK		(4)
+#define STATUS_FEATURES_OK      (8)
 #define STATUS_DEVICE_NEEDS_RESET	(64)
 
 typedef struct virtio_mmio_map {

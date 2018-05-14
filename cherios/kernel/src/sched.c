@@ -208,49 +208,27 @@ void sched_delete(act_t * act) {
 
 /* These should be called when an event is generated */
 
-void sched_receives_sem_signal(act_t * act) {
-	kernel_assert(act->sched_status & sched_sem);
-	KERNEL_TRACE("sched", "now unblocked on sempahore%s", act->name);
+// This can be used to
+void sched_receive_event(act_t* act, sched_status_e events) {
 	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-	add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
-	CRITICAL_LOCKED_END(&act->sched_access_lock);
-}
-
-void sched_receives_notify(act_t * act) {
-	// We may end up notifying BEFORE act has actually waited. If this happens note it and just return.
-	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-	if(act->sched_status & sched_wait_notify) {
+	if(act->sched_status & events) {
+		if(act->sched_status & sched_wait_timeout) {
+			kernel_timer_unsubcsribe(act);
+		}
 		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
-	} else {
+	} else if(events & sched_wait_notify) {
 		act->early_notify = 1;
 	}
 	CRITICAL_LOCKED_END(&act->sched_access_lock);
 }
-
-void sched_receives_msg(act_t * act) {
-	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-	if(act->sched_status & sched_waiting) {
-		KERNEL_TRACE("sched", "now unblocked %s", act->name);
-		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
-	}
-	CRITICAL_LOCKED_END(&act->sched_access_lock);
-}
-
-void sched_recieve_ret(act_t * act) {
-	KERNEL_TRACE("sched", "now unblocked %s", act->name);
-	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
-    if(act->sched_status & sched_sync_block) {
-        add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
-    } // We might be responding before the other party has actually de-scheduled
-	CRITICAL_LOCKED_END(&act->sched_access_lock);
-}
-
 /* This will block until ANY of the events specified by events occurs */
 
-void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events) {
+void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout) {
 
     if(act == NULL) act = sched_get_current_act();
-
+	if(timeout > 0) {
+		events |= sched_wait_timeout;
+	}
     int got_event = 0;
 
     CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
@@ -264,6 +242,7 @@ void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events
     if(events & sched_sem) kernel_panic("Not implemented");
 
     if(!got_event) {
+		if(timeout > 0) kernel_timer_subscribe(act, timeout);
         sched_block(act, events);
     }
 

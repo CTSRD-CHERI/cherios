@@ -74,8 +74,9 @@
 #define ETHARP_TRUST_IP_MAC         0
 #define ETH_PAD_SIZE                2
 #define LWIP_CHKSUM_ALGORITHM       2
-
+#define LWIP_DHCP                   1
 #define LWIP_TCP_KEEPALIVE          1
+#define LWIP_CALLBACK_API           1
 
 // Keepalive values, compliant with RFC 1122. Don't change this unless you know what you're doing
 #define TCP_KEEPIDLE_DEFAULT        10000UL // Default KEEPALIVE timer in milliseconds
@@ -95,6 +96,7 @@
 #define LWIP_HTTPD_DYNAMIC_HEADERS  1
 #define HTTPD_SERVER_PORT           80
 
+#define HTTPD_FSDATA_FILE               "bug_fsdata.c"
 #define LWIP_HTTPD_CUSTOM_FILES         1
 #define LWIP_HTTPD_DYNAMIC_FILE_READ    1
 #define FS_FILE_EXTENSION_T_DEFINED     1
@@ -102,7 +104,7 @@ typedef struct socket_seek_manager      fs_file_extension;
 #define LWIP_HTTPD_MAX_REQUEST_URI_LEN  0
 #define LWIP_HTTPD_SUPPORT_11_KEEPALIVE 1
 
-#define LWIP_DEBUG                  0
+#define LWIP_DEBUG                  1
 
 // Other constant is LWIP_DBG_ON
 #define LWIP_HTTPD_SUPPORT_EXTSTATUS 0

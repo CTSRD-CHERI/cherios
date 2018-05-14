@@ -41,6 +41,11 @@ int fs_open_custom(struct fs_file *file, const char *name) {
     if(file->pextension == NULL)
         return 0;
     file->len = (int)filesize(file->pextension);
+    if(file->len == 0) {
+        // Only because we don't supported open flags...
+        close(file->pextension);
+        return 0;
+    }
     return 1;
 }
 

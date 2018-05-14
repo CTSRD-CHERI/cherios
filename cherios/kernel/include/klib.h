@@ -106,6 +106,8 @@ int kernel_interrupt_enable(int number, act_control_t *ctrl);
 
 void	kernel_timer_init(void);
 void	kernel_timer(void);
+void 	kernel_timer_subscribe(act_t* act, register_t timeout);
+void 	kernel_timer_unsubcsribe(act_t* act);
 
 void	kernel_puts(const char *s);
 void	kernel_panic(const char *s) __dead2;
