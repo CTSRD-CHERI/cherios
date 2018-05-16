@@ -28,13 +28,16 @@
  * SUCH DAMAGE.
  */
 
+#include <queue.h>
 #include <nano/nanotypes.h>
+#include "syscalls.h"
 #include "pmem.h"
 #include "nano/nanokernel.h"
 #include "assert.h"
 #include "stdio.h"
 #include "mmap.h"
 #include "math.h"
+#include "object.h"
 
 page_t* book;
 
@@ -85,7 +88,7 @@ static int pmem_try_merge_after(size_t page_n) {
     return 0;
 }
 
-void pmem_try_merge(size_t page_n) {
+size_t pmem_try_merge(size_t page_n) {
     assert(page_n < TOTAL_PHY_PAGES);
 
     size_t before = book[page_n].prev;
@@ -103,6 +106,8 @@ void pmem_try_merge(size_t page_n) {
         pmem_check_phy_entry(page_n);
         assert(book[after].len == 0);
     }
+
+    return page_n;
 }
 
 void pmem_print_book(page_t *book, size_t page_n, size_t times) {
@@ -225,4 +230,25 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
     er:
     result->data = result->code = NULL;
     return;
+}
+
+void clean_page(size_t page_n) {
+    message_send(page_n,0,0,0,NULL,NULL,NULL,NULL,clean_act,SEND,0);
+}
+
+void clean_loop(void) {
+    while(1) {
+        // Get page to clean
+        msg_t* msg = get_message();
+        size_t page_n = msg->a0;
+        next_msg();
+
+        // Clean da page
+
+        // It is possible for the page states have been changed in the meantime, I didn't bother with any locking
+        if(book[page_n].status == page_dirty && book[page_n].len > 0) {
+            zero_page_range(page_n);
+        }
+
+    }
 }

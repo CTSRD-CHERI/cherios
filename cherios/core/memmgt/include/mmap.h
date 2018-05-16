@@ -173,6 +173,8 @@ static inline mop_t seal_mop(mop_internal_t* mop_internal) {
 extern act_kt general_act;
 extern act_kt commit_act;
 extern act_kt revoke_act;
+extern act_kt clean_act;
+
 void revoke(void);
 void revoke_finish(res_t res);
 void __revoke(void);

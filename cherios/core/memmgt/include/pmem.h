@@ -56,13 +56,19 @@ void pmem_check_phy_entry(size_t pagen);
 /* Debug check the book */
 void pmem_check_book(void);
 
-/* Tries to remove page_n if it is a redundent node */
-void pmem_try_merge(size_t page_n);
+/* Tries to remove page_n if it is a redundent node - returns a node that will include it*/
+size_t pmem_try_merge(size_t page_n);
 
 /* Get a physical capability. Mediates access to the similar nano kernel function */
 void __get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop_sealed, cap_pair* result);
 
 /* Dumps the whole book */
 void full_dump(void);
+
+/* Send a page_n to the cleaner to clean */
+void clean_page(size_t page_n);
+
+/* The clean loop for the cleaner */
+void clean_loop(void);
 
 #endif //CHERIOS_PMEM_H

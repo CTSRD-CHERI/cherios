@@ -97,6 +97,10 @@
 /* Physical page records */
 #define PHY_PAGE_ENTRY_SIZE_BITS        (REG_SIZE_BITS + 2)
 #define PHY_PAGE_ENTRY_SIZE             (1L << PHY_PAGE_ENTRY_SIZE_BITS)
+#define PHY_PAGE_OFFSET_status          0
+#define PHY_PAGE_OFFSET_len             REG_SIZE
+#define PHY_PAGE_OFFSET_prev            (2*REG_SIZE)
+#define PHY_PAGE_OFFSET_spare           (3*REG_SIZE)
 
 /* Virtual page table records */
 
@@ -145,7 +149,8 @@
     ITEM(page_ptable_free, 5)                      \
     ITEM(page_transaction, 6)                      \
     ITEM(page_io, 7)                               \
-    ITEM(page_dirty, 8)
+    ITEM(page_dirty, 8)                            \
+    ITEM(page_cleaning, 9)                         \
 
 #define NANO_KERNEL_RES_STATUS_ENUM_LIST(ITEM) \
     ITEM(res_open,          0)                  \

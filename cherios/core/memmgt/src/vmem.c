@@ -147,6 +147,7 @@ void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, si
 
     if(page_n != 0) {
         pmem_try_merge(page_n);
+        clean_page(page_n);
     }
 }
 

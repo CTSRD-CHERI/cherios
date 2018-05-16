@@ -93,6 +93,8 @@
     ITEM(split_phy_page_range, void, (register_t, pagen, register_t, new_len), __VA_ARGS__)\
 /* The page must have non zero length, and the the next page must have identical status. Merges the records. */\
     ITEM(merge_phy_page_range, void, (register_t, pagen), __VA_ARGS__)\
+/* The page must have non zero length, will go from state dirty -> free when finished */\
+    ITEM(zero_page_range, void, (register_t, pagen), __VA_ARGS__)\
 /* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
 /* For debugging. Returns a global cap and gives your pcc all the permission bits it can */\
     ITEM(obtain_super_powers, capability, (void), __VA_ARGS__)\

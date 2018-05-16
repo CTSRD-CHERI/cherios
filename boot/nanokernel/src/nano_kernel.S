@@ -197,15 +197,13 @@ nano_kernel_start:
 .set zero_page_tmp_1,   $t8
 .set zero_page_ctmp_1,  $c13
 .set zero_page_arg,     $t0
-.set zero_page_rreg,    $c17
 
 .set UNROLL_FACTOR,     8
 
 # Zeros page. I unrolled this a few times on point of principle. This is in no way optimal.
 
 nano_zero_page:
-    candperm    zero_page_ctmp_1, $kdc, $zero # Get this right...
-    cfromptr    zero_page_ctmp_1, zero_page_ctmp_1, $zero
+    cnull       zero_page_ctmp_1
     daddiu      zero_page_tmp_1, zero_page_arg, (PHY_PAGE_SIZE) - (UNROLL_FACTOR * CAP_SIZE)
 
 1:
@@ -586,6 +584,7 @@ merge_phy_page_range:
     dli         $a2, page_transaction
     cincoffset  $c3, $idc, $t0                          # c3 is pointer to first page
 1:  cllw        $t8, $c3                                # t8 is state of first page
+# FIXME: This looks blatently broken, this should be CAS and does not do the compare
     cscw        $t3, $a2, $c3
     beqz        $t3, 1b
     nop
@@ -625,6 +624,59 @@ merge_phy_page_range_end:
     cclearlo    EN2(c3,c4)
     CRETURN
     nop
+
+###################################
+# void zero_page_range(register_t pagen)
+.global zero_page_range
+zero_page_range:
+###################################
+
+    dli         $t0, TOTAL_PHY_PAGES                # check in range
+    sltu        $t0, $a0, $t0
+    beqz        $t0, zero_er
+    dli         $t0, phy_page_table
+    cincoffset  $c3, $idc, $t0
+    dsll        $t3, $a0, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset  $c3, $c3, $t3                       # c3 is book+page_n
+
+    # must go dirty -> transaction -> cleaning -> unused
+    dli         $a1, page_dirty
+    dli         $a2, page_transaction
+
+1:  cllw        $t3, $c3                            # t3 = state
+    bne         $t3, $a1, zero_er                   # check dirty
+    nop
+    cscw        $t2, $a2, $c3
+    beqz        $t2, 1b
+    cld         $t2, $zero, PHY_PAGE_OFFSET_len($c3)    # t2 = len
+
+    beqz        $t2, zero_er_1                      # abort transaction
+    dli         $a2, page_cleaning
+    csw         $a2, $zero, 0($c3)                  # set state cleaning
+#  From here on we are fine to zero. $a0 is page_n. $t2 is len
+
+    dli         $t1, PHY_MEM_START_CACHED
+    dsll        $a0, $a0, PHY_PAGE_SIZE_BITS
+    daddu       $a0, $a0, $t1                          # a0 is the address of page
+
+    move        $t3, $ra                                #ra/t0 clobbered
+1:                                                      # call zero len times
+    jal         nano_zero_page
+    move        $t0, $a0
+    daddiu      $t2, $t2, -1
+    bnez        $t2, 1b
+    daddiu      $a0, $a0, PHY_PAGE_SIZE
+
+    move        $ra, $t3                             # restore ra
+    move        $a1, $zero
+
+    zero_er_1:
+
+    csw         $a1, $zero, 0($c3)                # set state clean or dirty depending how we got here
+
+    zero_er:
+    CRETURN
+    cclearlo    EN2(c3, c13)
 
 ###################################
 # ptable get_top_level_table(void)

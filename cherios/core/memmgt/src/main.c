@@ -51,6 +51,7 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 act_kt general_act; // For anything else (worker id 1)
 act_kt commit_act;  // Only for commit   (worker id 0)
 act_kt revoke_act;  // Only for revoke   (worker if 2)
+act_kt clean_act; 	// Only for clean 	 (worker id 3)
 
 static void worker_start(register_t arg, capability carg) {
 
@@ -121,6 +122,12 @@ static void revoke_worker_start(register_t arg, capability carg) {
     msg_enable = 1;
 }
 
+static void clean_worker_start(register_t arg, capability carg) {
+	worker_id = 3;
+	clean_act = act_self_ref;
+
+	clean_loop();
+}
 int main(memmgt_init_t* mem_init) {
 
     commit_act = act_self_ref;
@@ -139,6 +146,9 @@ int main(memmgt_init_t* mem_init) {
 	printf("spawning revoke\n");
 
 	thread_new("memmgt_revoke", 0, 0, &revoke_worker_start);
+
+	/* And also a worker that will zero pages. */
+	thread_new("memmgt_clean", 0, 0, &clean_worker_start);
 
 	/* This thread handles only commit_vmem */
 	msg_enable = 1;
