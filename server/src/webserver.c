@@ -37,7 +37,7 @@
 #include "stdlib.h"
 #include "namespace.h"
 #include "assert.h"
-#include "netsocket.h"
+#include "net.h"
 
 struct session {
     char file_name_buf[100];
@@ -210,36 +210,34 @@ void handle_loop(void) {
 
     assert(namespace_register(namespace_num_webserver, act_self_ref) == 0);
 
-
+    struct tcp_bind bind;
+    bind.port = 666;
+    bind.addr.addr = IP_ADDR_ANY->addr;
+    netsock_listen_tcp(&bind, 4, NULL);
 
     while(1) {
-        netsocket* netsock = (netsocket*)malloc(sizeof(netsocket));
-        s.sock = &netsock->sock;
-        netsocket_init(netsock);
+        printf("Server accept...\n");
+        NET_SOCK netsock = netsock_accept(MSG_NO_COPY);
 
-        res = netsocket_listen(netsock, 8080);
-
-        if(res < 0) {
+        if(netsock == NULL) {
             printf("Rejected a connection\n");
             continue;
         }
 
-        if(res == 0) {
+        s.sock = &netsock->sock;
 
-            s.sent_initial = 0;
-            s.sent_headers = 0;
-            handle_request(&s);
+        s.sent_initial = 0;
+        s.sent_headers = 0;
+        handle_request(&s);
 
-            if(!s.sent_initial) {
-                send_response_initial(&s, 400, YOU_SUCK "\n", sizeof(YOU_SUCK));
-            }
-            if(!s.sent_headers) {
-                finish_headers(&s);
-            }
+        if(!s.sent_initial) {
+            send_response_initial(&s, 400, YOU_SUCK "\n", sizeof(YOU_SUCK));
+        }
+        if(!s.sent_headers) {
+            finish_headers(&s);
+        }
 
-        } else ERR("Listen failed %ld", -res);
-
-        res = socket_close(s.sock);
+        res = netsock_close(netsock);
 
         assert_int_ex(res, ==, 0);
 

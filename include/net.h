@@ -27,33 +27,47 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_NETSOCKET_H
-#define CHERIOS_NETSOCKET_H
+#ifndef CHERIOS_NET_H
+#define CHERIOS_NET_H
 
 #include "sockets.h"
+#include "lwip/ip_addr.h"
+#include "lwip/err.h"
+#include "lwip/inet.h"
 
-typedef struct netsocket {
+struct tcp_bind {
+    ip_addr_t addr;
+    uint16_t port;
+};
+struct tcp_con_args {
+    struct tcp_bind binding;
+    err_t result;
+};
+
+struct net_sock {
     unix_like_socket sock;
+    capability callback_arg;
     struct requester_32 write_req;
-    char drb[0x200];
-} netsocket;
+    uint8_t drb_inline;
+    data_ring_buffer drb;
+};
 
-static inline int netsocket_init(netsocket* netsock) {
-    socket_init(&netsock->sock, MSG_NONE, netsock->drb, sizeof(netsock->drb), CONNECT_PUSH_WRITE | CONNECT_PUSH_READ);
-    netsock->sock.write.push_writer = &netsock->write_req.r;
-    socket_internal_requester_init(&netsock->write_req.r, 32, SOCK_TYPE_PUSH, &netsock->sock.write_copy_buffer);
-    socket_internal_fulfiller_init(&netsock->sock.read.push_reader, SOCK_TYPE_PUSH);
-    return 0;
-}
+#define NET_SOCK_DRB_SIZE 0x4000
 
-static inline int netsocket_listen(netsocket* netsock, register_t port) {
-    // TODO registeron some lower layer that we are listening on port
-    return socket_internal_listen(port, &netsock->write_req.r, &netsock->sock.read.push_reader);
-}
+typedef struct net_sock* NET_SOCK;
 
-// TODO connect to IP. Also the ref should be an ip handler, which should then perform a loopback
-static inline int netsocket_connect(netsocket* netsock, register_t port, act_kt ref) {
-    return socket_internal_connect(ref, port, &netsock->write_req.r, &netsock->sock.read.push_reader);
-}
+enum TCP_OOBS {
+    REQUEST_TCP_CONNECT = (2 << 16) | (0x10),
+    REQUEST_TCP_LISTEN  = (2 << 16) | (0x11),
+};
 
-#endif //CHERIOS_NETSOCKET_H
+
+act_kt net_try_get_ref(void);
+
+int netsock_close(NET_SOCK sock);
+int netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
+                       capability callback_arg);
+int netsock_connect_tcp(struct tcp_bind* bind, struct tcp_bind* server,
+                        capability callback_arg);
+NET_SOCK netsock_accept(enum SOCKET_FLAGS flags);
+#endif //CHERIOS_NET_H

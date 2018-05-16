@@ -29,7 +29,6 @@
  */
 
 
-#include <sockets.h>
 #include "cheric.h"
 #include "virtio_queue.h"
 #include "virtio_net.h"
@@ -41,6 +40,8 @@
 #include "mman.h"
 #include "misc.h"
 #include "syscalls.h"
+#include "namespace.h"
+#include "net.h"
 
 #include "lwip/inet.h"
 #include "lwip/tcp.h"
@@ -90,31 +91,42 @@ typedef struct net_session {
 
 } net_session;
 
-struct tcp_con_args {
-    const ip_addr_t addr;
-    uint16_t port;
-    err_t result;
-};
+
 
 typedef struct tcp_session {
     struct tcp_pcb* tcp_pcb;
+    struct tcp_session* next, *prev;
+
+    act_kt callback;
+    capability callback_arg;
+    register_t callback_port;
+
     uni_dir_socket_fulfiller tcp_input_pushee;
     struct requester_32 tcp_output_pusher;
-    struct tcp_session* next, *prev;
-    struct tcp_con_args* con;
-    enum poll_events events;
-    uint8_t connected;
 
-    uint64_t byte_mark;
-    uint64_t byte_highest_seen;
-    uint64_t byte_missing;
+    enum poll_events events;
+
+    struct pbuf * ack_head, *ack_tail;
+    uint64_t recv;
+    uint64_t application_recv_ack;
+    uint64_t ack_handled;
+    uint64_t free_leftover;
+
+    uint8_t stack_closed;
 } tcp_session;
+
+typedef struct tcp_listen_session {
+    struct tcp_pcb* tcp_pcb;
+    act_kt callback;
+    capability callback_arg;
+    register_t callback_port;
+}tcp_listen_session;
 
 tcp_session* tcp_head = NULL;
 
 #define FOR_EACH_TCP(T) for(tcp_session* T = tcp_head; T != NULL; T = T->next)
 
-tcp_session* alloc_tcp_session(uni_dir_socket_fulfiller* tcp_output_pushee, uni_dir_socket_requester* tcp_input_pusher) {
+static tcp_session* alloc_tcp_session(void) {
 
     // Allocate and add to chain
     tcp_session* new = (tcp_session*)malloc(sizeof(tcp_session));
@@ -127,24 +139,16 @@ tcp_session* alloc_tcp_session(uni_dir_socket_fulfiller* tcp_output_pushee, uni_
     socket_internal_fulfiller_init(&new->tcp_input_pushee, SOCK_TYPE_PUSH);
     socket_internal_requester_init(&new->tcp_output_pusher.r, 32, SOCK_TYPE_PUSH, NULL);
 
-    // Connect
-    socket_internal_requester_connect(&new->tcp_output_pusher.r);
-    socket_internal_fulfiller_connect(&new->tcp_input_pushee, tcp_input_pusher);
-
     return new;
 }
 
 void free_tcp_session(tcp_session* tcp_session) {
-    // TODO dont wait here. Instead delay closing until we have pushed everything up
 
-    // Close
-    socket_internal_close_fulfiller(&tcp_session->tcp_input_pushee, 1, 0);
-    socket_internal_close_requester(&tcp_session->tcp_output_pusher.r, 1, 0);
-
-    // Free from close
     if(tcp_session->prev) tcp_session->prev->next = tcp_session->next;
     else tcp_head = tcp_session->next; // If we have no previous we are the head
     if(tcp_session->next) tcp_session->next->prev = tcp_session->prev;
+
+    free(tcp_session);
 
     return;
 }
@@ -280,7 +284,6 @@ int init_net(net_session* session, struct netif* nif) {
     netif_set_link_up(nif);
     netif_set_up(nif);
 
-    printf("Only now enabled\n");
     syscall_interrupt_enable(session->irq, act_self_ctrl);
     virtio_device_ack_used(session->mmio);
 
@@ -382,29 +385,10 @@ void interrupt(struct netif* nif) {
     syscall_interrupt_enable(session->irq, act_self_ctrl);
 }
 
-uni_dir_socket_requester* user_tcp_new(uni_dir_socket_fulfiller* tcp_output_pushee,
-                                       uni_dir_socket_requester* tcp_input_pusher,
-                                       ip_addr_t ip_addr, u16_t port) {
-    tcp_session* session = alloc_tcp_session(tcp_output_pushee, tcp_input_pusher);
-
-    session->byte_mark = session->byte_missing = session->byte_highest_seen = 0;
-    session->events = POLL_IN;
-    session->connected = 0;
-    session->con = NULL;
-    session->tcp_pcb = tcp_new();
-    tcp_arg(session->tcp_pcb, session);
-    tcp_bind(session->tcp_pcb, &ip_addr, port);
-
-    return socket_internal_make_read_only(&session->tcp_output_pusher.r);
-}
-
-enum TCP_OOBS {
-    REQUEST_TCP_CONNECT = (1 << 16) | (0x10),
-    REQUEST_TCP_LISTEN  = (1 << 16) | (0x11),
-};
-
 err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
                              u16_t len) {
+    if(arg == NULL) return ERR_OK;
+
     tcp_session* tcp = (tcp_session*)arg;
 
     // TODO check whether this is len TOTAL bytes or len more bytes (assuming here that its a delta)
@@ -418,73 +402,261 @@ err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
     return ERR_OK;
 }
 
+static int user_tcp_stack_close(tcp_session* tcp) {
+    if(tcp->stack_closed == 2) return 1;
+
+    if(tcp->stack_closed == 0) {
+        socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
+    }
+
+    tcp->stack_closed = 1;
+
+    if(socket_internal_requester_wait_all_finish(&tcp->tcp_output_pusher.r, 1) == 0) {
+        tcp->stack_closed = 2;
+        return 1;
+    }
+
+    return 0;
+}
+
+// If there are no errors and the callback function returns ERR_OK, then it is responsible for freeing the pbuf.
+// Otherwise, it must not free the pbuf so that lwIP core code can store it.
+
+err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
+                        struct pbuf * p, err_t err) {
+    if(arg == NULL) return err;
+
+    tcp_session* tcp = (tcp_session*)arg;
+
+    if(p == NULL) {
+        user_tcp_stack_close(tcp);
+        return ERR_OK;
+    }
+
+    struct pbuf* pp = p;
+    uint16_t count = 1;
+    while(pp->len != pp->tot_len) {
+        pp = pp->next;
+        count++;
+    }
+
+    int res = socket_internal_requester_space_wait(&tcp->tcp_output_pusher.r, count, 1, 0);
+
+    assert_int_ex(-res, == , -0);
+
+    if(tcp->ack_head == NULL) tcp->ack_head = p;
+    else tcp->ack_tail->next = p;
+
+    pp = p;
+    do {
+        socket_internal_request_ind(&tcp->tcp_output_pusher.r, (char*)pp->payload, pp->len, pp->len);
+        tcp->recv += pp->len;
+    } while(pp->len != pp->tot_len && (pp = pp->next));
+
+    assert(pp != NULL);
+
+    tcp->ack_tail = pp;
+
+    return ERR_OK;
+}
+
+static void tcp_application_ack_all(tcp_session* tcp) {
+    if(tcp->recv != tcp->ack_handled){
+        uint64_t to_ack = (tcp->recv - tcp->ack_handled);
+        tcp_recved(tcp->tcp_pcb, (u16_t)to_ack);
+        tcp->ack_handled = tcp->recv;
+    }
+    struct pbuf* p = tcp->ack_head;
+    struct pbuf* pp;
+    while(p) {
+        pp = p->next;
+        pbuf_free(p);
+        p = pp;
+    }
+    tcp->ack_head = NULL;
+}
+
+static void tcp_application_ack(tcp_session* tcp) {
+
+    if(tcp->application_recv_ack != tcp->ack_handled) {
+        assert(tcp->application_recv_ack  <= tcp->recv && tcp->application_recv_ack > tcp->ack_handled);
+
+        uint64_t to_ack = (tcp->application_recv_ack - tcp->ack_handled);
+
+        assert_int_ex(to_ack, <=, UINT16_MAX);
+        tcp_recved(tcp->tcp_pcb, (u16_t)to_ack);
+
+        tcp->ack_handled = tcp->application_recv_ack;
+
+        to_ack += tcp->free_leftover;
+        struct pbuf* p = tcp->ack_head;
+        while(to_ack && p->len <= to_ack) {
+            to_ack -=p->len;
+            tcp->ack_head = p->next;
+            pbuf_free(p);
+            p = tcp->ack_head;
+        }
+        tcp->free_leftover = to_ack;
+    }
+}
+
 ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
-    uint64_t start = tcp->byte_mark; // need to attach (start,length) to the pbuf we create
-    tcp->byte_mark+=length;
     // Make a pbuf to send, linked to a byte range
-}
 
-err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
-    tcp_session* tcp = (tcp_session*)arg;
-    tcp->con->result = err;
-    assert_int_ex(err, ==, ERR_OK); // TODO handle
-    tcp->events = POLL_IN;
-    tcp->connected = 1;
-    tcp->con = NULL;
-    tcp_sent(tcp->tcp_pcb, tcp_sent_callback);
-    // Ack connection
-    socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, SOCK_INF,
-                                           F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                           &ful_func_cancel_non_oob, NULL, 0, &ful_oob_func_skip_oob);
-    socket_internal_fulfiller_reset_check(&tcp->tcp_input_pushee);
-    return err;
-}
+    assert(length < UINT16_MAX);
+    err_t er = tcp_write(tcp->tcp_pcb, buf, (uint16_t)length, 0);
 
-ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
-    tcp_session* tcp = (tcp_session*)arg;
+    assert_int_ex(er, ==, ERR_OK);
 
-    enum TCP_OOBS otype = (enum TCP_OOBS)request->type;
-    struct tcp_con_args* args = (struct tcp_con_args*)request->request.oob; // ONLY VALID IF otype field correct
-    err_t er;
-    switch(otype) {
-        case REQUEST_TCP_CONNECT:
-            er = tcp_connect(tcp->tcp_pcb, &args->addr, args->port, &tcp_connected_callback);
-            tcp->events = POLL_NONE;
-            tcp->con = args;
-            assert(er == ERR_OK);
-            break;
-        case REQUEST_TCP_LISTEN:
-            tcp->tcp_pcb = tcp_listen(tcp->tcp_pcb);
-            tcp->events = POLL_NONE;
-            tcp->con = args;
-            assert(tcp->tcp_pcb != NULL);
-            tcp_accept(tcp->tcp_pcb, &tcp_connected_callback);
-            break;
-        default:
-            return E_OOB; // Can't handle anything else
-
-    }
     return length;
 }
 
-
 void handle_fulfill(tcp_session* tcp) {
-    if(tcp->connected) {
-        // We expect only data
-    } else{
-        // We expect an oob
-        ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, SOCK_INF,
-                                               F_CHECK | F_START_FROM_LAST_MARK | F_SET_MARK | F_DONT_WAIT,
-                                               &tcp_ful_func, tcp, 0, &ful_oob_func_skip_oob);
-        assert_int_ex(-bytes_translated, <=, 0);
-        // Note we have pushed another bytes_translated bytes
+
+    // We expect only data
+    ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, SOCK_INF,
+                                                                      F_CHECK | F_START_FROM_LAST_MARK | F_SET_MARK | F_DONT_WAIT,
+                                                                      &tcp_ful_func, tcp, 0, &ful_oob_func_skip_oob);
+    tcp_output(tcp->tcp_pcb);
+}
+
+static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
+    tcp_session* session = alloc_tcp_session();
+
+    session->application_recv_ack = session->recv= session->ack_handled = 0;
+    session->ack_head = session->ack_tail = NULL;
+    session->tcp_output_pusher.r.drb_fulfill_ptr = &session->application_recv_ack;
+    session->events = POLL_NONE;
+    session->tcp_pcb = pcb;
+
+
+    tcp_arg(session->tcp_pcb, session);
+    tcp_sent(session->tcp_pcb, tcp_sent_callback);
+    tcp_recv(session->tcp_pcb, tcp_recv_callback);
+    // TODO err
+
+    return session;
+}
+
+static void send_connect_callback(tcp_session* tcp, err_t err) {
+    capability sealed_tcp = (capability)tcp;
+    message_send((register_t)err, 0, 0, 0, tcp->callback_arg,
+                 sealed_tcp, (capability)socket_internal_make_read_only(&tcp->tcp_output_pusher.r), NULL,
+                 tcp->callback, SEND, tcp->callback_port);
+    socket_internal_requester_connect(&tcp->tcp_output_pusher.r);
+}
+
+static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
+    if(arg == NULL) return err;
+
+    tcp_session* tcp = (tcp_session*)arg;
+
+    assert(tcp->tcp_pcb == tpcb);
+
+    assert_int_ex(err, ==, ERR_OK); // TODO handle
+
+    send_connect_callback(tcp, err);
+
+    return err;
+}
+
+static err_t tcp_accept_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
+
+    if(arg == NULL) return err;
+
+    assert_int_ex(err, ==, ERR_OK); // TODO handle
+
+    tcp_listen_session* listen_session = (tcp_listen_session*)arg;
+
+    assert(listen_session->tcp_pcb != tpcb);
+
+    tcp_session* tcp = user_tcp_new(tpcb);
+
+    tcp->callback = listen_session->callback;
+    tcp->callback_arg = listen_session->callback_arg;
+    tcp->callback_port = listen_session->callback_port;
+
+    send_connect_callback(tcp, err);
+
+    return err;
+}
+
+static int user_tcp_connect_sockets(capability sealed_session,
+                                      uni_dir_socket_requester* tcp_input_pusher) {
+
+    tcp_session* tcp = (tcp_session*)sealed_session; // TODO seal/unseal
+    tcp->events = POLL_IN;
+    return socket_internal_fulfiller_connect(&tcp->tcp_input_pushee, tcp_input_pusher);
+}
+
+static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
+                             act_kt callback, capability callback_arg, register_t callback_port) {
+    tcp_session* tcp = user_tcp_new(tcp_new());
+    assert(bind != NULL);
+    tcp_bind(tcp->tcp_pcb, &bind->addr, bind->port);
+    tcp->callback = callback;
+    tcp->callback_arg = callback_arg;
+    tcp->callback_port = callback_port;
+    err_t er = tcp_connect(tcp->tcp_pcb, &server->addr, server->port, tcp_connected_callback);
+    assert_int_ex(er, ==, ERR_OK);
+    return er;
+}
+
+static err_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
+                            act_kt callback, capability callback_arg, register_t callback_port) {
+    tcp_listen_session* listen_session = (tcp_listen_session*)(malloc(sizeof(tcp_listen_session)));
+
+    listen_session->callback = callback;
+    listen_session->callback_arg = callback_arg;
+    listen_session->callback_port = callback_port;
+
+    listen_session->tcp_pcb = tcp_new();
+    err_t er = tcp_bind(listen_session->tcp_pcb, &bind->addr, bind->port);
+
+    assert_int_ex(er, ==, ERR_OK);
+
+    listen_session->tcp_pcb = tcp_listen_with_backlog(listen_session->tcp_pcb, backlog);
+    tcp_arg(listen_session->tcp_pcb, listen_session);
+    tcp_accept(listen_session->tcp_pcb, tcp_accept_callback);
+
+    return er;
+}
+
+// TODO close on timeout?
+// TODO close on error
+
+static void user_tcp_close(tcp_session* tcp) {
+    // First close user layer
+
+    ssize_t res = socket_internal_close_requester(&tcp->tcp_output_pusher.r, 0, 1);
+
+    assert_int_ex(res, ==, 0);
+
+    if(tcp->stack_closed == 0) {
+        // We will have done this earlier otherwise
+        res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
+
+        assert_int_ex(res, ==, 0);
     }
-    // Convert the push writes into pbufs them put them in the tcp stack
-    // Also handle OOBS: tcp_connect, tcp_listen
 
 
+    // Then free any pcbs / ack the entire window in case anything has not been consumed
+    tcp_arg(tcp->tcp_pcb, NULL); // We may still get events, to do this to ignore them
+
+    tcp_application_ack_all(tcp);
+
+    // Then close tcp layer
+    err_t er = tcp_close(tcp->tcp_pcb);
+
+    assert_int_ex(er, ==, ERR_OK);
+
+    // Then free session
+
+    free_tcp_session(tcp);
+
+    return;
 }
 
 int main(register_t arg, capability carg) {
@@ -514,17 +686,24 @@ int main(register_t arg, capability carg) {
 
     httpd_init();
 
+    // Advertise self for tcp/socket layer
+    namespace_register(namespace_num_tcp, act_self_ref);
+
     int sock_sleep = 0;
     int sock_event = 0;
 
-    uint8_t sol = 0;
+    register_t time = syscall_now();
     // Main loop
     while(1) {
-        if(sol++ % 256 == 0) printf("Sign of life\n");
+        register_t now = syscall_now();
+        if((now - time) >= 200000000) {
+            time = now;
+            printf("Sign of life\n");
+        }
         sock_event = 0;
 
         sys_check_timeouts();
-
+        netif_poll_all();
         // Wait for a message or socket
 
         // Respond to messages (may include interrupt getting called or a new socket being created)
@@ -549,7 +728,15 @@ int main(register_t arg, capability carg) {
         restart_poll:
         // respond to sockets
         FOR_EACH_TCP(tcp_session) {
-            assert(0 && "WIP");
+            if(tcp_session->tcp_output_pusher.r.fulfiller_component.fulfiller_closed ||
+                    (tcp_session->stack_closed && user_tcp_stack_close(tcp_session))) {
+                // We can safely free everything
+                user_tcp_close(tcp_session);
+                // Don't trust the for each after modifying the set
+                goto restart_poll;
+            }
+
+            tcp_application_ack(tcp_session);
             enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1);
             if(revents && sock_sleep) {
                 sock_sleep = 0;
@@ -559,12 +746,12 @@ int main(register_t arg, capability carg) {
                 sock_event = 1;
                 handle_fulfill(tcp_session);
             } else if(revents & (POLL_ER | POLL_HUP)) {
-                // TODO
-                assert(0);
+                user_tcp_close(tcp_session);
+                // Don't trust the for each after modifying the set
+                goto restart_poll;
             }
         }
 
-        // FIXME this needs timeout so we can call sys_check_timeouts more promptly
         if(sock_sleep) {
             syscall_cond_wait(1, 80000000);
             //wait();
@@ -574,7 +761,7 @@ int main(register_t arg, capability carg) {
     }
 }
 
-void (*msg_methods[]) = {user_tcp_new};
+void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);

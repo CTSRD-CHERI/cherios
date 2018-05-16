@@ -31,7 +31,7 @@
 #include "cheric.h"
 #include "namespace.h"
 #include "syscalls.h"
-#include "netsocket.h"
+#include "net.h"
 #include "sockets.h"
 #include "assert.h"
 #include "stdio.h"
@@ -50,45 +50,43 @@ static ssize_t ful_print(capability arg, char* buf, uint64_t offset, uint64_t le
 
 int main(register_t arg, capability carg) {
 
-    // Get the server
+    // Connect to server
+    struct tcp_bind bind;
+    struct tcp_bind server;
 
-    act_kt server;
+    bind.port = 1234;
+    bind.addr.addr = IP_ADDR_ANY->addr;
 
-    while((server = namespace_get_ref(namespace_num_webserver)) == NULL) {
-        sleep(0);
-    }
+    inet_aton("127.0.0.1", &server.addr);
+    server.port = 666;
 
-    CHERI_PRINT_CAP(server);
+    netsock_connect_tcp(&bind, &server, NULL);
+    NET_SOCK netsock = netsock_accept(MSG_NONE);
 
-    netsocket netsock;
-
-    netsocket_init(&netsock);
-
-    ssize_t res = netsocket_connect(&netsock, 8080, server);
-    assert_int_ex(netsock.write_req.r.connected, ==, 1);
-    assert_int_ex(res, ==, 0);
+    assert(netsock != NULL);
 
     printf("Sending request: %s\n", REQ1);
-    res = socket_send(&netsock.sock, REQ1, sizeof(REQ1), MSG_NONE);
+    ssize_t  res = socket_send(&netsock->sock, REQ1, sizeof(REQ1), MSG_NONE);
 
     assert_int_ex(res, ==, sizeof(REQ1));
 
-    res = socket_internal_fulfill_progress_bytes(&netsock.sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL);
+    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL);
 
-    socket_close(&netsock.sock);
+    netsock_close(netsock);
 
-    netsocket_init(&netsock);
+    bind.port = 1235;
+    netsock_connect_tcp(&bind, &server, NULL);
 
-    res = netsocket_connect(&netsock, 8080, server);
-    assert_int_ex(netsock.write_req.r.connected, ==, 1);
-    assert_int_ex(res, ==, 0);
+    netsock = netsock_accept(MSG_NONE);
+
+    assert(netsock != NULL);
 
     printf("Sending request: %s\n", REQ2);
-    res = socket_send(&netsock.sock, REQ2, sizeof(REQ2), MSG_NONE);
+    res = socket_send(&netsock->sock, REQ2, sizeof(REQ2), MSG_NONE);
 
     assert_int_ex(res, ==, sizeof(REQ2));
 
-    res = socket_internal_fulfill_progress_bytes(&netsock.sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL);
+    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL);
 
     assert_int_ex(res, > , 0);
 }

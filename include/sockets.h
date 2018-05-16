@@ -69,6 +69,8 @@ enum SOCKET_FLAGS {
     MSG_EMULATE_SINGLE_PTR = 16,
 };
 
+#define SOCK_TRACING        1
+
 enum FULFILL_FLAGS {
     F_NONE                  = 0x0,
     F_DONT_WAIT             = 0x1, // Same as MSG_DONT_WAIT
@@ -77,6 +79,7 @@ enum FULFILL_FLAGS {
     F_PROGRESS              = 0x8, // Same bit but opposite meaning to MSG_PEEK
     F_START_FROM_LAST_MARK  = 0x10,
     F_SET_MARK              = 0x20,
+    F_TRACE                 = 0x40,
 };
 
 #define SOCK_TYPE_PUSH 0

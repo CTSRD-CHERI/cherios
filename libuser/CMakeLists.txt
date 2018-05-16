@@ -47,6 +47,8 @@ set(LIBUSER_SRCS
     src/temporal.c
     src/sockets.c
     src/unistd.c
+    src/net.c
+    ${LWIP_DIR}/src/core/ipv4/ip4_addr.c
 )
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})

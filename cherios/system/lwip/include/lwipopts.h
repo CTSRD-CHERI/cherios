@@ -47,6 +47,9 @@
 #define PBUF_POOL_SIZE              512
 #define LWIP_ARP                    1
 #define LWIP_ETHERNET               1
+//#define LWIP_HAVE_LOOPIF            1
+#define LWIP_NETIF_LOOPBACK         1
+#define LWIP_LOOPBACK_MAX_PBUFS     16
 #define IP_REASS_MAX_PBUFS          64
 #define IP_FRAG_USES_STATIC_BUF     0
 #define IP_DEFAULT_TTL              255

@@ -132,7 +132,9 @@ include_directories(include/sys)
 include_directories(elf/include)
 include_directories(sha256/include)
 include_directories(cherios/system/dylink/include)
+include_directories(cherios/system/lwip/include)
 include_directories(libcrt/include)
+include_directories(lwip/src/include)
 
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS

@@ -447,7 +447,10 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
 
     uni_dir_socket_requester* requester = fulfiller->requester;
 
+    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill %lx bytes. flags %x\n", bytes, flags);
+
     if((flags & F_PROGRESS) && (flags & (F_START_FROM_LAST_MARK | F_SET_MARK))) {
+        if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill bad flags\n");
         return E_BAD_FLAGS;
     }
 
@@ -484,10 +487,12 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
         required +=
                 (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & mask;
 
+    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill begin %x \n", fptr);
     while(bytes_remain != 0) {
 
         if((flags & F_CHECK) && partial_bytes == 0) {
              // make sure there is something in the queue to read
+            if(flags & F_TRACE) printf("Sock fulfill space wait %x\n", required);
             ret = socket_internal_fulfill_outstanding_wait(fulfiller, required, flags & F_DONT_WAIT, 0);
             if(ret < 0) break;
         }
@@ -529,6 +534,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
             volatile act_notify_kt* to_notify = &other_request->request.barrier_waiting;
         }
         else if(req->type == REQUEST_PROXY) {
+            if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill proxy\n");
             proxy = req->request.proxy_for;
             ret = socket_internal_fulfill_progress_bytes(proxy, bytes_to_process,
                                                          flags | F_IN_PROXY,
@@ -536,18 +542,21 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
         } else {
             if(visit) {
                 if (req->type == REQUEST_IM) {
+                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill immediate\n");
                     char *buf = req->request.im + partial_bytes;
                     ret = visit(arg, buf, offset, bytes_to_process);
                 } else if (req->type == REQUEST_IND) {
+                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill indirect\n");
                     char *buf = req->request.ind + partial_bytes;
                     ret = visit(arg, buf, offset, bytes_to_process);
                 }
             }
             if (req->type >= REQUEST_OUT_BAND) {
                 if(oob_visit) {
+                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob visit\n");
                     ret = oob_visit(arg, req, offset, partial_bytes, bytes_to_process);
                 } else {
-                    printf("This kind of oob btp %lx. diff %lx. %d\n", bytes_to_process, bytes - bytes_remain, flags | F_IN_PROXY);
+                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob visit no func\n");
                     ret = E_OOB;
                 }
             }
@@ -594,6 +603,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
 
     ssize_t actually_fulfill = bytes - bytes_remain;
 
+    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill finish. %lx bytes fulfilled\n", actually_fulfill);
     return (actually_fulfill == 0) ? ret : actually_fulfill;
 }
 
@@ -745,12 +755,16 @@ int socket_internal_connect(act_kt target, register_t port,
 }
 
 int socket_internal_fulfiller_connect(uni_dir_socket_fulfiller* fulfiller, uni_dir_socket_requester* requester) {
+    if(fulfiller->connected) return E_ALREADY_CONNECTED;
     fulfiller->requester = requester;
     fulfiller->connected = 1;
+    return 0;
 }
 
 int socket_internal_requester_connect(uni_dir_socket_requester* requester) {
+    if(requester->connected) return E_ALREADY_CONNECTED;
     requester->connected = 1;
+    return 0;
 }
 
 static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint8_t* other_close, volatile act_notify_kt * waiter_cap) {
