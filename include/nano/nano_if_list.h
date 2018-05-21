@@ -44,7 +44,7 @@
 /* Switch to a handle, and store a handle for the suspended context to the location pointed to by store_to */\
     ITEM(context_switch, void, (context_t, restore_from, context_t*,  store_to), __VA_ARGS__) \
 /* Delays interrupts until exit is called the same number of times OR context_switch is called */\
-    ITEM(critical_section_enter, void, (void), __VA_ARGS__) \
+    ITEM(critical_section_enter, uint8_t, (void), __VA_ARGS__) \
     ITEM(critical_section_exit, void, (void), __VA_ARGS__) \
 /* TODO a better interface would consist of two things: A chain of contexts to restore, and a chain per exception type.
  * TODO my thoughts are these: In the event of an interrupt, it seems silly to restore a special context that decides
@@ -102,9 +102,6 @@
     ITEM(get_userdata_for_res, capability, (res_t, res), __VA_ARGS__)\
 /* Get the victim context and cause register for the last exception. */\
     ITEM(get_last_exception, void, (exection_cause_t*, out), __VA_ARGS__)\
-/* For both diagnostic and performance reasons a r.w capability to the EL is available. Use this for a fast critical region*/\
-    ITEM(get_critical_level_ptr, ex_lvl_t*,  (register_t, cpu_id), __VA_ARGS__)\
-    ITEM(get_critical_cause_ptr, cause_t*,  (register_t, cpu_id), __VA_ARGS__) \
 /* Create a new founded code block. The entry returned will be at offset entry0. */\
 /* A public foundation has no associated data, but the entries can be converted into readable capabilities. */\
     ITEM(foundation_create, entry_t,                                                                            \

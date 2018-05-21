@@ -1007,73 +1007,33 @@ destroy_context_end:
     CRETURN
     nop
 
-################################################# (TODO unsafe (maybe remove?)
-.global get_critical_level_ptr
-get_critical_level_ptr:
-#################################################
-
-    sltiu       $t0, $a0, SMP_CORES
-    beqz        $t0, get_critical_end
-    dli         $t0, context_array_size
-    multu       $t0, $a0
-    mflo        $t0
-    daddiu      $t0, exception_level
-
-    dli        $t1, REG_SIZE
-    cincoffset $c3, $idc, $t0
-    dli        $t2, DEF_DATA_PERMS
-    csetbounds $c3, $c3, $t1
-    candperm   $c3, $c3, $t2
-    CRETURN
-    nop
-
-################################################# (TODO unsafe (maybe remove?)
-.global get_critical_cause_ptr
-get_critical_cause_ptr:
-#################################################
-
-    sltiu       $t0, $a0, SMP_CORES
-    beqz        $t0, get_critical_end
-    dli         $t0, context_array_size
-    multu       $t0, $a0
-    mflo        $t0
-    daddiu      $t0, exception_cause
-
-    dli        $t1, REG_SIZE
-    cincoffset $c3, $kr1c, $t0
-    dli        $t2, DEF_DATA_PERMS
-    csetbounds $c3, $c3, $t1
-    candperm   $c3, $c3, $t2
-
-get_critical_end:
-    CRETURN
-    nop
-
-################################# (TODO unsafe)
-# void critical_section_enter();
+################################# (safe)
+# uint8_t critical_section_enter();
 .global critical_section_enter
 critical_section_enter:
 #################################
-
-    cld        $v0, $zero, exception_level($kr1c)            # TODO atomic increment
+    cld        $v0, $zero, exception_level($kr1c)
     daddiu     $v0, 1
-    csd        $v0, $zero, exception_level($kr1c)
+    csd        $v0, $zero, exception_level($kr1c) # This has efftively turned off interrupts so getting cpu_id is ok
+    dmfc0      $v0, $15, 1
     CRETURN
-    nop
+    andi       $v0, $v0, 0xFF
 
 
 
+# TODO this, like a few other functions, set EXL. This might be unsafe if we take an interrupt due to
+# TODO settin exl not being atomic.
 
-################################# (TODO unsafe)
+################################# (safe)
 # void critical_section_exit();
 .global critical_section_exit
 critical_section_exit:
 #################################
 
-    cld        $v0, $zero, exception_level($kr1c)            # TODO atomic decrement
+    cld        $v0, $zero, exception_level($kr1c)
     daddiu     $v0, -1
     bnez       $v0, kernel_critical_section_exit_end
-    csd        $v0, $zero, exception_level($kr1c)            # decrement level
+    csd        $v0, $zero, exception_level($kr1c)            # decrement level could take exception now
 
     cld        $t0, $zero, exception_cause($kr1c)
     beqz       $t0, kernel_critical_section_exit_end

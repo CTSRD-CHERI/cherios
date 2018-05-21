@@ -98,9 +98,9 @@ act_t* sched_get_current_act_in_pool(uint8_t pool_id) {
 }
 
 act_t* sched_get_current_act(void) {
-	uint8_t pool_id = fast_critical_enter();
+	uint8_t pool_id = critical_section_enter();
 	act_t* ret = sched_get_current_act_in_pool(pool_id);
-	fast_critical_exit();
+	critical_section_exit();
 	return ret;
 }
 
@@ -170,9 +170,9 @@ void sched_create(uint8_t pool_id, act_t * act) {
             idles_registered++;
         } else {
             act->pool_id = pool_id;
-            fast_critical_enter();
+			critical_section_enter();
             add_act_to_queue(&sched_pools[pool_id], act, sched_runnable);
-            fast_critical_exit();
+			critical_section_exit();
         }
 	} else {
 		act->sched_status = sched_terminated;
@@ -203,7 +203,7 @@ void sched_delete(act_t * act) {
 		sched_reschedule(NULL, 0);
 	}
 
-    fast_critical_exit();
+	critical_section_exit();
 }
 
 /* These should be called when an event is generated */
@@ -307,7 +307,7 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 	uint8_t pool_id;
 
 	if(!in_exception_handler) {
-		pool_id = fast_critical_enter();
+		pool_id = critical_section_enter();
 	} else {
 		pool_id = (uint8_t)cp0_get_cpuid();
 	}
@@ -364,7 +364,7 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 		} else {
 			spinlock_release(&hint->sched_access_lock);
 			if(!in_exception_handler) {
-				fast_critical_exit();
+				critical_section_exit();
 			}
         }
 	}

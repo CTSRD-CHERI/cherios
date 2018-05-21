@@ -34,9 +34,6 @@
 #include "spinlock.h"
 #include "klib.h"
 
-ex_lvl_t* ex_lvl[SMP_CORES];
-cause_t* ex_cause[SMP_CORES];
-
 void semaphore_init(semaphore_t* sem) {
     spinlock_init(&sem->lock);
     sem->first_waiter = NULL;
@@ -148,15 +145,5 @@ int  mutex_try_acquire(mutex_t* mu, act_t* owner) {
             mu->owner = owner;
         }
         return res;
-    }
-}
-
-#define printf kernel_printf
-void init_fast_critical_section(void) {
-    for(register_t i = 0; i < SMP_CORES; i++) {
-        ex_lvl[i] = get_critical_level_ptr(i);
-        ex_cause[i] = get_critical_cause_ptr(i);
-        CHERI_PRINT_CAP(ex_lvl[i]);
-        CHERI_PRINT_CAP(ex_cause[i]);
     }
 }

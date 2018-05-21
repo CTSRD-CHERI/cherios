@@ -103,8 +103,6 @@ int cherios_main(nano_kernel_if_t* interface,
 
 	set_uart_cap(cap_for_uart);
 
-    init_fast_critical_section();
-
 	kernel_puts("Kernel Hello world\n");
 
     CHERI_PRINT_CAP(interface);
