@@ -252,7 +252,7 @@ nano_smp_spin:
     dli         $k0, 0
 #endif
 
-###############################################################
+############################################################### (safe)
 # int smp_context_start(context_t start_as, register_t cpu_id)
 .global smp_context_start
 smp_context_start:
@@ -286,7 +286,7 @@ smp_context_start_er:
     CRETURN
     nop
 
-#################################################################
+################################################################# (TODO unsafe)
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
 .global nano_kernel_init
 nano_kernel_init:
@@ -490,7 +490,7 @@ nano_kernel_init:
 ##########################################################################
 
 .text
-#######################################
+####################################### (safe)
 # capability obtain_super_powers(void)
 .global obtain_super_powers
 obtain_super_powers:
@@ -505,7 +505,7 @@ obtain_super_powers:
     CRETURN
     nop
 
-###################################
+################################### (safe)
 # page_t* get_book(void)
 .global get_book
 get_book:
@@ -520,7 +520,7 @@ get_book:
     nop
 
 # Notes: Locks the page being split, but not the next page (which will have its back ptr updated #
-#################################################################
+################################################################# (TODO unsafe)
 # void split_phy_page_range(register_t pagen, register_t new_len)
 .global split_phy_page_range
 split_phy_page_range:
@@ -568,7 +568,7 @@ split_phy_end:
     nop
 
 # Notes: Locks pagen and the next page. Not the page after that even though the back pointer is updated #
-##############################################
+############################################## (TODO unsafe)
 # void merge_phy_page_range(register_t pagen)
 .global merge_phy_page_range
 merge_phy_page_range:
@@ -625,7 +625,7 @@ merge_phy_page_range_end:
     CRETURN
     nop
 
-###################################
+################################### (safe)
 # void zero_page_range(register_t pagen)
 .global zero_page_range
 zero_page_range:
@@ -678,7 +678,7 @@ zero_page_range:
     CRETURN
     cclearlo    EN2(c3, c13)
 
-###################################
+################################### (safe)
 # ptable get_top_level_table(void)
 .global get_top_level_table
 get_top_level_table:
@@ -695,7 +695,7 @@ get_top_level_table:
     CRETURN
     nop
 
-#####################################
+##################################### (TODO unsafe)
 # res_t make_first_reservation(void)
 .global make_first_reservation
 make_first_reservation:
@@ -731,7 +731,7 @@ make_first_er:
     CRETURN
     nop
 
-#####################################################################
+##################################################################### (TODO unsafe? only when exl = 0)
 # void context_switch(context_t restore_from, context_t*  store_to);
 .global context_switch
 context_switch:
@@ -837,7 +837,7 @@ normal_return:
     mtc0       $k0, $12
     eret
 
-#################################################
+################################################# (safe)
 # void get_last_exception(exection_cause_t* out)
 .global get_last_exception
 get_last_exception:
@@ -855,7 +855,7 @@ get_last_exception:
     CRETURN
     nop
 
-################################################################################################################
+################################################################################################################ (TODO unsafe)
 # capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out, register_t IO)
 .global get_phy_page
 get_phy_page:
@@ -913,12 +913,12 @@ get_phy_page_end:
     nop
 
 
-########################################################
+######################################################## (TODO unsafe)
 # context_t create_context(reg_frame_t* initial_state);
 .global create_context
 create_context:
 ########################################################
-
+# TODO allow user to provide reservation
 # first check alignment
     cgetbase    $t0, $c3
     cgetoffset  $t1, $c3
@@ -959,7 +959,7 @@ memcpy_loop:
 
 
 
-########################################################################
+######################################################################## (TODO unsafe)
 # context_t destroy_context(context_t context, context_t restore_from);
 .global destroy_context
 destroy_context:
@@ -988,7 +988,7 @@ destroy_context_end:
     CRETURN
     nop
 
-#################################################
+################################################# (TODO unsafe (maybe remove?)
 .global get_critical_level_ptr
 get_critical_level_ptr:
 #################################################
@@ -1008,7 +1008,7 @@ get_critical_level_ptr:
     CRETURN
     nop
 
-#################################################
+################################################# (TODO unsafe (maybe remove?)
 .global get_critical_cause_ptr
 get_critical_cause_ptr:
 #################################################
@@ -1030,7 +1030,7 @@ get_critical_end:
     CRETURN
     nop
 
-#################################
+################################# (TODO unsafe)
 # void critical_section_enter();
 .global critical_section_enter
 critical_section_enter:
@@ -1045,7 +1045,7 @@ critical_section_enter:
 
 
 
-#################################
+################################# (TODO unsafe)
 # void critical_section_exit();
 .global critical_section_exit
 critical_section_exit:
@@ -1073,7 +1073,7 @@ kernel_critical_section_exit_end:
 
 
 
-###################################################################
+################################################################### (safe)
 # void set_exception_handler(context_t context, register_t cpu_id);
 .global set_exception_handler
 set_exception_handler:
@@ -1098,7 +1098,7 @@ set_exception_handler:
     nop
 
 
-#############################
+############################# (safe)
 # void nano_kernel_die(void)
 .global nano_kernel_die
 nano_kernel_die:
@@ -1109,7 +1109,7 @@ nano_kernel_die:
     li  $k1,  0x42
     csb $k1, $k0, 0($kdc)
 
-#############################################
+############################################# (TODO unsafe (maybe remove?)
 # capability get_userdata_for_res(res_t res)
 .global get_userdata_for_res
 get_userdata_for_res:
@@ -1128,7 +1128,7 @@ get_userdata_for_res:
     nop
 
 # WARN: This is called as subroutine. Be careful on register usage. Don't clobber argument registers #
-############################################
+############################################ (TODO unsafe)
 # void rescap_take(res_t res, cap_pair* out)
 .global rescap_take
 rescap_take:
@@ -1218,7 +1218,7 @@ take_er:
     CRETURN
     nop
 
-##################################################
+################################################## (safe)
 # res_t rescap_getsub(res_t res, register_t index)
 .global rescap_getsub
 rescap_getsub:
@@ -1241,7 +1241,7 @@ getsub_er:
     CRETURN
     nop
 
-####################################################
+#################################################### (TODO unsafe)
 # res_t rescap_splitsub(res_t res, register_t scale)
 .global rescap_splitsub
 rescap_splitsub:
@@ -1266,7 +1266,7 @@ rescap_splitsub:
     CRETURN
     nop
 
-####################################
+#################################### (TODO unsafe)
 # capability rescap_info(res_t res)
 .global rescap_info
 rescap_info:
@@ -1321,7 +1321,7 @@ rescap_info:
 .endm
 
 
-######################################
+###################################### (TODO unsafe)
 # void rescap_revoke_start(res_t res);
 .global rescap_revoke_start
 rescap_revoke_start:
@@ -1365,7 +1365,7 @@ rescap_revoke_start:
 
 
 
-#######################################
+####################################### (TODO unsafe)
 # void rescap_revoke_finish(res_t res);
 .global rescap_revoke_finish
 rescap_revoke_finish:
@@ -1714,7 +1714,7 @@ revoke_er:
     nop
 
 
-###################################################
+################################################### (TODO unsafe)
 # res_t  rescap_split(capability res, size_t size)
 .global rescap_split
 rescap_split:
@@ -1767,7 +1767,7 @@ split_er:
     nop
 
 
-#############################################
+############################################# (TODO unsafe)
 # res_t rescap_merge(res_t res1, res_t res2)
 .global rescap_merge
 rescap_merge:
@@ -1817,7 +1817,7 @@ merge_er:
     CRETURN
     nop
 
-#################################
+################################# (TODO unsafe)
 # res_t rescap_parent(res_t res)
 .global rescap_parent
 rescap_parent:
@@ -1859,7 +1859,7 @@ parent_er:
     nop
 
 # Notes: will lock the physical page, and atomically updates the vtable entry #
-########################################################################
+######################################################################## (TODO unsafe)
 # ptable create_table(register_t page, ptable parent, register_t index)
 .global create_table
 create_table:
@@ -1951,7 +1951,7 @@ create_ptable_er:
 
 # checked untranslated # l0_index # l1_index # l2_index # unchecked untranslated bits
 
-###########################################################
+########################################################### (safe)
 # ptable_t get_sub_table(ptable_t table, register_t index)
 .global get_sub_table
 get_sub_table:
@@ -1993,7 +1993,7 @@ get_sub_table:
     CRETURN
     nop
 
-###########################################################
+########################################################### (safe)
 # readable_table_t* get_read_only_table(ptable_t table,)
 .global get_read_only_table
 get_read_only_table:
@@ -2016,7 +2016,7 @@ get_read_only_table:
     nop
 
 # Notes: Locks the physical page, and atomically updates the vtable entry #
-#########################################################################################
+######################################################################################### (TODO unsafe)
 # void create_mapping(register_t page, ptable table, register_t index, register_t flags)
 .global create_mapping
 create_mapping:
@@ -2078,7 +2078,7 @@ create_mapping_er:
 
 
 
-######################################################
+###################################################### (TODO unsafe)
 # void free_mapping(ptable_t table, register_t index)
 .global free_mapping
 free_mapping:
@@ -2169,7 +2169,7 @@ free_er:
 #    capability entrys[n_entries];
 #};
 
-###########################################################################################
+########################################################################################### (safe)
 # entry_t foundation_create(res_t res, size_t image_size, capability image,
 #                           size_t entry0, size_t n_entries, register_t public)
 .global foundation_create
@@ -2273,7 +2273,7 @@ foundation_create:
     nop
 
 
-###########################################################################################
+########################################################################################### (safe)
 # void foundation_enter(entry_t entry)
 .global foundation_enter
 foundation_enter:
@@ -2294,7 +2294,7 @@ foundation_enter:
     cjr         $c12
     cclearlo    EN2(c3,c4)
 
-###########################################################################################
+########################################################################################### (safe)
 # capability foundation_entry_expose(entry_t entry)
 .global foundation_entry_expose
 foundation_entry_expose:
@@ -2309,7 +2309,7 @@ foundation_entry_expose:
     CRETURN
     cclearlo    EN1(c4)
 
-###########################################################################################
+########################################################################################### (safe)
 # found_id_t* foundation_entry_get_id(entry_t entry)
 .global foundation_entry_get_id
 foundation_entry_get_id:
@@ -2324,7 +2324,7 @@ foundation_entry_get_id:
     CRETURN
     cclearlo    EN1(c4)
 
-###########################################################################################
+########################################################################################### (safe)
 # void foundation_exit(void)
 .global foundation_exit
 foundation_exit:
@@ -2340,7 +2340,7 @@ foundation_exit:
     nop
 
 
-###########################################################################################
+########################################################################################### (safe)
 # entry_t foundation_new_entry(size_t eid, capability at)
 .global foundation_new_entry
 foundation_new_entry:
@@ -2378,7 +2378,7 @@ new_entry_er:
     CRETURN
     nop
 
-#######################################
+####################################### (safe)
 # found_id_t* foundation_get_id (void)
 .global foundation_get_id
 foundation_get_id:
@@ -2401,7 +2401,7 @@ id_none:
     CRETURN
     nop
 
-###########################################################################################
+########################################################################################### (safe)
 # cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms)
 .global rescap_take_cert
 rescap_take_cert:
@@ -2422,7 +2422,7 @@ rescap_take_cert:
     b           rescap_take_locked_cert_shared
     dli         $a1, FOUND_CERT_TYPE
 
-###########################################################################################
+########################################################################################### (safe)
 # locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms, found_id_t* recipient_id)
 .global rescap_take_locked
 rescap_take_locked:
@@ -2481,7 +2481,7 @@ take_cert_er:
     CRETURN
     nop
 
-###########################################################################################
+########################################################################################### (safe)
 # found_id_t* rescap_check_cert(cert_t cert, cap_pair* out)
 .global rescap_check_cert
 rescap_check_cert:
@@ -2506,7 +2506,7 @@ rescap_check_cert:
     nop
 
 
-###########################################################################################
+########################################################################################### (safe)
 # void rescap_unlock(locked_t locked, cap_pair* out)
 .global rescap_unlock
 rescap_unlock:
@@ -2553,7 +2553,7 @@ rescap_unlock:
     nop
 
 
-###################################
+################################### (safe)
 # tres_t tres_get(register_t type)
 .global tres_get
 tres_get:
@@ -2575,7 +2575,7 @@ tres_get:
     CRETURN
     cclearlo    EN1(c4)
 
-###################################
+################################### (safe)
 # sealing_cap tres_take(tres_t tres)
 .global tres_take
 tres_take:
@@ -2606,7 +2606,7 @@ tres_take:
     CRETURN
     cclearlo    EN1(c4)
 
-############################################################
+############################################################ (safe)
 # capability tres_revoke(register_t start, register_t end)
 .global tres_revoke
 tres_revoke:
@@ -2617,7 +2617,7 @@ tres_revoke:
     CRETURN
     nop
 
-############################################################
+############################################################ (safe)
 # void exception_subscribe(void)
 .global exception_subscribe
 exception_subscribe:
@@ -2633,7 +2633,7 @@ exception_subscribe:
     cclearlo EN1(c3)
 
 # WARN: Trying to guarentee this only clobers c1/v0/v1 so exception handlers can be fast #
-############################################################
+############################################################ (safe)
 # user_exception_cause_t exception_getcause(void)
 .global
 exception_getcause:
@@ -2646,7 +2646,7 @@ exception_getcause:
     CRETURN
     cclearlo EN1(c1)
 
-############################################################
+############################################################ (safe)
 # void, exception_replay(void)
 .global exception_replay
 exception_replay:
@@ -2670,7 +2670,7 @@ exception_replay:
     cld         $k0, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($kr2c)
 
 
-############################################################
+############################################################  (safe)
 # void exception_return(void)
 .global exception_return
 exception_return:
@@ -2731,7 +2731,7 @@ exception_signal:
     CRETURN
     nop
 
-exception_user_handle:
+exception_user_handle: # TODO our idc needs an appropriate entry for this
 
     # idc is USER idc - we look for exception pcc and idc
     # kr1c is the per physical cpu state (can't clobber)
@@ -2782,7 +2782,7 @@ exception_user_handle_abort:
     b context_switch_exception_entry
     dmfc0   $k0, $13
 
-#########################################
+######################################### (safe)
 # type_res_bitfield_t* tres_get_ro_bitfield(void)
 .global tres_get_ro_bitfield
 tres_get_ro_bitfield:
@@ -2808,7 +2808,7 @@ nano_er:
 # Some stuff used by the exception vectors #
 ############################################
 
-tlb_table_missing:
+tlb_table_missing: # (safe)
 
 # Look for magic nop after this instruction. If it is present, we advance pcc and no exception
     li      $k0, 0x3400d00d
@@ -2826,7 +2826,7 @@ tlb_table_missing:
     dmfc0 $k0, $13
 
 
-get_interface:
+get_interface: # (safe)
     dla         $k0, locals_start
     dli         $k1, locals_size
     csetoffset  $kr2c, $kdc, $k0
