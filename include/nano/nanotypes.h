@@ -124,6 +124,11 @@
 #define UNTRANSLATED_PAGE_SIZE          (1 << UNTRANSLATED_BITS)
 
 #define VTABLE_ENTRY_USED               (-1)
+#define VTABLE_ENTRY_TRAN               (-2)
+#define REVOKE_STATE_AVAIL      0
+#define REVOKE_STATE_STARTED    1
+#define REVOKE_STATE_REVOKING   2
+
 
 #define PFN_SHIFT                       6
 /* These bits will eventually be untranslated high bits, but we will check they are equal to a field in the leaf
@@ -140,6 +145,7 @@
 
 #define PAGE_SIZE                 (PHY_PAGE_SIZE)
 
+// Anything less than transaction can be split/merged.
 #define NANO_KERNEL_PAGE_STATUS_ENUM_LIST(ITEM)    \
     ITEM(page_unused, 0)                           \
     ITEM(page_nano_owned, 1)                       \
@@ -147,9 +153,9 @@
     ITEM(page_mapped, 3)                           \
     ITEM(page_ptable, 4)                           \
     ITEM(page_ptable_free, 5)                      \
-    ITEM(page_transaction, 6)                      \
-    ITEM(page_io, 7)                               \
-    ITEM(page_dirty, 8)                            \
+    ITEM(page_io, 6)                               \
+    ITEM(page_dirty, 7)                            \
+    ITEM(page_transaction, 8)                      \
     ITEM(page_cleaning, 9)                         \
 
 #define NANO_KERNEL_RES_STATUS_ENUM_LIST(ITEM) \

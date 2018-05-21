@@ -519,56 +519,62 @@ get_book:
     CRETURN
     nop
 
-# Notes: Locks the page being split, but not the next page (which will have its back ptr updated #
-################################################################# (TODO unsafe)
+# Notes: Locks the page being split, but not the next page (which will have its back ptr updated) #
+# This is O.K. is the prev pointer is never read by the nano kernel. Only updated. #
+################################################################# (safe)
 # void split_phy_page_range(register_t pagen, register_t new_len)
 .global split_phy_page_range
 split_phy_page_range:
 #################################################################
-    beqz        $a1, split_phy_end
+    beqz        $a1, split_phy_er
     dli         $t0, TOTAL_PHY_PAGES                # check index in range
     sltu        $t0, $a0, $t0
-    beq         $t0, $zero, split_phy_end               # $a0 >= $t0
+    beq         $t0, $zero, split_phy_er                # $a0 >= $t0
     dli         $t0, phy_page_table                     # $t0 = start of book
     dsll        $t1, $a0, PHY_PAGE_ENTRY_SIZE_BITS      # $t1 = offset for pagen
     daddu       $t0, $t0, $t1                           # $t0 = book + pagen
 
     cincoffset  $c3, $idc, $t0                          # c3 is book entry
 
-    dli         $t8, page_transaction
+    dli         $t8, page_transaction                   # to set to
 1:  cllw        $t9, $c3                                # lock physcial page
-    cscw        $t3, $t8, $c3
+    daddiu      $t9, $t9, -(page_transaction-1)         # make sure les than transaction
+    bgtz        $t9, split_phy_er
+    daddiu      $t9, $t9, (page_transaction-1)
+    cscw        $t3, $t8, $c3                           # set to transaction. t9 holds old state
     beqz        $t3, 1b
     nop
 
-    cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
+    cld         $t2, $zero, (PHY_PAGE_OFFSET_len)($c3)  # $t2 = book[pagen].len
     sltu        $t3, $a1, $t2
-    beq         $t3, $zero, split_phy_end               # $a1 >= $t2
-    dsll        $t3, $t2, PHY_PAGE_ENTRY_SIZE_BITS
+    beq         $t3, $zero, split_phy_undo              # $a1 >= $t2
+    dsll        $t3, $t2, PHY_PAGE_ENTRY_SIZE_BITS      # t3 is byte offset from entry to next
     cincoffset  $c4, $c3, $t3                           # c4 is last book entry
     dsubu       $t3, $t2, $a1                           # $t3 is length of next block
 
-    csd         $a1, $t0, (REG_SIZE)($idc)              # book[pagen].len = new_len
+    csd         $a1, $zero, (REG_SIZE)($c3)             # book[pagen].len = new_len
 
-    dsll         $t1, $a1, PHY_PAGE_ENTRY_SIZE_BITS
-    daddu       $t0, $t0, $t1                           # t0 = book + pagen + new_len
+    dsll        $t1, $a1, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset  $c5, $c3, $t1                           # c5 is new entry
 
-    csw         $t8, $t0, 0($idc)                       # book[new].state = transaction
-    csd         $t3, $t0, (REG_SIZE)($idc)              # book[new].len = book[pagen].len - new_len
-    csd         $a0, $t0, (REG_SIZE*2)($idc)            # book[new].prev = pagen
-    csw         $t9, $t0, 0($idc)                       # book[new].state = book[pagen].state
+    csw         $t8, $zero, (PHY_PAGE_OFFSET_status)($c5)   # book[new].state = transaction
+    csd         $t3, $zero, (PHY_PAGE_OFFSET_len)($c5)      # book[new].len = book[pagen].len - new_len
+    csd         $a0, $zero, (PHY_PAGE_OFFSET_prev)($c5)     # book[new].prev = pagen
 
     daddu       $t1, $a0, $a1
     csd         $t1, $zero, (2*REG_SIZE)($c4)           # book[next].prev = pagen + new_len
 
-split_phy_end:
+    csw         $t9, $zero, 0($c5)                      # book[new].state = book[pagen].state
+
+split_phy_undo:
     csw         $t9, $zero, 0($c3)                      # unlock page
-    cclearlo    EN2(c3,c4)
+split_phy_er:
+    cclearlo    EN3(c3,c4,c5)
     CRETURN
     nop
 
 # Notes: Locks pagen and the next page. Not the page after that even though the back pointer is updated #
-############################################## (TODO unsafe)
+############################################## (safe)
 # void merge_phy_page_range(register_t pagen)
 .global merge_phy_page_range
 merge_phy_page_range:
@@ -584,24 +590,26 @@ merge_phy_page_range:
     dli         $a2, page_transaction
     cincoffset  $c3, $idc, $t0                          # c3 is pointer to first page
 1:  cllw        $t8, $c3                                # t8 is state of first page
-# FIXME: This looks blatently broken, this should be CAS and does not do the compare
+    daddiu      $t8, $t8, -(page_transaction-1)         # make sure les than transaction
+    bgtz        $t8, merge_phy_page_range_end
+    daddiu      $t8, $t8, (page_transaction-1)
     cscw        $t3, $a2, $c3
     beqz        $t3, 1b
     nop
 
-    cld         $t2, $t0, (REG_SIZE)($idc)              # $t2 = book[pagen].len
+    cld         $t2, $t0, (PHY_PAGE_OFFSET_len)($idc)              # $t2 = book[pagen].len
     beqz        $t2, merge_phy_er_1
     sll         $t1, $t2, PHY_PAGE_ENTRY_SIZE_BITS
     daddu       $t1, $t1, $t0                           # t1 = book[pagen + len]
 
     cincoffset  $c4, $idc, $t1                          # c3 is pointer to first page
 1:  cllw        $t9, $c4                                # t9 is state of second page
+    bne         $t8, $t9, merge_phy_er_1
     cscw        $t3, $a2, $c4
     beqz        $t3, 1b
     nop
 
-    bne         $t8, $t9, merge_phy_er_2
-    cld         $t3, $t1, REG_SIZE($idc)                # t3 = len2
+    cld         $t3, $t1, PHY_PAGE_OFFSET_len($idc)    # t3 = len2
 
     beqz        $t3, merge_phy_er_2
 
@@ -609,17 +617,17 @@ merge_phy_page_range:
     sll         $t3, $t3, PHY_PAGE_ENTRY_SIZE_BITS
     daddu       $t3, $t3, $t1                           # t3 = book[pagen + len + len2]
 
-    csd         $zero, $t1, REG_SIZE($idc)              # book[page + len].len = 0
-    csd         $t2, $t0, REG_SIZE($idc)                # book[page].len += len2
-    csd         $a0, $t3, (2 * REG_SIZE)($idc)          # book[page + len + len2].prev = pagen
+    csd         $zero, $t1, PHY_PAGE_OFFSET_len($idc)   # book[page + len].len = 0
+    csd         $t2, $t0, PHY_PAGE_OFFSET_len($idc)     # book[page].len += len2
+    csd         $a0, $t3, (PHY_PAGE_OFFSET_prev)($idc)  # book[page + len + len2].prev = pagen
 
     b           merge_phy_er_1                          # finish by unlocking first page
     csw         $zero, $zero, 0($c4)                    # unlock second page
 
 merge_phy_er_2:
-    csw         $t9, $zero, 0($c4)
+    csw         $t9, $zero, PHY_PAGE_OFFSET_status($c4)
 merge_phy_er_1:
-    csw         $t8, $zero, 0($c3)
+    csw         $t8, $zero, PHY_PAGE_OFFSET_status($c3)
 merge_phy_page_range_end:
     cclearlo    EN2(c3,c4)
     CRETURN
@@ -855,7 +863,7 @@ get_last_exception:
     CRETURN
     nop
 
-################################################################################################################ (TODO unsafe)
+################################################################################################################ (safe)
 # capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out, register_t IO)
 .global get_phy_page
 get_phy_page:
@@ -864,31 +872,40 @@ get_phy_page:
     beqz        $a2, get_phy_page_end
     dli         $t0, TOTAL_PHY_PAGES
     cmove       $c5, $c3
+    cnull       $c3
+    cnull       $c4
+
     sltu        $t0, $a0, $t0
     beq         $t0, $zero, get_phy_page_end            # $a0 >= $t0
     dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
-    cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
+    cincoffset  $c6, $idc, $t0                          # $c6 our entry
 
-    bne         $t1, $a2, get_phy_page_end              # $t1 must be npages
-    clw         $t3, $t0, 0($idc)                       # $t1 = state
 
     dli         $t1, page_system_owned
     dli         $t2, page_io
+    movn        $t1, $t2, $a3                           # t1 is the state we set to on success
 
-    beqz        $t3, 2f                                 # state must be un-used,
-    movn        $t1, $t2, $a3
-    bne         $t1, $t3, get_phy_page_end              # or equal to what was asked for
-    nop
+# Set to transacting
 
-    2:
-    csw         $t1, $t0, 0($idc)                       # set to system owned / io
+1:  cllw        $t3, $c6                                # t3 is what we will restore on error
+    beqz        $t3, 2f                                 # must be free
+    li          $t2, page_transaction
+    bne         $t1, $t3, get_phy_page_end              # or in the state we will set it to
+2:  nop
+    cscw        $t0, $t2, $c6
+    beqz        $t0, 1b
+    cld         $t2, $zero, PHY_PAGE_OFFSET_len($c6)    # $t2 = len of record
 
-    bnez        $a1, 1f                                 # 0: uncached. ow: cached
+    bne         $t2, $a2, get_phy_page_backout          # $t2 must be npages
+
+    move        $t3, $t1                                # set to system owned / io
+
     dli         $t1, PHY_MEM_START_CACHED_TOP
-    dli         $t1, PHY_MEM_START_UNCACHED_TOP
-    1: dsll     $t1, $t1, TOP_ADDR_SHIFT
+    dli         $t2, PHY_MEM_START_UNCACHED_TOP
+    movn        $t1, $t2, $a1                           # 0: uncached. ow: cached
+    dsll        $t1, $t1, TOP_ADDR_SHIFT
 
     dsll        $t2, $a0, PHY_PAGE_SIZE_BITS
     dsll        $t0, $a2, PHY_PAGE_SIZE_BITS
@@ -908,9 +925,11 @@ get_phy_page:
     csc         $c3, $zero, CAP_SIZE($c5)
     csc         $c4, $zero, 0($c5)
 
+get_phy_page_backout:
+    csw         $t3, $zero, PHY_PAGE_OFFSET_status($c6)
 get_phy_page_end:
     CRETURN
-    nop
+    cclearlo    EN1 (c6)
 
 
 ######################################################## (TODO unsafe)
@@ -1859,7 +1878,7 @@ parent_er:
     nop
 
 # Notes: will lock the physical page, and atomically updates the vtable entry #
-######################################################################## (TODO unsafe)
+######################################################################## (safe)
 # ptable create_table(register_t page, ptable parent, register_t index)
 .global create_table
 create_table:
@@ -1888,22 +1907,23 @@ good_level: #t2 now contains the type we will seal the next level with
     daddu       $t0, $t0, $t1                           # $t0 is the offset of our phy entry
 
     li          $t8, page_transaction
+    li          $a2, page_ptable_free
+
     cincoffset  $c5, $idc, $t0                          # c5 is out physical entry
+
 2:  cllw        $t9, $c5                                # $t9 = state. Take out transaction lock.
+    # t9 must be page_ptable_free or 0
+    movz        $a2, $zero, $t9
+    bne         $t9, $a2, create_ptable_er
+    li          $a2, page_ptable_free
     cscw        $t1, $t8, $c5
     beqz        $t1, 2b
     nop
 
-    cld         $t1, $t0, REG_SIZE($idc)                # $t1 = len of record
+    cld         $t1, $zero, PHY_PAGE_OFFSET_len($c5)    # $t1 = len of record
     daddiu      $t1, $t1, -1
     bnez        $t1, create_ptable_er_restore_state     # $t1 must be 1
     nop
-
-    beqz        $t9, 1f                                 # state must be un-used
-    dli         $t8, page_ptable_free                   # or can safely re-use old ptables for new ptables
-    bne         $t9, $t8, create_ptable_er_restore_state
-
-1:
 
     dsll        $t0, $a0, PHY_PAGE_SIZE_BITS
     dli         $t1, PHY_MEM_START_CACHED
@@ -2016,7 +2036,7 @@ get_read_only_table:
     nop
 
 # Notes: Locks the physical page, and atomically updates the vtable entry #
-######################################################################################### (TODO unsafe)
+######################################################################################### (safe)
 # void create_mapping(register_t page, ptable table, register_t index, register_t flags)
 .global create_mapping
 create_mapping:
@@ -2036,19 +2056,17 @@ create_mapping:
     dli         $t8, page_transaction
 
 2:  cllw        $t9, $c6                                # $t9 is the state of this phy page
+    bnez        $t9, create_mapping_er                  # must be un-used
+    nop
     cscw        $t0, $t8, $c6                           # lock phy entry
     beqz        $t0, 2b
-    nop
 
-    cld         $t1, $zero, REG_SIZE($c6)               # $t1 = len of record
+    cld         $t1, $zero, PHY_PAGE_OFFSET_len($c6)    # $t1 = len of record
     daddiu      $t1, $t1, -2
     bnez        $t1, create_mapping_er_restore_phy      # $t1 must be 2
-    nop
-
-    bnez        $t9, create_mapping_er_restore_phy      # must be un-used
     dsll        $t2, $a1, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
 
-    cincoffset  $c5, $c3, $t2
+    cincoffset  $c5, $c3, $t2                           # c5 is virtual entry
     dsll        $a0, $a0, PFN_SHIFT
     or          $a0, $a0, $a2
 
@@ -2058,39 +2076,32 @@ create_mapping:
     cscd        $t1, $a0, $c5                          # store EntryLo
     beqz        $t1, 1b
 
-    dli         $t1, page_mapped
-    csw         $t1, $zero, 0($c6)                     # set page to be mapped
+    dli         $t9, page_mapped
 
     # TODO add autharising cap
     # TODO add the checked top bits
 
-    cclearlo    EN4(c3,c4,c5,c6)
-    CRETURN
-    nop
-
 create_mapping_er_restore_phy:
-    csw         $t9, $zero, 0($c6)
+    csw         $t9, $zero, PHY_PAGE_OFFSET_status($c6)
 
 create_mapping_er:
-    cclearlo    EN4(c3,c4,c5,c6)
     CRETURN
-    nop
+    cclearlo    EN4(c3,c4,c5,c6)
 
 
 
-###################################################### (TODO unsafe)
+###################################################### (safe)
 # void free_mapping(ptable_t table, register_t index)
 .global free_mapping
 free_mapping:
 ######################################################
 
     cgettype    $t0, $c3
-    dli         $t1, -VTABLE_TYPE_L0
-    daddu       $t1, $t1, $t0
+    daddu       $t1, $t0, -VTABLE_TYPE_L0
 
     sltiu       $t2, $t1, VTABLE_LEVELS
-    daddiu      $t1, $t1, -(VTABLE_LEVELS-1)             # t1 zero if last level
     beqz        $t2, free_er
+    daddiu      $t1, $t1, -(VTABLE_LEVELS-1)             # t1 zero if last level
 
     csetoffset  $c4, $kdc, $t0
 
@@ -2100,35 +2111,54 @@ free_mapping:
     cunseal     $c3, $c3, $c4
     dsll        $t2, $a0, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
 
-    cld         $t3, $t2, 0($c3)                        # t3 is the PFN/Physical adress of page
-    beqz        $t3, free_to_used                       # if free we can go straight to used w/o updating any physical pages
-    dli         $t0, VTABLE_ENTRY_USED
-    beq         $t0, $t3, free_er
+    cincoffset  $c3, $c3, $t2                           # c3 is the vtable entry
 
-    dli         $t9, 2
+1:  dli         $t0, VTABLE_ENTRY_USED
+    clld        $t3, $c3                                # t3 is the PFN/Physical adress of page
+    beq         $t0, $t3, free_er                       # must not already be free
+    li          $t8, VTABLE_ENTRY_TRAN                  # set to this while fiddling with physical pages
+    cscd        $t8, $t8, $c3
+    beqz        $t8, 1b
+    dli         $t9, 2                                  # hoisted from a couple instructions below to fill slot
+
+    beqz        $t3, free_to_used
+
     dli         $a3, page_dirty
-    beqz        $t1, 1f
+    beqz        $t1, 2f
     dsrl        $t8, $t3, PFN_SHIFT                     # the last level has a PFN entry for the TLB
     dli         $a3, page_ptable_free
     dli         $t9, 1
     dsll        $t8, $t3, TOP_ADDR_BITS                 # other levels have physical indexs. first zero top.
     dsrl        $t8, $t8, TOP_ADDR_BITS + PHY_PAGE_SIZE_BITS # then shift down to get a pagen
-    1:
-    # t8 as the physical pagen. t9 has how many pages we will be freeing. a3 the type to set to.
+2:
+    # t8 is the physical pagen. t9 has how many pages we will be freeing. a3 the type to set to.
+    # t0 is constant VTABLE_ENTRY_USED. t3 is old PFN/PHY addr for restore.
 
-    dsll        $t3, $t8, PHY_PAGE_ENTRY_SIZE_BITS
+    dsll        $t1, $t8, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset  $c4, $idc, $t1
     dli         $t1, phy_page_table
-    daddu       $t1, $t3, $t1                           # $t1 is the offset of our phy entry
+    cincoffset  $c4, $c4, $t1                           # c4 is our phy entry
 
-    cld         $t3, $t1, REG_SIZE($idc)                # $t3 is the length
-    bne         $t3, $t9, free_er
-    nop
 
-    csw         $a3, $t1, 0($idc)                       # store to update phy page status
+    dli         $t2, page_transaction
 
-free_to_used:
-    csd         $t0, $t2, 0($c3)                        # store -1 in vtable to mean 'used'
+3:  clld        $t1, $c4                                # t1 is the state of the phy page (might be transacting)
+    beq         $t1, $t2, 3b                            # TODO think about whether the loop here is appropriate?
+                                                        # The state will eventually be correct as
+                                                        # we know we were mapping to it
+    li          $t2, page_transaction
+    cscd        $t2, $t2, $c4                           # set p-entry to transacting
+    beqz        $t2, 3b
 
+
+    cld         $t0, $zero, PHY_PAGE_OFFSET_len($c4)     # $t0 is the length
+    beq         $t0, $t9, 4f                             # if length is wrong back out of changing the vtable entry
+
+    move        $t0, $t3
+    b           free_to_used                             # will set v-entry to what it was before
+    csd         $t1, $zero, PHY_PAGE_OFFSET_status($c4)  # set p-entry back to whatever it was
+
+4:
     # Invalidate TLB - could do this selectively for performance
 
     .set N_TLB_ENTS, 32
@@ -2140,6 +2170,12 @@ free_to_used:
     tlbwi
     bnez    $t0, 1b
     daddiu  $t0, -1
+
+# At this point we might be allowed to use the page again. TLB flush must have already happened
+    csw         $a3, $zero, PHY_PAGE_OFFSET_status($c4)    # store to update phy page status
+    li          $t0, VTABLE_ENTRY_USED
+free_to_used:
+    csd         $t0, $zero, 0($c3)                        # store -1 in vtable to mean 'used'
 
 free_er:
     cclearlo    EN2(c3, c4)
