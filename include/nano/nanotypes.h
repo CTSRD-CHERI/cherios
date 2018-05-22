@@ -103,6 +103,10 @@
 
 #define CONTEXT_SIZE                    (CHERI_FRAME_SIZE + (CAP_SIZE * 5))
 #define CONTEXT_OFFSET_STATE            CHERI_FRAME_SIZE
+
+#define CONTEXT_STATE_CREATED           0
+#define CONTEXT_STATE_DESTROYED         1
+
 #define CONTEXT_OFFSET_EX_STATE         CHERI_FRAME_SIZE + REG_SIZE
 
 #define EX_STATE_UH                     1

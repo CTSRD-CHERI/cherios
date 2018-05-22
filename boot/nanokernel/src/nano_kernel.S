@@ -889,7 +889,7 @@ get_phy_page_end:
     cclearlo    EN1 (c6)
 
 
-######################################################## (TODO unsafe)
+########################################################
 # context_t create_context(reg_frame_t* initial_state);
 .global create_context
 create_context:
@@ -903,17 +903,17 @@ create_context:
     bnez        $t0, 1f
 
 
-    dli         $t0,  CONTEXT_SIZE                          # TODO atomic increment
-    clc         $c4,  $zero, next_context($idc)
+    dli         $t0,  CONTEXT_SIZE
+1:  cincoffset  $c6, $idc, next_context
+    cllc        $c4, $c6
     cincoffset  $c5,  $c4, $t0
-    csc         $c5,  $zero, next_context($idc)             # increment next context
+    cscc        $t3, $c5,  $c6                              # increment next context
+    beqz        $t3, 1b
 
-
-
-    csetbounds  $c4, $c4, $t0
-    dli         $a0, CHERI_FRAME_SIZE
+    csetbounds  $c4, $c4, $t0                               # will fail if we were out of space
+    dli         $a0, CONTEXT_OFFSET_STATE
     csd         $zero, $a0, 0($c4)                          # set state to allocated for new context
-    cfromptr    $c5, $c5, $zero
+    cnull       $c5
     csc         $c5, $a0, CAP_SIZE($c4)                     # set foundation ref to null
     # memcpy a0 bytes from c3 to c4
     dli         $t0, 0
@@ -928,29 +928,35 @@ memcpy_loop:
     cseal       $c3, $c4, $c3                              # Return sealed cap
 
 1:
-    cclearlo    EN3(c4,c5,c6)                              # c3 is a return value
     CRETURN
-    nop
+    cclearlo    EN3(c4,c5,c6)                              # c3 is a return value
 
 
 
-######################################################################## (TODO unsafe)
+########################################################################
 # context_t destroy_context(context_t context, context_t restore_from);
 .global destroy_context
 destroy_context:
 ########################################################################
 
-    cincoffset  $c13, $kdc, CONTEXT_TYPE                    # Load sealing capability
-    cunseal     $c3, $c3, $c13                              # unseal context we are destroying
-    clc         $c14, $zero, current_context($kr1c)         # load current context
-    ceq         $t1, $c3, $c14                              # t1 = 1 if we are deleting ourselves
-    dli         $t2, 1
-    dli         $t0, CHERI_FRAME_SIZE
-    beqz        $t1, destroy_context_end
-    csd         $t2, $t0, 0($c3)                            # set state to dead (in delay slot)
+    cincoffset  $c5, $kdc, CONTEXT_TYPE                     # Load sealing capability
+    cunseal     $c3, $c3, $c5                               # unseal context we are destroying
+    clc         $c6, $zero, current_context($kr1c)          # load current context
+    ceq         $t1, $c3, $c6                               # t1 = 1 if we are deleting ourselves
+    dli         $t2, CONTEXT_STATE_DESTROYED
+    dli         $t0, CONTEXT_OFFSET_STATE
+    cincoffset  $c6, $c3, $t0
+
+1:  clld        $t3, $c6
+    bnez        $t3, destroy_context_end                    # must be created
+    cscd        $t3, $t2, $c6
+    beqz        $t3, 1b
+    nop
+
+    beqz        $t1, destroy_context_end                    # if we are not destroying ourselves we can end now
 
     # If we are here we are destroying ourselves, thus we should restore restore_from
-    cunseal     $c3, $c4, $c13
+    cunseal     $c3, $c4, $c5
     dmfc0       $t1, $12
     ori         $t1, 2                                      # set SR(EXL)
     mtc0        $t1, $12
@@ -958,9 +964,8 @@ destroy_context:
     nop
 
 destroy_context_end:
-    cclearlo    (1 << 13) | (1 << 14) | (1 << 3)
     CRETURN
-    nop
+    cclearlo    EN4(c3,c4,c5,c6)
 
 ################################# (safe)
 # uint8_t critical_section_enter();
