@@ -41,50 +41,6 @@
 #include "nano/nanokernel.h"
 #include "dylink.h"
 
-# We will lay out our contexts like this
-
-# FIXME We could shorten our code by re-ordering context_t
-# We need to put normal registers first, then capability regs
-
-# struct context_t {
-#   reg_frame_t
-#   enum state{allocated, dead} (size of a double)
-#   emum exception_state{ user_handle = 1, in_exception = 2} (size of a double
-#   user_cause
-#   user_ccause
-#   padded to a cap
-#   found_id_t* foundation
-#   exception_pcc       # PCC that was the exception pcc
-#   exception_idc       # IDC that was the exception idc
-#   exception_saved_idc # IDC to do swapping with
-#};
-
-.set CONTEXT_SIZE, CHERI_FRAME_SIZE + (CAP_SIZE * 5)
-
-.set CONTEXT_OFFSET_STATE,      CHERI_FRAME_SIZE
-.set CONTEXT_OFFSET_EX_STATE,   CHERI_FRAME_SIZE + REG_SIZE
-
-.set EX_STATE_UH, 1
-.set EX_STATE_EL, 2
-
-.set CONTEXT_OFFSET_CAUSE,      CHERI_FRAME_SIZE + (2 * REG_SIZE)
-.set CONTEXT_OFFSET_CCAUSE,     CHERI_FRAME_SIZE + (3 * REG_SIZE)
-.set CONTEXT_OFFSET_FOUND,      CHERI_FRAME_SIZE + CAP_SIZE
-.set CONTEXT_OFFSET_EX_PCC,     CHERI_FRAME_SIZE + (2 * CAP_SIZE)
-.set CONTEXT_OFFSET_EX_IDC,     CHERI_FRAME_SIZE + (3 * CAP_SIZE)
-.set CONTEXT_OFFSET_EX_SAVED_IDC, CHERI_FRAME_SIZE + (4 * CAP_SIZE)
-.set N_CONTEXTS,         64             # We never reallocate these, so its currently a huge limitation
-
-#struct res_t {
-#    enum state{open, taken, merged, revoking}
-#    size_t length <- length of reservation (not including meta data). Not set when open.
-#    size_t pid <- an id for the parent node. Checked for merging
-#    padding to size of one cap
-#    user data to pad to size of cache_line
-#    union{cap for region, user data} <- store a cheeky cap here when open for ease. Part of user data o/w
-#
-#}
-
 .set CACHE_LINE_SIZE,                64
 
 # Top bits of virtual address decide which range we are using

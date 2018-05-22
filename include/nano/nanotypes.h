@@ -80,6 +80,44 @@
 #define RES_SUBFIELD_BITMAP_BITS        (14 * 8)
 
 
+// The layout of contexts
+
+
+// We will lay out our contexts like this
+
+// FIXME We could shorten our code by re-ordering context_t
+// FIXME We need to put normal registers first, then capability regs
+
+// struct context_t {
+//   reg_frame_t
+//   enum state{allocated, dead} (size of a double)
+//   emum exception_state{ user_handle = 1, in_exception = 2} (size of a double
+//   user_cause
+//   user_ccause
+//   padded to a cap
+//   found_id_t* foundation
+//   exception_pcc       // PCC that was the exception pcc
+//   exception_idc       // IDC that was the exception idc
+//   exception_saved_idc // IDC to do swapping with
+//};
+
+#define CONTEXT_SIZE                    (CHERI_FRAME_SIZE + (CAP_SIZE * 5))
+#define CONTEXT_OFFSET_STATE            CHERI_FRAME_SIZE
+#define CONTEXT_OFFSET_EX_STATE         CHERI_FRAME_SIZE + REG_SIZE
+
+#define EX_STATE_UH                     1
+#define EX_STATE_EL                     2
+
+#define CONTEXT_OFFSET_CAUSE            (CHERI_FRAME_SIZE + (2 * REG_SIZE))
+#define CONTEXT_OFFSET_CCAUSE           (CHERI_FRAME_SIZE + (3 * REG_SIZE))
+#define CONTEXT_OFFSET_FOUND            (CHERI_FRAME_SIZE + CAP_SIZE)
+#define CONTEXT_OFFSET_EX_PCC           (CHERI_FRAME_SIZE + (2 * CAP_SIZE))
+#define CONTEXT_OFFSET_EX_IDC           (CHERI_FRAME_SIZE + (3 * CAP_SIZE))
+#define CONTEXT_OFFSET_EX_SAVED_IDC     (CHERI_FRAME_SIZE + (4 * CAP_SIZE))
+// We never reallocate these, so its currently a huge limitation
+// Create context should take an optional reservation similar to the how the kernel gets non static space
+#define N_CONTEXTS                      (64)
+
 //TODO make this dynamic
 /* Page sizes etc */
 #define PHY_RAM_SIZE                    (1L << 31)
