@@ -766,9 +766,8 @@ context_switch_exception_entry:                         # kr1c should contain a 
 
     save_reg_frame_idc $kr2c, $k1, $c1, $epcc, $idc     # Save state
 
-    dli      $k1, CONTEXT_TYPE
     bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
-    csetoffset  $c13 , $kdc, $k1                        # meant to be in delay
+    cincoffset  $c13 , $kdc, CONTEXT_TYPE               # meant to be in delay
 
     cunseal  $c3, $c3, $c13
 
@@ -969,8 +968,7 @@ memcpy_loop:
     bne         $t0, $a0, memcpy_loop
     csc         $c5, $t0, (-CAP_SIZE)($c4)
 
-    dli         $t0, CONTEXT_TYPE
-    csetoffset  $c3, $kdc, $t0                             # Load sealing capability
+    cincoffset  $c3, $kdc, CONTEXT_TYPE                    # Load sealing capability
     cseal       $c3, $c4, $c3                              # Return sealed cap
 
 1:
@@ -986,8 +984,7 @@ memcpy_loop:
 destroy_context:
 ########################################################################
 
-    dli         $t0, CONTEXT_TYPE
-    csetoffset  $c13, $kdc, $t0                             # Load sealing capability
+    cincoffset  $c13, $kdc, CONTEXT_TYPE                    # Load sealing capability
     cunseal     $c3, $c3, $c13                              # unseal context we are destroying
     clc         $c14, $zero, current_context($kr1c)         # load current context
     ceq         $t1, $c3, $c14                              # t1 = 1 if we are deleting ourselves
@@ -1062,8 +1059,7 @@ set_exception_handler:
     sltiu       $t1, $a0, SMP_CORES
     beqz        $t1, 1f
 
-    dli         $t0, CONTEXT_TYPE
-    csetoffset  $c4, $kdc, $t0
+    cincoffset  $c4, $kdc, CONTEXT_TYPE
     cunseal     $c3, $c3, $c4
 
     dli         $t0, context_array_size
@@ -1097,9 +1093,8 @@ get_userdata_for_res:
 #############################################
     cgetoffset  $t0, $c3
     bnez        $t0, take_er
-    dli         $t0, RES_TYPE
     dli         $t1, RES_PRIV_SIZE
-    csetoffset  $c4, $kdc, $t0
+    cincoffset  $c4, $kdc, RES_TYPE
     dli         $t2, RES_USER_SIZE
     cunseal     $c3, $c3, $c4
     cincoffset  $c3, $c3, $t1
@@ -1320,8 +1315,7 @@ rescap_info:
 .global rescap_revoke_start
 rescap_revoke_start:
 ######################################
-    dli         $t0, RES_TYPE
-    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
     cgetoffset  $t0, $c3
