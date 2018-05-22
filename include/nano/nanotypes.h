@@ -67,13 +67,16 @@
 #define RES_USER_SIZE                   (RES_META_SIZE - RES_PRIV_SIZE)
 
 
-#define RES_LENGTH_OFFSET               0
-#define RES_PID_OFFSET                  8
-#define RES_STATE_OFFSET                31
+#define RES_LENGTH_OFFSET               16
+#define RES_PID_OFFSET                  24
+#define RES_STATE_OFFSET                0           // Keep zero for link/conditional
 #define STORE_RES_STATE                 csb
 #define LOAD_RES_STATE                  clb
-#define RES_SUBFIELD_SIZE_OFFSET        30
-#define RES_SUBFIELD_BITMAP_OFFSET      16
+#define STOREC_RES_STATE                cscb
+#define LOADL_RES_STATE                 cllb
+#define RES_SUBFIELD_SIZE_OFFSET        1
+#define RES_SIZE_NOT_FIELD              0xFF
+#define RES_SUBFIELD_BITMAP_OFFSET      2
 #define RES_SUBFIELD_BITMAP_BITS        (14 * 8)
 
 
@@ -162,7 +165,8 @@
     ITEM(res_open,          0)                  \
     ITEM(res_taken,         1)                  \
     ITEM(res_merged,        2)                  \
-    ITEM(res_revoking,      3)
+    ITEM(res_trans,         3)                  \
+    ITEM(res_revoking,      4)
 
 DECLARE_ENUM(e_res_status, NANO_KERNEL_RES_STATUS_ENUM_LIST)
 

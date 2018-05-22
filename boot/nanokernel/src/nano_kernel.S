@@ -703,17 +703,19 @@ get_top_level_table:
     CRETURN
     nop
 
-##################################### (TODO unsafe)
+##################################### (safe)
 # res_t make_first_reservation(void)
 .global make_first_reservation
 make_first_reservation:
 #####################################
     # TODO we should actually revoke the initial reservation in case the boot loader made a mistake
-    # TODO more atomicity
-    cld         $t2, $zero, made_first_res($idc)
+
+    cincoffset  $c4, $idc, made_first_res
+1:  clld        $t2, $c4
     bnez        $t2, make_first_er
     dli         $t2, 1
-    csd         $t2, $zero, made_first_res($idc)  # can only be done once
+    cscd        $t2, $t2, $c4
+    beqz        $t2, 1b
 
     dli         $t2, VIRT_MEM_START
     dli         $t1, VIRT_MEM_SIZE
@@ -1088,7 +1090,7 @@ nano_kernel_die:
     li  $k1,  0x42
     csb $k1, $k0, 0($kdc)
 
-############################################# (TODO unsafe (maybe remove?)
+############################################# (TODO (maybe remove?)
 # capability get_userdata_for_res(res_t res)
 .global get_userdata_for_res
 get_userdata_for_res:
@@ -1106,39 +1108,43 @@ get_userdata_for_res:
     CRETURN
     nop
 
+
+
 # WARN: This is called as subroutine. Be careful on register usage. Don't clobber argument registers #
-############################################ (TODO unsafe)
+############################################ (safe)
 # void rescap_take(res_t res, cap_pair* out)
 .global rescap_take
 rescap_take:
 ############################################
-    dli         $t0, RES_TYPE
     cmove       $c5, $c4
-    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
     cgetoffset  $t3, $c3                    # t3 is non zero if using subfields
     csetoffset  $c3, $c3, $zero
 
     cgetbase    $t0, $c3
     daddiu      $t0, $t0, RES_META_SIZE     # get base
-    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)      # get length
+    li          $t8, RES_SIZE_NOT_FIELD
 
-
+1:  LOADL_RES_STATE $t2, $c3                # get state
     bnez        $t3, take_sub
-    LOAD_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3)          # get state
-
+    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)      # get length (protected by load linked)
     bnez        $t2, take_er                # error if not open
     dli         $t2, res_taken
+    csb         $t8, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # set not subfield by setting size to not field
+                                                          # this will not matter even if this store cond fails
+    STOREC_RES_STATE $t3, $t2, $c3          # try set to taken
+    beqz        $t3, 1b
+    nop
 
-    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3)   # set to taken
-    dli         $t2, ~0
-    csd         $t2, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
-    csw         $t2, $zero, (RES_SUBFIELD_BITMAP_OFFSET+8)($c3)
     b           take_make
-    csh         $t2, $zero, (RES_SUBFIELD_BITMAP_OFFSET+12)($c3)    # set bitfield to all taken
+    nop
 
 take_sub:
 # t0 is base of ALL of the reservation. t1 is length of ALL. t2 is state. t3 is index+1.
+# We don't really care about a merge race. A revoke race should be impossible as c3 will be detagged.
+# We must handle the take race however. Do this will conditionals on the resfield bits
+
     dli         $t8, res_taken
     bne         $t2, $t8, take_er           # subfields are marked taken. We should look at the bitmap.
     daddiu      $t3, $t3, -1
@@ -1150,14 +1156,20 @@ take_sub:
     dsrl        $t2, $t3, 3                 # t2 is byte
 
     # set bit or error if already set
-    clb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
+    cincoffset  $c3, $c3, RES_SUBFIELD_BITMAP_OFFSET
+    cincoffset  $c3, $c3, $t2
+
+2:  cllb        $t9, $c3
     and         $a7, $t8, $t9
     bnez        $a7, take_er
     or          $t9, $t9, $t8
-    csb         $t9, $t2, RES_SUBFIELD_BITMAP_OFFSET($c3)
+    cscb        $t9, $t9, $c3
+    beqz        $t9, 2b
+    nop
 
     # calculate base offset
-    clb         $t2, $zero, RES_SUBFIELD_SIZE_OFFSET($c3)   # t2 is the scale
+    neg         $t2, $t2
+    clb         $t2, $t2, (RES_SUBFIELD_SIZE_OFFSET-RES_SUBFIELD_BITMAP_OFFSET)($c3)   # t2 is the scale
     daddiu      $t8, $t3, 1
     dsllv       $t3, $t3, $t2                               # baseoff
     dsllv       $t8, $t8, $t2                               # bound
@@ -1193,9 +1205,8 @@ take_end:
     CRETURN
     nop
 take_er:
-    clearlo     EN2(c3, c4)
     CRETURN
-    nop
+    clearlo     EN2(c3, c4)
 
 ################################################## (safe)
 # res_t rescap_getsub(res_t res, register_t index)
@@ -1205,53 +1216,57 @@ rescap_getsub:
 
     cgetoffset  $t0, $c3
     bnez        $t0, getsub_er          # can only sub the main reservation
+    cincoffset  $c4, $kdc, RES_TYPE
+    cunseal     $c5, $c3, $c4
+
+    clb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c5) # size field indicates whether or not it is a subfield
+    daddiu      $t0, $t0, -(RES_SIZE_NOT_FIELD)
+    beqz        $t0, getsub_er
+
     sltiu       $t0, $a0, RES_SUBFIELD_BITMAP_BITS
     beqz        $t0, getsub_er          # can only have an index that will fit in the bitfield
 
-    daddiu      $a0, $a0, 1             # 0 means not a subfield
-    dli         $t0, RES_TYPE
-    csetoffset  $c4, $kdc, $t0
-    cunseal     $c3, $c3, $c4
-    csetoffset  $c3, $c3, $a0           # offset field encodes sub
+    daddiu      $a0, $a0, 1             # 0 means it is the parent of the subfield
+    csetoffset  $c3, $c5, $a0           # offset field encodes sub
     cseal       $c3, $c3, $c4
 
 getsub_er:
-    cclearlo    EN1(c4)
     CRETURN
-    nop
+    cclearlo    EN2(c4, c5)
 
-#################################################### (TODO unsafe)
+#################################################### (safe)
 # res_t rescap_splitsub(res_t res, register_t scale)
 .global rescap_splitsub
 rescap_splitsub:
 ####################################################
 
-    dli         $t0, RES_TYPE
-    csetoffset  $c4, $kdc, $t0              # create unsealing cap
-    cunseal     $c3, $c3, $c4               # unseal res
-    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)            # get state
+    cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
+    cunseal     $c3, $c3, $c4                    # unseal res
+1:  LOADL_RES_STATE $t0, $c3                     # get state
     bnez        $t0, take_er                                    # error if not open
-    dli         $t0, res_taken
-    STORE_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)           # set to taken
+    dli         $t0, res_trans
+    STOREC_RES_STATE $t0, $t0, $c3               # set to transacting to lock this in, but not make useable
+    beqz        $t0, 1b
 
-    csd         $zero, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
-    csw         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+8)($c3)
-    csh         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+12)($c3)      # set bitfield to all not taken
+    csh         $zero, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
+    csw         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+2)($c3)
+    csd         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+6)($c3)      # set bitfield to all not taken
     csb         $a0, $zero, (RES_SUBFIELD_SIZE_OFFSET)($c3)             # set scale
 
+    sync
+    dli         $t0, res_taken
+    STORE_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)
     cseal       $c3, $c3, $c4
 
-    cclearlo    EN1(c4)
     CRETURN
-    nop
+    cclearlo    EN1(c4)
 
-#################################### (TODO unsafe)
+#################################### (safe)
 # capability rescap_info(res_t res)
 .global rescap_info
 rescap_info:
 ####################################
-    dli         $t0, RES_TYPE
-    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
     cgetoffset  $t3, $c3                    # get sub-id if exists
@@ -1693,31 +1708,41 @@ revoke_er:
     nop
 
 
-################################################### (TODO unsafe)
+################################################### (safe)
 # res_t  rescap_split(capability res, size_t size)
 .global rescap_split
 rescap_split:
 ###################################################
     andi        $t0, $a0, (RES_META_SIZE-1) # check alignment
     bnez        $t0, split_er
+    cgetoffset  $t0, $c3
+    bnez        $t0, split_er               # can't split subfields
 
-    dli         $t0, RES_TYPE
-    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
-    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)          # get state
+1:  LOADL_RES_STATE $t0, $c3                # get state
     bnez        $t0, split_er               # reservation must be open
+    li          $t0, res_trans
+    STOREC_RES_STATE $t0, $t0, $c3          # set transacting to avoid race
+    beqz        $t0, 1b
 
     cld         $t1, $zero, (RES_LENGTH_OFFSET)($c3) # get length
-    beqz        $t1, split_er               # length must be non zero
+    beqz        $t1, split_er_backout       # length must be non zero
 
     daddiu      $a1, $t1, -(RES_META_SIZE)  # length minus new metadata space
     sltu        $t0, $a1, $a0
-    bnez        $t0, split_er               # size arg too large
+    bnez        $t0, split_er_backout       # size arg too large
+
+    # At this point we can no longer error
 
     dsubu       $a1, $a1, $a0                   # size of remainder
     cld         $t0, $zero, (RES_PID_OFFSET)($c3)       # get pid
     csd         $a0, $zero, (RES_LENGTH_OFFSET)($c3)    # set length for old res
+
+    # We can now allow the original to be used again
+    sync
+    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)
 
     dli         $t8, RES_META_SIZE
 
@@ -1736,85 +1761,103 @@ rescap_split:
     csd         $t0, $zero, (RES_PID_OFFSET)($c3)           # set parent
 
     cseal        $c3, $c3, $c4
+    CRETURN
     cclearlo    EN1(c4)
-    CRETURN
-    nop
 
+split_er_backout:
+    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)
 split_er:
-    cclearlo    EN2(c3, c4)
     CRETURN
-    nop
+    cclearlo    EN2(c3, c4)
 
 
-############################################# (TODO unsafe)
+############################################# (safe)
 # res_t rescap_merge(res_t res1, res_t res2)
 .global rescap_merge
 rescap_merge:
 #############################################
     ceq         $t0, $c3, $c4
     bnez        $t0, merge_er               # naughty people may try trip us up merging a reservation with itself
-    dli         $t0, RES_TYPE
-    csetoffset  $c5, $kdc, $t0              # create unsealing cap
+    cincoffset  $c5, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c5
     cunseal     $c4, $c4, $c5               # unseal both arguments
 
-    cgetoffset  $t1, $c3
+    cgetoffset  $t1, $c3                    # can't split subfields
     bnez        $t1, merge_er
     cgetoffset  $t1, $c4
     bnez        $t1, merge_er
 
-    dli         $t0, res_taken
+    dli         $t3, res_taken
 
-    LOAD_RES_STATE $t1, $zero, RES_STATE_OFFSET($c3)
-    bne         $t0, $t1, merge_er          # check first is taken
+1:  LOADL_RES_STATE $t1, $c3
+    bne         $t3, $t1, merge_er          # check first is taken
+    li          $t1, res_trans
+    STOREC_RES_STATE $t1, $t1, $c3
+    beqz        $t1, 1b
 
-    LOAD_RES_STATE $t1, $zero, RES_STATE_OFFSET($c4)
-    bne         $t0, $t1, merge_er          # check second is taken
+2:  LOADL_RES_STATE $t1, $c4
+    bne         $t3, $t1, merge_er_backout1 # check first is taken
+    li          $t1, res_trans
+    STOREC_RES_STATE $t1, $t1, $c4
+    beqz        $t1, 2b
 
     cld         $t0, $zero, (RES_PID_OFFSET)($c3) # get depth of first
     cld         $t1, $zero, (RES_PID_OFFSET)($c4) # get depth of second
-    bne         $t0, $t1, merge_er          # must have same depth
+    bne         $t0, $t1, merge_er_backout2          # must have same depth
 
     cld         $t0, $zero, RES_LENGTH_OFFSET($c3)   # get first length
     cld         $t1, $zero, RES_LENGTH_OFFSET($c4)   # get second length
     daddiu      $t0, RES_META_SIZE
     cincoffset  $c6, $c3, $t0               # c6 should point to the next reservation
     cne         $t2, $c6, $c4               # if not equal then we are not merging adjacent blocks
-    bnez        $t2, merge_er
+    bnez        $t2, merge_er_backout2
 
-    addu        $t0, $t0, $t1               # this is the total new length
+# From here on we can be confident of no error
+
+    daddu        $t0, $t0, $t1               # this is the total new length
     li          $t1, res_merged
     csd         $t0, $zero, RES_LENGTH_OFFSET($c3)      # store back in the field of the lower address reservation a new length.
+    sync
     STORE_RES_STATE $t1, $zero, RES_STATE_OFFSET($c4)   # set higher address reservation to merged
+    STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c3)   # set lower address back to taken
     cseal       $c3, $c3, $c5               # although the caller can just use the first argument, its nice to return it
     cclearlo    EN3(c4, c5, c6)
     CRETURN
     nop
 
+merge_er_backout2:
+    STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c4)     # set higher address reservation back to open
+merge_er_backout1:
+    STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c3)     # set lower address back to open
 merge_er:
-    cclearlo    EN4(c3, c4, c5, c6)
     CRETURN
-    nop
+    cclearlo    EN4(c3, c4, c5, c6)
 
-################################# (TODO unsafe)
+################################# (safe)
 # res_t rescap_parent(res_t res)
 .global rescap_parent
 rescap_parent:
 #################################
-    dli         $t0, RES_TYPE
-    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+    cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
-    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)          # get state
-    bnez        $t0, parent_er              # reservation must be open
+    cgetoffset  $t0, $c3
+    bnez        $t0, parent_er              # must not be a sub field
 
-    dli         $t2, res_taken
-    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3)          # set state field for parent
+    dli          $t2, res_taken
+    dli          $t0, RES_SIZE_NOT_FIELD
+1:  LOADL_RES_STATE $t1, $c3                # get state
+    bnez        $t1, parent_er              # reservation must be open
+    cld         $t8, $zero, (RES_LENGTH_OFFSET)($c3) # get length
+    beqz        $t8, parent_er              # empty reservation will not have enough space
+    csb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # fine to do to anything open
+    STOREC_RES_STATE $t1, $t2, $c3          # set state field for parent
+    beqz        $t1, 1b
+
 
     cgetbase    $t0, $c3                    # parent base is id for child
     dli         $a0, RES_META_SIZE
 
-    cld         $t1, $zero, (RES_LENGTH_OFFSET)($c3) # get length
-    daddiu      $t2, $t1, (-RES_META_SIZE)  # length of child
+    daddiu      $t2, $t8, (-RES_META_SIZE)  # length of child
 
     csetoffset  $c3, $kdc, $t0              # create new res node
     cincoffset  $c3, $c3, $a0
@@ -1828,14 +1871,11 @@ rescap_parent:
 
     cseal       $c3, $c3, $c4               # seal child for return
 
+    CRETURN
     cclearlo    EN1(c4)
-    CRETURN
-    nop
 parent_er:
-
-    cclearlo    EN2(c3, c4)
     CRETURN
-    nop
+    cclearlo    EN2(c3, c4)
 
 # Notes: will lock the physical page, and atomically updates the vtable entry #
 ######################################################################## (safe)
@@ -2153,7 +2193,7 @@ free_er:
     dla         $t0, rescap_take
     cgetpccsetoffset $c12, $t0
     cjalr       $c12, $c17                          # call rescap_take
-    cfromptr    $c4, $c4, $zero                     # null c4 for call to rescap_take
+    cnull       $c4                                 # null c4 for call to rescap_take
 
     cmove       $c17, $c14                          # restore return code
     cmove       $c18, $c15                          # restore return data
