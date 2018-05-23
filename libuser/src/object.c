@@ -80,7 +80,9 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     sync_state = (sync_state_t){.sync_caller = NULL, .sync_token = NULL};
 
     // Tag exceptions can happen when we first use an unsafe stack. We will handle these to get a stack.
+    // We can also get a length violation if we need a new one.
     register_vectored_cap_exception(&temporal_exception_handle, Tag_Violation);
+    register_vectored_cap_exception(&temporal_exception_handle, Length_Violation);
 
     own_found_id = foundation_get_id();
     was_secure_loaded = (own_found_id != NULL);

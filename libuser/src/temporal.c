@@ -28,23 +28,43 @@
  * SUCH DAMAGE.
  */
 
+#include <exceptions.h>
 #include "cheric.h"
 #include "exceptions.h"
 #include "stdlib.h"
+#include "mman.h"
+
+#define MinStackSize    0x2000 // The compiler throws away stacks smaller than this!
 
 int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
-// Looking for: csc     $c11, $zero, -64($c10)
-    uint32_t csc_i_mask		  = (1 << 11) - 1;
-    uint32_t handle_instr = 0xf96a0000;
-    uint32_t fault_instr = *((uint32_t*)get_ctl()->ex_pcc) &~csc_i_mask;
+// Looking for: csetbounds     $c15, $c15, MinStackSize  <-- will fail if too small or non existant
+
+    // TODO
+    uint32_t mask = 0; // If we don't care exactly what the immediate/reg/exact instruction is
+
+    uint32_t handle_instr = 0x480f7848;
+    uint32_t fault_instr = *((uint32_t*)get_ctl()->ex_pcc) &~mask;
+
+    // We might fail because we have no unsafe stack, or because its not large enough to use
     if(handle_instr != fault_instr) return 1;
 
-    uint64_t default_unsafe_stack_size = 0x2000;
+    capability old_c10 = cheri_getreg(10);
+    uint64_t default_unsafe_stack_size = MinStackSize + UNTRANSLATED_PAGE_SIZE + MEM_REQUEST_MIN_REQUEST;
 
-    capability new_c10 = malloc(default_unsafe_stack_size);
+    if(old_c10 != NULL) {
+        mem_release(cheri_getbase(old_c10), default_unsafe_stack_size, 1, own_mop);
+    }
+
+    ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, 0, own_mop);
+    //if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
+
+    cap_pair pair;
+    rescap_take(stack_res.val, &pair);
+
+    capability new_c10 = pair.data;
 
     new_c10 = cheri_setoffset(new_c10, default_unsafe_stack_size);
-
+    restore_frame->c15 = new_c10 - 0x2000;
     cheri_setreg(10, new_c10);
 
     return 0;

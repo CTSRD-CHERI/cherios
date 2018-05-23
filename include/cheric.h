@@ -129,6 +129,7 @@ typedef unsigned int stype;
 #define	cheri_cchecktype(c, t)	__builtin_mips_cheri_check_type(		\
 				    __DECONST(capability, (c)), (t))
 
+// Update and use __builtin_mips_cheri_get_cap_addr(x)
 #define cheri_getcursor(x) (cheri_getbase(x) + cheri_getoffset(x))
 #define cheri_setcursor(x,y) (cheri_setoffset(x, y - cheri_getbase(x)))
 
