@@ -35,7 +35,7 @@
 #include "mman.h"
 #include "tman.h"
 
-#define MAX_PROCS 20
+#define MAX_PROCS 0x20
 
 enum process_state {
     proc_created = 0,
