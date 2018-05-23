@@ -112,7 +112,7 @@ local_reg_var exception_ccause
 local_reg_var last_exception_cause
 local_reg_var last_exception_ccause
 local_reg_var last_bad_vaddr
-
+local_reg_var since_switched
 #ifdef SMP_ENABLED
 local_array_end context_array, CAP_SIZE_BITS,  SMP_CORES
 #endif
@@ -766,6 +766,11 @@ switch_exception:                                       # void switch_exception(
     # Restore everything, we dont have a register spare for $c0 so set default while restoring
     # We use exception registers here. These are not used by the critical section check in exception.S
 
+    # From here everything is saved out, and we are about to overwrite all registers.
+    # It should be safe to mark this core as having switched for revoke signal
+    li      $t0, 1
+    csd     $t0, $zero, since_switched($kr1c)
+
     .macro crestore_setc0 greg, offset, frame
         crestore \greg, \offset, \frame
         .if \offset == 0
@@ -1271,7 +1276,7 @@ rescap_info:
 .endm
 
 
-###################################### (TODO unsafe)
+###################################### (safe)
 # void rescap_revoke_start(res_t res);
 .global rescap_revoke_start
 rescap_revoke_start:
@@ -1279,38 +1284,49 @@ rescap_revoke_start:
     cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
-    cgetoffset  $t0, $c3
-    bnez        $t0, revoke_er
-    dli         $t1, res_taken
+    cgetoffset  $t0, $c3                    # cant revoke sub-reservations
+    bnez        $t0, revoke_start_er
+    li          $t2, res_taken
 
-    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)
-    bne         $t0, $t1, revoke_er        # check this reservation is taken
+1:  LOADL_RES_STATE $t0, $c3
+    bne         $t0, $t2, revoke_start_er  # check this reservation is taken
+    li          $t0, res_trans
+    STOREC_RES_STATE $t0, $t0, $c3         # set to transaction so nothing else can modify
+    beqz        $t0, 1b
 
-    cld         $t0, $zero, revoke_state($idc)
-    bnez        $t0, revoke_er             # check we are not already revoking
-    dli         $t2, res_revoking
-
-    ctoptr      $a2, $c3, $kdc              #a2 is the base of our revoke
+    cgetbase    $a2, $c3                    #a2 is the base of our revoke
     cld         $t1, $zero, RES_LENGTH_OFFSET($c3)
     daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of revoke
     addu        $a3, $a2, $a4               #a3 is the end of our revoke (not inclusive)
 
     andi        $t0, $a2, (PHY_PAGE_SIZE-1)
-    bnez        $t0, revoke_er              # base of revocation must be page aligned
+    bnez        $t0, revoke_start_er_backout1              # base of revocation must be page aligned
     andi        $t0, $a4, (PHY_PAGE_SIZE-1)
-    bnez        $t0, revoke_er              # size of revocation must be page aligned
+    bnez        $t0, revoke_start_er_backout1              # size of revocation must be page aligned
 
-    li          $t1, 1
-    li          $t2, res_revoking
-    csd         $t1, $zero, revoke_state($idc) # Set revoke state to 1
-    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3) # Mark reservation as revoking
+    cincoffset  $c5, $idc, revoke_state
+2:  clld        $t0, $c5
+    bnez        $t0, revoke_start_er_backout1              # check we are not already revoking
+    dli         $t0, REVOKE_STATE_TRANS
+    cscd        $t0, $t0, $c5
+    beqz        $t0, 2b
+
+    # We are locked in at this point
+
+    li          $t2, res_revoking                           # when we finish set from transacting to revoking
 
     csd         $a2, $zero, revoke_base($idc)
     csd         $a3, $zero, revoke_bound($idc)
+    sync                                                    # make sure we have set base and bound before advertising started
 
-    cclearlo    EN4(c3, c4, c5, c6)
+    li          $t1, REVOKE_STATE_STARTED
+    csd         $t1, $zero, 0($c5) # Set revoke state to 1
+
+revoke_start_er_backout1:
+    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3) # Mark reservation as revoking or open again
+revoke_start_er:
     CRETURN
-    nop
+    cclearlo    EN4(c3, c4, c5, c6)
 
 
 
@@ -1320,15 +1336,29 @@ rescap_revoke_start:
 rescap_revoke_finish:
 #######################################
 
-    cld         $t0, $zero, revoke_state($idc)
-    daddiu      $t0, $t0, -1
+    cincoffset  $c4, $idc, revoke_state
+
+    clld        $t0, $c4
+    daddiu      $t0, $t0, (-(REVOKE_STATE_STARTED))         # revoke must have been started
     bnez        $t0, revoke_er
-    li          $t0, 2
-    csd         $t0, $zero, revoke_state($idc)  # set revoke state to 2
+    li          $t0, REVOKE_STATE_REVOKING
+    cscd        $t0, $t0, $c4                               # set revoke state to revoking
 
     cld         $a2, $zero, revoke_base($idc)
     cld         $a3, $zero, revoke_bound($idc)
     dsubu       $a4, $a3, $a2
+
+    # Blocking writing of the capability - should do as early as possible #
+    dli         $t0, DEF_DATA_PERMS
+    dmtc0       $a2, $30, 2
+    dmtc0       $a3, $30, 3
+    dmtc0       $t0, $30, 4                 # only revoke Writable and Executable caps, not sealing caps
+
+    # Now blocking has started we can set that we need suspend/restore
+    dli         $t0, (context_array_size) * (SMP_CORES-1)
+1:  csd         $zero, $t0, since_switched($idc)
+    bnez        $t0, 1b
+    daddiu      $t0, $t0, -(context_array_size)
 
     # TODO check vtables (should all be -1, or 0 and then set to -1
     dli         $t0, top_virt_page
@@ -1344,6 +1374,7 @@ rescap_revoke_finish:
     EXTRACT_AND_SCALE_L2 $a2, $t2, PAGE_TABLE_ENT_BITS
 
     # ending points for each level in t3, t8, t9
+    # t3 and t8 are exclusive when calculated, t9 is inclusive
     EXTRACT_AND_SCALE_L0 $a3, $t3, PAGE_TABLE_ENT_BITS
     daddiu     $t3, $t3, PAGE_TABLE_ENT_SIZE
     # a1 has the used flag
@@ -1352,9 +1383,11 @@ rescap_revoke_finish:
     # The following walks through the vtables and checks all entries covered by the reservation are used,
     # or if they are un-used sets them to used. If an L2 mapping is present, we get an error.
 
-    l0_loop_start:
+    # c8 is the last thing we had to load link
 
-        cld         $a0, $t0, 0($c5)
+    l0_loop_start:
+        cincoffset  $c8, $c5, $t0
+l0_retry: clld        $a0, $c8
         beq         $a0, $a1, l0_loop_footer    # if used everything is ok
         daddiu      $t0, $t0, PAGE_TABLE_ENT_SIZE
         beqz        $a0, 1f                     # if un-used must set to used
@@ -1366,33 +1399,30 @@ rescap_revoke_finish:
         daddiu      $t8, $t8, PAGE_TABLE_ENT_SIZE
 
         l1_loop_start:
-
-            cld         $a0, $t1, 0($c6)
+            cincoffset  $c8, $c6, $t1
+l1_retry:   clld        $a0, $c8
             beq         $a0, $a1, l1_loop_footer    # if used everything is ok
             daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
             beqz        $a0, 2f                     # if un-used must set to used
 
             cfromptr    $c7, $kdc, $a0              # otherwise go into inner loop
             bne         $t1, $t8, l2_loop_start
-            dli         $t9, (PAGE_TABLE_ENT_PER_TABLE << PAGE_TABLE_ENT_BITS)
+            dli         $t9, (PAGE_TABLE_ENT_PER_TABLE << PAGE_TABLE_ENT_BITS) - PAGE_TABLE_ENT_SIZE # INCLUSIVE
             EXTRACT_AND_SCALE_L2 $a3, $t9, PAGE_TABLE_ENT_BITS
-            daddiu      $t9, $t9, PAGE_TABLE_ENT_SIZE
             l2_loop_start:
+                cincoffset  $c8, $c7, $t2
+l2_retry:       clld        $a0, $c8
+                beq         $a0, $a1, l2_loop_foot  # if used everything is ok, otherwise try set to used
+                nop
+                bnez        $a0, revoke_er          # A mapping still exists. Error.
+                nop
+                cscd        $a0, $a1, $c8          # try set to used
+                beqz        $a0, l2_retry
+                nop
 
-                cld         $a0, $t2, 0($c7)
-                bne         $a0, $a1, 3f            # if used everything is ok
+            l2_loop_foot:
+                bne         $t2, $t9, l2_loop_start # t9 is the last INCLUSIVE
                 daddiu      $t2, $t2, PAGE_TABLE_ENT_SIZE
-                bne         $t2, $t9, l2_loop_start
-                nop
-                b           l1_loop_footer
-                nop
-
-                3:
-                bnez        $a0, revoke_er         # A mapping still exists. Error.
-                nop
-                bne         $t2, $t9, l2_loop_start
-                csd         $a1, $t2, (-PAGE_TABLE_ENT_SIZE)($c7)
-
             l2_loop_end:
                 b           l1_loop_footer
                 nop
@@ -1408,9 +1438,10 @@ rescap_revoke_finish:
             bnez        $a0, revoke_er        # the last page must have an explicit entry
             nop
 
-
-            csd         $a1, $t1, (-PAGE_TABLE_ENT_SIZE)($c6)# if un-used set to used
-
+            cscd        $a0, $a1, $c8         # if l1 was un-used set to used here
+            beqz        $a0, l1_retry         # rety if l1 entry has changed
+            daddiu      $t1, $t1, -PAGE_TABLE_ENT_SIZE
+            daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
         l1_loop_footer:
             bne         $t1, $t8, l1_loop_start
             dli         $t2, 0
@@ -1427,7 +1458,10 @@ rescap_revoke_finish:
         bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
         nop
 
-        csd         $a1, $t0, (-PAGE_TABLE_ENT_SIZE)($c5) # if un-used set to used
+        cscd        $a0, $a1, $c8
+        beqz        $a0, l0_retry
+        daddiu      $t0, -PAGE_TABLE_ENT_SIZE
+        daddiu      $t0, $t0, PAGE_TABLE_ENT_SIZE
 
     l0_loop_footer:
         dli         $t1, 0
@@ -1443,43 +1477,46 @@ rescap_revoke_finish:
     dli         $a0, PHY_MEM_START_CACHED          #a0 is the start of memory
     dli         $a1, PHY_MEM_END_CACHED            #a1 the end
 
-#TRACE_ON
-
-    # Blocking writing of the capability #
+    # Now we have set revoking
     dli          $t0, DEF_DATA_PERMS
-    dmtc0       $a2, $30, 2
-    dmtc0       $a3, $30, 3
-    dmtc0       $t0, $30, 4                 # only revoke Writable and Executable caps, not sealing caps
-
 
     dsubu        $a1, $a1, $a0
     beqz        $a1, revoke_loop_end
     csetoffset  $c5, $kdc, $a0
-    dli         $t0, CAP_SIZE
     dli         $t3, PHY_PAGE_SIZE
-    dli         $t8, 0
-
+    dli         $t8, 0                      # t8 is our current byte index
 
 revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
 
-    andi        $t1, $t8, (PHY_PAGE_SIZE-1)
-    bnez        $t1, 1f
+    andi        $t1, $t8, (PHY_PAGE_SIZE-1)                                         # get in phy page offset
+    bnez        $t1, 1f                                                             # if non zero keep scanning
     dsrl        $t1, $t8, (PHY_PAGE_SIZE_BITS - PHY_PAGE_ENTRY_SIZE_BITS)
     dli         $t2, phy_page_table
-    daddu       $t1, $t1, $t2
+    daddu       $t1, $t1, $t2                                                       # this should be the index of
+                                                                                    # a page entry
+
+    # state of page can change concurrently - but it will only make us scan too much (not too little) #
+    cincoffset  $c8, $idc, $t1
+
+# FIXME: this is a potential deadlock
+# FIXME: maybe after some point assume we should scan it
+# FIXME: or make transaction its own bit, not just a state
+    dli         $t0, page_transaction
+2:
+    cllw        $t2, $c8
+    beq         $t2, $t0, 2b                           # If transacting wait till we can find out the type
+    cld         $t1, $zero, PHY_PAGE_OFFSET_len($c8)    # Get length in load link. if non zero use last state
+    cscw        $t0, $t2, $c8                          # store to make sure state/length consistent
+    beqz        $t0, 2b
+    dli         $t0, page_transaction
+
+    movn        $t9, $t2, $t1                          # state only valid if length non zero. Use last state otherwise
 
     # only bother scanning nano owned, mapped and system owned #
-    # FIXME another thing that might race with updates. Maybe lock modifying the state of these pages #
-    clw         $t2, $t1, 0($idc)
-    cld         $t1, $t1, REG_SIZE($idc)    # Get length. if non zero use last state
-    movn        $t9, $t2, $t1
-
-    dli         $t2, page_nano_owned
-    beq         $t9, $t2, 1f
-    dli         $t2, page_system_owned
-    beq         $t9, $t2, 1f
-    dli         $t2, page_mapped
-    beq         $t9, $t2, 1f
+    li          $t0, 1
+    dsllv       $t0, $t0, $t9
+    andi        $t0, $t0, (1 << page_nano_owned) | (1 << page_system_owned) | ( 1 << page_mapped)
+    bnez        $t0, 1f
     nop
 
     # Otherwise skip this page
@@ -1505,29 +1542,45 @@ revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
 revoke_loop_footer:
     daddiu      $t8, $t8, CAP_SIZE
     bne         $t8, $a1, revoke_loop_start
-    cincoffset  $c5, $c5, $t0
+    cincoffset  $c5, $c5, CAP_SIZE
 
 revoke_loop_end:
-#TRACE_OFF
+
 
     # with multicore this will require a sync. This will force a switch to ourselves which will clear registers #
+    # First check if we have had a content switch or not. We can force ourselves by calling
+    # context_switch as a sub-routine.
+    cld         $t0, $zero, since_switched($kr1c)
+    bnez        $t0, revoke_check_switched
 
-    # FIXME needs updating for smp
-
-    dli         $t1, current_context
-    dli         $t0, CONTEXT_TYPE
-    cincoffset  $c4, $idc, $t1
-    cincoffset  $c5, $kdc, $t0
+#   Call switch to ourselves.
     clc         $c3, $zero, current_context($idc)
+    cincoffset  $c5, $kdc, CONTEXT_TYPE
     cseal       $c3, $c3, $c5
+    cmove       $c6, $c17
+    cmove       $c7, $c18
+    li          $t0, 0
+    cgetpcc     $c17     # this is mocking up a capability branch and link
+    beqz        $t0, 1f
+    cmove       $c18, $idc
+    b           context_switch
+    li          $t0, 1
+1:  cmove       $c17, $c6
+    cmove       $c18, $c7
 
-    cmove       $c13, $c17
-    dla         $t0, revoke_restore
-    b           revoke_restore
-    cgetpccsetoffset    $c17, $t0
+revoke_check_switched:
+    # TODO we should signal others with a dummy signal to force a switch
+    # Check others. Currently we just yield.
+    dli         $t0, (context_array_size) * (SMP_CORES-1)
+    sync
+1:  YIELD
+2:  cld         $t1, $t0, since_switched($idc)
+    beqz        $t1, 1b
+    nop
+    bnez        $t0, 2b
+    daddiu      $t0, $t0, -(context_array_size)
 
 revoke_restore:
-    cmove       $c17, $c13
 
     # Allow any cap writes again #
     dmtc0       $zero, $30, 4
@@ -1540,7 +1593,7 @@ revoke_restore:
     dli         $t0, top_virt_page
     cincoffset  $c5, $idc, $t0              # c5 is the top level table
                                             # c6 is the L1 table. c7 the l2
-
+                                            # c8 is for load link
     # make upper bound INCLUSIVE for easier calculations
     daddiu      $a3, $a3, (-UNTRANSLATED_PAGE_SIZE)
 
@@ -1559,8 +1612,9 @@ revoke_restore:
     # This will set them to free so new tables can be attached. This is good as the next part of this
     # will cause a tlb miss
     clear_loop_l0_start:
-
-        cld         $a0, $t0, 0($c5)
+        cincoffset  $c8, $c5, $t0
+clear_loop_l0_start_retry:
+        clld        $a0, $c8
         bne         $a0, $a1, 1f    # if used set to free, otherwise recurse
         daddiu      $t0, $t0, PAGE_TABLE_ENT_SIZE
 
@@ -1572,7 +1626,12 @@ revoke_restore:
         daddu       $a0, $t1, $t2
         bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
                                                # when t1 and t2 are zero, this is not the first page, or its aligned
+        nop
 
+        cscd        $a0, $zero, $c8                 # set to free
+        beqz        $a0, clear_loop_l0_start_retry
+        daddiu      $t0, $t0, -PAGE_TABLE_ENT_SIZE
+        daddiu      $t0, $t0, PAGE_TABLE_ENT_SIZE
         dli         $t1, 0
         csd         $zero, $t0, (-PAGE_TABLE_ENT_SIZE)($c5)          # set to free
         bne         $t0, $t3, clear_loop_l0_start
@@ -1587,8 +1646,9 @@ revoke_restore:
         daddiu      $t8, $t8, PAGE_TABLE_ENT_SIZE
 
         clear_loop_l1_start:
-
-            cld         $a0, $t1, 0($c6)
+            cincoffset  $c8, $c6, $t1
+clear_loop_l1_start_retry:
+            clld        $a0, $c8
             bne         $a0, $a1, 1f    # if used set to free, otherwise recurse
             daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
 
@@ -1603,7 +1663,11 @@ revoke_restore:
             bnez        $a0, revoke_er        # the last page must have an explicit entry
             nop
 
-            csd         $zero, $t1, (-PAGE_TABLE_ENT_SIZE)($c6)          # set to free
+            cscd        $a0, $zero, $c8
+            beqz        $a0, clear_loop_l1_start_retry
+            daddiu      $t1, $t1, -PAGE_TABLE_ENT_SIZE
+            daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
+
         2:  bne         $t1, $t8, clear_loop_l1_start
             dli         $t2, 0
             bne         $t0, $t3, clear_loop_l0_start
@@ -1619,7 +1683,7 @@ revoke_restore:
             clear_loop_l2_start:
                 daddiu      $t2, $t2, PAGE_TABLE_ENT_SIZE
                 bne         $t2, $t9, clear_loop_l2_start
-                csd         $zero, $t2, (-PAGE_TABLE_ENT_SIZE)($c7)
+                csd         $zero, $t2, (-PAGE_TABLE_ENT_SIZE)($c7) # We checked these in the first loop
                 b           2b
                 nop
 
@@ -1629,17 +1693,13 @@ revoke_restore:
 
     clear_loop_l0_end:
 
-
-    # Make exclusive again
-    daddiu      $a3, $a3, UNTRANSLATED_PAGE_SIZE
-
     # Make a new reservation here now. This will cause a fault but the vtables should be available again #
-    dli         $t0, RES_TYPE
-    csetoffset  $c4, $kdc, $t0              # create unsealing cap
+
+    cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
 
     dli         $t0, RES_META_SIZE
     csetoffset  $c3, $kdc, $a2
-    csetbounds  $c3, $c3,  $a4
+    csetbounds  $c3, $c3, $t0
     sub         $a4, $a4, $t0               #some space for metadata
 
     dli         $t1, DEF_DATA_PERMS
@@ -1651,16 +1711,16 @@ revoke_restore:
 
     cseal       $c3, $c3, $c4               # seal new reservation
 
+    sync
+
     csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
-    cclearlo    EN3(c4, c5, c6)
     CRETURN
-    nop
+    cclearlo    EN5(c4, c5, c6, c7, c8)
 
 revoke_er:
-    cclearlo    EN4(c3, c4, c5, c6)
     CRETURN
-    nop
+    cclearlo    EN6(c3, c4, c5, c6, c7, c8)
 
 
 ################################################### (safe)

@@ -173,7 +173,7 @@
 #define REVOKE_STATE_AVAIL      0
 #define REVOKE_STATE_STARTED    1
 #define REVOKE_STATE_REVOKING   2
-
+#define REVOKE_STATE_TRANS      3
 
 #define PFN_SHIFT                       6
 /* These bits will eventually be untranslated high bits, but we will check they are equal to a field in the leaf
