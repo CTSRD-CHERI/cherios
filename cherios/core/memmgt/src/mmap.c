@@ -1165,6 +1165,7 @@ void __revoke(void) {
     res_t  res = rescap_revoke_finish();
 
     assert(res != NULL);
+    assert(cheri_gettag(res));
 
     printf("Revoke: Sending revoke finish back to main thread\n");
 
