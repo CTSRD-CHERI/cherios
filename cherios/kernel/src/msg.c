@@ -180,14 +180,16 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 
 /* Creates a token for synchronous CCalls. This ensures the answer is unique. */
 static capability get_and_set_sealed_sync_token(act_t* ccaller) {
-	// FIXME No static local variables
-	static sync_t unique = 0;
-	unique ++;
+	volatile static sync_t unique = 0;
+
+	sync_t our_copy;
+
+	ATOMIC_ADD(&unique, 64, 1, our_copy);
 
     static int something;
 
 	kernel_assert(ccaller->sync_state.sync_condition == 0);
-	ccaller->sync_state.sync_token = unique;
+	ccaller->sync_state.sync_token = our_copy;
 	ccaller->sync_state.sync_condition = 1;
 
     // I really want something that is tagged but can have any offset - this only works on 256 now
@@ -195,7 +197,7 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 #ifdef _CHERI256_
 	sync_token = cheri_setbounds(sync_token, 0);
 #endif
-	sync_token = cheri_setoffset(sync_token, unique);
+	sync_token = cheri_setoffset(sync_token, our_copy);
 	return cheri_seal(sync_token, sync_token_sealer);
 }
 
