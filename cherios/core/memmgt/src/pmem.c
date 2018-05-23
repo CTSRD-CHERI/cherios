@@ -233,7 +233,9 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
 }
 
 void clean_page(size_t page_n) {
-    message_send(page_n,0,0,0,NULL,NULL,NULL,NULL,clean_act,SEND,0);
+    //message_send(page_n,0,0,0,NULL,NULL,NULL,NULL,clean_act,SEND,0); <-- caused problems
+    zero_page_range(page_n);
+    pmem_try_merge(page_n);
 }
 
 void clean_loop(void) {
