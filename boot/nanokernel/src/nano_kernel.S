@@ -2910,25 +2910,26 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens in something like context switch we should die more nicely
-        dmfc0     $k0, $13
-        bnez      $a0, 1f
-        andi      $k1, $k0, 0xFF
-        daddiu    $k1, $k1, -(8 << 2) # syscall with a0 = 0 results in getting nano kernel IF
-        beqz      $k1, get_interface
-1:
-        cgetcause $k0       # Meant to be in delay slot - but should be executed on both paths
-                #  -if k1 is '8' or 'c' then this is TLB refill
-        daddiu  $k1, $k1, -8
-        beqz    $k1, tlb_trampoline
-        daddiu  $k1, $k1, -4 # = -c
-        beqz    $k1, tlb_trampoline
-        cld $k1, $zero, exception_level($kr1c)
-        beqz $k1, take_exception
-        csd     $k0, $zero, exception_ccause($kr1c)
+        dmfc0       $k0, $13
+        bnez        $a0, 1f
+        andi        $k0, $k0, 0xFF        # k0 has cause
+        daddiu      $k1, $k0, -(MIPS_CP0_EXCODE_SYSCALL << MIPS_CP0_CAUSE_EXCODE_SHIFT) # syscall with a0 = 0 results in getting nano kernel IF
+        beqz        $k1, get_interface
+1:      # If this is a TLB error, first go to the TLB handle. We must allow TLB faults in exception levels etc.1:
+        daddiu      $k1, $k0, -(MIPS_CP0_EXCODE_TLBL << MIPS_CP0_CAUSE_EXCODE_SHIFT)
+        beqz        $k1, tlb_trampoline
+        daddiu      $k1, $k0, -((MIPS_CP0_EXCODE_TLBS - MIPS_CP0_EXCODE_TLBL) << MIPS_CP0_CAUSE_EXCODE_SHIFT)
+        beqz        $k1, tlb_trampoline
+        # We supress exception if a magic sequence is present. This is to allow default behavior with bad caps
+        li          $k0, 0x3400d00d                 # We should ignore other kinds of faults when the magic sequence is seen
+        clw         $k1, $zero, 4($epcc)            # Might have problems if this is the last instruction ;)
+        beq         $k0, $k1, skip_and_return
+        cld         $k1, $zero, exception_level($kr1c)
+        beqz        $k1, take_exception
 
 skip_exception:
-        dmfc0   $k1, $13
-        csd     $k1, $zero, exception_cause($kr1c)
+        dmfc0       $k0, $13                        # MEANT TO BE IN DELAY SLOT
+        csd         $k0, $zero, exception_cause($kr1c)
         dmfc0   $k1, $12
         li      $k0, 1
         not     $k0, $k0
@@ -2937,8 +2938,8 @@ skip_exception:
         eret
 
 take_exception:
-
-        dmfc0   $k0, $13
+        cgetcause   $k1
+        csd         $k1, $zero, exception_ccause($kr1c)
         andi    $k1, $k0, 0xFF
         beqz    $k1, context_switch_exception_entry # Timer/HW Interrupt
         clc     $kr2c, $zero, current_context($kr1c)
