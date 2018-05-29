@@ -37,6 +37,7 @@
 #define MEMP_MEM_MALLOC             1
 #define MEM_ALIGNMENT               4
 #define MEM_SIZE                    (4 * 1024 * 1024)
+// These seem to get IGNORED when we use libc malloc
 #define MEMP_NUM_PBUF               1024
 #define MEMP_NUM_UDP_PCB            20
 #define MEMP_NUM_TCP_PCB            20
@@ -69,11 +70,7 @@
 #define LWIP_NETIF_HWADDRHINT       1
 #define LWIP_NETCONN                0
 #define LWIP_SOCKET                 0
-#define LWIP_STATS_DISPLAY          1
-#define MEM_STATS                   0
-#define SYS_STATS                   0
-#define MEMP_STATS                  0
-#define LINK_STATS                  0
+
 #define ETHARP_TRUST_IP_MAC         0
 #define ETH_PAD_SIZE                2
 #define LWIP_CHKSUM_ALGORITHM       2
@@ -140,5 +137,13 @@ typedef struct socket_seek_manager      fs_file_extension;
 #define PPP_DEBUG                   LWIP_DBG_OFF
 #define SLIP_DEBUG                  LWIP_DBG_OFF
 #define DHCP_DEBUG                  LWIP_DBG_OFF
+
+#define LWIP_STATS                  1
+
+#define LWIP_STATS_DISPLAY          0
+#define MEM_STATS                   0
+#define SYS_STATS                   0
+#define MEMP_STATS                  1
+#define LINK_STATS                  0
 
 #endif //CHERIOS_LWIPOPTS_H

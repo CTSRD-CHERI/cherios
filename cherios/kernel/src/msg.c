@@ -188,6 +188,9 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 
     static int something;
 
+	if(ccaller->sync_state.sync_condition != 0) {
+		KERNEL_ERROR("Caller %s made a sync call but seemed to be waiting for a return already\n", ccaller->name);
+	}
 	kernel_assert(ccaller->sync_state.sync_condition == 0);
 	ccaller->sync_state.sync_token = our_copy;
 	ccaller->sync_state.sync_condition = 1;

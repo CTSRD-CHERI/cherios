@@ -2860,7 +2860,7 @@ nano_er:
 ############################################
 
 tlb_table_missing: # (safe)
-
+# FIXME: if we were in an nested exception, accessing this might get us stuck in an exception loop =(
 # Look for magic nop after this instruction. If it is present, we advance pcc and no exception
     li      $k0, 0x3400d00d
     clw     $k1, $zero, 4($epcc)            # Might have problems if this is the last instruction ;)

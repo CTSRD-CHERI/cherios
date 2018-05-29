@@ -227,6 +227,7 @@ static void free_send(net_session* session) {
 
 static void alloc_recv(net_session* session) {
 
+    // FIXME these buffers are too large for most packets. Better to have smaller ones and chain them
     // enough for a least 1 more recieve chain
     while (session->recvs_free >= 3) {
         struct pbuf* pb = pbuf_alloc(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM);
@@ -306,10 +307,6 @@ err_t myif_link_output(struct netif *netif, struct pbuf *p) {
 
     le16 tail = head;
 
-    // Put in a reference until this send has finished
-
-    session->pbuf_send_map[head] = p;
-
     struct virtq_desc* desc = sendq->desc + head;
 
     struct virtio_net_hdr* net_hdr = &session->net_hdrs[SEND_HDR_START + (head)];
@@ -320,12 +317,11 @@ err_t myif_link_output(struct netif *netif, struct pbuf *p) {
     desc->len = sizeof(struct virtio_net_hdr);
     desc->flags = VIRTQ_DESC_F_NEXT;
 
-    // TODO crossing a page problem
-    // TODO probably have to bump reference count on pbuf until this write finishes.
+
+    struct pbuf* p_head = p;
 
     int first_pbuf = 1;
     do {
-        pbuf_ref(p); // maybe every one?
         capability payload = (capability)(((char*)p->payload));
         le32 size = (le32)(p->len);
         if(first_pbuf) {
@@ -343,6 +339,12 @@ err_t myif_link_output(struct netif *netif, struct pbuf *p) {
     } while(p->len != p->tot_len && (p = p->next));
 
     sendq->desc[tail].flags = 0;
+
+    // Put in a reference until this send has finished
+
+    session->pbuf_send_map[head] = p_head;
+    //CHERI_PRINT_CAP(p_head);
+    pbuf_ref(p_head); // We only need to put in a ref on the head. Do so only after we know this write is succeeding
 
     virtio_q_add_descs(sendq, (le16)head);
 
@@ -385,13 +387,14 @@ void interrupt(struct netif* nif) {
     syscall_interrupt_enable(session->irq, act_self_ctrl);
 }
 
+// Application (ack) -> TCP
 err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
                              u16_t len) {
     if(arg == NULL) return ERR_OK;
 
     tcp_session* tcp = (tcp_session*)arg;
 
-    // TODO check whether this is len TOTAL bytes or len more bytes (assuming here that its a delta)
+    // This is how many bytes have been been sent this. NOT total.
 
     // Progress len bytes
     ssize_t res = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, len,
@@ -422,6 +425,7 @@ static int user_tcp_stack_close(tcp_session* tcp) {
 // If there are no errors and the callback function returns ERR_OK, then it is responsible for freeing the pbuf.
 // Otherwise, it must not free the pbuf so that lwIP core code can store it.
 
+// TCP -> Application
 err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
                         struct pbuf * p, err_t err) {
     if(arg == NULL) return err;
@@ -444,6 +448,7 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
 
     assert_int_ex(-res, == , -0);
 
+    // FIXME I am not allowed to just set next as this causes freeing weirdness
     if(tcp->ack_head == NULL) tcp->ack_head = p;
     else tcp->ack_tail->next = p;
 
@@ -460,6 +465,7 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
     return ERR_OK;
 }
 
+// TCP ->(ack) Application
 static void tcp_application_ack_all(tcp_session* tcp) {
     if(tcp->recv != tcp->ack_handled){
         uint64_t to_ack = (tcp->recv - tcp->ack_handled);
@@ -470,12 +476,13 @@ static void tcp_application_ack_all(tcp_session* tcp) {
     struct pbuf* pp;
     while(p) {
         pp = p->next;
-        pbuf_free(p);
+        pbuf_free(p); // FIXME Free fress chain
         p = pp;
     }
     tcp->ack_head = NULL;
 }
 
+// TCP ->(ack) Application
 static void tcp_application_ack(tcp_session* tcp) {
 
     if(tcp->application_recv_ack != tcp->ack_handled) {
@@ -500,6 +507,7 @@ static void tcp_application_ack(tcp_session* tcp) {
     }
 }
 
+// Application -> TCP
 ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
@@ -513,6 +521,7 @@ ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length
     return length;
 }
 
+// Application -> TCP
 void handle_fulfill(tcp_session* tcp) {
 
     // We expect only data
@@ -698,7 +707,8 @@ int main(register_t arg, capability carg) {
         register_t now = syscall_now();
         if((now - time) >= 200000000) {
             time = now;
-            printf("Sign of life\n");
+            printf("Sign of life now = %lx\n", now);
+            stats_display();
         }
         sock_event = 0;
 
@@ -753,7 +763,9 @@ int main(register_t arg, capability carg) {
         }
 
         if(sock_sleep) {
-            syscall_cond_wait(1, 80000000);
+            // This is poll based but we don't want to delay. If there is loopback skip sleeping to process it
+            if(nif.loop_first == NULL)
+                syscall_cond_wait(1, MS_TO_CLOCK(250)); // Roughly enough for most TCP things
             //wait();
         } else if (!sock_event) sock_sleep = 1;
 

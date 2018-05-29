@@ -57,7 +57,7 @@ typedef int32_t s32_t;
 #define U32_F "u"
 #define S32_F "d"
 #define X32_F "x"
-#define SZT_F "uz"
+#define SZT_F "lu"
 
 // Packing is difficult with capabilities - we should do whatever can to avoid it
 
@@ -75,5 +75,10 @@ typedef int32_t s32_t;
 //TODO
 
 #define memmove memcpy
+
+//#define mem_clib_free free_debug
+//#define mem_clib_malloc malloc_debug
+//#define mem_clib_calloc calloc_debug
+
 
 #endif //CHERIOS_CC_H

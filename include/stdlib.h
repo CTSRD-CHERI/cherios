@@ -33,22 +33,42 @@
 
 #include "cdefs.h"
 #include "capmalloc.h"
+#include "stdio.h"
 
 static inline capability malloc(size_t size) {
     res_t res = cap_malloc(size);
     cap_pair pair;
     rescap_take(res, &pair);
     capability taken = pair.data;
-    taken = cheri_setbounds(taken, size);
+    //taken = cheri_setbounds(taken, size); screws with free
     return taken;
+}
+
+static inline capability malloc_debug(size_t size) {
+    capability r = malloc(size);
+    //printf("Allocated: "); CHERI_PRINT_CAP(r);
+    static int x = 0;
+    printf("Total malloc: %d", x++);
+    return r;
 }
 
 static inline void free(capability cap) {
     cap_free(cap);
 }
 
+static inline void free_debug(capability cap) {
+    //printf("Freed:      "); CHERI_PRINT_CAP(cap);
+    static int x = 0;
+    printf("Total free: %d", x++);
+    cap_free(cap);
+}
+
 static inline void * calloc(size_t n, size_t s) {
     return malloc(n * s);
+}
+
+static inline void * calloc_debug(size_t n, size_t s) {
+    return malloc_debug(n * s);
 }
 
 void 	abort(void)      __dead2;

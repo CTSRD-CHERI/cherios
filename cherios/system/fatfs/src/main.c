@@ -271,7 +271,7 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
             n_files++;
             first_free = next;
             return 0;
-        } else printf("Error opening file %d\n", fres);
+        } // else printf("Error opening file %d\n", fres);
     }
 
     return -1;

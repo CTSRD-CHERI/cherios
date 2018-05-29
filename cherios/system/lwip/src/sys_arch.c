@@ -31,7 +31,6 @@
 #include "arch/cc.h"
 #include "syscalls.h"
 
-// Fudge factor >> 15 to make this roughly in ms...
 u32_t sys_now(void) {
-    return (u32_t)syscall_now() >> 15;
+    return CLOCK_TO_MS(syscall_now());
 }
