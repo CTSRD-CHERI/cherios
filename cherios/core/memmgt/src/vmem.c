@@ -38,7 +38,7 @@
 #include "string.h"
 #include "pmem.h"
 
-ptable_t vmem_create_table(ptable_t parent, register_t index) {
+ptable_t vmem_create_table(ptable_t parent, register_t index) { // FIXME: Races with main thread
     size_t page = pmem_find_page_type(1, page_ptable_free);
 
     if(page == BOOK_END) page = pmem_get_free_page();
@@ -57,7 +57,7 @@ ptable_t vmem_create_table(ptable_t parent, register_t index) {
     return  r;
 }
 
-int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) {
+int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) { // FIXME: Races with main thread
     size_t page = pmem_find_page_type(2, page_unused);
     if(page == BOOK_END) return -1;
 

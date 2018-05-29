@@ -155,7 +155,7 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
         printf("|---Claimers: \n");
         FOREACH_CLAIMER(desc, index, claim) {
             if(claim->owner != NULL) {
-                printf("    |--- %lx\n", cheri_getcursor(claim->owner));
+                printf("    |--- %lx x%ld\n", cheri_getcursor(claim->owner), claim->n_claims);
             }
         }
     }
@@ -427,7 +427,10 @@ static int visit_free_check(vpage_range_desc_t *desc, size_t base, mop_internal_
     size_t index = find_free_claim_index(desc, owner);
 
     // Does not have a claim on this range
-    if(index == (size_t)(-1) || desc->claimers[index].owner != owner) return VISIT_CONT;
+    if(index == (size_t)(-1) || desc->claimers[index].owner != owner) {
+        printf(KRED"WARNING Got a free for something unclaimed!\n"KRST);
+        return VISIT_CONT;
+    }
 
     return CHECK_PASS;
 }
@@ -667,6 +670,14 @@ visit_free(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t 
         revoke_start(desc);
         printf("Sending revoke request...\n");
         revoke();
+    } else if(DUMP_INTERVAL != 0) {
+        static register_t last = 0;
+        register_t now = syscall_now();
+        if(now - last > DUMP_INTERVAL) {
+            last = now;
+            mmap_dump();
+        }
+
     }
 
     return desc;
