@@ -99,15 +99,16 @@ extern capability fpga_cap;
 void	kernel_ccall(void);
 void	kernel_creturn(void);
 
-void	kernel_interrupts_init(int enable_timer);
-void	kernel_interrupt(register_t cause);
+void	kernel_interrupts_init(int enable_timer, uint8_t cpu_id);
+void	kernel_interrupt(register_t cause, uint8_t cpu_id);
 int kernel_interrupt_register(int number, act_control_t *ctrl, register_t v0, register_t arg, capability carg);
 int kernel_interrupt_enable(int number, act_control_t *ctrl);
 
-void	kernel_timer_init(void);
-void	kernel_timer(void);
+void	kernel_timer_init(uint8_t cpu_id);
+void	kernel_timer(uint8_t cpu_id);
 void 	kernel_timer_subscribe(act_t* act, register_t timeout);
 void 	kernel_timer_unsubcsribe(act_t* act);
+uint64_t get_high_res_time(uint8_t cpu_id);
 
 void	kernel_puts(const char *s);
 void	kernel_panic(const char *s) __dead2;

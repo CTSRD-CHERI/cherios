@@ -51,7 +51,8 @@ void kernel_sleep(int time) {
 
 DECLARE_WITH_CD(register_t , kernel_syscall_now(void));
 register_t kernel_syscall_now(void) {
-	return cp0_count_get();
+	// FIXME: Will break if core is moved. Currently core is never moved so this is fine.
+	return get_high_res_time(cp0_get_cpuid());
 }
 
 DECLARE_WITH_CD(void, kernel_wait(void));

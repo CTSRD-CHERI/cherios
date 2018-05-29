@@ -51,14 +51,14 @@ register_t handle_mask = 0;
 
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */
 
-void kernel_interrupts_init(int enable_timer) {
+void kernel_interrupts_init(int enable_timer, uint8_t cpu_id) {
 	KERNEL_TRACE("interrupts", "enabling interrupts");
 	kernel_assert(cp0_status_ie_get() == 0);
 	cp0_status_ie_enable();
 
 	if(enable_timer) {
 		/* Start timer */
-		kernel_timer_init();
+		kernel_timer_init(cpu_id);
 		cp0_status_im_enable(MIPS_CP0_STATUS_IM_TIMER);
 	}
 }
@@ -86,13 +86,13 @@ static void kernel_interrupt_others(register_t pending) {
 	}
 }
 
-void kernel_interrupt(register_t cause) {
+void kernel_interrupt(register_t cause, uint8_t cpu_id) {
 	register_t ipending = cp0_cause_ipending_get(cause);
 	register_t toprocess = ipending & (~MIPS_CP0_CAUSE_IP_TIMER) & handle_mask;
     register_t mask = cp0_status_im_get();
-	KERNEL_TRACE("interrupt", "pending: %lx, to_process: %lx cpu: %d ", ipending, toprocess, cp0_get_cpuid());
+	KERNEL_TRACE("interrupt", "pending: %lx, to_process: %lx cpu: %d ", ipending, toprocess, cpu_id);
 	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
-		kernel_timer();
+		kernel_timer(cpu_id);
 	}
 	if(toprocess) {
 		kernel_interrupt_others(toprocess);

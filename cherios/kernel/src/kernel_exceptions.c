@@ -123,7 +123,7 @@ static void handle_exception_loop(context_t* own_context_ptr) {
     uint8_t cpu_id = cp0_get_cpuid();
 
     cp0_status_bev_set(0);
-    kernel_interrupts_init(1);
+    kernel_interrupts_init(1, cpu_id);
 
     while(1) {
 
@@ -149,7 +149,7 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
         switch (excode) {
             case MIPS_CP0_EXCODE_INT:
-                kernel_interrupt(ex_info.cause);
+                kernel_interrupt(ex_info.cause, cpu_id);
                 break;
 
             case MIPS_CP0_EXCODE_SYSCALL:

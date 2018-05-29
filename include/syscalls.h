@@ -68,6 +68,10 @@
         ITEM(syscall_cond_cancel, void, (void), __VA_ARGS__)\
         ITEM(syscall_now, register_t, (void), __VA_ARGS__)
 
+// Fudge factor >> 15 to make this roughly in ms...
+#define CLOCK_TO_MS(X) (uint32_t)(X >> 14)
+#define MS_TO_CLOCK(X) (((uint64_t)X) << 14)
+
 #define CCALL_SELECTOR_LIST(ITEM)   \
         ITEM(SEND,1)                \
         ITEM(SEND_SWITCH,2)         \

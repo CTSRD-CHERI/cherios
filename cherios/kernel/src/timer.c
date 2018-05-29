@@ -34,19 +34,31 @@
 #include "cp0.h"
 #include "atomic.h"
 
-static register_t		kernel_last_timer;
+uint64_t high_resolution_timers[SMP_CORES];
+
+static register_t		kernel_last_timer[SMP_CORES];
 // TODO everyone may wait on timeout, maybe just walk the list?
 #define MAX_WAITERS 0x10
 act_t* sleeps[MAX_WAITERS];
 
-void kernel_timer_init(void) {
+void kernel_timer_init(uint8_t cpu_id) {
 	/*
 	 * Start timer.
 	 */
 	KERNEL_TRACE("timer", "starting timer");
-	kernel_last_timer = cp0_count_get();
-	kernel_last_timer += TIMER_INTERVAL;
-	cp0_compare_set(kernel_last_timer);
+
+	kernel_last_timer[cpu_id] = cp0_count_get();
+	high_resolution_timers[cpu_id] = kernel_last_timer[cpu_id];
+	kernel_last_timer[cpu_id] += TIMER_INTERVAL;
+	cp0_compare_set(kernel_last_timer[cpu_id]);
+}
+
+uint64_t get_high_res_time(uint8_t cpu_id) {
+	uint32_t low_res = (uint32_t)cp0_count_get();
+	uint32_t old_low_res = (uint32_t)(high_resolution_timers[cpu_id] & 0xFFFFFFFF);
+	uint64_t top = high_resolution_timers[cpu_id] ^ (uint64_t)(old_low_res);
+	if(low_res < old_low_res) top += 0x100000000;
+	return (top | low_res);
 }
 
 static inline register_t TMOD(register_t count) {
@@ -99,9 +111,13 @@ void kernel_timer_unsubcsribe(act_t* act) {
 /*
  * Kernel timer handler -- reschedule, reset timer.
  */
-void kernel_timer(void)
+
+void kernel_timer(uint8_t cpu_id)
 {
 	KERNEL_TRACE(__func__, "in %lu", cp0_count_get());
+
+	// Set the high solution timer. This must be done before it wraps around since last call.
+	high_resolution_timers[cpu_id] = get_high_res_time(cpu_id);
 
 	kernel_timer_check_sleepers();
 
@@ -115,11 +131,11 @@ void kernel_timer(void)
 	 * tick, better to defer.
 	 */
 	/* count register is 32 bits */
-	register_t next_timer = TMOD(kernel_last_timer + TIMER_INTERVAL);
+	register_t next_timer = TMOD(kernel_last_timer[cpu_id] + TIMER_INTERVAL);
 	while (next_timer < TMOD(cp0_count_get() + TIMER_INTERVAL_MIN)) {
 		next_timer = TMOD(next_timer + TIMER_INTERVAL);
 	}
 	cp0_compare_set(next_timer);		/* Clears pending interrupt. */
 
-	kernel_last_timer = next_timer;
+	kernel_last_timer[cpu_id] = next_timer;
 }
