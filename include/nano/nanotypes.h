@@ -299,12 +299,14 @@ typedef struct {
 typedef register_t ex_lvl_t;
 typedef register_t cause_t;
 
+#define MAGIC_SAFE         "ori    $zero, $zero, 0xd00d            \n"
+
 #define ENUM_VMEM_SAFE_DEREFERENCE(location, result, edefault)  \
     __asm__ (                                                   \
         SANE_ASM                                                \
         "li     %[res], %[def]               \n"                \
         "clw    %[res], $zero, 0(%[state])   \n"                \
-        "ori    $zero, $zero, 0xd00d            \n"             \
+        MAGIC_SAFE \
     : [res]"=r"(result)                                         \
     : [state]"C"(location),[def]"i"(edefault)                   \
     :                                                           \
@@ -314,7 +316,7 @@ typedef register_t cause_t;
 __asm__ (                                                       \
         SANE_ASM                                                \
         LOAD(type)" %[res], $zero, 0(%[loc])   \n"              \
-        "ori    $zero, $zero, 0xd00d            \n"             \
+        MAGIC_SAFE \
     : [res]INOUT(type)(result)                                  \
     : [loc]"C"(var)                                             \
     :                                                           \
