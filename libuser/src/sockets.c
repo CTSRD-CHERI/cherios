@@ -95,7 +95,10 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
         __asm__ __volatile(
                 SANE_ASM
                 "2: cllc   $c1, %[wc]               \n"
+                        MAGIC_SAFE
+                "li     %[res], 1                   \n"
                 "clb    %[res], $zero, 0(%[cc])     \n"
+                        MAGIC_SAFE
                 "bnez   %[res], 1f                  \n"
                 "li     %[res], 2                   \n"
                 "clhu   %[res], $zero, 0(%[mc])     \n"
@@ -127,6 +130,18 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
     return 0;
 }
 
+// Until we use exceptions properly this can check whether a requester closed their end even if unmapped
+static int socket_internal_fulfiller_closed_safe(uni_dir_socket_fulfiller* fulfiller) {
+    volatile uint8_t * req_closed = &fulfiller->requester->requester_closed;
+    volatile uint8_t * ful_closed = &fulfiller->requester->fulfiller_component.fulfiller_closed;
+
+    uint8_t rc = 1, fc = 1;
+    VMEM_SAFE_DEREFERENCE(req_closed, rc, 8);
+    VMEM_SAFE_DEREFERENCE(ful_closed, fc, 8);
+
+    return rc || fc;
+}
+
 int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait, int delay_sleep) {
 
     if(requester->fulfiller_component.fulfiller_closed || requester->requester_closed) {
@@ -155,7 +170,7 @@ int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller
         return E_SOCKET_CLOSED;
     }
 
-    if(fulfiller->requester->requester_closed || access->fulfiller_closed) {
+    if(socket_internal_fulfiller_closed_safe(fulfiller)) {
         return E_SOCKET_CLOSED;
     }
 
@@ -454,7 +469,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
         return E_BAD_FLAGS;
     }
 
-    if(requester->requester_closed || requester->fulfiller_component.fulfiller_closed) {
+    if(socket_internal_fulfiller_closed_safe(fulfiller)) {
         return E_SOCKET_CLOSED;
     }
 
@@ -1132,8 +1147,7 @@ enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfille
         else if(wait_res < 0) ret |= POLL_ER;
 
     } else {
-        if(fulfiller->requester->requester_closed ||
-           fulfiller->requester->fulfiller_component.fulfiller_closed) ret |= POLL_HUP;
+        if(socket_internal_fulfiller_closed_safe(fulfiller)) ret |= POLL_HUP;
     }
 
     return ret;
