@@ -84,9 +84,9 @@ static int is_taken(stype type) {
 }
 
 static stype tracker_to_type(ownership_tracker_t* tracker) {
-    ptrdiff_t one_diff = (ptrdiff_t)((ownership_map+1) - (ownership_map));
-    ptrdiff_t diff = (ptrdiff_t)(tracker-ownership_map);
-    stype index = (stype)(diff/one_diff);
+
+    long diff = ((long)tracker-(long)ownership_map);
+    stype index = (stype)(diff/sizeof(ownership_tracker_t));
     return index+USER_TYPES_START;
 }
 
