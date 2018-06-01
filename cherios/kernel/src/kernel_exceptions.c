@@ -103,14 +103,15 @@ static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 		kernel_freeze();
 	}
 
-    last_vmem_exception = kernel_curr_act;
-    /* We may already have sent a message for this address - but it may not have been processed yet */
-    if(badvaddr != kernel_curr_act->last_vaddr_fault) {
-        msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
-    }
-    kernel_curr_act->last_vaddr_fault = badvaddr;
+    // Order is important here. We need to send the message first to unblock memgt.
+    // This can however result in the commit coming in before the block. sched handles this for us.
 
-	sched_reschedule(memgt_ref, 1);
+    kernel_curr_act->last_vaddr_fault = badvaddr;
+    kernel_curr_act->commit_early_notify = 0;
+    msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
+    sched_block_until_event(kernel_curr_act, memgt_ref, sched_wait_commit, 0, 1);
+
+    kernel_curr_act->last_vaddr_fault = badvaddr;
 }
 /*
  * Exception handler demux to various more specific exception

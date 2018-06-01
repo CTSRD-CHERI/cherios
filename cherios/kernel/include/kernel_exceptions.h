@@ -44,8 +44,6 @@ static inline cap_exception_t parse_cause(register_t packed_cause) {
 	return (cap_exception_t) {.cause = ((packed_cause >> 8) & 0x1F), .reg_num = (packed_cause & 0xFF)};
 }
 
-act_t* last_vmem_exception;
-
 #ifndef __LITE__
 	#define exception_printf kernel_printf
 #else

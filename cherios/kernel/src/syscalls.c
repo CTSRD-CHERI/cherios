@@ -55,10 +55,21 @@ register_t kernel_syscall_now(void) {
 	return get_high_res_time(cp0_get_cpuid());
 }
 
+DECLARE_WITH_CD(void, kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch));
+void kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch) {
+	act_t* target = act_unseal_ref(waiter);
+	act_t* caller = sched_get_current_act();
+	kernel_assert(caller == memgt_ref);
+	sched_receive_event(target, sched_wait_commit);
+	if(suggest_switch) {
+		sched_reschedule(target, 0);
+	}
+}
+
 DECLARE_WITH_CD(void, kernel_wait(void));
 void kernel_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
-    sched_block_until_event(NULL, NULL, sched_waiting, 0);
+    sched_block_until_event(NULL, NULL, sched_waiting, 0, 0);
 }
 
 DECLARE_WITH_CD(act_control_t *, kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint));
@@ -175,7 +186,7 @@ DECLARE_WITH_CD(void, kernel_syscall_cond_wait(int notify_on_message, register_t
 void kernel_syscall_cond_wait(int notify_on_message, register_t timeout) {
     sched_status_e events = sched_wait_notify;
     if(notify_on_message) events |= sched_waiting;
-    sched_block_until_event(NULL, NULL, events, timeout);
+    sched_block_until_event(NULL, NULL, events, timeout, 0);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_cond_cancel(void));

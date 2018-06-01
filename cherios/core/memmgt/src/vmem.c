@@ -37,6 +37,7 @@
 #include "math.h"
 #include "string.h"
 #include "pmem.h"
+#include "object.h"
 
 ptable_t vmem_create_table(ptable_t parent, register_t index) { // FIXME: Races with main thread
     size_t page = pmem_find_page_type(1, page_ptable_free);
@@ -57,7 +58,7 @@ ptable_t vmem_create_table(ptable_t parent, register_t index) { // FIXME: Races 
     return  r;
 }
 
-int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) { // FIXME: Races with main thread
+int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) { // FIXME: Races with other thread
     size_t page = pmem_find_page_type(2, page_unused);
     if(page == BOOK_END) return -1;
 
@@ -77,7 +78,8 @@ int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) {
 
 /* TODO commiting per page is a stupid policy. We are doing this for now to make sure everything works */
 void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
-    // WARN: THIS MUST NOT TOUCH VIRTUAL MEMORY. Mops are virtual, if we want to update commit tallies, send a message.
+    // WARN: THIS MUST NOT TOUCH VIRTUAL MEMORY (that has not been commited).
+    // Mops are virtual, if we want to update commit tallies, send a message.
 
     assert(worker_id == 0);
 
@@ -122,6 +124,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
     }
     else vmem_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
 
+    syscall_vmem_notify(activation, msg_queue_empty());
     // TODO bump counters on commits for MOPs
 }
 

@@ -78,6 +78,7 @@ typedef struct act_t
 	status_e status;		/* Activation status flags */
 
 	size_t last_vaddr_fault; /* Used by exception handler to stop commit message spam */
+	uint8_t commit_early_notify;
 
 	/* Debug related */
 	size_t image_base;

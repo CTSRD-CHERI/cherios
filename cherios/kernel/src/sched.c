@@ -46,7 +46,7 @@ static void sched_nothing_to_run(void) {
 	KERNEL_ERROR("No activation to schedule");
 
     for(act_t* act = act_list_start; act != NULL; act = act->list_next) {
-        kernel_printf("%20s : status %d\n", act->name, act->sched_status);
+        kernel_printf("%20s : status %x\n", act->name, act->sched_status);
     }
 
 	kernel_freeze();
@@ -216,14 +216,19 @@ void sched_receive_event(act_t* act, sched_status_e events) {
 			kernel_timer_unsubcsribe(act);
 		}
 		add_act_to_queue(&sched_pools[act->pool_id], act, sched_runnable);
-	} else if(events & sched_wait_notify) {
-		act->early_notify = 1;
-	}
+	} else {
+        if(events & sched_wait_notify) {
+            act->early_notify = 1;
+        }
+        if(events & sched_waiting) {
+            act->commit_early_notify = 1;
+        }
+    }
 	CRITICAL_LOCKED_END(&act->sched_access_lock);
 }
 /* This will block until ANY of the events specified by events occurs */
 
-void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout) {
+void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout, int in_exception_handler) {
 
     if(act == NULL) act = sched_get_current_act();
 	if(timeout > 0) {
@@ -235,6 +240,7 @@ void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events
 
     if((events & sched_sync_block) && !act->sync_state.sync_condition) got_event = 1;
     if((events & sched_waiting) && !msg_queue_empty(act)) got_event = 1;
+    if((events & sched_wait_commit) && act->commit_early_notify) got_event = 1;
     if((events & sched_wait_notify) && act->early_notify) {
         act->early_notify = 0;
         got_event = 1;
@@ -248,7 +254,7 @@ void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events
 
     CRITICAL_LOCKED_END(&act->sched_access_lock);
 
-    if(!got_event) sched_reschedule(next_hint, 0);
+    if(!got_event) sched_reschedule(next_hint, in_exception_handler);
 }
 
 void sched_block(act_t *act, sched_status_e status) {

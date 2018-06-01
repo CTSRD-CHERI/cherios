@@ -47,13 +47,7 @@ void    sched_reschedule(act_t *hint, int in_exception_handler);
 void	sched_create(uint8_t pool_id, act_t * act);
 void	sched_delete(act_t * act);
 
-void    sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout);
-
-void    sched_block_until_ret(act_t * act, act_t * next_hint);
-void    sched_block_until_msg(act_t * act, act_t * next_hint);
-void sched_wait_for_notify(act_t* act, act_t* next_hint, int notify_on_message);
-
-
+void    sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout, int in_exception_handler);
 void	sched_block(act_t *act, sched_status_e status);
 void    sched_receive_event(act_t* act, sched_status_e events);
 
