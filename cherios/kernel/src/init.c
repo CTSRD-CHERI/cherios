@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <nano/nanotypes.h>
 #include "klib.h"
 #include "nano/nanokernel.h"
 #include "cp0.h"
@@ -97,6 +98,19 @@ int cherios_main(nano_kernel_if_t* interface,
 
 	/* Get the capability for the uart. We should save this somewhere sensible */
     page_t* book = get_book();
+
+    /* All pages start out dirty. Give them a clean here */
+
+    size_t page_n = 0;
+
+    do {
+        if(book[page_n].status == page_dirty) {
+            zero_page_range(page_n);
+
+        }
+        page_n += book[page_n].len;
+    } while(page_n != BOOK_END);
+
 
 	capability  cap_for_uart = get_phy_cap(book, uart_base_phy_addr, uart_base_size, 0, 1);
     fpga_cap = get_phy_cap(book, FPGA_BASE, FPGA_SIZE, 0, 1);

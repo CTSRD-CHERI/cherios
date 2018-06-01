@@ -68,7 +68,7 @@
 .set PHY_MEM_END_CACHED,            PHY_MEM_START_CACHED + PHY_RAM_SIZE + IO_HOLE
 
 #.set NANO_SIZE, __nano_size
-.set NANO_SIZE, 0x5000000
+.set NANO_SIZE, 0x4000000
 
 # We will lay out PHYSICAL state like this. The PFN is just the index in the table:
 # struct phy_ent {
@@ -344,13 +344,14 @@ nano_kernel_init:
     dsrl            $t1, $a0, PHY_PAGE_SIZE_BITS        # system pages
     PHY_LINK_LEN
 
-    # Then free low pages
+    # Then free low pages (start dirty as boot was around here)
     PHY_NEXT
     PHY_LINK_PREV
     PHY_NEXT_PREV
     dli             $t2, (TOTAL_LOW_RAM_PAGES - (NANO_SIZE / PHY_PAGE_SIZE))
     dsubu           $t1, $t2, $t1   # len = LO_PAGES - NANO_PAGES - SYSTEM_PAGES
     PHY_LINK_LEN
+    PHY_SET_STATE   page_dirty
 
     # Then IO pages
     PHY_NEXT
@@ -2920,28 +2921,21 @@ kernel_exception_trampoline:
         beqz        $k1, tlb_trampoline
         daddiu      $k1, $k0, -((MIPS_CP0_EXCODE_TLBS - MIPS_CP0_EXCODE_TLBL) << MIPS_CP0_CAUSE_EXCODE_SHIFT)
         beqz        $k1, tlb_trampoline
+
+# If k0 is zero (this is a HW interrupt) We can supress with ex level. o/w it is a software exception.
+# These can be user handled or skipped with magic
+        cgetcause   $k1
+        beqz        $k0, hw_ex
+        csd         $k1, $zero, exception_ccause($kr1c)
+soft_ex:
+
         # We supress exception if a magic sequence is present. This is to allow default behavior with bad caps
         li          $k0, 0x3400d00d                 # We should ignore other kinds of faults when the magic sequence is seen
         clw         $k1, $zero, 4($epcc)            # Might have problems if this is the last instruction ;)
         beq         $k0, $k1, skip_and_return
-        cld         $k1, $zero, exception_level($kr1c)
-        beqz        $k1, take_exception
+        dmfc0       $k0, $13
 
-skip_exception:
-        dmfc0       $k0, $13                        # MEANT TO BE IN DELAY SLOT
-        csd         $k0, $zero, exception_cause($kr1c)
-        dmfc0   $k1, $12
-        li      $k0, 1
-        not     $k0, $k0
-        and     $k1, $k1, $k0 # As interrupts had to be enabled
-        mtc0    $k1, $12      # Disable interrupts, we are happy to take the hit as this is rare
-        eret
-
-take_exception:
-        cgetcause   $k1
-        csd         $k1, $zero, exception_ccause($kr1c)
-        andi    $k1, $k0, 0xFF
-        beqz    $k1, context_switch_exception_entry # Timer/HW Interrupt
+        # We can also pass to the user
         clc     $kr2c, $zero, current_context($kr1c)
         cbtu    $idc, context_switch_exception_entry # No IDC = no user interrupts
         cincoffset  $kr2c, $kr2c, INC_IM_MAX
@@ -2951,6 +2945,18 @@ take_exception:
         nop
 		b exception_user_handle # All of the above pass - user can take his own exception
 		nop
+
+hw_ex:
+        cld         $k1, $zero, exception_level($kr1c)
+        beqz        $k1, context_switch_exception_entry
+        dmfc0       $k0, $13
+        csd         $k0, $zero, exception_cause($kr1c)
+        dmfc0       $k1, $12
+        li          $k0, 1
+        not         $k0, $k0
+        and         $k1, $k1, $k0 # As interrupts had to be enabled
+        mtc0        $k1, $12      # Disable interrupts, we are happy to take the hit as this is rare
+        eret
 
 kernel_exception_trampoline_end:
 		.global kernel_exception_trampoline_end
