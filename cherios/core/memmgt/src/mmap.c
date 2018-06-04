@@ -556,12 +556,14 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 
 
             if(right_alloc_node) {
+                // FIXME
+                // We are merging two reservation nodes
                 // Merge reservation nodes, and unmap page containing right
                 rescap_merge(left_desc->reservation, right_desc->reservation);
-
-                if(left_amount != 1) vmem_free_single((right_desc->start-1) << UNTRANSLATED_BITS);
-                if(transfer_amount != 1) vmem_free_single(right_desc->start << UNTRANSLATED_BITS);
             }
+
+            if(left_amount != 1) vmem_free_single((right_desc->start-1) << UNTRANSLATED_BITS);
+            if(transfer_amount != 1) vmem_free_single(right_desc->start << UNTRANSLATED_BITS);
 
             /* Our parent nodes may need start and end adjusting */
             downward_correct_end(left_desc->start, left_desc->start + left_desc->length);
@@ -580,6 +582,13 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 // define MIN_REVOKE (PAGE_TABLE_ENT_PER_TABLE*4)
 
 #define MIN_REVOKE (512)
+#define REVOKE_SANITY 0
+
+static void revoke_sanity(capability arg, ptable_t table, readable_table_t* RO, size_t index, size_t rep_pages) {
+    register_t state = RO->entries[index];
+
+    assert_int_ex(state, == , VTABLE_ENTRY_USED);
+}
 
 void revoke_start(vpage_range_desc_t* desc) {
     assert(desc->allocation_type == tomb_node);
@@ -603,6 +612,12 @@ void revoke_start(vpage_range_desc_t* desc) {
 
     vmem_free_single(base);
     vmem_free_single((base+len)-1);
+
+    // Check everything is unmapped
+    if(REVOKE_SANITY) {
+        printf("Sanity Check %lx to %lx\n", base, base+len);
+        vmem_visit_range(desc->start << UNTRANSLATED_BITS, desc->length, revoke_sanity, NULL);
+    }
 }
 
 static vpage_range_desc_t * free_desc(vpage_range_desc_t *desc) {
@@ -611,11 +626,9 @@ static vpage_range_desc_t * free_desc(vpage_range_desc_t *desc) {
     size_t free_start = desc->start;
     size_t free_len = desc->length;
 
-    if(desc->allocated_length != 0) {
-        free_start++;
-        free_len--;
-    }
-
+    // We maintain the last/first page of every range as sentinel.
+    // The first is needed to hold reservation metadata
+    // The last is needed to stop freeing of tables
     if(free_len >= 3) {
         vmem_free_range((free_start + 1)  << UNTRANSLATED_BITS, free_len-2);
     }
@@ -1175,6 +1188,10 @@ void __revoke(void) {
 
     res_t  res = rescap_revoke_finish();
 
+    if(!cheri_gettag(res)) {
+        int er = cheri_getoffset(res);
+        printf(KRED"Revoke error code %d\n", er);
+    }
     assert(res != NULL);
     assert(cheri_gettag(res));
 

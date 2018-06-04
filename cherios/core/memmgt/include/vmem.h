@@ -59,6 +59,10 @@ void vmem_free_range(size_t vaddr_start, size_t pages);
 
 void vmem_free_single(size_t vaddr);
 
+typedef void vmem_visit_func(capability arg, ptable_t table, readable_table_t* RO, size_t index, size_t rep_pages);
+
+void vmem_visit_range(size_t page_start, size_t pages, vmem_visit_func*, capability arg);
+
 size_t virtual_to_physical(size_t vaddr);
 
 extern __thread int worker_id;

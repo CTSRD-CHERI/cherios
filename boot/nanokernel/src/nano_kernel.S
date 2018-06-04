@@ -1330,6 +1330,18 @@ revoke_start_er:
     cclearlo    EN4(c3, c4, c5, c6)
 
 
+#define REVOKE_ER_NOT_STARTED       1
+#define REVOKE_ER_HAS_ENTRY         2
+#define REVOKE_ER_L0_SKIP_START     3
+#define REVOKE_ER_L0_SKIP_END       4
+#define REVOKE_ER_L1_SKIP_START     5
+#define REVOKE_ER_L1_SKIP_END       6
+#define REVOKE_ER_L0_SKIP_START2     7
+#define REVOKE_ER_L0_SKIP_END2       8
+#define REVOKE_ER_L1_SKIP_START2     9
+#define REVOKE_ER_L1_SKIP_END2       10
+
+#define SET_ER(X) li $s0, X
 
 ####################################### (TODO unsafe)
 # void rescap_revoke_finish(res_t res);
@@ -1338,6 +1350,9 @@ rescap_revoke_finish:
 #######################################
 
     cincoffset  $c4, $idc, revoke_state
+    cnull       $c9
+    csetoffset  $c9, $c9, $s0
+    li          $s0, REVOKE_ER_NOT_STARTED
 
     clld        $t0, $c4
     daddiu      $t0, $t0, (-(REVOKE_STATE_STARTED))         # revoke must have been started
@@ -1347,7 +1362,6 @@ rescap_revoke_finish:
 
     cld         $a2, $zero, revoke_base($idc)
     cld         $a3, $zero, revoke_bound($idc)
-    dsubu       $a4, $a3, $a2
 
     # Blocking writing of the capability - should do as early as possible #
     dli         $t0, DEF_DATA_PERMS
@@ -1380,15 +1394,39 @@ rescap_revoke_finish:
     daddiu     $t3, $t3, PAGE_TABLE_ENT_SIZE
     # a1 has the used flag
     dli         $a1, VTABLE_ENTRY_USED
+    # a4 is the transacting flag. Normally we would abort if we find it. Revoke is allowed to take as long as it likes
+    # So instead we will loop until the page is not transacting
+    dli         $a4, VTABLE_ENTRY_TRAN
 
     # The following walks through the vtables and checks all entries covered by the reservation are used,
     # or if they are un-used sets them to used. If an L2 mapping is present, we get an error.
 
     # c8 is the last thing we had to load link
 
+# FIXME. Need to set pages we are loop through to transacting to stop races
+
+b   l0_loop_start
+    nop
+
+    l0_retry_yield:
+        YIELD
+        b l0_retry
+        nop
+    l1_retry_yield:
+        YIELD
+        b l1_retry
+        nop
+    l2_retry_yield:
+        YIELD
+        b l2_retry
+        nop
+
+
     l0_loop_start:
         cincoffset  $c8, $c5, $t0
 l0_retry: clld        $a0, $c8
+        beq         $a0, $a4, l0_retry_yield
+        nop
         beq         $a0, $a1, l0_loop_footer    # if used everything is ok
         daddiu      $t0, $t0, PAGE_TABLE_ENT_SIZE
         beqz        $a0, 1f                     # if un-used must set to used
@@ -1402,6 +1440,8 @@ l0_retry: clld        $a0, $c8
         l1_loop_start:
             cincoffset  $c8, $c6, $t1
 l1_retry:   clld        $a0, $c8
+            beq         $a0, $a4, l1_retry_yield
+            nop
             beq         $a0, $a1, l1_loop_footer    # if used everything is ok
             daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
             beqz        $a0, 2f                     # if un-used must set to used
@@ -1413,10 +1453,12 @@ l1_retry:   clld        $a0, $c8
             l2_loop_start:
                 cincoffset  $c8, $c7, $t2
 l2_retry:       clld        $a0, $c8
+                beq         $a0, $a4, l2_retry_yield
+                nop
                 beq         $a0, $a1, l2_loop_foot  # if used everything is ok, otherwise try set to used
                 nop
                 bnez        $a0, revoke_er          # A mapping still exists. Error.
-                nop
+                SET_ER(REVOKE_ER_HAS_ENTRY)
                 cscd        $a0, $a1, $c8          # try set to used
                 beqz        $a0, l2_retry
                 nop
@@ -1429,6 +1471,7 @@ l2_retry:       clld        $a0, $c8
                 nop
 
         2:
+            SET_ER(REVOKE_ER_L1_SKIP_START)
             bnez        $t2, revoke_er             # check we arn't skipping the start
             daddiu      $t2, $t0, -PAGE_TABLE_ENT_SIZE
             dsll        $t2, $t2, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
@@ -1437,7 +1480,7 @@ l2_retry:       clld        $a0, $c8
             daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
             sltu        $a0, $a3, $a0              # when the address is greater than it should be, we have an error
             bnez        $a0, revoke_er        # the last page must have an explicit entry
-            nop
+            SET_ER(REVOKE_ER_L1_SKIP_END)
 
             cscd        $a0, $a1, $c8         # if l1 was un-used set to used here
             beqz        $a0, l1_retry         # rety if l1 entry has changed
@@ -1451,13 +1494,14 @@ l2_retry:       clld        $a0, $c8
             nop
 
     1:
+        SET_ER(REVOKE_ER_L0_SKIP_START)
         dsll        $a0, $t0, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
         daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
         sltu        $a0, $a3, $a0              # when the address is greater than it should be, we have an error
         bnez        $a0, revoke_er        # the last page must have an explicit entry
         daddu       $a0, $t1, $t2
         bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
-        nop
+        SET_ER(REVOKE_ER_L0_SKIP_END)
 
         cscd        $a0, $a1, $c8
         beqz        $a0, l0_retry
@@ -1623,11 +1667,12 @@ clear_loop_l0_start_retry:
         dsll        $a0, $t0, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
         daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
         sltu        $a0, $a3, $a0              # if the address is greater than it should be, we have an error
+        SET_ER(REVOKE_ER_L0_SKIP_START2)
         bnez        $a0, revoke_er        # the last page must have an explicit entry
         daddu       $a0, $t1, $t2
         bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
                                                # when t1 and t2 are zero, this is not the first page, or its aligned
-        nop
+        SET_ER(REVOKE_ER_L0_SKIP_END2)
 
         cscd        $a0, $zero, $c8                 # set to free
         beqz        $a0, clear_loop_l0_start_retry
@@ -1654,6 +1699,7 @@ clear_loop_l1_start_retry:
             daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
 
             # Error check edge cases #
+            SET_ER(REVOKE_ER_L1_SKIP_START2)
             bnez        $t2, revoke_er             # check we arn't skipping the start
             daddiu      $t2, $t0, -PAGE_TABLE_ENT_SIZE
             dsll        $t2, $t2, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
@@ -1662,7 +1708,7 @@ clear_loop_l1_start_retry:
             daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
             sltu        $a0, $a3, $a0              # if the address is greater than it should be, we have an error
             bnez        $a0, revoke_er        # the last page must have an explicit entry
-            nop
+            SET_ER(REVOKE_ER_L1_SKIP_END2)
 
             cscd        $a0, $zero, $c8
             beqz        $a0, clear_loop_l1_start_retry
@@ -1694,6 +1740,11 @@ clear_loop_l1_start_retry:
 
     clear_loop_l0_end:
 
+    # Make exclusive again
+
+    daddiu      $a3, $a3, (UNTRANSLATED_PAGE_SIZE)
+    dsubu       $a4, $a3, $a2
+
     # Make a new reservation here now. This will cause a fault but the vtables should be available again #
 
     cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
@@ -1716,12 +1767,16 @@ clear_loop_l1_start_retry:
 
     csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
+    cgetoffset  $s0, $c9
     CRETURN
     cclearlo    EN5(c4, c5, c6, c7, c8)
 
 revoke_er:
+    cnull       $c3
+    csetoffset  $c3, $c3, $s0
+    cgetoffset  $s0, $c9
     CRETURN
-    cclearlo    EN6(c3, c4, c5, c6, c7, c8)
+    cclearlo    EN5(c4, c5, c6, c7, c8)
 
 
 ################################################### (safe)

@@ -162,6 +162,7 @@ int range_is_free(readable_table_t *tbl, size_t start, size_t stop) {
 }
 
 /* Will free a number of mappings, returns how many pages have been freed (might already be free). */
+/* FIXME don't delete tables that contain entries we need for revocation */
 size_t memmgt_free_mappings(ptable_t table, size_t l0, size_t l1, size_t l2, size_t n, size_t lvl, int* can_free) {
     if(can_free) *can_free = 0;
 
@@ -286,6 +287,47 @@ static void dump_table(ptable_t tbl) {
     for(int i = 0; i < PAGE_TABLE_ENT_PER_TABLE; i++) {
         printf("%x: %lx\n", i, RO->entries[i]);
     }
+}
+
+void vmem_visit_range(size_t page_start, size_t pages, vmem_visit_func* func, capability arg) {
+
+    while(pages != 0) {
+        size_t l0_index = L0_INDEX(page_start);
+        ptable_t L0 = get_top_level_table();
+        readable_table_t* RO = get_read_only_table(L0);
+        register_t state = RO->entries[l0_index];
+
+        if(state == VTABLE_ENTRY_USED || state == VTABLE_ENTRY_TRAN || state == 0) {
+            size_t reps = PAGE_TABLE_ENT_PER_TABLE*PAGE_TABLE_ENT_PER_TABLE;
+            func(arg, L0, RO, l0_index, reps);
+            page_start += reps;
+            pages = pages < reps ? 0 : pages - reps;
+            continue;
+        }
+
+        size_t l1_index = L1_INDEX(page_start);
+        ptable_t L1 = get_sub_table(L0, l0_index);
+        RO = get_read_only_table(L1);
+
+        state = RO->entries[l1_index];
+
+        if(state == VTABLE_ENTRY_USED || state == VTABLE_ENTRY_TRAN || state == 0) {
+            size_t reps = PAGE_TABLE_ENT_PER_TABLE;
+            func(arg, L1, RO, l1_index, reps);
+            page_start += reps;
+            pages = pages < reps ? 0 : pages - reps;
+            continue;
+        }
+
+        size_t l2_index = L2_INDEX(page_start);
+        ptable_t L2 = get_sub_table(L1, l1_index);
+        RO = get_read_only_table(L2);
+
+        func(arg, L2, RO, l2_index, 1);
+        page_start++;
+        pages--;
+    }
+
 }
 
 size_t virtual_to_physical(size_t vaddr) {
