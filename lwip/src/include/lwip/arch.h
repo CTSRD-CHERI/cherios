@@ -132,7 +132,8 @@ typedef int32_t   s32_t;
 typedef uint64_t  u64_t;
 typedef int64_t   s64_t;
 #endif
-typedef uintptr_t mem_ptr_t;
+//typedef uintptr_t mem_ptr_t;
+typedef size_t mem_ptr_t;
 #endif
 
 /** Define this to 1 in arch/cc.h of your port if your compiler does not provide
