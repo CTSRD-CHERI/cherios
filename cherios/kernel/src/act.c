@@ -245,6 +245,19 @@ static act_t* alloc_static_act(aid_t* aid_used) {
 	return act;
 }
 
+void touch(char* buf, size_t len) {
+	size_t addr = (size_t)buf;
+	while(len != 0) {
+		 *((volatile char*)buf);
+
+		size_t last_bits = (UNTRANSLATED_PAGE_SIZE) - (addr & (UNTRANSLATED_PAGE_SIZE-1));
+		size_t touched = last_bits > len ? len : last_bits;
+		len-=touched;
+		buf+=touched;
+		addr+=touched;
+	}
+}
+
 act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 							status_e create_in_status, act_control_t *parent, size_t base, res_t res) {
 	(void)parent;
@@ -275,6 +288,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
     act->ctl.cds = ctrl_ref_sealer;
     act->ctl.cgp = get_cgp();
 
+	kernel_printf("Program %s loaded at base %lx\n", name, base);
 	act->image_base = base;
 
 	//TODO bit of a hack. the kernel needs to know what namespace service to use
@@ -320,6 +334,9 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 
 	KERNEL_TRACE("register", "image base of %s is %lx", act->name, act->image_base);
 	KERNEL_TRACE("act", "%s OK! ", __func__);
+
+	// TODO as claim
+	touch((char*)act, sizeof(act_t));
 	return act;
 }
 
