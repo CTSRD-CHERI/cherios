@@ -532,6 +532,9 @@ void handle_fulfill(tcp_session* tcp) {
 }
 
 static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
+
+    assert(pcb != NULL);
+
     tcp_session* session = alloc_tcp_session();
 
     session->application_recv_ack = session->recv= session->ack_handled = 0;
@@ -557,6 +560,10 @@ static void send_connect_callback(tcp_session* tcp, err_t err) {
     socket_internal_requester_connect(&tcp->tcp_output_pusher.r);
 }
 
+static void tcp_er(void *arg, err_t err) {
+    assert(0);
+}
+
 static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
     if(arg == NULL) return err;
 
@@ -566,9 +573,25 @@ static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) 
 
     assert_int_ex(err, ==, ERR_OK); // TODO handle
 
+    tcp_err(tcp->tcp_pcb, tcp_er);
+
     send_connect_callback(tcp, err);
 
     return err;
+}
+
+static void user_tcp_connect_er(void *arg, err_t err) {
+    tcp_session* tcp = (tcp_session*)arg;
+
+    // Send an error to the user
+    message_send((register_t)err, 0, 0, 0, tcp->callback_arg,
+                 NULL, NULL, NULL,
+                 tcp->callback, SEND, tcp->callback_port);
+    // I don't -think- we need to free the TCP layer. LWIP does this for us.
+
+    // Then free session
+
+    free_tcp_session(tcp);
 }
 
 static err_t tcp_accept_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
@@ -581,11 +604,15 @@ static err_t tcp_accept_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
 
     assert(listen_session->tcp_pcb != tpcb);
 
+    assert(tpcb != NULL);
+
     tcp_session* tcp = user_tcp_new(tpcb);
 
     tcp->callback = listen_session->callback;
     tcp->callback_arg = listen_session->callback_arg;
     tcp->callback_port = listen_session->callback_port;
+
+    tcp_err(tcp->tcp_pcb, tcp_er);
 
     send_connect_callback(tcp, err);
 
@@ -608,8 +635,9 @@ static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
     tcp->callback = callback;
     tcp->callback_arg = callback_arg;
     tcp->callback_port = callback_port;
+    tcp_err(tcp->tcp_pcb, &user_tcp_connect_er);
     err_t er = tcp_connect(tcp->tcp_pcb, &server->addr, server->port, tcp_connected_callback);
-    assert_int_ex(er, ==, ERR_OK);
+    assert_int_ex(-er, ==, -ERR_OK);
     return er;
 }
 
@@ -668,6 +696,14 @@ static void user_tcp_close(tcp_session* tcp) {
     return;
 }
 
+// We should not really be able to get this. But its nice for debugging.
+uint16_t
+cp0_status_im_get(void) {
+    register_t status;
+    __asm__ __volatile__ ("dmfc0 %0, $12" : "=r" (status)); // not technically possible.
+    return (uint16_t )((status >> MIPS_CP0_STATUS_IM_SHIFT) & 0xFF);
+}
+
 int main(register_t arg, capability carg) {
     // Init session
     printf("LWIP Hello World!\n");
@@ -701,23 +737,28 @@ int main(register_t arg, capability carg) {
     int sock_sleep = 0;
     int sock_event = 0;
 
+    int ints = 0;
+    int fake_ints = 0;
+
     register_t time = syscall_now();
     // Main loop
     while(1) {
         register_t now = syscall_now();
         if((now - time) >= 200000000) {
             time = now;
-            printf("Sign of life now = %lx\n", now);
+            printf("Sign of life now = %lx. (%d)(%d. IM = %x)\n", now, ints, fake_ints, cp0_status_im_get());
             stats_display();
         }
         sock_event = 0;
 
         sys_check_timeouts();
+
         netif_poll_all();
         // Wait for a message or socket
 
         // Respond to messages (may include interrupt getting called or a new socket being created)
         if(!msg_queue_empty()) {
+            ints++;
             msg_entry(1);
         }
 
@@ -729,8 +770,10 @@ int main(register_t arg, capability carg) {
         while((session.virtq_send.last_used_idx != session.virtq_send.used->idx)
                 || ((session.virtq_recv.last_used_idx != session.virtq_recv.used->idx))) {
             if(!msg_queue_empty()) {
+                ints++;
                 msg_entry(1);
             } else {
+                fake_ints++;
                 interrupt(session.nif); // Fake an interrupt
             }
         }

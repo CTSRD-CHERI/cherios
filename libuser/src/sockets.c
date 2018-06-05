@@ -279,7 +279,7 @@ ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_d
 }
 
 ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t align, uint64_t size, int dont_wait,
-                                        char** c1, char**c2, uni_dir_socket_requester* requester) {
+                                        char** c1, char**c2, size_t* part1_out, uni_dir_socket_requester* requester) {
     ssize_t res = 0;
 
     uint64_t extra_to_align = 0;
@@ -342,12 +342,12 @@ ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t 
 
     part_1 = two_parts ? part_1 : size;
 
-    char* cap1 = cheri_setbounds(data_buffer->buffer + copy_from, part_1);
+    *part1_out = part_1;
+    char* cap1 = data_buffer->buffer + copy_from;
     *c1 = cap1;
     char* cap2 = NULL;
     if(two_parts) {
-        size_t part_2 = size - part_1;
-        cap2 = cheri_setbounds(data_buffer->buffer, part_2);
+        cap2 = data_buffer->buffer;
     }
     *c2 = cap2;
 
@@ -367,12 +367,11 @@ ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, cons
 
     char* cap1;
     char* cap2;
-
-    res = socket_internal_drb_space_alloc(data_buffer, (uint64_t)buf, size, dont_wait, &cap1, &cap2, requester);
+    size_t part_1;
+    res = socket_internal_drb_space_alloc(data_buffer, (uint64_t)buf, size, dont_wait, &cap1, &cap2, &part_1, requester);
 
     if(res < 0) return res;
 
-    uint64_t part_1 = cheri_getlen(cap1);
     uint64_t align_off = res;
 
     if(requester->socket_type == SOCK_TYPE_PUSH) {
@@ -384,7 +383,7 @@ ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, cons
     if(res < 0) return res;
 
     if(cap2) {
-        size_t part_2 = cheri_getlen(cap2);
+        size_t part_2 = size - part_1;
         if(requester->socket_type == SOCK_TYPE_PUSH) {
             memcpy(cap2, buf + part_1, part_2);
         }
@@ -1021,19 +1020,18 @@ static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, 
 
         char* cap1;
         char* cap2;
-
-        res = socket_internal_drb_space_alloc(drb, align, req_size, dont_wait, &cap1, &cap2, push_req);
+        size_t part1;
+        res = socket_internal_drb_space_alloc(drb, align, req_size, dont_wait, &cap1, &cap2, &part1, push_req);
 
         if(res < 0) return res;
 
         uint64_t align_off = res;
-        uint64_t size1 = cheri_getlen(cap1);
-        uint64_t size2 = 0;
+        uint64_t size1 = part1;
+        uint64_t size2 = req_size - part1;
 
         socket_internal_request_ind(pull_req, cap1, size1, 0);
 
         if(cap2) {
-            size2 = cheri_getlen(cap2);
             socket_internal_request_ind(pull_req, cap2, size2, 0);
         }
 
@@ -1043,7 +1041,7 @@ static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, 
 
         // Make 2 requests
 
-        res = socket_internal_requester_space_wait(push_req, size2 ? 2 : 1, dont_wait, 0);
+        res = socket_internal_requester_space_wait(push_req, cap2 ? 2 : 1, dont_wait, 0);
 
         if(res < 0) return res;
 

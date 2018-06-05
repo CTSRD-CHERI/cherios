@@ -60,8 +60,14 @@ int main(register_t arg, capability carg) {
     inet_aton("127.0.0.1", &server.addr);
     server.port = 666;
 
-    netsock_connect_tcp(&bind, &server, NULL);
-    NET_SOCK netsock = netsock_accept(MSG_NONE);
+    NET_SOCK netsock;
+
+    // We need to loop. The server may not have been created yet!
+    do {
+        sleep(0);
+        netsock_connect_tcp(&bind, &server, NULL);
+        netsock = netsock_accept(MSG_NONE);
+    } while(netsock == NULL);
 
     assert(netsock != NULL);
 
@@ -75,9 +81,12 @@ int main(register_t arg, capability carg) {
     netsock_close(netsock);
 
     bind.port = 1235;
-    netsock_connect_tcp(&bind, &server, NULL);
+    do {
+        sleep(0);
+        netsock_connect_tcp(&bind, &server, NULL);
+        netsock = netsock_accept(MSG_NONE);
+    } while(netsock == NULL);
 
-    netsock = netsock_accept(MSG_NONE);
 
     assert(netsock != NULL);
 

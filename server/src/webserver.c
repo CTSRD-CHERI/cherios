@@ -217,7 +217,7 @@ void handle_loop(void) {
 
     while(1) {
         printf("Server accept...\n");
-        NET_SOCK netsock = netsock_accept(MSG_NO_COPY);
+        NET_SOCK netsock = netsock_accept(MSG_NONE);
 
         if(netsock == NULL) {
             printf("Rejected a connection\n");

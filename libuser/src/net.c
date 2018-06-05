@@ -87,9 +87,9 @@ NET_SOCK netsock_accept(enum SOCKET_FLAGS flags) {
     uni_dir_socket_requester* requester = (uni_dir_socket_requester*)msg->c5;
     int err = (int)msg->a0;
 
-    assert_int_ex(err, ==, 0);
-
     next_msg();
+
+    if(err != 0) return NULL;
 
     uint8_t drb_inline = (uint8_t)!(flags & MSG_NO_COPY);
     // Alloc netsock
@@ -108,6 +108,7 @@ NET_SOCK netsock_accept(enum SOCKET_FLAGS flags) {
     socket_internal_requester_init(&sock->write_req.r, 32, SOCK_TYPE_PUSH, NULL);
     socket_internal_fulfiller_init(&sock->sock.read.push_reader, SOCK_TYPE_PUSH);
     socket_init(&sock->sock, flags, drb, sock->drb_inline ? NET_SOCK_DRB_SIZE : 0, CONNECT_PUSH_READ | CONNECT_PUSH_WRITE);
+    sock->write_req.r.drb_fulfill_ptr = &sock->drb.fulfill_ptr;
     sock->sock.write.push_writer = &sock->write_req.r;
 
     // Send message to net_act
