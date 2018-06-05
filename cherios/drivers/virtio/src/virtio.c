@@ -178,6 +178,7 @@ int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 ad
     le16 new = virtio_q_alloc(queue, free_head);
     if(new == queue->num) return -1;
     queue->desc[*tail].next = new;
+    queue->desc[*tail].flags |= VIRTQ_DESC_F_NEXT;
 
     *tail = new;
     struct virtq_desc* desc = queue->desc + new;
