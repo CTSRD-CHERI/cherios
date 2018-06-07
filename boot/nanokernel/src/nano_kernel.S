@@ -743,9 +743,9 @@ switch_restore:                                         # void switch_restore(co
     cld     $k0,   $zero, exception_cause($kr1c)        # load cause
     csd     $zero, $zero, exception_cause($kr1c)        # and set to 0
     beqz    $k0,   switch_restore_final                 # no exception
-    csd     $zero, $zero, exception_level($kr1c)        # critical_state.level = 0 (should be in delay)
 
 switch_exception:                                       # void switch_exception(context_t victim, reg_t cause)
+    csd     $zero, $zero, exception_level($kr1c)        # critical_state.level = 0 (should be in delay)
     csd     $zero, $zero, exception_cause($kr1c)
                 # If we were doing it properly we would modify it to have the faulting instruction be from the new
                 # activation. However, for now as only the bits to check the type of
