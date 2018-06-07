@@ -96,6 +96,7 @@ typedef enum {
     REQUEST_FLUSH = (2 << 16) + 1,
     REQUEST_SEEK = (2 << 16) + 2,
     REQUEST_SIZE = (2 << 16) + 3,
+    REQUEST_CLOSE = (2 << 16) + 4, // Like flush, but we plan to close after
 } request_type_e;
 
 /* A socket is formed of a single requester and fulfiller. Between them they manage a ring buffer. The requester

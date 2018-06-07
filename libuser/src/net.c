@@ -29,6 +29,7 @@
  */
 
 #include <queue.h>
+#include <sockets.h>
 #include "cheric.h"
 #include "net.h"
 #include "assert.h"
@@ -45,7 +46,10 @@ act_kt net_try_get_ref(void) {
 }
 
 int netsock_close(NET_SOCK sock) {
-    socket_internal_requester_wait_all_finish(sock->sock.write.push_writer, 0);
+    if(socket_internal_requester_space_wait(sock->sock.write.push_writer, 1, 0, 0) == 0) {
+        socket_internal_request_oob(sock->sock.write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
+        socket_internal_requester_wait_all_finish(sock->sock.write.push_writer, 0);
+    }
     socket_close(&sock->sock);
     free((capability)sock);
     return 0;

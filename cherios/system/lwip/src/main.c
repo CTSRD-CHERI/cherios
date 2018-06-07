@@ -86,12 +86,22 @@ typedef struct net_session {
     le16 free_head_recv;
     struct virtio_net_config config;
 
+    uint64_t RECV;
+    uint64_t RECV_RDY;
+
     ip4_addr_t gw_addr, my_ip, netmask;
     uint8_t mac[6];
 
 } net_session;
 
-
+enum session_close_state {
+    SCS_NONE = 0,
+    SCS_FULFILL_CLOSED = 1,         // We closed our fulfiller
+    SCS_PCB_LAYER_CLOSED = 2,       // We closed the LWIP tcp layer
+    SCS_USER_REQUEST_CLOSED = 4,    // User closed their request channel
+    SCS_USER_FULFILL_CLOSED = 8,   // User closed their fulfill channel
+    SCS_USER_CLOSING = 16           // User sent a close request
+};
 
 typedef struct tcp_session {
     struct tcp_pcb* tcp_pcb;
@@ -112,7 +122,9 @@ typedef struct tcp_session {
     uint64_t ack_handled;
     uint64_t free_leftover;
 
-    uint8_t stack_closed;
+    enum session_close_state close_state;
+
+    int session_id;
 } tcp_session;
 
 typedef struct tcp_listen_session {
@@ -139,6 +151,8 @@ static tcp_session* alloc_tcp_session(void) {
     socket_internal_fulfiller_init(&new->tcp_input_pushee, SOCK_TYPE_PUSH);
     socket_internal_requester_init(&new->tcp_output_pusher.r, 32, SOCK_TYPE_PUSH, NULL);
 
+    static int id = 0;
+    new->session_id = id++;
     return new;
 }
 
@@ -195,6 +209,10 @@ err_t netsession_init(struct netif* nif) {
     virtio_q_init_free(&session->virtq_send, &session->free_head_send, 0);
     session->recvs_free = QUEUE_SIZE;
 
+
+    session->RECV = 0;
+    session->RECV_RDY = 0;
+
     session->config = *(struct virtio_net_config*)session->mmio->config;
 
     syscall_interrupt_register(session->irq, act_self_ctrl, -1, 0, nif);
@@ -225,13 +243,27 @@ static void free_send(net_session* session) {
     }
 }
 
+static void free_malloc_pbuf(struct pbuf* pbuf) {
+    free((capability)pbuf);
+
+}
+
 static void alloc_recv(net_session* session) {
 
     // FIXME these buffers are too large for most packets. Better to have smaller ones and chain them
     // enough for a least 1 more recieve chain
     while (session->recvs_free >= 3) {
-        struct pbuf* pb = pbuf_alloc(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM);
+        // We create a custom pbuf here thats is malloc'd. We do this because they _may_ be passed to userspace if TCP
+        capability buf = malloc(TCP_MSS + PBUF_TRANSPORT + sizeof(struct pbuf_custom));
+        struct pbuf_custom* custm = (struct pbuf_custom*)buf;
+        char* payload = (char*)buf + (sizeof(struct pbuf_custom));
+        custm->custom_free_function = &free_malloc_pbuf;
+        struct pbuf* pb =  pbuf_alloced_custom(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM, custm, payload, TCP_MSS+PBUF_TRANSPORT);
+
+
         le16 head = virtio_q_alloc(&session->virtq_recv, &session->free_head_recv);
+
+
 
         assert_int_ex(head, !=, session->virtq_recv.num);
 
@@ -254,6 +286,8 @@ static void alloc_recv(net_session* session) {
         virtio_q_add_descs(&session->virtq_recv, (le16)head);
 
         session->recvs_free -= (ret + 1);
+
+        session->RECV_RDY++;
     }
 
     virtio_device_notify(session->mmio, 0);
@@ -378,8 +412,10 @@ void interrupt(struct netif* nif) {
         // NOTE: input will free its pbuf!
         nif->input(pb, nif);
 
-        session->recvs_free += virtio_q_free_chain(recvq, &session->free_head_recv, used.id);
+        int freed = virtio_q_free_chain(recvq, &session->free_head_recv, used.id);
+        session->recvs_free += freed;
         recvq->last_used_idx++;
+        session->RECV++;
     }
 
     if(any_in) alloc_recv(session);
@@ -405,23 +441,6 @@ err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
     return ERR_OK;
 }
 
-static int user_tcp_stack_close(tcp_session* tcp) {
-    if(tcp->stack_closed == 2) return 1;
-
-    if(tcp->stack_closed == 0) {
-        socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
-    }
-
-    tcp->stack_closed = 1;
-
-    if(socket_internal_requester_wait_all_finish(&tcp->tcp_output_pusher.r, 1) == 0) {
-        tcp->stack_closed = 2;
-        return 1;
-    }
-
-    return 0;
-}
-
 // If there are no errors and the callback function returns ERR_OK, then it is responsible for freeing the pbuf.
 // Otherwise, it must not free the pbuf so that lwIP core code can store it.
 
@@ -432,8 +451,12 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
 
     tcp_session* tcp = (tcp_session*)arg;
 
-    if(p == NULL) {
-        user_tcp_stack_close(tcp);
+    if(p == NULL) { // The other end has closed. So they are no longer receiving. Thus we close our fulfiller.
+        if(!(tcp->close_state & SCS_FULFILL_CLOSED)) {
+            ssize_t res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
+            tcp->close_state |= SCS_FULFILL_CLOSED;
+            assert_int_ex(-res, == , 0);
+        }
         return ERR_OK;
     }
 
@@ -448,12 +471,20 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
 
     assert_int_ex(-res, == , -0);
 
-    // FIXME I am not allowed to just set next as this causes freeing weirdness
+    // If we set P to be the head, it has only one reference (the reference that will free it).
     if(tcp->ack_head == NULL) tcp->ack_head = p;
-    else tcp->ack_tail->next = p;
+    else {
+        //  otherwise it has 2, the tail element from the ack chain, and also the reference for when we manually call free
+        tcp->ack_tail->next = p;
+        pbuf_ref(p);
+    }
 
     pp = p;
     do {
+        if(p != pp) {
+            // We add an extra ref to everything in the chain, as we will free them individually
+            pbuf_ref(pp);
+        }
         socket_internal_request_ind(&tcp->tcp_output_pusher.r, (char*)pp->payload, pp->len, pp->len);
         tcp->recv += pp->len;
     } while(pp->len != pp->tot_len && (pp = pp->next));
@@ -476,7 +507,7 @@ static void tcp_application_ack_all(tcp_session* tcp) {
     struct pbuf* pp;
     while(p) {
         pp = p->next;
-        pbuf_free(p); // FIXME Free fress chain
+        pbuf_free(p); // This frees a whole chain, but we have added in extra references
         p = pp;
     }
     tcp->ack_head = NULL;
@@ -521,14 +552,43 @@ ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length
     return length;
 }
 
+static ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+    tcp_session* tcp = (tcp_session*)arg;
+
+    switch(request->type) {
+        case REQUEST_CLOSE:
+            tcp->close_state |= SCS_USER_CLOSING;
+            break;
+        case REQUEST_FLUSH:
+            tcp_output(tcp->tcp_pcb);
+            break;
+        default:
+            // Empty
+        {}
+    }
+
+    return length;
+}
+
 // Application -> TCP
 void handle_fulfill(tcp_session* tcp) {
 
     // We expect only data
     ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, SOCK_INF,
                                                                       F_CHECK | F_START_FROM_LAST_MARK | F_SET_MARK | F_DONT_WAIT,
-                                                                      &tcp_ful_func, tcp, 0, &ful_oob_func_skip_oob);
-    tcp_output(tcp->tcp_pcb);
+                                                                      &tcp_ful_func, tcp, 0, &tcp_ful_oob_func);
+
+    err_t flush = tcp_output(tcp->tcp_pcb);
+
+    assert_int_ex(flush, == , ERR_OK);
+
+    if(tcp->close_state & SCS_USER_CLOSING) {
+        // Get up to date on acking RCV path o/w a RST is sent instead of a FIN
+        tcp_application_ack(tcp);
+        err_t er = tcp_close(tcp->tcp_pcb);
+        tcp->close_state |= SCS_PCB_LAYER_CLOSED;
+        assert_int_ex(er, ==, ERR_OK);
+    }
 }
 
 static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
@@ -547,7 +607,7 @@ static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
     tcp_arg(session->tcp_pcb, session);
     tcp_sent(session->tcp_pcb, tcp_sent_callback);
     tcp_recv(session->tcp_pcb, tcp_recv_callback);
-    // TODO err
+    // er is set elsewhere
 
     return session;
 }
@@ -561,7 +621,19 @@ static void send_connect_callback(tcp_session* tcp, err_t err) {
 }
 
 static void tcp_er(void *arg, err_t err) {
-    assert(0);
+    tcp_session* tcp = (tcp_session*)arg;
+
+    // This session may have already been freed
+    if(tcp != NULL) {
+        // We don't free here. Instead we mark the pcb as already closed, and handle on the next main loop
+
+        tcp->close_state |= SCS_FULFILL_CLOSED | SCS_PCB_LAYER_CLOSED;
+
+        ssize_t res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 0);
+
+        assert_int_ex(-res, ==, 0);
+    }
+
 }
 
 static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
@@ -624,7 +696,12 @@ static int user_tcp_connect_sockets(capability sealed_session,
 
     tcp_session* tcp = (tcp_session*)sealed_session; // TODO seal/unseal
     tcp->events = POLL_IN;
-    return socket_internal_fulfiller_connect(&tcp->tcp_input_pushee, tcp_input_pusher);
+    int res = socket_internal_fulfiller_connect(&tcp->tcp_input_pushee, tcp_input_pusher);
+    if(res < 0) return res;
+    if(tcp->close_state & SCS_FULFILL_CLOSED) {
+        // We got the connect AFTER we tried to close! Just close it now.
+        socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
+    }
 }
 
 static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
@@ -661,9 +738,6 @@ static err_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
     return er;
 }
 
-// TODO close on timeout?
-// TODO close on error
-
 static void user_tcp_close(tcp_session* tcp) {
     // First close user layer
 
@@ -671,24 +745,28 @@ static void user_tcp_close(tcp_session* tcp) {
 
     assert_int_ex(res, ==, 0);
 
-    if(tcp->stack_closed == 0) {
+    if(!(tcp->close_state & SCS_FULFILL_CLOSED)) {
         // We will have done this earlier otherwise
         res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
-
+        tcp->close_state |= SCS_FULFILL_CLOSED;
         assert_int_ex(res, ==, 0);
     }
 
-
     // Then free any pcbs / ack the entire window in case anything has not been consumed
-    tcp_arg(tcp->tcp_pcb, NULL); // We may still get events, to do this to ignore them
 
-    tcp_application_ack_all(tcp);
+    if(!(tcp->close_state & SCS_USER_REQUEST_CLOSED)) {
+        tcp_application_ack_all(tcp);
+    }
 
     // Then close tcp layer
-    err_t er = tcp_close(tcp->tcp_pcb);
+    if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) {
+        tcp->close_state |= SCS_PCB_LAYER_CLOSED;
+        err_t er = tcp_close(tcp->tcp_pcb);
 
-    assert_int_ex(er, ==, ERR_OK);
+        assert_int_ex(er, ==, ERR_OK);
+    }
 
+    tcp_arg(tcp->tcp_pcb, NULL); // We may still get events, to do this to ignore them
     // Then free session
 
     free_tcp_session(tcp);
@@ -746,7 +824,12 @@ int main(register_t arg, capability carg) {
         register_t now = syscall_now();
         if((now - time) >= 200000000) {
             time = now;
-            printf("Sign of life now = %lx. (%d)(%d. IM = %x)\n", now, ints, fake_ints, cp0_status_im_get());
+            size_t n = 0;
+            FOR_EACH_TCP(T) {
+                n++;
+            }
+            printf("Sign of life now = %lx. (%d)(%d) IM = %x. RCV = %ld of %ld. Open TCPS = %lx\n",
+                   now, ints, fake_ints, cp0_status_im_get(), session.RECV, session.RECV_RDY, n);
             stats_display();
         }
         sock_event = 0;
@@ -781,28 +864,41 @@ int main(register_t arg, capability carg) {
         restart_poll:
         // respond to sockets
         FOR_EACH_TCP(tcp_session) {
-            if(tcp_session->tcp_output_pusher.r.fulfiller_component.fulfiller_closed ||
-                    (tcp_session->stack_closed && user_tcp_stack_close(tcp_session))) {
-                // We can safely free everything
+            if(!(tcp_session->close_state & SCS_USER_FULFILL_CLOSED) &&
+                    tcp_session->tcp_output_pusher.r.fulfiller_component.fulfiller_closed) {
+                tcp_session->close_state |= SCS_USER_FULFILL_CLOSED;
+                // TODO close half the duplex. Currently we just close the entire thing.
+            }
+
+            // TODO we need a notify for this wait_all_finish
+            // FIXME in the case the pcb is closed we might want the session around if it was closed with fin rather than rst
+            if(tcp_session->close_state & (SCS_USER_FULFILL_CLOSED | SCS_PCB_LAYER_CLOSED) ||
+                    ((tcp_session->close_state & SCS_FULFILL_CLOSED) &&
+                            (socket_internal_requester_wait_all_finish(&tcp_session->tcp_output_pusher.r, 1) == 0))) {
+                // Either the user stopped reading
                 user_tcp_close(tcp_session);
                 // Don't trust the for each after modifying the set
                 goto restart_poll;
             }
 
-            tcp_application_ack(tcp_session);
-            enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1);
-            if(revents && sock_sleep) {
-                sock_sleep = 0;
-                goto restart_poll;
+            if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
+                tcp_application_ack(tcp_session);
+                enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1);
+                if(revents && sock_sleep) {
+                    sock_sleep = 0;
+                    goto restart_poll;
+                }
+                if(revents & POLL_IN) {
+                    sock_event = 1;
+                    handle_fulfill(tcp_session);
+                } else if(revents & (POLL_ER | POLL_HUP)) {
+                    tcp_session->close_state |= SCS_USER_REQUEST_CLOSED;
+                    user_tcp_close(tcp_session);
+                    // Don't trust the for each after modifying the set
+                    goto restart_poll;
+                }
             }
-            if(revents & POLL_IN) {
-                sock_event = 1;
-                handle_fulfill(tcp_session);
-            } else if(revents & (POLL_ER | POLL_HUP)) {
-                user_tcp_close(tcp_session);
-                // Don't trust the for each after modifying the set
-                goto restart_poll;
-            }
+
         }
 
         if(sock_sleep) {

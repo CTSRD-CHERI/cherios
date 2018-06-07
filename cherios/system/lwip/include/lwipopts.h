@@ -33,11 +33,17 @@
 
 #define NO_SYS                      1
 #define SYS_LIGHTWEIGHT_PROT        0
-#define MEM_LIBC_MALLOC             1
-#define MEMP_MEM_MALLOC             1
-#define MEM_ALIGNMENT               4
+//#define MEM_LIBC_MALLOC             1
+//#define MEMP_MEM_MALLOC             1
+#define MEM_ALIGNMENT               32 // CAP_SIZE
+
+// This ALWAYS works
+#define LWIP_MEM_ALIGN(x) cheri_setoffset(x,((cheri_getbase(x) + cheri_getoffset(x) + MEM_ALIGNMENT - 1) & ~(MEM_ALIGNMENT-1)) - cheri_getbase(x))
+// This works if base is aligned.
+//#define LWIP_MEM_ALIGN(x) cheri_setoffset(x,((cheri_getoffset(x) + MEM_ALIGNMENT - 1) & ~(MEM_ALIGNMENT-1)))
+
 #define MEM_SIZE                    (4 * 1024 * 1024)
-// These seem to get IGNORED when we use libc malloc
+// These seem to get IGNORED when we use mem_malloc. We probably want to use pools however. Only payloads need malloc.
 #define MEMP_NUM_PBUF               1024
 #define MEMP_NUM_UDP_PCB            20
 #define MEMP_NUM_TCP_PCB            20
@@ -71,6 +77,8 @@
 #define LWIP_NETCONN                0
 #define LWIP_SOCKET                 0
 
+#define LWIP_SUPPORT_CUSTOM_PBUF    1
+
 #define ETHARP_TRUST_IP_MAC         0
 #define ETH_PAD_SIZE                2
 #define LWIP_CHKSUM_ALGORITHM       2
@@ -82,6 +90,8 @@
 #define TCP_KEEPIDLE_DEFAULT        10000UL // Default KEEPALIVE timer in milliseconds
 #define TCP_KEEPINTVL_DEFAULT       2000UL  // Default Time between KEEPALIVE probes in milliseconds
 #define TCP_KEEPCNT_DEFAULT         9U      // Default Counter for KEEPALIVE probes
+
+// #define TCP_MSL                     1000 // The time (in ms) we will keep connections alive after closing
 
 /*
 #define mem_init(X)

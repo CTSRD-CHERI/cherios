@@ -62,6 +62,9 @@ int main(register_t arg, capability carg) {
 
     NET_SOCK netsock;
 
+    while(net_try_get_ref() == NULL) {
+        sleep(0);
+    }
     // We need to loop. The server may not have been created yet!
     do {
         sleep(0);
@@ -91,9 +94,9 @@ int main(register_t arg, capability carg) {
     assert(netsock != NULL);
 
     printf("Sending request: %s\n", REQ2);
-    res = socket_send(&netsock->sock, REQ2, sizeof(REQ2), MSG_NONE);
+    res = socket_send(&netsock->sock, REQ2, sizeof(REQ2)-1, MSG_NONE);
 
-    assert_int_ex(res, ==, sizeof(REQ2));
+    assert_int_ex(res, ==, sizeof(REQ2)-1);
 
     res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL);
 

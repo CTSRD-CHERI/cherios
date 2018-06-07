@@ -204,6 +204,10 @@ void handle_loop(void) {
     memcpy(s.file_name_buf, ROOT "/", sizeof(ROOT));
     s.server_root_length = sizeof(ROOT);
 
+    while(!try_get_fs() || !net_try_get_ref()) {
+        sleep(0);
+    }
+
     ssize_t res = mkdir(ROOT);
 
     assert(res == 0 || res == 8);
