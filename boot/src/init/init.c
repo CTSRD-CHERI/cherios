@@ -318,8 +318,16 @@ static void load_modules(init_info_t * init_info) {
     printf("Creating mop for proc man\n");
     // TODO eventually capmalloc will do this nicely */
     res_t space_for_mop = cap_malloc(MOP_REQUIRED_SPACE);
-    mop_t mop_for_proc = mem_makemop(space_for_mop, mop).val;
 
+    CHERI_PRINT_CAP(space_for_mop);
+
+    ERROR_T(mop_t) mop_t_or_er = mem_makemop(space_for_mop, mop);
+
+    if(!IS_VALID(mop_t_or_er)) {
+        assert_int_ex(-mop_t_or_er.er, == , 0);
+    }
+
+    mop_t mop_for_proc = mop_t_or_er.val;
 
     /* Send the mop */
     printf("Passing mop to proc man\n");

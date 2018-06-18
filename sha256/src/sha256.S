@@ -28,9 +28,10 @@
 # SUCH DAMAGE.
 #
 
-.set noreorder
-.set nobopt
-.set noat
+#define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+#include "mips.h"
+.include "asm.S"
 
 # This is an implementation of sha256 that tries not to spill any registers - due to lack of stack trusted memory being
 # In short supply when we don't trust the system.
@@ -141,11 +142,12 @@ sha256:
 
 # save the registers we use
 
-csetoffset  $c6, $c0, $s0
-csetoffset  $c7, $c0, $s1
-csetoffset  $c8, $c0, $s2
-csetoffset  $c9, $c0, $s3
-csetoffset  $c13, $c0, $s4
+cnull       $c6
+csetoffset  $c6, $c6, $s0
+csetoffset  $c7, $c6, $s1
+csetoffset  $c8, $c6, $s2
+csetoffset  $c9, $c6, $s3
+csetoffset  $c13, $c6, $s4
 
 ##########
 # Init H #

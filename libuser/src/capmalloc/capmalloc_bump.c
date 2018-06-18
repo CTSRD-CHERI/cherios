@@ -149,12 +149,9 @@ static int offload_release(size_t base, size_t length, size_t times, mop_t mop, 
     return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, worker_act, mode, 0);
 }
 
-static capability memhandle_nfo(capability mem) {
+static size_t memhandle_length(capability mem) {
     register_t type = cheri_gettype(mem);
-    if(type == RES_TYPE) {
-        mem = rescap_info(mem);
-    }
-    return mem;
+    return (type == RES_TYPE) ? rescap_length(mem) : cheri_getlen(mem);
 }
 
 static res_t alloc_from_pool(size_t size, size_t pool_n) {
@@ -164,11 +161,18 @@ static res_t alloc_from_pool(size_t size, size_t pool_n) {
         /* Needs a new page. We might eventually try make this asyc as well (have a queue of pages waiting */
         if(try_init_memmgt_ref() == NULL) return NULL;
 
-        p->field = mem_request(0,FIXED_POOL_SIZE - RES_META_SIZE, NONE, own_mop).val;
+        assert(cheri_gettag(own_mop));
 
-        assert(p->field != NULL);
+        ERROR_T(res_t) res = mem_request(0,FIXED_POOL_SIZE - RES_META_SIZE, NONE, own_mop);
 
-        p->start = align_down_to(cheri_getbase(rescap_info(p->field)), UNTRANSLATED_PAGE_SIZE);
+        if(!IS_VALID(res)) {
+            printf(KRED"Mem request failed with code %d\n"KRST, (int)res.er);
+            panic("");
+        }
+
+        p->field = res.val;
+
+        p->start = align_down_to(cheri_getbase((p->field)), UNTRANSLATED_PAGE_SIZE);
         p->end = p->start + UNTRANSLATED_PAGE_SIZE;
 
         if(p->pool_size > RES_SUBFIELD_BITMAP_BITS) {
@@ -248,7 +252,7 @@ static res_t alloc_from_dynamic(size_t size) {
 
         dynamic_pool.length = DYNAMIC_POOL_SIZE;
 
-        dynamic_pool.page_start = align_down_to(cheri_getbase(rescap_info(dynamic_pool.head)), UNTRANSLATED_PAGE_SIZE);
+        dynamic_pool.page_start = align_down_to(cheri_getbase(dynamic_pool.head), UNTRANSLATED_PAGE_SIZE);
         dynamic_pool.page_offset = UNTRANSLATED_PAGE_SIZE;
 
         dynamic_pool.outstanding_claims = 0;
@@ -313,8 +317,7 @@ res_t cap_malloc(size_t size) {
     }
 }
 
-fixed_pool* find_inuse(capability nfo) {
-    size_t base = cheri_getbase(nfo);
+fixed_pool* find_inuse(size_t base) {
 
     for(size_t i = 0; i < N_FIXED_POOLS; i++) {
         fixed_pool* p = & pools[i];
@@ -328,9 +331,9 @@ fixed_pool* find_inuse(capability nfo) {
 }
 
 int cap_claim(capability mem) {
-    capability nfo = memhandle_nfo(mem);
+    size_t nfo_len = memhandle_length(mem);
 
-    fixed_pool* fixed = find_inuse(nfo);
+    fixed_pool* fixed = find_inuse(cheri_getbase(mem));
 
     if(fixed != NULL) {
         fixed->outstanding_claims++;
@@ -340,14 +343,14 @@ int cap_claim(capability mem) {
 
         // Sync because we care about the return
 
-        return offload_claim(cheri_getbase(nfo), cheri_getlen(nfo), 1, own_mop, SYNC_CALL);
+        return offload_claim(cheri_getbase(mem), nfo_len, 1, own_mop, SYNC_CALL);
     }
 }
 
 void cap_free(capability mem) {
-    capability nfo = memhandle_nfo(mem);
+    size_t nfo_len = memhandle_length(mem);
 
-    fixed_pool* fixed = find_inuse(nfo);
+    fixed_pool* fixed = find_inuse(cheri_getbase(mem));
 
     if(fixed != NULL) {
         if(fixed->outstanding_claims == 0) {
@@ -361,7 +364,7 @@ void cap_free(capability mem) {
 
         // We free asynchronously for efficiency
 
-        offload_release(cheri_getbase(nfo), cheri_getlen(nfo), 1, own_mop, SEND);
+        offload_release(cheri_getbase(mem), nfo_len, 1, own_mop, SEND);
     }
 }
 

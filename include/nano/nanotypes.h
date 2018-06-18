@@ -62,8 +62,8 @@
 
 
 /* Size of metadata for reservations. Split into private and user data */
-#define RES_PRIV_SIZE                   (32)
-#define RES_META_SIZE                   (64)
+#define RES_PRIV_SIZE                   (0)
+#define RES_META_SIZE                   (32)
 #define RES_USER_SIZE                   (RES_META_SIZE - RES_PRIV_SIZE)
 
 

@@ -42,6 +42,7 @@ ALLOCATE_PLT_NANO
 /* Use linker allocated memory to store boot-info. */
 static init_info_t init_info;
 capability fpga_cap;
+capability int_cap;
 
 capability
 crt_init_globals_kernel()
@@ -95,6 +96,8 @@ int cherios_main(nano_kernel_if_t* interface,
 	 * to get access to the phy mem we need */
 
     init_nano_kernel_if_t(interface, def_data, &plt_common_single_domain, plt_auth_cap);
+
+    int_cap = get_integer_space_cap();
 
 	/* Get the capability for the uart. We should save this somewhere sensible */
     page_t* book = get_book();

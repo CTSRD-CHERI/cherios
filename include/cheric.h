@@ -41,7 +41,7 @@
     #define CAP_SIZE 0x20
 #elif _MIPS_SZCAP == 128
 #define _CHERI128_
-	#define U_PERM_BITS 16
+	#define U_PERM_BITS 4
     #define CAP_SIZE 0x10
 #else
 #error Unknown capability size
@@ -50,7 +50,6 @@
 #ifndef __ASSEMBLY__
 
 #include "cdefs.h"
-#include "cherireg.h"
 #include "mips.h"
 
 #define _safe __attribute__((temporal_safe))
@@ -129,8 +128,7 @@ typedef unsigned int stype;
 #define	cheri_cchecktype(c, t)	__builtin_mips_cheri_check_type(		\
 				    __DECONST(capability, (c)), (t))
 
-// Update and use __builtin_mips_cheri_get_cap_addr(x)
-#define cheri_getcursor(x) (cheri_getbase(x) + cheri_getoffset(x))
+#define cheri_getcursor(x) (__builtin_cheri_address_get(x))
 #define cheri_setcursor(x,y) (cheri_setoffset(x, y - cheri_getbase(x)))
 
 #define	cheri_getdefault()	__builtin_mips_cheri_get_global_data_cap()
@@ -147,6 +145,15 @@ typedef unsigned int stype;
 
 #define	cheri_setbounds(x, y)	__builtin_cheri_bounds_set(		\
 				    __DECONST(capability, (x)), (y))
+// TODO find instrinsic
+#define	cheri_setbounds_exact(x, y)	                        \
+({                                                          \
+capability __exact;                                         \
+__asm__ ("csetbounds %[out], %[in], %[len]"                 \
+    : [out]"=C"(__exact)                                    \
+    :[in]"C"(x),[len]"r"(y):);                              \
+    __exact; \
+})
 
 /* Names for permission bits */
 #define CHERI_PERM_GLOBAL		(1 <<  0)

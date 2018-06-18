@@ -60,7 +60,7 @@ if(NOT MAKEFS_PROGRAM)
     message(FATAL_ERROR "Could not find makefs program, please install it!")
 endif()
 
-option(BUILD_FOR_CHERI128 "build for cheri128" OFF)
+option(BUILD_FOR_CHERI128 "build for cheri128" ON)
 if(BUILD_FOR_CHERI128)
   set(CHERI_CPU cheri128)
 else()

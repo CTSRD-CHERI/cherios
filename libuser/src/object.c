@@ -45,6 +45,8 @@
 #include "exception_cause.h"
 #include "temporal.h"
 
+capability int_cap;
+
 __thread act_control_kt act_self_ctrl = NULL;
 __thread act_kt act_self_ref  = NULL;
 __thread act_notify_kt act_self_notify_ref = NULL;
@@ -72,6 +74,8 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     } else {
         init_kernel_if_t_new_thread(&kernel_if, self_ctrl, &plt_common_complete_trusting, plt_auth);
     }
+
+    int_cap = get_integer_space_cap();
 
 	act_self_ref  = syscall_act_ctrl_get_ref(self_ctrl);
     act_self_notify_ref = syscall_act_ctrl_get_notify_ref(self_ctrl);

@@ -37,12 +37,13 @@
 #include "types.h"
 #include "nano/nanokernel.h"
 #include "elf.h"
+#include "cheric.h"
 
 #define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
 
 typedef capability mop_t;
 
-#define MOP_REQUIRED_SPACE (8 * RES_META_SIZE)
+#define MOP_REQUIRED_SPACE (8 * CAP_SIZE)
 
 // Request bases with this alignment, and sizes that are this much less than multiples of pages
 #define MEM_REQUEST_FAST_OFFSET (2 * RES_META_SIZE)

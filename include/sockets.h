@@ -126,7 +126,7 @@ typedef struct request {
     union {
         struct uni_dir_socket_fulfiller* proxy_for;
         char* ind;
-        char im[CHERICAP_SIZE];
+        char im[CAP_SIZE];
         volatile act_notify_kt barrier_waiting;
         struct request* barrier_target;
         struct seek_desc seek_desc;

@@ -29,10 +29,6 @@
 #
 
 
-# FIXME: Used cfromptr to create null cap in a few places (this is wrong)
-# FIXME: Better concurrency
-# FIXME: SMP for revoke won't work at all in current state
-
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "mips.h"
@@ -95,6 +91,9 @@
 
 .data
 
+# We would like to bound these exactly. Help with a few bits
+.p2align 8
+
 START_LOCALS CAP_SIZE_BITS
 
 # Stuff to do with context switch. Allocated for each smp core #
@@ -136,7 +135,9 @@ local_var tres_bitfield, TRES_BITFIELD_SIZE, 1
 
 local_var context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
-local_var phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, PHY_PAGE_ENTRY_SIZE_BITS
+local_var phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, 8
+
+local_align 8
 
 END_LOCALS
 
@@ -227,7 +228,7 @@ smp_context_start:
     mflo        $t0
     daddiu      $t0, current_context
 
-    csetoffset  $c4, $idc, $t0               # current_context for smp core with cpu_id of $a0
+    cincoffset  $c4, $idc, $t0               # current_context for smp core with cpu_id of $a0
 
 smp_signal_loop:
     cllc        $c5, $c4
@@ -256,7 +257,7 @@ nano_kernel_init:
     dla         $k0, locals_start
     dli         $k1, locals_size
     csetoffset  $kr1c, $kdc, $k0
-    csetbounds  $kr1c, $kr1c, $k1                       # kr1c will hold a capability to our locals
+    csetboundsexact  $kr1c, $kr1c, $k1                       # kr1c will hold a capability to our locals
 
 #ifdef SMP_ENABLED
 	# Send SMP TCs other than 0 to trap to let nano perform init
@@ -269,18 +270,18 @@ nano_kernel_init:
 
     dli         $k0, context_table
     dli         $k1, (N_CONTEXTS * CONTEXT_SIZE)
-    csetoffset  $kr2c, $kr1c, $k0
-    csetbounds  $kr2c, $kr2c, $k1                       # Create capability to context_table
+    cincoffset  $kr2c, $kr1c, $k0
+    csetboundsexact  $kr2c, $kr2c, $k1                       # Create capability to context_table
 
     dli         $k0, CONTEXT_SIZE
 
     cincoffset  $c13, $kr2c, $k0
     csc         $c13, $zero, next_context($kr1c)        # Initialise next context
 
-    csetbounds  $c3, $kr2c, $k0
+    csetboundsexact  $c3, $kr2c, $k0
     dli         $k0, CHERI_FRAME_SIZE
     csd         $zero, $k0, 0($c3)                      # Set state to 0
-    cfromptr    $c4, $c4, $zero
+    cnull       $c4
     csc         $c4, $k0, CAP_SIZE($c3)                 # Set foundation ref to NULL
     csc         $c3, $zero, current_context($kr1c)       # Create first context and make it the current context
 
@@ -290,7 +291,7 @@ nano_kernel_init:
 
     cseal       $c3, $c3, $kr2c                          # Seal the first context
 
-    cfromptr    $kr2c, $kr2c, $zero
+    cnull       $kr2c
     csc         $kr2c, $zero, exception_context($kr1c)   # Set exception context = NULL
 
     csd         $zero, $zero, exception_level($kr1c)     # Set exception level to 0
@@ -391,8 +392,8 @@ nano_kernel_init:
     # Pass a read-only capability to the cap table
     dli          $k0, create_context_cap
     dli          $k1, cap_table_end - create_context_cap
-    csetoffset   $c1, $kr1c, $k0
-    csetbounds   $c1, $c1, $k1
+    cincoffset   $c1, $kr1c, $k0
+    csetboundsexact $c1, $c1, $k1
     dli          $k0, (Perm_Load | Perm_Load_Capability)
     candperm     $c1, $c1, $k0
 
@@ -408,12 +409,12 @@ nano_kernel_init:
     daddu       $t2, $a0, $t0                             # t2 = start of free physical mem
 
     csetoffset  $c13, $kdc, $t0
-    csetbounds  $c13, $c13, $a0
+    csetboundsexact  $c13, $c13, $a0
     candperm    $c13, $c13, $k0
     csetdefault $c13                                    # c13 is the beginning of unmanaged mem
 
     csetoffset  $c17, $kcc, $t0
-    csetbounds  $c17, $c17, $a0
+    csetboundsexact  $c17, $c17, $a0
     csetoffset  $c17, $c17, $a1
     candperm    $c17, $c17, $k0
 
@@ -447,6 +448,16 @@ nano_kernel_init:
 ##########################################################################
 
 .text
+
+####################################### (safe)
+# capaiblity get_integer_space_cap(void)
+.global get_integer_space_cap
+get_integer_space_cap:
+#######################################
+
+    CRETURN
+    candperm    $c3, $kdc, $zero
+
 ####################################### (safe)
 # capability obtain_super_powers(void)
 .global obtain_super_powers
@@ -469,9 +480,9 @@ get_book:
 ###################################
     dli        $t0, phy_page_table
     dli        $t1, (TOTAL_PHY_PAGES) * PHY_PAGE_ENTRY_SIZE
-    csetoffset $c3, $idc, $t0
+    cincoffset $c3, $idc, $t0
     dli        $t2, Perm_Load
-    csetbounds $c3, $c3, $t1
+    csetboundsexact $c3, $c3, $t1
     candperm   $c3, $c3, $t2
     CRETURN
     nop
@@ -652,7 +663,7 @@ get_top_level_table:
     dli         $t1, PAGE_TABLE_SIZE
     cincoffset  $c3, $idc, $t0
     dli         $t0, VTABLE_TYPE_L0
-    csetbounds  $c3, $c3, $t1
+    csetboundsexact  $c3, $c3, $t1
     csetoffset  $c4, $kdc, $t0
     cseal       $c3, $c3, $c4
 
@@ -678,7 +689,6 @@ make_first_reservation:
     dli         $t1, VIRT_MEM_SIZE
     csetoffset  $c3, $kdc, $t2
     dli         $t0, DEF_DATA_PERMS
-    csetbounds  $c3, $c3, $t1
     candperm    $c3, $c3, $t0                     # c3 is a cap to all of virtual mem
 
     dli         $t0, RES_META_SIZE                # amount of space we lost to meta data
@@ -690,7 +700,7 @@ make_first_reservation:
     csd         $t2, $zero, (RES_LENGTH_OFFSET)($c3)        # set length
     csd         $zero, $zero, (RES_PID_OFFSET)($c3)         # set parent to none
 
-    csetbounds  $c3, $c3, $t0
+    csetboundsexact  $c3, $c3, $t0
     cseal       $c3, $c3, $c4                     # handle
 
 make_first_er:
@@ -875,8 +885,8 @@ get_phy_page:
     daddu       $t1, $t1, $t2                           # t1 is the offset required for our cap
     csetoffset  $c3, $kdc, $t1
     csetoffset  $c4, $kcc, $t1
-    csetbounds  $c3, $c3, $t0                           # bounds number of pages requested
-    csetbounds  $c4, $c4, $t0
+    csetboundsexact  $c3, $c3, $t0                           # bounds number of pages requested
+    csetboundsexact  $c4, $c4, $t0
 
     dli         $t0, DEF_DATA_PERMS   #t0 is the permission mask
     dli         $t1, (Perm_Load | Perm_Store)
@@ -916,7 +926,7 @@ create_context:
     cscc        $t3, $c5,  $c6                              # increment next context
     beqz        $t3, 1b
 
-    csetbounds  $c4, $c4, $t0                               # will fail if we were out of space
+    csetboundsexact  $c4, $c4, $t0                               # will fail if we were out of space
     dli         $a0, CONTEXT_OFFSET_STATE
     csd         $zero, $a0, 0($c4)                          # set state to allocated for new context
     cnull       $c5
@@ -1065,7 +1075,7 @@ get_userdata_for_res:
     dli         $t2, RES_USER_SIZE
     cunseal     $c3, $c3, $c4
     cincoffset  $c3, $c3, $t1
-    csetbounds  $c3, $c3, $t2
+    csetboundsexact  $c3, $c3, $t2
     cclearlo    EN1(c4)
     CRETURN
     nop
@@ -1151,8 +1161,8 @@ take_make:
     csetoffset  $c3, $kcc, $t0              # c3 is code
     csetoffset  $c4, $kdc, $t0              # c4 is data
 
-    csetbounds  $c3, $c3, $t1
-    csetbounds  $c4, $c4, $t1
+    csetboundsexact  $c3, $c3, $t1
+    csetboundsexact  $c4, $c4, $t1
 
     candperm    $c3, $c3, $t2
     candperm    $c4, $c4, $t2
@@ -1224,38 +1234,27 @@ rescap_splitsub:
     cclearlo    EN1(c4)
 
 #################################### (safe)
-# capability rescap_info(res_t res)
-.global rescap_info
-rescap_info:
+# size_t rescap_length(res_t res)
+.global rescap_length
+rescap_length:
 ####################################
+    li          $v0, 0
     cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
     cgetoffset  $t3, $c3                    # get sub-id if exists
     csetoffset  $c3, $c3, $zero
-    cld         $t2, $zero, RES_LENGTH_OFFSET($c3)       # get length
-    cgetbase    $t1, $c3
-    daddiu      $t1, $t1, RES_META_SIZE
+    cld         $v0, $zero, RES_LENGTH_OFFSET($c3)       # get length
 
     beqz        $t3, normal_info
-    csetoffset  $c5, $kdc, $t1
+    dli         $t2, 1
 
     clb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3)
-    dli         $t2, 1
-    dsllv       $t2, $t2, $t0               # set new bounds
-    daddiu      $t3, $t3, -1
-    dsllv       $t3, $t3, $t0
-    cincoffset  $c5, $c5, $t3               # increment to get sub
+    dsllv       $v0, $t2, $t0               # set new bounds
 
     normal_info:
-    dli         $t0, DEF_DATA_PERMS
-    csetbounds  $c3, $c5, $t2
-    candperm    $c3, $c3, $t0
-    ccleartag   $c3, $c3
-
-    cclearlo    EN1(c4)
     CRETURN
-    nop
+    cclearlo    EN2(c3,c4)
 
 
 .macro EXTRACT_AND_SCALE_L0 addr, out, scale
@@ -1751,7 +1750,7 @@ clear_loop_l1_start_retry:
 
     dli         $t0, RES_META_SIZE
     csetoffset  $c3, $kdc, $a2
-    csetbounds  $c3, $c3, $t0
+    csetboundsexact  $c3, $c3, $t0
     sub         $a4, $a4, $t0               #some space for metadata
 
     dli         $t1, DEF_DATA_PERMS
@@ -1824,7 +1823,7 @@ rescap_split:
     dli         $t1, DEF_DATA_PERMS
 
     csetoffset  $c3, $kdc, $t3              # Create new meta node
-    csetbounds  $c3, $c3, $t8
+    csetboundsexact  $c3, $c3, $t8
     candperm    $c3, $c3, $t1
 
     STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)     # set state of new reservation to open
@@ -1932,7 +1931,7 @@ rescap_parent:
 
     csetoffset  $c3, $kdc, $t0              # create new res node
     cincoffset  $c3, $c3, $a0
-    csetbounds  $c3, $c3, $a0
+    csetboundsexact  $c3, $c3, $a0
     dli         $t3, DEF_DATA_PERMS
     candperm    $c3, $c3, $t3
 
@@ -2021,7 +2020,7 @@ good_level: #t2 now contains the type we will seal the next level with
 
     dli         $t1, PAGE_TABLE_SIZE                    # construct return value
     csetoffset  $c3, $kdc, $t0
-    csetbounds  $c3, $c3, $t1
+    csetboundsexact  $c3, $c3, $t1
     csetoffset  $c4, $kdc, $t2
     cseal       $c3, $c3, $c4
 
@@ -2067,11 +2066,11 @@ get_sub_table:
     cld         $t0, $t0, 0($c3)
     slti        $t2, $t0, -1
     beqz        $t2, get_sub_table_end
-    cfromptr    $c3, $c3, $zero
+    cnull       $c3
 
     csetoffset  $c3, $kdc, $t0
     dli         $t1, PAGE_TABLE_SIZE
-    csetbounds  $c3, $c3, $t1
+    csetboundsexact  $c3, $c3, $t1
     cseal       $c3, $c3, $c4
 
     get_sub_table_end:
@@ -2324,7 +2323,7 @@ foundation_create:
 
     cincoffset  $c4, $c14, $t1                       # c4 is the start of the user code/data
     dli         $t0, DEF_DATA_PERMS
-    csetbounds  $c4, $c4, $a0                       # c4 is users data
+    csetboundsexact  $c4, $c4, $a0                       # c4 is users data
     # store data we will get on entry
     bnez        $a3, 1f
     candperm    $c4, $c4, $t0
@@ -2334,13 +2333,13 @@ foundation_create:
 
     # create first entry point
     cincoffset  $c3, $c3, $t1                       # skip over metadata
-    csetbounds  $c3, $c3, $a0                       # correctly bounded code pointer
+    csetboundsexact  $c3, $c3, $a0                       # correctly bounded code pointer
     csetoffset  $c3, $c3, $a1                       # correctly offset entry
 
     csc         $c3, $zero, FOUNDATION_META_ENTRY_VECTOR_OFFSET($c14) # store first entry trampoline
 
     # create return token
-    csetbounds  $c15, $c14, $t1                       # we can set offset to 0 to get metadata
+    csetboundsexact  $c15, $c14, $t1                       # we can set offset to 0 to get metadata
     dli         $t3, FOUNDATION_META_ENTRY_VECTOR_OFFSET
     csetoffset  $c15, $c15, $t3                       # entry points to pcc to load in trampoline
 
@@ -2425,7 +2424,8 @@ foundation_entry_get_id:
     cincoffset  $c4, $kdc, FOUND_ENTRY_TYPE
     cunseal     $c3, $c3, $c4                           # unseal foundation
     csetoffset  $c3, $c3, $zero
-    csetbounds  $c3, $c3, FOUNDATION_ID_SIZE            # set bounds
+    li          $t1, FOUNDATION_ID_SIZE
+    csetboundsexact  $c3, $c3, $t1                      # set bounds
     dli         $t0, Perm_Load
     candperm    $c3, $c3, $t0                           # read only
     CRETURN
@@ -2439,7 +2439,7 @@ foundation_exit:
 
     clc         $c3, $zero, current_context($kr1c)       # get current context
     dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
-    cfromptr    $c4, $c4, $zero
+    cnull       $c4
 
     csc         $c4, $t0, 0($c3)
     cclearlo    EN2(c3,c4)
@@ -2500,7 +2500,7 @@ foundation_get_id:
 
     # make cert for current foundation
     dli         $t0, FOUNDATION_ID_SIZE
-    csetbounds  $c3, $c3, $t0
+    csetboundsexact  $c3, $c3, $t0
     dli         $t0, Perm_Load
     candperm    $c3, $c3, $t0
 
@@ -2522,7 +2522,7 @@ rescap_take_cert:
 
     # make cert for current foundation
     dli         $t0, FOUNDATION_ID_SIZE
-    csetbounds  $c5, $c5, $t0
+    csetboundsexact  $c5, $c5, $t0
     dli         $t0, Perm_Load
     candperm    $c5, $c5, $t0
 
@@ -2556,9 +2556,9 @@ rescap_take_locked_cert_shared:
     cmove       $c6, $c4
     cincoffset  $c3, $c3, $t0
     cincoffset  $c4, $c4, $t0
-    csetbounds  $c6, $c6, $t0
-    csetbounds  $c3, $c3, $t1
-    csetbounds   $c4, $c4, $t1
+    csetboundsexact  $c6, $c6, $t0
+    csetboundsexact  $c3, $c3, $t1
+    csetboundsexact   $c4, $c4, $t1
 
     # store cert
     csc         $c7, $zero, 0($c6)
@@ -2632,7 +2632,7 @@ rescap_unlock:
 
     # convert to same form as used for cert earlier
     dli         $t0, FOUNDATION_ID_SIZE
-    csetbounds  $c5, $c5, $t0
+    csetboundsexact  $c5, $c5, $t0
     dli         $t0, Perm_Load
     candperm    $c5, $c5, $t0
 
@@ -2676,7 +2676,8 @@ tres_get:
     csetoffset $c4, $kdc, $t1
 
     candperm $c3, $c3, $t0
-    csetbounds $c3, $c3, 1
+    li       $t0, 1
+    csetboundsexact $c3, $c3, $t0
     cseal   $c3, $c3, $c4
 
     CRETURN
@@ -2898,7 +2899,7 @@ tres_get_ro_bitfield:
     dli         $t0, tres_bitfield
     cincoffset  $c3, $idc, $t0
     dli         $t0, TRES_BITFIELD_SIZE
-    csetbounds  $c3, $c3, $t0
+    csetboundsexact  $c3, $c3, $t0
     dli         $t0, (Perm_Load)
     CRETURN
     candperm    $c3, $c3, $t0
@@ -2937,7 +2938,7 @@ get_interface: # (safe)
     dla         $k0, locals_start
     dli         $k1, locals_size
     csetoffset  $kr2c, $kdc, $k0
-    csetbounds  $kr2c, $kr2c, $k1                        # kr1c will hold a capability to our locals
+    csetboundsexact  $kr2c, $kr2c, $k1                        # kr1c will hold a capability to our locals
 
     # TODO have a per context vector to say which functions are allowed
     dsll        $k1, $a1, CAP_SIZE_BITS

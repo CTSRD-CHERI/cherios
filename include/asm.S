@@ -318,6 +318,7 @@ li  $zero, 0xdead
 
 .macro cnull reg
     cfromptr    \reg, $idc, $zero
+    # csetbounds  \reg, \reg, $zero ???
 .endm
 
 .macro CRETURN

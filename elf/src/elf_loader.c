@@ -131,7 +131,12 @@ int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
 		ERROR("Bad e_version");
 		return 0;
 	}
-	if((hdr->e_flags != 0x30000007) && (hdr->e_flags != 0x30C2C005)) {
+#ifdef _CHERI256_
+#define ELF_E_FLAGS 0x30C2C005
+#else
+#define ELF_E_FLAGS 0x30C1C005
+#endif
+	if((hdr->e_flags != 0x30000007) && (hdr->e_flags != ELF_E_FLAGS)) {
 		ERRORM("Bad e_flags: %X", hdr->e_flags);
 		return 0;
 	}

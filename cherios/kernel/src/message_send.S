@@ -33,7 +33,7 @@
 #include "mips.h"
 .include "asm.S"
 #include "dylink.h"
-
+#include "syscall_ret.h"
 
 // Message send is still a bit funky because of how it returns, should probably fix this
 // This does the normal cross domain stuff, but creates a struct to contain both possible return registers and
@@ -47,17 +47,17 @@ cjalr  $c14, $c12
 clcbi  $c11, (CTLP_OFFSET_CSP)($idc)
 clcbi  $c10, (CTLP_OFFSET_CUSP)($idc)
 clcbi  $c25, (CTLP_OFFSET_CGP)($idc)
-cincoffset  $c11, $c11, -(64 + 64)
+cincoffset  $c11, $c11, -((2 * CAP_SIZE) + RET_T_size)
 cmove       $c8, $c11
-csc	$c17, $zero, 64($c11)
-csc	$c18, $zero, (64 + 32)($c11)
+csc	$c17, $zero, (RET_T_size)($c11)
+csc	$c18, $zero, (RET_T_size + CAP_SIZE)($c11)
 clcbi  $c12, %capcall20(kernel_message_send_ret)($c25)
 cjalr  $c12, $c17
 cmove  $c18, $idc
-clc	$c17, $zero, 64($c11)
-clc	$c18, $zero, (64 + 32)($c11)
+clc	$c17, $zero, (RET_T_size)($c11)
+clc	$c18, $zero, (RET_T_size + CAP_SIZE)($c11)
 clc	$c3, $zero, 0($c11)
-cld    $v0, $zero, 32($c11)
-cld    $v1, $zero, 40($c11)
+cld    $v0, $zero, (RET_T_v0_offset)($c11)
+cld    $v1, $zero, (RET_T_v1_offset)($c11)
 ccall  $c17, $c18, 2
-cincoffset $c11, $c11, (64 + 64)
+cincoffset $c11, $c11, ((2 * CAP_SIZE) + RET_T_size)

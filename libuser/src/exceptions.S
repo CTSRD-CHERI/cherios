@@ -34,6 +34,7 @@
 #include "mips.h"
 .include "asm.S"
 #include "dylink.h"
+#include "cheriplt.h"
 
 .set RED_ZONE, 256
 
@@ -119,7 +120,7 @@ cmove       $c18, $idc
 clcbi       $c1, CTLP_OFFSET_CGP($idc)
 clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)
 clcbi       $c1, %captab20(exception_getcause)($c1)
-clcbi       $c1, (32)($c1) # Get the code capability directly from the plt stub
+clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
 
 # Call get cause
 # Gets v0 (cause) and v1(ccause). clobers c1. Restores idc. 18 now available as tmp.
@@ -212,14 +213,14 @@ normal_return:
 # LLVM is really stupid, we can't use idc for non thread local things - have to use c1
 
 clcbi       $c1, %captab20(exception_return)($c1)
-clcbi       $c1, (32)($c1) # Get the code capability directly from the plt stub
+clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
 ccall       $c1, $idc, 2
 nop
 
 replay_return:
 
 clcbi       $c1, %captab20(exception_replay)($c1)
-clcbi       $c1, (32)($c1) # Get the code capability directly from the plt stub
+clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
 ccall       $c1, $idc, 2
 nop
 

@@ -45,34 +45,34 @@ PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
 #define ALLOCATE_PLT_NANO PLT_ALLOCATE_csd(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 
+
+extern capability int_cap;
+#define MAKE_SEALABLE_INT(x) cheri_setoffset(int_cap, x)
+
 /* Safe (assuming the nano kernel performs relevent locking n the presence of a race */
 static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out) {
     out->data = out->code = NULL;
     size_t set_bound_to = required;
     required = align_up_to(set_bound_to, RES_META_SIZE);
     if(res != NULL) {
+        size_t length = rescap_length(res);
 
-        capability nfo = rescap_info(res);
+        if(length > required + RES_META_SIZE) {
+            res = rescap_split(res, length - (required + RES_META_SIZE));
+        }
+        if(res != NULL && length >= required) {
+            rescap_take(res, out);
 
-        if(nfo != NULL) {
-            size_t length = cheri_getlen(nfo);
-
-            if(length > required + RES_META_SIZE) {
-                res = rescap_split(res, length - (required + RES_META_SIZE));
-            }
-            if(res != NULL && length >= required) {
-                rescap_take(res, out);
-
-                if(out->data != NULL) {
-                    if(cheri_getlen(out->data) < set_bound_to) {
-                        out->data = out->code = NULL;
-                    } else {
-                        out->data = cheri_setbounds(out->data, set_bound_to);
-                        out->code = cheri_setbounds(out->code, set_bound_to);
-                    }
+            if(out->data != NULL) {
+                if(cheri_getlen(out->data) < set_bound_to) {
+                    out->data = out->code = NULL;
+                } else {
+                    out->data = cheri_setbounds(out->data, set_bound_to);
+                    out->code = cheri_setbounds(out->code, set_bound_to);
                 }
             }
         }
+
     }
 }
 

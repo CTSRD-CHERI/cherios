@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -27,72 +27,25 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_SYSCALL_RET_H
+#define CHERIOS_SYSCALL_RET_H
 
 #include "cheric.h"
-#include "mman.h"
-#include "string.h"
-#include "assert.h"
-#include "stdio.h"
-#include "syscalls.h"
 
-#define BLOCK_SIZE  0x10000
-#define WINDOW_SIZE 100
-#define N           1000    // set to 0 for good times
+#define RET_T_c3_offset 0
+#define RET_T_v0_offset CAP_SIZE
+#define RET_T_v1_offset (CAP_SIZE + REG_SIZE)
+#define RET_T_size      (2*CAP_SIZE)
 
-capability naughty[N];
+#ifndef __ASSEMBLY__
 
-int main(register_t arg, capability carg) {
+#include "types.h"
 
-    printf("Churn Hello World!\n");
-    cap_pair pr;
+_Static_assert(offsetof(ret_t, c3) == RET_T_c3_offset, "message_send.S assumes these offsets");
+_Static_assert(offsetof(ret_t, v0) == RET_T_v0_offset, "message_send.S assumes these offsets");
+_Static_assert(offsetof(ret_t, v1) == RET_T_v1_offset, "message_send.S assumes these offsets");
+_Static_assert(sizeof(ret_t) <= RET_T_size, "message_send.S allocates this size");
 
-    res_t maps[WINDOW_SIZE];
+#endif
 
-    bzero(maps, sizeof(maps));
-
-    printf("Oh boy here I go mmapping again!\n");
-
-    for(size_t i = 0; i < N; i++) {
-        size_t ndx = (i % WINDOW_SIZE);
-        res_t res = NULL;
-
-        if(i + WINDOW_SIZE < N) {
-            res = mem_request(0, BLOCK_SIZE - (2*RES_META_SIZE), NONE, own_mop).val;
-            if(res == NULL) {
-                printf("mmap failed\n");
-                return -1;
-            }
-        }
-
-        res_t old = maps[ndx];
-
-        maps[ndx] = res;
-
-        naughty[i] = res;
-
-        if(old != NULL) {
-            size_t len = rescap_length(old);
-
-            size_t base = align_down_to(cheri_getbase(old), UNTRANSLATED_PAGE_SIZE);
-            size_t length = align_up_to(len + (base - cheri_getbase(old)), UNTRANSLATED_PAGE_SIZE);
-
-            if(mem_release(base,length, 1, own_mop) != 0) {
-                printf("munmap failed\n");
-                return -1;
-            }
-        }
-    }
-
-    printf("Churn test done\n");
-
-
-    printf("Array at: %lx\n", mvirtual_to_physical((size_t)naughty));
-
-    for(size_t i = 0; i < N; i++) {
-        CHERI_PRINT_CAP(naughty[i]);
-    }
-
-    mdump();
-
-    return 0;
-}
+#endif //CHERIOS_SYSCALL_RET_H

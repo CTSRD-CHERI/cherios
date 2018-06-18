@@ -64,7 +64,7 @@ static image* find_process(const char *name) {
 static process_t* alloc_process(const char* name) {
 	assert(processes_end != MAX_PROCS);
 	loaded_processes[processes_end].name = name;
-	return &loaded_processes[processes_end++];
+	return cheri_setbounds_exact(&loaded_processes[processes_end++], sizeof(process_t));
 }
 
 process_t* seal_proc_for_user(process_t* process) {
@@ -230,6 +230,7 @@ act_control_kt user_create_thread(process_t* proc, const char* name, startup_des
 static void deliver_mop(mop_t mop) {
 	/* Normally a process would already have these, but we were created before memmgt */
 	if(own_mop == NULL) {
+		assert(cheri_gettag(mop));
 		mmap_set_mop(mop);
 		try_init_memmgt_ref();
 		bootstrapping = 0;

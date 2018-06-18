@@ -54,8 +54,8 @@
     ITEM(set_exception_handler, void, (context_t, context, register_t ,cpu_id), __VA_ARGS__) \
 /* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
     ITEM(rescap_take, void, (res_t, res, cap_pair*, out), __VA_ARGS__)\
-/* Returns a SEALED version of rescap_take, but does not change state. Then get fields using normal ops */\
-    ITEM(rescap_info, capability, (res_t, res), __VA_ARGS__)\
+/* Returns the length of a reservation (not including any metadata) */\
+    ITEM(rescap_length, size_t, (res_t, res), __VA_ARGS__)\
 /* Tells the revokeer to start revoking this reservation. revoking fails if already revoking. Must be MAPPED */\
     ITEM(rescap_revoke_start, void, (res_t, res), __VA_ARGS__)\
 /* Tells the revokeer to finish revoking this reservation from before. Must be UNMAPPED. */\
@@ -98,8 +98,6 @@
 /* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
 /* For debugging. Returns a global cap and gives your pcc all the permission bits it can */\
     ITEM(obtain_super_powers, capability, (void), __VA_ARGS__)\
-/* Gets a R/W cap for the userdata space of a meta data node of a reservation. */\
-    ITEM(get_userdata_for_res, capability, (res_t, res), __VA_ARGS__)\
 /* Get the victim context and cause register for the last exception. */\
     ITEM(get_last_exception, void, (exection_cause_t*, out), __VA_ARGS__)\
 /* Create a new founded code block. The entry returned will be at offset entry0. */\
@@ -146,7 +144,9 @@
 /* Send a user generated signal to another context\ */\
     ITEM(exception_signal, void, (context_t, other_context, register_t, code), __VA_ARGS__)\
 /* Get the last user exception */\
-    ITEM(exception_getcause, user_exception_cause_t, (void), __VA_ARGS__)
+    ITEM(exception_getcause, user_exception_cause_t, (void), __VA_ARGS__)\
+/* Get a capability that grants no permissions but can take any offset for sealing integers */\
+    ITEM(get_integer_space_cap, capability, (void), __VA_ARGS__)\
 
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
 

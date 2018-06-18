@@ -57,9 +57,8 @@ static mop_t init_vmem(capability mop_sealing_cap) {
     res_t first = make_first_reservation();
 
     /* Align the reservation to a page boundry (just throw away forever the first few bytes) */
-    capability nfo = rescap_info(first);
-    size_t base = cheri_getbase(nfo);
-    size_t length = cheri_getlen(nfo);
+    size_t length = rescap_length(first);
+    size_t base = cheri_getbase(first) + RES_META_SIZE;
     size_t realigned_base = align_up_to(base - RES_META_SIZE, UNTRANSLATED_PAGE_SIZE) + RES_META_SIZE;
 
     if(base != realigned_base) {

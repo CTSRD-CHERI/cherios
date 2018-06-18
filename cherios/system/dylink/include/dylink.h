@@ -73,7 +73,7 @@ DECLARE_ENUM(domain_type_t, DOMAIN_TYPE_LIST)
 
 typedef struct guard_t {
     register_t guard; // of type (domain_type_t | (info << 8))
-    char pad[CHERICAP_SIZE - sizeof(register_t)];
+    char pad[CAP_SIZE - sizeof(register_t)];
 } guard_t;
 
 typedef void entry_stub_t(void);

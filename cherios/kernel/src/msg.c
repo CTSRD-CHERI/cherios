@@ -186,8 +186,6 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 
 	ATOMIC_ADD(&unique, 64, 1, our_copy);
 
-    static int something;
-
 	if(ccaller->sync_state.sync_condition != 0) {
 		KERNEL_ERROR("Caller %s made a sync call but seemed to be waiting for a return already\n", ccaller->name);
 	}
@@ -196,11 +194,7 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 	ccaller->sync_state.sync_condition = 1;
 
     // I really want something that is tagged but can have any offset - this only works on 256 now
-	capability sync_token = (capability)&something;
-#ifdef _CHERI256_
-	sync_token = cheri_setbounds(sync_token, 0);
-#endif
-	sync_token = cheri_setoffset(sync_token, our_copy);
+	capability sync_token = MAKE_SEALABLE_INT(our_copy);
 	return cheri_seal(sync_token, sync_token_sealer);
 }
 
@@ -263,10 +257,6 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 	ret->c3 = NULL;
 	return;
 }
-
-_Static_assert(offsetof(ret_t, c3) == 0, "message return assumes these offsets");
-_Static_assert(offsetof(ret_t, v0) == 32, "message return assumes these offsets");
-_Static_assert(offsetof(ret_t, v1) == 40, "message return assumes these offsets");
 
 int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token) {
 

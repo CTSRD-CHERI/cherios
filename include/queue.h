@@ -74,7 +74,11 @@ typedef struct
 
 	register_t v0;  /* method nb */
 
+#ifdef _CHERI256_
 	char pad[20];	/* Makes the size 256 bytes in 256. Steal these bytes if you want larger messages. */
+#else
+	char pad[120]; /* for 128 it would make a lot of sense to have one fewer int args to make this fit in 128 */
+#endif
 }  msg_t;
 
 struct header_t {

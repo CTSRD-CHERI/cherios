@@ -43,6 +43,18 @@
 
 // The stubs are now as they will eventually be in the linker
 
+#if _MIPS_SZCAP == 256
+        #define PLT_STUB PLT_STUB256
+        #define PLT_STUB_CSD PLT_STUB256_CSD
+        #define PLT_STUB_DATA_OFF 32
+#elif _MIPS_SZCAP == 128
+    #define PLT_STUB PLT_STUB128
+    #define PLT_STUB_CSD PLT_STUB128_CSD
+    #define PLT_STUB_DATA_OFF 16
+#else
+    #error Unknown capability size
+#endif
+
 #ifndef __ASSEMBLY__
 
 #include "cheric.h"
@@ -93,6 +105,45 @@ __asm__ (                       \
     ".end " #name "\n"          \
 );
 
+#define PLT_STUB128(name, obj, tls, tls_reg, alias) \
+__asm__ (                       \
+    SANE_ASM                    \
+    ".text\n"                   \
+    ".p2align 4\n"              \
+    ".global " #name "\n"       \
+    ".ent " #name "\n"          \
+    "" #name ":\n"              \
+    alias                       \
+    "clc         $c1, $zero, (1*16)($c12)  \n"        \
+    "clc         $c12, $zero, (2*16)($c12)\n"         \
+    "cjr         $c12                                 \n"   \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
+    ".global " #name "_data\n"  \
+    "" #name "_data:\n"         \
+    ".space (2 * 16) \n"        \
+    ".size " #name "_data, 32\n"\
+    ".end " #name "\n"          \
+);
+
+#define PLT_STUB128_CSD(name, obj, tls, tls_reg, alias) \
+__asm__ (                       \
+    SANE_ASM                    \
+    ".text\n"                   \
+    ".p2align 4\n"              \
+    ".global " #name "\n"       \
+    ".ent " #name "\n"          \
+    "" #name ":\n"              \
+    alias                       \
+    "clc         $c1, $zero, (1*16)($c12)  \n"        \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
+    "ccall       $c1, $c2, 2 \n"\
+    "nop\n"                     \
+    ".global " #name "_data\n"  \
+    "" #name "_data:\n"         \
+    ".space (2 * 16) \n"        \
+    ".size " #name "_data, 32\n"\
+    ".end " #name "\n"          \
+);
 
 typedef void common_t(void);
 
@@ -105,8 +156,8 @@ struct pltstub256 {
 
     #define PLT_GOT_ENTRY(name, ...) capability name;
 
-    #define STUB_STRUCT(name, auth) ((struct pltstub256*)(rederive_perms((((char*)&name) + 32), auth)))
-    #define STUB_STRUCT_RO(name) ((struct pltstub256*)((((char*)&name) + 32)))
+    #define STUB_STRUCT(name, auth) ((struct pltstub256*)(rederive_perms((((char*)&name) + PLT_STUB_DATA_OFF), auth)))
+    #define STUB_STRUCT_RO(name) ((struct pltstub256*)((((char*)&name) + PLT_STUB_DATA_OFF)))
     #define PLT_UNIQUE_OBJECT(name) name ## _data_obj
 
     #define DECLARE_STUB(name, ret, sig, ...) extern ret name sig; extern struct pltstub256 name ## _data;
@@ -146,9 +197,9 @@ struct pltstub256 {
     #define PLT_ALLOCATE_common(type, LIST, thread_loc, tls, tls_reg, ST) ALLOCATE_DEFAULT(type, thread_loc) LIST(DEFINE_STUB, type, ST, tls, tls_reg)
 
 
-    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB256_CSD)
-    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB256)
-    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB256)
+    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CSD)
+    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB)
+    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB)
 
     // These are the mode stubs
     extern void plt_common_single_domain(void);
