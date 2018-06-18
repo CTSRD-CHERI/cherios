@@ -1234,9 +1234,9 @@ rescap_splitsub:
     cclearlo    EN1(c4)
 
 #################################### (safe)
-# size_t rescap_length(res_t res)
-.global rescap_length
-rescap_length:
+# size_t rescap_nfo(res_t res)
+.global rescap_nfo
+rescap_nfo:
 ####################################
     li          $v0, 0
     cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
@@ -1246,11 +1246,16 @@ rescap_length:
     csetoffset  $c3, $c3, $zero
     cld         $v0, $zero, RES_LENGTH_OFFSET($c3)       # get length
 
+    cgetbase    $v1, $c3
     beqz        $t3, normal_info
-    dli         $t2, 1
+    daddiu      $v1, RES_META_SIZE
 
+    dli         $t2, 1
     clb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3)
     dsllv       $v0, $t2, $t0               # set new bounds
+    daddiu      $t3, $t3, -1
+    dsllv       $t3, $t3, $t0
+    daddu       $v1, $v1, $t3
 
     normal_info:
     CRETURN

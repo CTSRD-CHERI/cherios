@@ -322,6 +322,13 @@ __asm__ (                                                       \
     :                                                           \
     )
 
+
+typedef struct res_nfo_t {
+    size_t length;
+    size_t base;
+} res_nfo_t;
+
+#define MAKE_NFO(l, b) (res_nfo_t){.length = l, .base = b}
 #endif // __ASSEMBLY__
 
 #endif //CHERIOS_NANOTYPES_H

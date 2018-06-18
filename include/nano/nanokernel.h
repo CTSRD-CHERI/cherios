@@ -55,7 +55,8 @@ static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out
     size_t set_bound_to = required;
     required = align_up_to(set_bound_to, RES_META_SIZE);
     if(res != NULL) {
-        size_t length = rescap_length(res);
+        res_nfo_t nfo = rescap_nfo(res);
+        size_t length = nfo.length;
 
         if(length > required + RES_META_SIZE) {
             res = rescap_split(res, length - (required + RES_META_SIZE));

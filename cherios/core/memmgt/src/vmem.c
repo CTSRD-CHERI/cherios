@@ -258,8 +258,8 @@ void vmem_free_range(size_t vaddr_start, size_t pages) {
 }
 
 static void dump_res(res_t res) {
-    size_t len = rescap_length(res);
-    printf("Base: %lx. Length %lx\n", cheri_getbase(res), len+RES_META_SIZE);
+    res_nfo_t nfo = rescap_nfo(res);
+    printf("Base: %lx. Length %lx\n", nfo.base-RES_META_SIZE, nfo.length+RES_META_SIZE);
 }
 
 static int mapping_exists(size_t vaddr) {

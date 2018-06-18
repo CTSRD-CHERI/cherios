@@ -71,10 +71,11 @@ int main(register_t arg, capability carg) {
         naughty[i] = res;
 
         if(old != NULL) {
-            size_t len = rescap_length(old);
+            res_nfo_t nfo = rescap_nfo(old);
+            size_t len = nfo.length;
 
-            size_t base = align_down_to(cheri_getbase(old), UNTRANSLATED_PAGE_SIZE);
-            size_t length = align_up_to(len + (base - cheri_getbase(old)), UNTRANSLATED_PAGE_SIZE);
+            size_t base = align_down_to(nfo.base, UNTRANSLATED_PAGE_SIZE);
+            size_t length = align_up_to(len + (base - nfo.base), UNTRANSLATED_PAGE_SIZE);
 
             if(mem_release(base,length, 1, own_mop) != 0) {
                 printf("munmap failed\n");

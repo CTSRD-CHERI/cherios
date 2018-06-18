@@ -54,8 +54,8 @@
     ITEM(set_exception_handler, void, (context_t, context, register_t ,cpu_id), __VA_ARGS__) \
 /* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
     ITEM(rescap_take, void, (res_t, res, cap_pair*, out), __VA_ARGS__)\
-/* Returns the length of a reservation (not including any metadata) */\
-    ITEM(rescap_length, size_t, (res_t, res), __VA_ARGS__)\
+/* Returns the length/base of a reservation (not including any metadata) */\
+    ITEM(rescap_nfo, res_nfo_t, (res_t, res), __VA_ARGS__)\
 /* Tells the revokeer to start revoking this reservation. revoking fails if already revoking. Must be MAPPED */\
     ITEM(rescap_revoke_start, void, (res_t, res), __VA_ARGS__)\
 /* Tells the revokeer to finish revoking this reservation from before. Must be UNMAPPED. */\

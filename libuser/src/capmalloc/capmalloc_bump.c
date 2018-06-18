@@ -149,9 +149,9 @@ static int offload_release(size_t base, size_t length, size_t times, mop_t mop, 
     return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, worker_act, mode, 0);
 }
 
-static size_t memhandle_length(capability mem) {
+static res_nfo_t memhandle_nfo(capability mem) {
     register_t type = cheri_gettype(mem);
-    return (type == RES_TYPE) ? rescap_length(mem) : cheri_getlen(mem);
+    return (type == RES_TYPE) ? rescap_nfo(mem) : MAKE_NFO(cheri_getlen(mem), cheri_getbase(mem));
 }
 
 static res_t alloc_from_pool(size_t size, size_t pool_n) {
@@ -331,9 +331,9 @@ fixed_pool* find_inuse(size_t base) {
 }
 
 int cap_claim(capability mem) {
-    size_t nfo_len = memhandle_length(mem);
+    res_nfo_t nfo = memhandle_nfo(mem);
 
-    fixed_pool* fixed = find_inuse(cheri_getbase(mem));
+    fixed_pool* fixed = find_inuse(nfo.base);
 
     if(fixed != NULL) {
         fixed->outstanding_claims++;
@@ -343,14 +343,14 @@ int cap_claim(capability mem) {
 
         // Sync because we care about the return
 
-        return offload_claim(cheri_getbase(mem), nfo_len, 1, own_mop, SYNC_CALL);
+        return offload_claim(nfo.base, nfo.length, 1, own_mop, SYNC_CALL);
     }
 }
 
 void cap_free(capability mem) {
-    size_t nfo_len = memhandle_length(mem);
+    res_nfo_t nfo = memhandle_nfo(mem);
 
-    fixed_pool* fixed = find_inuse(cheri_getbase(mem));
+    fixed_pool* fixed = find_inuse(nfo.base);
 
     if(fixed != NULL) {
         if(fixed->outstanding_claims == 0) {
@@ -364,7 +364,7 @@ void cap_free(capability mem) {
 
         // We free asynchronously for efficiency
 
-        offload_release(cheri_getbase(mem), nfo_len, 1, own_mop, SEND);
+        offload_release(nfo.base, nfo.length, 1, own_mop, SEND);
     }
 }
 

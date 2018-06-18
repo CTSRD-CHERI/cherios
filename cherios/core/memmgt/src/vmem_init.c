@@ -56,9 +56,12 @@ static mop_t init_vmem(capability mop_sealing_cap) {
     /* Now we get the first reservation which NEEDS virtual mem */
     res_t first = make_first_reservation();
 
+    res_nfo_t nfo = rescap_nfo(first);
+
     /* Align the reservation to a page boundry (just throw away forever the first few bytes) */
-    size_t length = rescap_length(first);
-    size_t base = cheri_getbase(first) + RES_META_SIZE;
+    size_t length = nfo.length;
+    size_t base = nfo.base;
+
     size_t realigned_base = align_up_to(base - RES_META_SIZE, UNTRANSLATED_PAGE_SIZE) + RES_META_SIZE;
 
     if(base != realigned_base) {
