@@ -155,7 +155,7 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
         printf("|---Claimers: \n");
         FOREACH_CLAIMER(desc, index, claim) {
             if(claim->owner != NULL) {
-                printf("    |--- %lx x%ld\n", cheri_getcursor(claim->owner), claim->n_claims);
+                printf("    |--- %s(%lx) x%ld\n", claim->owner->debug_id, cheri_getcursor(claim->owner), claim->n_claims);
             }
         }
     }
@@ -841,6 +841,7 @@ mop_t __init_mop(capability sealing_cap, res_t big_res) {
         init_desc(big_res);
         bzero(&first_mop, sizeof(mop_internal_t));
         bzero(&mmap_mop, sizeof(mop_internal_t));
+        first_mop.debug_id = "init_mop";
         return seal_mop(&first_mop);
     } else return NULL;
 }
@@ -997,7 +998,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
             assert(desc->length != 0);
 
-            if(desc->allocation_type == open_node && desc->length > npages) {
+            if(desc->allocation_type == open_node && desc->length >= npages) {
                 int can_use_range = !(flags & ALIGN_TOP) || ((search_page_n & ((align_power - 1))) + npages <= align_power);
                 int can_use_part_range = (flags & ALIGN_TOP) && (desc->length >= 2 * npages);
 
@@ -1090,6 +1091,9 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
         visit_free(desc, desc->start, mop, desc->length, 1);
     }
 
+    // Should have removed every claim
+    assert(mop->first.start_page == 0);
+
     /* Remove from sibling chain */
     if(remove_from_chain) {
         mop_internal_t* prev = mop->prev_sibling_mop;
@@ -1124,7 +1128,7 @@ int __mem_reclaim_mop(mop_t mop_sealed) {
 
 // FIXME should we allocate this space ourselves? probably.
 
-ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed) {
+ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed, const char* debug_id) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
     if(mop == NULL) return MAKE_ER(mop_t, MEM_BAD_MOP);
@@ -1141,6 +1145,7 @@ ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed) {
     bzero(new_mop, sizeof(mop_internal_t));
 
     new_mop->parent_mop = mop;
+    new_mop->debug_id = debug_id;
 
     if(mop->child_mop != NULL) {
         new_mop->next_sibling_mop = mop->child_mop;

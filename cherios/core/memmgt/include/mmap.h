@@ -68,6 +68,8 @@ typedef struct mop_internal_t {
     struct mop_internal_t* next_sibling_mop;
     struct mop_internal_t* prev_sibling_mop;
 
+    const char* debug_id;
+
     // Allocation tracking
     size_t allocated_pages;
 
@@ -109,7 +111,7 @@ claimer_link_t lnk;             \
 vpage_range_desc_t* desc;       \
 claimer_t* claim;                \
 claimer_link_t lnk_tmp;         \
-for(lnk = owner->first; lnk.index != 0 && (desc = hard_index(lnk.start_page), claim = &desc->claimers[lnk.index], lnk_tmp = claim->next, 1); lnk = lnk_tmp)
+for(lnk = owner->first; lnk.start_page != 0 && (desc = hard_index(lnk.start_page), claim = &desc->claimers[lnk.index], lnk_tmp = claim->next, 1); lnk = lnk_tmp)
 
 typedef struct vpage_range_desc_t {
     // An array of all claimers. Each part of a doubly linked list managed by a mop
@@ -186,7 +188,7 @@ int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed);
 int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed);
 ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed);
 mop_t __init_mop(capability sealing_cap, res_t big_res);
-ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed);
+ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed, const char* debug_id);
 int __mem_reclaim_mop(mop_t mop_sealed);
 
 void mmap_dump(void);

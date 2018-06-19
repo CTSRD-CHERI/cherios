@@ -161,8 +161,6 @@ static res_t alloc_from_pool(size_t size, size_t pool_n) {
         /* Needs a new page. We might eventually try make this asyc as well (have a queue of pages waiting */
         if(try_init_memmgt_ref() == NULL) return NULL;
 
-        assert(cheri_gettag(own_mop));
-
         ERROR_T(res_t) res = mem_request(0,FIXED_POOL_SIZE - RES_META_SIZE, NONE, own_mop);
 
         if(!IS_VALID(res)) {
@@ -171,8 +169,9 @@ static res_t alloc_from_pool(size_t size, size_t pool_n) {
         }
 
         p->field = res.val;
+        res_nfo_t nfo = rescap_nfo(res.val);
 
-        p->start = align_down_to(cheri_getbase((p->field)), UNTRANSLATED_PAGE_SIZE);
+        p->start = align_down_to(nfo.base, UNTRANSLATED_PAGE_SIZE);
         p->end = p->start + UNTRANSLATED_PAGE_SIZE;
 
         if(p->pool_size > RES_SUBFIELD_BITMAP_BITS) {

@@ -43,7 +43,7 @@
 
 typedef capability mop_t;
 
-#define MOP_REQUIRED_SPACE (8 * CAP_SIZE)
+#define MOP_REQUIRED_SPACE (10 * CAP_SIZE)
 
 // Request bases with this alignment, and sizes that are this much less than multiples of pages
 #define MEM_REQUEST_FAST_OFFSET (2 * RES_META_SIZE)
@@ -94,7 +94,7 @@ int         mem_release(size_t base, size_t length, size_t times, mop_t mop);
 
 /* Makes a new mop, places it in space provided by a reservation, and returns a handle. */
 ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop);
-
+ERROR_T(mop_t) mem_makemop_debug(res_t space, mop_t auth_mop, const char* debug_id);
 /* Releases all resources attributable to mop and makes it invalid. Will also reclaim all mops derived from it */
 int         mem_reclaim_mop(mop_t mop_sealed);
 

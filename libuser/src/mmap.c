@@ -147,10 +147,13 @@ int mem_release(size_t base, size_t length, size_t times, mop_t mop) {
 	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 1);
 }
 
-ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop) {
+ERROR_T(mop_t) mem_makemop_debug(res_t space, mop_t auth_mop, const char* debug_id) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
-	return MAKE_VALID(mop_t, message_send_c(0, 0, 0, 0, space, auth_mop, NULL, NULL, memmgt, SYNC_CALL, 7));
+	return MAKE_VALID(mop_t, message_send_c(0, 0, 0, 0, space, auth_mop, debug_id, NULL, memmgt, SYNC_CALL, 7));
+}
+ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop) {
+	return mem_makemop_debug(space, auth_mop, NULL);
 }
 
 int mem_reclaim_mop(mop_t mop_sealed) {

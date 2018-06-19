@@ -35,7 +35,7 @@
 #define SYS_LIGHTWEIGHT_PROT        0
 //#define MEM_LIBC_MALLOC             1
 //#define MEMP_MEM_MALLOC             1
-#define MEM_ALIGNMENT               32 // CAP_SIZE
+#define MEM_ALIGNMENT               16 // CAP_SIZE
 
 // This ALWAYS works
 #define LWIP_MEM_ALIGN(x) cheri_setoffset(x,((cheri_getbase(x) + cheri_getoffset(x) + MEM_ALIGNMENT - 1) & ~(MEM_ALIGNMENT-1)) - cheri_getbase(x))

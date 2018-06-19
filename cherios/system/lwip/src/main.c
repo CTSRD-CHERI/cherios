@@ -244,8 +244,9 @@ static void free_send(net_session* session) {
 }
 
 static void free_malloc_pbuf(struct pbuf* pbuf) {
+    static int x = 0;
+    //printf("Free %lx. (%d)\n", cheri_getbase(pbuf), x++);
     free((capability)pbuf);
-
 }
 
 static void alloc_recv(net_session* session) {
@@ -255,6 +256,9 @@ static void alloc_recv(net_session* session) {
     while (session->recvs_free >= 3) {
         // We create a custom pbuf here thats is malloc'd. We do this because they _may_ be passed to userspace if TCP
         capability buf = malloc(TCP_MSS + PBUF_TRANSPORT + sizeof(struct pbuf_custom));
+        static int x = 0;
+        //printf("Malloc %lx. (%d)\n", cheri_getbase(buf), x++);
+
         struct pbuf_custom* custm = (struct pbuf_custom*)buf;
         char* payload = (char*)buf + (sizeof(struct pbuf_custom));
         custm->custom_free_function = &free_malloc_pbuf;

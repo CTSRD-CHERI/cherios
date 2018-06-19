@@ -237,7 +237,13 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 		sync_token = get_and_set_sealed_sync_token(source_activation);
 	}
 
-	msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
+	int res;
+	do {
+		res = msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
+		if(res != 0) {
+			sched_reschedule(target_activation, 0);
+		}
+	} while(res != 0);
 
 	if(selector == SYNC_CALL) {
 		sched_block_until_event(source_activation, target_activation, sched_sync_block, 0, 0);

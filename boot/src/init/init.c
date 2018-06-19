@@ -321,7 +321,7 @@ static void load_modules(init_info_t * init_info) {
 
     CHERI_PRINT_CAP(space_for_mop);
 
-    ERROR_T(mop_t) mop_t_or_er = mem_makemop(space_for_mop, mop);
+    ERROR_T(mop_t) mop_t_or_er = mem_makemop_debug(space_for_mop, mop, "proc");
 
     if(!IS_VALID(mop_t_or_er)) {
         assert_int_ex(-mop_t_or_er.er, == , 0);

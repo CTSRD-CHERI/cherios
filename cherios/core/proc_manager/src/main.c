@@ -100,11 +100,11 @@ __asm__ (
 );
 extern void secure_entry_trampoline(void);
 
-static mop_t make_mop_for_process(void) {
+static mop_t make_mop_for_process(process_t* proc) {
 	if(bootstrapping) return NULL;
 	res_t  space = cap_malloc(MOP_REQUIRED_SPACE);
 	assert(space != NULL);
-	ERROR_T(mop_t) mop_or_er = mem_makemop(space, own_mop);
+	ERROR_T(mop_t) mop_or_er = mem_makemop_debug(space, own_mop, proc->name);
 	mop_t mop = mop_or_er.val;
 	if(!IS_VALID(mop_or_er)) {
 		assert_int_ex(-mop_or_er.er, ==, 0);
@@ -187,7 +187,7 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 	proc->state = proc_created;
 	proc->n_threads = 0;
 	proc->terminated_threads = 0;
-	proc->mop = make_mop_for_process();
+	proc->mop = make_mop_for_process(proc);
 
 	env.handle = proc->mop;
 
