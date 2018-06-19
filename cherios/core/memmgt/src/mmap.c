@@ -253,19 +253,18 @@ static int claim_node(mop_internal_t* mop, vpage_range_desc_t* desc, size_t inde
 
     desc->claims_used++;
 
-    mop->last.start_page = desc->start;
-    mop->last.index = index;
+    MAKE_CLAIM_LINK(mop->last, desc, index);
 
-    if(mop->first.start_page == 0) {
+    if(LINK_IS_END(mop->first)) {
         // Our first claim
         mop->first = mop->last;
-        claim->prev.start_page = 0;
+        LINK_SET_END(claim->prev);
     } else {
         FOLLOW(old_last).next = mop->last;
         claim->prev = old_last;
     }
 
-    claim->next.start_page = 0;
+    LINK_SET_END(claim->next);
 
     mop->allocated_pages += desc->length;
     mop->allocated_ranges++;
@@ -278,13 +277,13 @@ static void release_claim(vpage_range_desc_t* desc, size_t index) {
     mop_internal_t* owner = claim->owner;
     assert(owner != NULL);
 
-    if(claim->prev.start_page == 0) {
+    if(LINK_IS_END(claim->prev)) {
         owner->first = claim->next;
     } else {
        FOLLOW(claim->prev).next = claim->next;
     }
 
-    if(claim->next.start_page == 0) {
+    if(LINK_IS_END(claim->next)) {
         owner->last = claim->prev;
     } else {
         FOLLOW(claim->next).prev = claim->prev;
@@ -1092,7 +1091,7 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
     }
 
     // Should have removed every claim
-    assert(mop->first.start_page == 0);
+    assert(LINK_IS_END(mop->first));
 
     /* Remove from sibling chain */
     if(remove_from_chain) {

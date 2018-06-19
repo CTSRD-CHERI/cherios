@@ -100,6 +100,11 @@ enum allocation_type_t {
 };
 
 #define FOLLOW(X) (hard_index((X).start_page)->claimers[X.index])
+#define FOLLOW_DESC(X) (hard_index((X).start_page))
+#define INDEX_FROM_LNK(X) ((X).index)
+#define MAKE_CLAIM_LINK(link, desc, index) link.start_page = desc->start; link.index = index
+#define LINK_IS_END(link) ((link).start_page == 0)
+#define LINK_SET_END(link) (link).start_page = 0
 
 #define FOREACH_CLAIMER(desc, index, claim)     \
 size_t index;     \
@@ -111,7 +116,7 @@ claimer_link_t lnk;             \
 vpage_range_desc_t* desc;       \
 claimer_t* claim;                \
 claimer_link_t lnk_tmp;         \
-for(lnk = owner->first; lnk.start_page != 0 && (desc = hard_index(lnk.start_page), claim = &desc->claimers[lnk.index], lnk_tmp = claim->next, 1); lnk = lnk_tmp)
+for(lnk = owner->first; lnk.start_page != 0 && (desc = FOLLOW_DESC(lnk), claim = &desc->claimers[INDEX_FROM_LNK(lnk)], lnk_tmp = claim->next, 1); lnk = lnk_tmp)
 
 typedef struct vpage_range_desc_t {
     // An array of all claimers. Each part of a doubly linked list managed by a mop
