@@ -108,7 +108,8 @@ static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 
     kernel_curr_act->last_vaddr_fault = badvaddr;
     kernel_curr_act->commit_early_notify = 0;
-    msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL);
+    if(msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL))
+        kernel_printf(KRED"Could not send commit event. Queue full\n"KRST);
     sched_block_until_event(kernel_curr_act, memgt_ref, sched_wait_commit, 0, 1);
 
     kernel_curr_act->last_vaddr_fault = badvaddr;

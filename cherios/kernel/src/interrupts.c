@@ -80,7 +80,7 @@ static void kernel_interrupt_others(register_t pending, uint8_t cpu_id) {
 			if(msg_push(registration->carg, NULL, NULL, NULL,
 						registration->arg, i, 0, 0,
 						registration->v0, registration->target, &kernel_acts[0], NULL)) {
-                kernel_printf(KRED"Could not send interrupt to %s. Queue full"KRST, registration->target->name);
+                kernel_printf(KRED"Could not send interrupt to %s. Queue full\n"KRST, registration->target->name);
 			}
 		}
 	}
