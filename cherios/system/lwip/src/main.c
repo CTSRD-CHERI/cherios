@@ -243,10 +243,44 @@ static void free_send(net_session* session) {
     }
 }
 
+#define DEFAULT_USES 64;
+
+typedef struct custom_for_tcp {
+    union {
+        struct {
+            struct pbuf_custom custom;
+            char buf[TCP_MSS + PBUF_TRANSPORT];
+        } as_pbuf;
+        struct {
+            struct custom_for_tcp* next_free;
+        } as_free;
+    };
+    uint64_t reuse;
+} custom_for_tcp;
+
+custom_for_tcp* custom_free_head;
+
 static void free_malloc_pbuf(struct pbuf* pbuf) {
-    static int x = 0;
-    //printf("Free %lx. (%d)\n", cheri_getbase(pbuf), x++);
-    free((capability)pbuf);
+    custom_for_tcp* custom = (custom_for_tcp*)pbuf;
+    if(custom->reuse-- == 0) {
+        free((capability)pbuf);
+    } else {
+        custom->as_free.next_free = custom_free_head;
+        custom_free_head = custom;
+    }
+}
+
+struct custom_for_tcp* alloc_custom(void) {
+    custom_for_tcp* c = custom_free_head;
+    if(c) {
+        custom_free_head = c->as_free.next_free;
+    } else {
+        c = (custom_for_tcp*)malloc(sizeof(custom_for_tcp));
+        c->reuse = DEFAULT_USES;
+    }
+
+    c->as_pbuf.custom.custom_free_function = &free_malloc_pbuf;
+    return c;
 }
 
 static void alloc_recv(net_session* session) {
@@ -255,14 +289,9 @@ static void alloc_recv(net_session* session) {
     // enough for a least 1 more recieve chain
     while (session->recvs_free >= 3) {
         // We create a custom pbuf here thats is malloc'd. We do this because they _may_ be passed to userspace if TCP
-        capability buf = malloc(TCP_MSS + PBUF_TRANSPORT + sizeof(struct pbuf_custom));
-        static int x = 0;
-        //printf("Malloc %lx. (%d)\n", cheri_getbase(buf), x++);
+        custom_for_tcp* custom = alloc_custom();
 
-        struct pbuf_custom* custm = (struct pbuf_custom*)buf;
-        char* payload = (char*)buf + (sizeof(struct pbuf_custom));
-        custm->custom_free_function = &free_malloc_pbuf;
-        struct pbuf* pb =  pbuf_alloced_custom(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM, custm, payload, TCP_MSS+PBUF_TRANSPORT);
+        struct pbuf* pb =  pbuf_alloced_custom(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM, &custom->as_pbuf.custom, custom->as_pbuf.buf, TCP_MSS+PBUF_TRANSPORT);
 
 
         le16 head = virtio_q_alloc(&session->virtq_recv, &session->free_head_recv);
@@ -488,6 +517,10 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
         if(p != pp) {
             // We add an extra ref to everything in the chain, as we will free them individually
             pbuf_ref(pp);
+        }
+        if((pp->flags & PBUF_FLAG_IS_CUSTOM)) {
+            // These must not be re-used if they go to user space.
+            ((struct custom_for_tcp*)pp)->reuse = 0;
         }
         socket_internal_request_ind(&tcp->tcp_output_pusher.r, (char*)pp->payload, pp->len, pp->len);
         tcp->recv += pp->len;
