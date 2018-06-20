@@ -88,6 +88,72 @@ static void desc_table_free(vpage_range_desc_table_t* table) {
     next_free_desc_table = table;
 }
 
+/* These maintain free chains through desciptors so the page allocator doesn't have to walk the structure too much */
+
+#ifdef MAX_POOLS
+
+static vpage_range_desc_t* peek_from_pool_head(size_t pool) {
+    return pool_heads[pool];
+}
+
+#define PREV_FIXUP(desc) (desc->tracking.free_chain.prev ? &(desc->tracking.free_chain.prev->tracking.free_chain.next) : &pool_heads[desc->tracking.free_chain.pool_id-1])
+#define NEXT_FIXUP(desc) (desc->tracking.free_chain.next ? &desc->tracking.free_chain.next->tracking.free_chain.prev : NULL)
+#define HAS_NEXT(desc) (desc->tracking.free_chain.next)
+static vpage_range_desc_t* remove_from_pool(vpage_range_desc_t* desc) {
+    if(desc) {
+        assert(desc->allocation_type == open_node);
+        assert(desc->tracking.free_chain.pool_id);
+        *PREV_FIXUP(desc) = desc->tracking.free_chain.next;
+        if(HAS_NEXT(desc)) *NEXT_FIXUP(desc) = desc->tracking.free_chain.prev;
+        desc->tracking.free_chain.pool_id = 0;
+    }
+    return desc;
+}
+
+static void add_to_pool(vpage_range_desc_t* desc, size_t pool) {
+    assert(desc->allocation_type == open_node);
+    desc->tracking.free_chain.next = pool_heads[pool];
+    if(pool_heads[pool]) pool_heads[pool]->tracking.free_chain.prev = desc;
+    desc->tracking.free_chain.pool_id = pool+1;
+    pool_heads[pool] = desc;
+}
+
+static void add_desc_after(vpage_range_desc_t* after, vpage_range_desc_t* desc) {
+    assert(desc->allocation_type == open_node);
+    assert(after->allocation_type == open_node);
+    assert(after->tracking.free_chain.pool_id);
+    desc->tracking.free_chain.pool_id = after->tracking.free_chain.pool_id;
+    desc->tracking.free_chain.next = after->tracking.free_chain.next;
+    after->tracking.free_chain.next = desc;
+    if(desc->tracking.free_chain.next) desc->tracking.free_chain.next->tracking.free_chain.prev = desc;
+}
+
+static void fixup_desc_chain(vpage_range_desc_t* desc) {
+    assert(desc->allocation_type == open_node);
+    if(desc->tracking.free_chain.pool_id) {
+        *PREV_FIXUP(desc) = desc;
+        if(HAS_NEXT(desc)) *NEXT_FIXUP(desc) = desc;
+    }
+}
+
+static vpage_range_desc_t* remove_from_pool_head(size_t pool) {
+    return remove_from_pool(pool_heads[pool]);
+}
+
+static void check_pool(size_t pool) {
+    vpage_range_desc_t* desc = pool_heads[pool];
+    vpage_range_desc_t* prev = NULL;
+    while(desc) {
+        assert(desc->allocation_type == open_node);
+        assert(desc->tracking.free_chain.pool_id == pool+1);
+        assert(desc->tracking.free_chain.prev == prev);
+        assert(desc->tracking.free_chain.next != desc);
+        prev = desc;
+        desc = desc->tracking.free_chain.next;
+    }
+}
+#endif
+
 /* Intialisation of the map structure. Has two nodes, one a sentinal for the (non existant) first page, and one for the
  * rest of virtual memory */
 
@@ -128,6 +194,8 @@ static void init_desc(res_t big_res) {
     L2->descs[1].length = MAX_VIRTUAL_PAGES - 1;
     L2->descs[1].prev = 0;
     L2->descs[1].reservation = big_res; // This record holds the reservation for all virtual space
+
+    add_to_pool(&L2->descs[1], PAGE_POOL_FREE);
 }
 
 /* Some utility functions */
@@ -157,6 +225,10 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
             if(claim->owner != NULL) {
                 printf("    |--- %s(%lx) x%ld\n", claim->owner->debug_id, cheri_getcursor(claim->owner), claim->n_claims);
             }
+        }
+    } else if(desc->allocation_type == open_node) {
+        if(desc->tracking.free_chain.pool_id) {
+            printf("|---Tracking pool %ld. prev %lx. next %lx\n", desc->tracking.free_chain.pool_id-1, (size_t)desc->tracking.free_chain.prev, (size_t)desc->tracking.free_chain.next);
         }
     }
 }
@@ -224,6 +296,7 @@ static vpage_range_desc_t* hard_index(size_t page_n) {
 }
 
 static size_t find_free_claim_index(vpage_range_desc_t* desc, mop_internal_t* mop) {
+    assert(desc->allocation_type == allocation_node);
     size_t free_index = (size_t)-1;
     size_t claim_index = (size_t)-1;
     FOREACH_CLAIMER(desc, index, claim) {
@@ -242,8 +315,9 @@ static size_t find_free_claim_index(vpage_range_desc_t* desc, mop_internal_t* mo
 static int claim_node(mop_internal_t* mop, vpage_range_desc_t* desc, size_t index, size_t times) {
     // We are using NULL as no owner
     assert(mop != NULL);
+    assert(desc->allocation_type == allocation_node);
 
-    claimer_t* claim = &desc->claimers[index];
+    claimer_t* claim = &desc->tracking.claimers[index];
     assert(claim->owner == NULL);
 
     claimer_link_t old_last = mop->last;
@@ -273,7 +347,9 @@ static int claim_node(mop_internal_t* mop, vpage_range_desc_t* desc, size_t inde
 }
 
 static void release_claim(vpage_range_desc_t* desc, size_t index) {
-    claimer_t* claim = &desc->claimers[index];
+    assert(desc->allocation_type == allocation_node);
+
+    claimer_t* claim = &desc->tracking.claimers[index];
     mop_internal_t* owner = claim->owner;
     assert(owner != NULL);
 
@@ -307,6 +383,18 @@ static void transfer_claims(vpage_range_desc_t* desc, vpage_range_desc_t* free_d
     }
 }
 
+// When we move a description claims will point to the wrong node. These will relink things
+static void fixup_claims(vpage_range_desc_t* desc) {
+    assert(desc->allocation_type == allocation_node);
+    for(size_t i = 0; i != MAX_CLAIMERS; i++) {
+        if(desc->tracking.claimers[i].owner != NULL) {
+            claimer_link_t* link_prev = LINK_IS_END(desc->tracking.claimers[i].prev) ? &desc->tracking.claimers[i].owner->first : &FOLLOW((desc->tracking.claimers[i].prev)).next;
+            claimer_link_t* link_next = LINK_IS_END(desc->tracking.claimers[i].next) ? &desc->tracking.claimers[i].owner->last : &FOLLOW((desc->tracking.claimers[i].next)).prev;
+            MAKE_CLAIM_LINK((*link_prev),desc,i);
+            MAKE_CLAIM_LINK((*link_next),desc,i);
+        }
+    }
+}
 
 struct index_result {
     vpage_range_desc_t* result;
@@ -314,7 +402,7 @@ struct index_result {
 };
 
 // Fast but will only work if page_n is not in the middle a range covered by a node
-static vpage_range_desc_t* hard_index_parent(size_t page_n) {
+static vpage_range_desc_t* hard_index_parent(size_t page_n, vpage_range_desc_t* child) {
 
     if(page_n == MAX_VIRTUAL_PAGES) return NULL;
 
@@ -329,10 +417,17 @@ static vpage_range_desc_t* hard_index_parent(size_t page_n) {
     l = & l->sub_table->descs[l1];
 
     if(l->allocation_type != internal_node) {
+        assert( l == child);
         return parent;
     }
 
-    return l;
+    size_t l2 = L2_INDEX(page_n << UNTRANSLATED_BITS);
+    parent = l;
+    l = & l->sub_table->descs[l2];
+
+    assert(l == child);
+
+    return parent;
 }
 
 // Will do some searching, but no more than 3 tables worth at the worst
@@ -398,7 +493,7 @@ static int visit_claim_check(vpage_range_desc_t *desc, size_t base, mop_internal
 
     if(index == (size_t)(-1)) return MEM_CLAIM_CLAIM_LIMIT;
 
-    size_t claims = desc->claimers[index].n_claims;
+    size_t claims = desc->tracking.claimers[index].n_claims;
     if(claims + times < claims) return MEM_CLAIM_OVERFLOW;
 
     return CHECK_PASS;
@@ -426,8 +521,9 @@ static int visit_free_check(vpage_range_desc_t *desc, size_t base, mop_internal_
     size_t index = find_free_claim_index(desc, owner);
 
     // Does not have a claim on this range
-    if(index == (size_t)(-1) || desc->claimers[index].owner != owner) {
+    if(index == (size_t)(-1) || desc->tracking.claimers[index].owner != owner) {
         printf(KRED"WARNING Got a free for something unclaimed!\n"KRST);
+        mmap_dump_desc(desc);
         return VISIT_CONT;
     }
 
@@ -439,8 +535,8 @@ visit_claim(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t
 
     size_t index = find_free_claim_index(desc, owner);
 
-    if(desc->claimers[index].owner == owner) {
-        desc->claimers[index].n_claims += times;
+    if(desc->tracking.claimers[index].owner == owner) {
+        desc->tracking.claimers[index].n_claims += times;
     } else {
         claim_node(owner, desc, index, times);
     }
@@ -455,25 +551,33 @@ static vpage_range_desc_t* desc_being_revoked;
 
 static vpage_range_desc_t* pull_up_node(vpage_range_desc_t* child) {
     // We can pull this table into the parent
-    vpage_range_desc_t* parent = hard_index_parent(child->start);
+    assert(child->allocation_type != internal_node);
+    vpage_range_desc_t* parent = hard_index_parent(child->start, child);
+
 
     if(parent == NULL || parent->start != child->start || parent->length != child->length) return child;
 
-    parent->allocation_type = child->allocation_type;
-    parent->prev = child->prev;
-    parent->reservation = child->reservation;
-    parent->allocated_length = child->allocated_length;
+    assert(parent->allocation_type == internal_node);
 
-    child->length = 0;
-    child->allocation_type = free_node;
+    struct vpage_range_desc_table_t* parents_table = parent->sub_table;
 
-    desc_table_free(parent->sub_table);
-    parent->sub_table = child->sub_table;
+    memcpy(parent, child, sizeof(vpage_range_desc_t));
 
-    if(parent->allocation_type == internal_node) {
-        return pull_up_node(parent);
+    // The allocation pointers now need fixing. They point out correctly but do not point in correctly due to the move
+    if(parent->allocation_type == allocation_node) {
+        fixup_claims(parent);
+    } else if(parent->allocation_type == open_node) {
+        assert((parent->reservation != NULL));
+        fixup_desc_chain(parent);
+        check_pool(0);
     }
-    return parent;
+
+    child->allocation_type = free_node;
+    child->length = 0;
+
+    desc_table_free(parents_table);
+
+    return pull_up_node(parent);
 }
 
 static void downward_correct_end(size_t page_n, size_t new_end) {
@@ -580,7 +684,7 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 // Collect at least a few L1s worth
 // define MIN_REVOKE (PAGE_TABLE_ENT_PER_TABLE*4)
 
-#define MIN_REVOKE (512)
+#define MIN_REVOKE (0x200)
 #define REVOKE_SANITY 0
 
 static void revoke_sanity(capability arg, ptable_t table, readable_table_t* RO, size_t index, size_t rep_pages) {
@@ -665,10 +769,10 @@ static vpage_range_desc_t *
 visit_free(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
 
     size_t index = find_free_claim_index(desc, owner);
-    size_t rem_claims =  desc->claimers[index].n_claims;
+    size_t rem_claims =  desc->tracking.claimers[index].n_claims;
 
     rem_claims = rem_claims <= times ? 0 : rem_claims - times;
-    desc->claimers[index].n_claims = rem_claims;
+    desc->tracking.claimers[index].n_claims = rem_claims;
 
     if(rem_claims == 0) {
         release_claim(desc, index);
@@ -713,7 +817,16 @@ static vpage_range_desc_t* leaf_to_internal(vpage_range_desc_t* desc, size_t tra
     desc->sub_table = tbl;
     desc->reservation = NULL;
     desc->allocation_type = internal_node;
-    bzero(desc->claimers, sizeof(desc->claimers));
+
+    // The allocation pointers now need fixing. They point out correctly but do not point in correctly due to the move
+    if(sub_desc->allocation_type == allocation_node) {
+        fixup_claims(sub_desc);
+    } else if(sub_desc->allocation_type == open_node) {
+        fixup_desc_chain(sub_desc);
+        assert(sub_desc->reservation != NULL);
+    }
+
+    bzero(&desc->tracking, sizeof(desc->tracking));
 
     return sub_desc;
 }
@@ -745,7 +858,12 @@ static void push_in_index(size_t page_n, size_t prev, size_t length,
             desc->allocated_length = 0;
             transfer_claims(split_result->transfer_from, desc);
         }
-
+#ifdef MAX_POOLS
+        else if(desc->allocation_type == open_node) {
+            assert(desc->reservation != NULL);
+            add_desc_after(split_result->transfer_from, desc);
+        }
+#endif
         *desc_out = desc;
 
     } else {
@@ -796,6 +914,7 @@ static void split_index(size_t page_n, struct index_result* containing_index,
         } else if(left_desc->allocation_type == open_node) {
             split_result->reservation =
                     rescap_split(left_desc->reservation, (left_desc->length << UNTRANSLATED_BITS) - RES_META_SIZE);
+            assert(split_result->reservation != NULL);
         } else if(left_desc->allocation_type == internal_node) {
             split_index(page_n, containing_index, left_desc->sub_table, lvl+1, split_result, desc_out, 1);
         } else {
@@ -980,7 +1099,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         }
 
     } else {
-        // Search. // TODO we may wish to allocate better than "first fit"
+        // Search. // TODO we may wish to allocate better than "first fit". Probably better to have many pools.
 
         size_t lvl = 0;
         vpage_range_desc_table_t* tbl = &desc_table_root;
@@ -989,7 +1108,14 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
         while(1) {
 
+#ifdef MAX_POOLS
+            vpage_range_desc_t* desc = peek_from_pool_head(PAGE_POOL_FREE);
+            assert(desc->allocation_type == open_node);
+            search_page_n = desc->start;
+#else
             vpage_range_desc_t* desc = hard_index(search_page_n);
+#endif
+
 
             if(desc->length == 0) {
                 mmap_dump_desc(desc);
@@ -1020,10 +1146,16 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
             }
 
+#ifdef MAX_POOLS
+            desc = desc->tracking.free_chain.next;
+            if(desc == NULL)
+#else
             search_page_n += desc->length;
 
-            if(search_page_n == MAX_VIRTUAL_PAGES) {
-                printf("Search failed\n");
+            if(search_page_n == MAX_VIRTUAL_PAGES)
+#endif
+            {
+                panic("Search failed\n");
                 return MAKE_ER(res_t, MEM_REQUEST_NONE_FOUND); // No pages matched
             }
         }
@@ -1032,12 +1164,20 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
     size_node(page_n, npages, &index);
 
+#ifdef MAX_POOLS
+    remove_from_pool(index.result);
+#endif
+
     result = index.result->reservation;
     index.result->allocated_length = index.result->length;
 
     assert(index.result->allocation_type == open_node);
 
     index.result->allocation_type = allocation_node;
+
+    for(size_t i = 0; i != MAX_CLAIMERS; i++) {
+        index.result->tracking.claimers[i].owner = NULL;
+    }
 
     visit_claim(index.result, base, mop, length, 1);
 
@@ -1179,9 +1319,15 @@ void __revoke_finish(res_t res) {
 
     desc->reservation = res;
     desc->allocation_type = open_node;
+
+    desc->tracking.free_chain.pool_id = 0;
+
     desc_being_revoked = NULL;
 
-    pull_up_node(desc);
+    vpage_range_desc_t* now_free = pull_up_node(desc);
+
+    assert(now_free->reservation != NULL);
+    add_to_pool(now_free, PAGE_POOL_FREE);
 
     printf("Revoke: finished!\n");
 }

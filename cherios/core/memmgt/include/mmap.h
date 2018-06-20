@@ -35,7 +35,11 @@
 
 #define DUMP_INTERVAL   0 // 1000000000ULL
 
-#define MAX_CLAIMERS 0x4
+#define MAX_CLAIMERS 0x4 // These are double linked and are for claimers
+#define MAX_POOLS 0x1   // These a singly linked and are for allocation
+
+#define PAGE_POOL_FREE 0
+
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
 #define DESC_ALLOC_CHUNK_SIZE   (DESC_ALLOC_CHUNK_PAGES * PHY_PAGE_SIZE)
 #define DESC_ALLOC_N_PER_POOL   (DESC_ALLOC_CHUNK_SIZE/ (sizeof(vpage_range_desc_table_t)))
@@ -102,14 +106,14 @@ enum allocation_type_t {
 #define FOLLOW_DESC(X)      ((vpage_range_desc_t*)cheri_setoffset((X).claim,0))
 #define INDEX_FROM_LNK(X)   (cheri_getoffset((X).claim)/sizeof(claimer_t))
 #define MAKE_CLAIM_LINK(link, desc, index) \
-                            link.claim = &(((vpage_range_desc_t*)cheri_setbounds_exact(desc, sizeof(vpage_range_desc_t)))->claimers[index])
+                            link.claim = &(((vpage_range_desc_t*)cheri_setbounds_exact(desc, sizeof(vpage_range_desc_t)))->tracking.claimers[index])
 #define LINK_IS_END(link)   ((link).claim == NULL)
 #define LINK_SET_END(link)  (link).claim = NULL
 
 #define FOREACH_CLAIMER(desc, index, claim)     \
 size_t index;     \
 claimer_t* claim; \
-for(index = 0; claim = &desc->claimers[index], index != MAX_CLAIMERS; index++)
+for(index = 0; claim = &desc->tracking.claimers[index], index != MAX_CLAIMERS; index++)
 
 #define FOREACH_CLAIMED_RANGE(owner, desc, lnk)  \
 claimer_link_t lnk;             \
@@ -120,7 +124,15 @@ for(lnk = owner->first; !LINK_IS_END(lnk) && (desc = FOLLOW_DESC(lnk), claim = &
 
 typedef struct vpage_range_desc_t {
     // An array of all claimers. Each part of a doubly linked list managed by a mop
-    claimer_t claimers[MAX_CLAIMERS];
+    // When free (unclaimed), these are instead used for allocation metadata
+    union {
+        claimer_t claimers[MAX_CLAIMERS];
+        struct {
+            struct vpage_range_desc_t* next;
+            struct vpage_range_desc_t* prev;
+            size_t pool_id;
+        } free_chain;
+    } tracking;
 
     // A pointer to the sub-table (if it exists, this node may summarise)
     struct vpage_range_desc_table_t* sub_table;
@@ -140,6 +152,8 @@ typedef struct vpage_range_desc_t {
     uint8_t claims_used;
 
 } vpage_range_desc_t;
+
+vpage_range_desc_t* pool_heads[MAX_POOLS];
 
 typedef struct vpage_range_desc_table_t {
     // Our structure mirrors the actual vtables - when we can free a desc-table we can also free the corresponding vtable
