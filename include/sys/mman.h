@@ -70,7 +70,9 @@ DEC_ERROR_T(res_t);
 
 typedef enum mem_request_flags {
     NONE = 0,
-    ALIGN_TOP = 1
+    ALIGN_TOP = 1,
+    COMMIT_NOW = 2,
+    COMMIT_DMA = 4,
 } mem_request_flags;
 
 /* 'You' is defined by a system given token "memory ownership principle" (mop). You must quote this to the system.
@@ -81,6 +83,8 @@ typedef enum mem_request_flags {
  * If align_top is set the range with have all its high bits the same.
  * base must be aligned to RES_META_SIZE. */
 ERROR_T(res_t) mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop);
+// This version will (safely) return a physical base in the case the allocation gets made contiguously
+ERROR_T(res_t) mem_request_phy_out(size_t base, size_t length, mem_request_flags flags, mop_t mop, size_t* phy_out);
 
 /* Claiming adds to your resource limit - but guarantees the page(es) claimed will not be unmapped until you call release.
  * We must add to your resource limit straight away, otherwise we allow an attack where you think you are well below your

@@ -42,7 +42,7 @@ __thread int worker_id = 0;
 
 /* FIXME: Any thread will accidentally run any of these. They should be thread local */
 void (*msg_methods[]) = {__mem_request, __mem_release, vmem_commit_vmem, full_dump, virtual_to_physical, __mem_claim,
-						 NULL, __mem_makemop, __get_physical_capability, __mem_reclaim_mop, __revoke, __revoke_finish};
+						 NULL, __mem_makemop, __get_physical_capability, __mem_reclaim_mop, __revoke, __revoke_finish, __vmem_commit_vmem_range};
 
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
@@ -111,6 +111,10 @@ void revoke(void) {
 
 void revoke_finish(res_t res) {
     message_send(0, 0, 0, 0, res, NULL, NULL, NULL, general_act, SEND, 11);
+}
+
+size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size) {
+	return message_send(addr, pages, block_size, 0, NULL, NULL, NULL, NULL, commit_act, SYNC_CALL, 12);
 }
 
 static void revoke_worker_start(register_t arg, capability carg) {

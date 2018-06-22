@@ -47,9 +47,10 @@
 mop_t	mem_minit(capability mop_sealing_cap);
 
 void vmem_commit_vmem(act_kt activation, char* name, size_t addr);
+size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size);
 
 /* Allocates a page table, but finds a physical page for you */
-ptable_t vmem_create_table(ptable_t parent, register_t index);
+ptable_t vmem_create_table(ptable_t parent, register_t index, int level);
 
 /* Creates a virt->phy mapping but chooses a physical page for you */
 int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags);

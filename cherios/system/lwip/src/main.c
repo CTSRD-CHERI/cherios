@@ -77,6 +77,9 @@ typedef struct net_session {
 #define SEND_HDR_START (QUEUE_SIZE)
 
     struct virtio_net_hdr* net_hdrs;
+
+    struct arena_t* dma_arena;
+
     size_t net_hdrs_paddr;
     struct pbuf* pbuf_recv_map[QUEUE_SIZE];
     struct pbuf* pbuf_send_map[QUEUE_SIZE];
@@ -175,6 +178,8 @@ err_t netsession_init(struct netif* nif) {
     net_session* session = nif->state;
     session->nif = nif;
 
+    session->dma_arena = new_arena(1);
+
     // Setup queues
     cap_pair pair;
 #define GET_A_PAGE (rescap_take(mem_request(0, MEM_REQUEST_MIN_REQUEST, NONE, own_mop).val, &pair), pair.data)
@@ -256,6 +261,7 @@ typedef struct custom_for_tcp {
         } as_free;
     };
     uint64_t reuse;
+    size_t offset;
 } custom_for_tcp;
 
 custom_for_tcp* custom_free_head;
@@ -270,13 +276,15 @@ static void free_malloc_pbuf(struct pbuf* pbuf) {
     }
 }
 
-struct custom_for_tcp* alloc_custom(void) {
+struct custom_for_tcp* alloc_custom(net_session* session) {
     custom_for_tcp* c = custom_free_head;
     if(c) {
         custom_free_head = c->as_free.next_free;
     } else {
-        c = (custom_for_tcp*)malloc(sizeof(custom_for_tcp));
+        size_t offset;
+        c = (custom_for_tcp*)malloc_arena_dma(sizeof(custom_for_tcp), session->dma_arena, &offset);
         c->reuse = DEFAULT_USES;
+        c->offset = offset;
     }
 
     c->as_pbuf.custom.custom_free_function = &free_malloc_pbuf;
@@ -287,9 +295,9 @@ static void alloc_recv(net_session* session) {
 
     // FIXME these buffers are too large for most packets. Better to have smaller ones and chain them
     // enough for a least 1 more recieve chain
-    while (session->recvs_free >= 3) {
+    while (session->recvs_free >= 2) {
         // We create a custom pbuf here thats is malloc'd. We do this because they _may_ be passed to userspace if TCP
-        custom_for_tcp* custom = alloc_custom();
+        custom_for_tcp* custom = alloc_custom(session);
 
         struct pbuf* pb =  pbuf_alloced_custom(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM, &custom->as_pbuf.custom, custom->as_pbuf.buf, TCP_MSS+PBUF_TRANSPORT);
 
@@ -311,14 +319,15 @@ static void alloc_recv(net_session* session) {
         desc->len = sizeof(struct virtio_net_hdr);
         desc->flags = VIRTQ_DESC_F_WRITE | VIRTQ_DESC_F_NEXT;
 
-        int ret = virtio_q_chain_add_virtual(&session->virtq_recv, &session->free_head_recv, &tail,
-                                   pb->payload + ETH_PAD_SIZE, pb->len - ETH_PAD_SIZE, VIRTQ_DESC_F_WRITE);
+        int ret = virtio_q_chain_add(&session->virtq_recv, &session->free_head_recv, &tail,
+                                     ((size_t)pb->payload) + ETH_PAD_SIZE + custom->offset, pb->len - ETH_PAD_SIZE,
+                                     VIRTQ_DESC_F_WRITE);
 
-        assert_int_ex(ret, >, 0);
+        assert_int_ex(ret, ==, 0);
 
         virtio_q_add_descs(&session->virtq_recv, (le16)head);
 
-        session->recvs_free -= (ret + 1);
+        session->recvs_free -= (2);
 
         session->RECV_RDY++;
     }

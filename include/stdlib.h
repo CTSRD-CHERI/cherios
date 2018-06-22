@@ -34,13 +34,23 @@
 #include "cdefs.h"
 #include "capmalloc.h"
 #include "stdio.h"
+#include "assert.h"
 
 static inline capability malloc(size_t size) {
     res_t res = cap_malloc(size);
     cap_pair pair;
     rescap_take(res, &pair);
     capability taken = pair.data;
+    assert_int_ex(cheri_getlen(taken), >=, size);
     //taken = cheri_setbounds(taken, size); screws with free
+    return taken;
+}
+
+static inline capability malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) {
+    res_t res = cap_malloc_arena_dma(size, arena, dma_off);
+    cap_pair pair;
+    rescap_take(res, &pair);
+    capability taken = pair.data;
     return taken;
 }
 

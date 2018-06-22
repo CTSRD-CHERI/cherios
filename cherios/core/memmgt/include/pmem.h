@@ -41,6 +41,10 @@ void pmem_break_page_to(size_t page_n, size_t len);
 /* Gets the pagen that can be used to index the book. If in doubt, call this.*/
 size_t pmem_get_valid_page_entry(size_t page_n);
 
+/* One page at a time can be skipped when searching */
+void block_finding_page(size_t pagen);
+void unblock_finding_page(void);
+
 /* Searches for a range of pages of a particular size and minimum length */
 size_t pmem_find_page_type(size_t required_len, e_page_status required_type);
 

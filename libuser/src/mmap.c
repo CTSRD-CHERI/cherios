@@ -135,6 +135,16 @@ ERROR_T(res_t) mem_request(size_t base, size_t length, mem_request_flags flags, 
 	return MAKE_VALID(res_t, message_send_c(base, length, flags, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 0));
 }
 
+ERROR_T(res_t) mem_request_phy_out(size_t base, size_t length, mem_request_flags flags, mop_t mop, size_t* phy_out) {
+    act_kt memmgt = try_init_memmgt_ref();
+    assert(memmgt != NULL);
+    assert(flags & (COMMIT_DMA | COMMIT_NOW));
+    _unsafe size_t out = (size_t)(-1);
+    ERROR_T(res_t) res = MAKE_VALID(res_t, message_send_c(base, length, flags, 0, mop, &out, NULL, NULL, memmgt, SYNC_CALL, 0));
+    *phy_out = out;
+    return res;
+}
+
 int mem_claim(size_t base, size_t length, size_t times, mop_t mop) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);

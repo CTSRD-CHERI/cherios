@@ -41,10 +41,10 @@ static mop_t init_vmem(capability mop_sealing_cap) {
     top_table = get_top_level_table();
     assert(top_table != NULL);
     CHERI_PRINT_CAP(top_table);
-    L1_0 = vmem_create_table(top_table, 0);
+    L1_0 = vmem_create_table(top_table, 0, 1);
     assert(L1_0 != NULL);
     CHERI_PRINT_CAP(L1_0);
-    L2_0 = vmem_create_table(L1_0, 0);
+    L2_0 = vmem_create_table(L1_0, 0, 2);
     assert(L2_0 != NULL);
     CHERI_PRINT_CAP(L2_0);
 

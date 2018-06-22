@@ -160,10 +160,20 @@ size_t pmem_get_valid_page_entry(size_t page_n) {
     return page_n;
 }
 
+static size_t blocked;
+
+void block_finding_page(size_t pagen) {
+    blocked = pagen;
+}
+
+void unblock_finding_page(void) {
+    blocked = 0;
+}
+
 size_t pmem_find_page_type(size_t required_len, e_page_status required_type) {
     size_t search_index = 0;
 
-    while((search_index != BOOK_END) && (book[search_index].len < required_len || book[search_index].status != required_type)) {
+    while((search_index != BOOK_END) && (search_index == blocked || book[search_index].len < required_len || book[search_index].status != required_type)) {
         search_index = search_index + book[search_index].len;
     }
 

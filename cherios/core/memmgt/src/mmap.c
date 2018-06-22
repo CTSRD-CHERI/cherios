@@ -1052,7 +1052,7 @@ static void release_mop(mop_internal_t* mop) {
     mem_claim_or_release(cheri_getbase(mop),sizeof(mop_internal_t), 1, &mmap_mop, &visit_free, &visit_free_check);
 }
 
-ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed) {
+ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed, size_t* phy_base) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
     if(mop == NULL) return MAKE_ER(res_t, MEM_BAD_MOP);
@@ -1085,6 +1085,14 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
     res_t result;
     struct index_result index;
 
+    // We can always commit for dma for 1 page.
+    if((flags & COMMIT_DMA) && npages == 1) {
+        flags &= ~COMMIT_DMA;
+        flags |= COMMIT_NOW;
+    }
+
+    // We require an extra page as the first can't be in the contiguous chunk as it is already commited
+    if(flags & COMMIT_DMA) npages++;
 
     if(req_base != 0) {
         soft_index(page_n, &index);
@@ -1123,6 +1131,8 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
             assert(desc->length != 0);
 
+            if(flags & COMMIT_DMA) search_page_n++;
+
             if(desc->allocation_type == open_node && desc->length >= npages) {
                 int can_use_range = !(flags & ALIGN_TOP) || ((search_page_n & ((align_power - 1))) + npages <= align_power);
                 int can_use_part_range = (flags & ALIGN_TOP) && (desc->length >= 2 * npages);
@@ -1135,6 +1145,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
                     page_n = align_up_to(search_page_n, align_power);
                 }
 
+                if(flags & COMMIT_DMA) search_page_n--;
                 if(can_use_range || can_use_part_range) {
                     req_base = (page_n << UNTRANSLATED_BITS) + (2* RES_META_SIZE);
                     index.indexs[0] = NDX(search_page_n,0);
@@ -1160,6 +1171,21 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
             }
         }
 
+    }
+
+    // Page skip accounted for
+    if(flags & COMMIT_DMA) npages--;
+
+    if((flags & (COMMIT_DMA | COMMIT_NOW))) {
+        // must commit before we size node as sizing the node needs access to the reservation
+        // TODO think of a good default for how pages to allocate contiguously for commit now
+        if(npages > 1) {
+            size_t contig_base = vmem_commit_vmem_range(page_n << UNTRANSLATED_BITS, npages,
+                                                        (flags & COMMIT_DMA) ? npages : 0x10);
+            if (phy_base) *phy_base = contig_base;
+        } else if(phy_base) {
+            *phy_base = virtual_to_physical(page_n << UNTRANSLATED_BITS) + RES_META_SIZE;
+        }
     }
 
     size_node(page_n, npages, &index);

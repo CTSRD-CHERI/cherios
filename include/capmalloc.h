@@ -34,9 +34,16 @@
 #include "cheric.h"
 #include "nano/nanokernel.h"
 
+struct arena_t;
+
 /* Get a reservation capability of size `size'. Will result in a claim being made on all memory the reservation covers,
  * both the metadata and the capability that would result from a take. */
 res_t       cap_malloc(size_t size);
+
+res_t cap_malloc_arena(size_t size, struct arena_t* arena);
+res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off);
+
+struct arena_t* new_arena(int dma);
 
 /* Lay claim to a capability OR reservation. This capability will not be unmapped until free is called (by you). If cap
  * came from cap_malloc it will also be temporally safe. You may call claim multiple times. */

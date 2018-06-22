@@ -39,7 +39,8 @@
 #include "pmem.h"
 #include "object.h"
 
-ptable_t vmem_create_table(ptable_t parent, register_t index) { // FIXME: Races with main thread
+ptable_t vmem_create_table(ptable_t parent, register_t index, int level) { // FIXME: Races with main thread
+    //printf("memmgt: creating a l%d table at index %lx\n", level, index);
     size_t page = pmem_find_page_type(1, page_ptable_free);
 
     if(page == BOOK_END) page = pmem_get_free_page();
@@ -55,6 +56,9 @@ ptable_t vmem_create_table(ptable_t parent, register_t index) { // FIXME: Races 
     pmem_check_phy_entry(page);
 
     pmem_try_merge(page);
+
+    assert(r != NULL);
+
     return  r;
 }
 
@@ -93,9 +97,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
     ptable_t l1 = get_sub_table(top_table, l0_index);
 
     if(l1 == NULL) {
-        printf("memmgt: creating a l1 table at index %lx\n", l0_index);
-        l1 = vmem_create_table(top_table, l0_index);
-        assert(l1 != NULL);
+        l1 = vmem_create_table(top_table, l0_index, 1);
     }
 
     size_t l1_index = L1_INDEX(addr);
@@ -103,9 +105,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
     ptable_t l2 = get_sub_table(l1, l1_index);
 
     if(l2 == NULL) {
-        printf("memmgt: creating a l2 table at index %lx\n", l1_index);
-        l2 = vmem_create_table(l1, l1_index);
-        assert(l2 != NULL);
+        l2 = vmem_create_table(l1, l1_index, 2);
     }
 
     // TODO check not already commited. We may get a few messages.
@@ -127,6 +127,98 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
     syscall_vmem_notify(activation, msg_queue_empty());
     // TODO bump counters on commits for MOPs
 }
+
+size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size) {
+    assert(worker_id == 0);
+
+    pages <<=1; // How many physical pages this will be
+    block_size <<=1;
+
+    // Get the first vtable entry
+
+    ptable_t top_table = get_top_level_table();
+
+    size_t l0_index = L0_INDEX(addr);
+
+    ptable_t l1 = get_sub_table(top_table, l0_index);
+
+    if(l1 == NULL) {
+        l1 = vmem_create_table(top_table, l0_index, 1);
+    }
+
+    size_t l1_index = L1_INDEX(addr);
+
+    ptable_t l2 = get_sub_table(l1, l1_index);
+
+    if(l2 == NULL) {
+        l2 = vmem_create_table(l1, l1_index, 2);
+    }
+
+    // TODO check not already commited. We may get a few messages.
+
+    readable_table_t* ro =  get_read_only_table(l2);
+
+    size_t ndx = L2_INDEX(addr);
+
+    // Get a block of physical pages to map to
+    size_t phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused);
+    assert(phy_pagen != BOOK_END);
+    size_t in_block = book[phy_pagen].len;
+
+    size_t contig_base = phy_pagen;
+    while(pages > 0) {
+        // If we have exhausted the last block get a new one
+
+        if(in_block == 0) {
+            contig_base = (size_t)-1;
+            phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused);
+            in_block = book[phy_pagen].len;
+        }
+
+        // If we have walked over a boundary update
+
+        if(ndx == PAGE_TABLE_ENT_PER_TABLE) {
+            block_finding_page(phy_pagen);
+            l1_index++;
+            if(l1_index == PAGE_TABLE_ENT_PER_TABLE) {
+                l0_index++;
+                l1 = get_sub_table(top_table, l0_index);
+                if(l1 == NULL) l1 = vmem_create_table(top_table, l0_index, 1);
+
+                l1_index = 0;
+            }
+            l2 = get_sub_table(l1, l1_index);
+            if(l2 == NULL) l2 = vmem_create_table(l1, l1_index, 2);
+            ro = get_read_only_table(l2);
+            ndx = 0;
+        }
+
+        // Sanity checks
+        assert(phy_pagen != BOOK_END);
+        assert_int_ex(ro->entries[ndx], ==, 0);
+
+        assert(in_block != 1);
+
+        if(in_block != 2) {
+            // break page
+            pmem_break_page_to(phy_pagen, 2);
+        }
+
+        assert(book[phy_pagen].status == page_unused);
+        create_mapping(phy_pagen, l2, ndx, TLB_FLAGS_DEFAULT);
+        assert(book[phy_pagen].status == page_mapped);
+
+        in_block-=2;
+        ndx++;
+        phy_pagen+=2;
+        pages-=2;
+    }
+
+    unblock_finding_page();
+    return (contig_base << PHY_PAGE_SIZE_BITS) + (RES_META_SIZE);
+}
+
+
 
 void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, size_t index, size_t is_last_level) {
     assert(index < PAGE_TABLE_ENT_PER_TABLE);
