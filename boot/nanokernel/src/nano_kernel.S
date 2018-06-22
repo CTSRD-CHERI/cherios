@@ -1302,7 +1302,7 @@ rescap_revoke_start:
     cgetbase    $a2, $c3                    #a2 is the base of our revoke
     cld         $t1, $zero, RES_LENGTH_OFFSET($c3)
     daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of revoke
-    addu        $a3, $a2, $a4               #a3 is the end of our revoke (not inclusive)
+    daddu        $a3, $a2, $a4               #a3 is the end of our revoke (not inclusive)
 
     andi        $t0, $a2, (PHY_PAGE_SIZE-1)
     bnez        $t0, revoke_start_er_backout1              # base of revocation must be page aligned
