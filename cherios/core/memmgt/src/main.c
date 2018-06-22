@@ -74,6 +74,8 @@ static void worker_start(register_t arg, capability carg) {
 
 	/* This thread handles everything else */
 	msg_enable = 1; /* Go in waiting state instead of exiting */
+
+    syscall_change_priority(act_self_ctrl, PRIO_HIGH);
 }
 
 static size_t get_addr_lo(void) {
@@ -124,6 +126,8 @@ static void revoke_worker_start(register_t arg, capability carg) {
 
     /* This thread handles revoke */
     msg_enable = 1;
+
+	syscall_change_priority(act_self_ctrl, PRIO_IDLE);
 }
 
 static void clean_worker_start(register_t arg, capability carg) {
@@ -155,6 +159,8 @@ int main(memmgt_init_t* mem_init) {
 	thread_new("memmgt_clean", 0, 0, &clean_worker_start);
 
 	/* This thread handles only commit_vmem */
+	syscall_change_priority(act_self_ctrl, PRIO_HIGH);
+
 	msg_enable = 1;
 	return 0;
 }

@@ -131,7 +131,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	act_register(&frame, &kernel_queue.queue, "kernel", status_terminated, NULL, cheri_getbase(global_pcc), NULL);
 	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
-    sched_create(0, kernel_act);
+    sched_create(0, kernel_act, PRIO_HIGH); // priority does not matter here. Exception context not interrupted.
 	// Create and register the init activation
 	KERNEL_TRACE("act", "Retroactively creating init activation");
 
@@ -351,7 +351,7 @@ act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const cha
     /* set scheduling status */
 
     if(cpu_hint >= SMP_CORES) cpu_hint = SMP_CORES-1;
-    sched_create(cpu_hint, act);
+    sched_create(cpu_hint, act, PRIO_MID);
 	return act_create_sealed_ctrl_ref(act);
 }
 

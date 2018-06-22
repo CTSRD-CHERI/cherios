@@ -44,15 +44,15 @@ void    sched_init(sched_idle_init_t*);
 void    sched_schedule(uint8_t pool_id, act_t * act);
 void    sched_reschedule(act_t *hint, int in_exception_handler);
 
-void	sched_create(uint8_t pool_id, act_t * act);
+void	sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority);
 void	sched_delete(act_t * act);
+void    sched_change_prio(act_t* act, enum sched_prio new_prio);
 
 void    sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout, int in_exception_handler);
 void	sched_block(act_t *act, sched_status_e status);
 void    sched_receive_event(act_t* act, sched_status_e events);
 
 
-size_t* sched_get_queue_fill_pointer(uint8_t pool_id);
 act_t*  sched_get_current_act_in_pool(uint8_t pool_id);
 act_t*  sched_get_current_act(void);
 void    sched_set_idle_act(act_t* idle_act, uint8_t pool_id);

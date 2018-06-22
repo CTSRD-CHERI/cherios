@@ -58,6 +58,17 @@ typedef enum sched_status_e
     sched_wait_commit   = 0x200,     /* Waiting on a vmem commit */
 } sched_status_e;
 
+/* Scheduling priorities. Higher gets exponentially more time. */
+#define SCHED_PRIO_FACTOR 0x10 // Each level of priority gives this factor more time. Must be power 2.
+#define SCHED_PRIO_LEVELS 5
+enum sched_prio {
+    PRIO_IDLE = 0, // only do this when there are no activations at higher levels
+    PRIO_LOW = 1,
+    PRIO_MID = 2,
+    PRIO_HIGH = 3,
+    PRIO_IO = 4, // Temporay, can be toggled on off alongside another priority (keep power 2)
+};
+
 typedef struct
 {
     capability c3;

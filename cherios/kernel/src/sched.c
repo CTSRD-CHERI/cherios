@@ -53,15 +53,22 @@ static void sched_nothing_to_run(void) {
 }
 
 #define SCHED_QUEUE_LENGTH 0x10
+#define LEVEL_TO_NDX(level) ((level > PRIO_IO) ? PRIO_IO : level)
 
+
+typedef struct sched_q {
+	act_t* 		act_queue[SCHED_QUEUE_LENGTH];
+	size_t   	act_queue_current; // index round robin. MAY NOT ACTUALLY BE CURRENT;
+	size_t   	act_queue_end;	   // index for end;
+	uint8_t		queue_ctr;		   // a counter for how many tasks at this level have been processed
+} sched_q;
 
 typedef struct sched_pool {
 	/* The currently scheduled activation */
 	act_t*		idle_act;
 	act_t* 		current_act; // DONT use the current index for this. This can be accessed without a lock.
-	act_t* 		act_queue[SCHED_QUEUE_LENGTH];
-	size_t   	act_queue_current; // index round robin. MAY NOT ACTUALLY BE CURRENT;
-	size_t   	act_queue_end;	   // index for end;
+	sched_q 	queues[SCHED_PRIO_LEVELS];
+	size_t 		in_queues;
 	spinlock_t 	queue_lock;
     uint8_t     pool_id;
 } sched_pool;
@@ -75,22 +82,22 @@ void sched_init(sched_idle_init_t* sched_idle_init) {
 	FOREACH_POOL(pool) {
 		spinlock_init(&pool->queue_lock);
 		pool->current_act = NULL;
-		pool->act_queue_current = 0;
-		pool->act_queue_end = 0;
+		for(size_t j = 0; j != SCHED_PRIO_LEVELS; j++) {
+			pool->queues[j].act_queue_current = 0;
+			pool->queues[j].act_queue_end = 0;
+			pool->queues[j].queue_ctr = 0;
+		}
+		pool->in_queues = 0;
 		pool->idle_act = NULL;
         pool->pool_id = i;
 
-        capability qsz_cap = & pool->act_queue_end;
+        capability qsz_cap = & pool->in_queues;
         qsz_cap = cheri_setbounds(qsz_cap, sizeof(size_t));
         qsz_cap = cheri_andperm(qsz_cap, CHERI_PERM_LOAD);
 
         sched_idle_init->queue_fill_pre[i] = qsz_cap;
         i++;
 	}
-}
-
-size_t* sched_get_queue_fill_pointer(uint8_t pool_id) {
-	return &sched_pools[pool_id].act_queue_end;
 }
 
 act_t* sched_get_current_act_in_pool(uint8_t pool_id) {
@@ -105,25 +112,28 @@ act_t* sched_get_current_act(void) {
 }
 
 static void add_act_to_queue(sched_pool* pool, act_t * act, sched_status_e set_to) {
-	kernel_assert(pool->act_queue_end != SCHED_QUEUE_LENGTH);
+	sched_q* q = &pool->queues[LEVEL_TO_NDX(act->priority)];
+	kernel_assert(q->act_queue_end != SCHED_QUEUE_LENGTH);
 	spinlock_acquire(&pool->queue_lock);
-	pool->act_queue[pool->act_queue_end++] = act;
+	q->act_queue[q->act_queue_end++] = act;
 	act->sched_status = set_to;
+	pool->in_queues++;
  	spinlock_release(&pool->queue_lock);
 }
 
 static void delete_act_from_queue(sched_pool* pool, act_t * act, sched_status_e set_to, size_t index_hint) {
     size_t index;
 	restart: index = 0;
+	sched_q* q = &pool->queues[LEVEL_TO_NDX(act->priority)];
 
-	if(pool->act_queue[index_hint] == act) {
+	if(q->act_queue[index_hint] == act) {
 		index = index_hint;
-	} else if (pool->act_queue[pool->act_queue_current] == act) {
-		index = pool->act_queue_current;
+	} else if (q->act_queue[q->act_queue_current] == act) {
+		index = q->act_queue_current;
 	} else {
 		size_t i;
-		for(i = 0; i < pool->act_queue_end; i++) {
-			if(pool->act_queue[i] == act) {
+		for(i = 0; i < q->act_queue_end; i++) {
+			if(q->act_queue[i] == act) {
 				index = i;
 				break;
 			}
@@ -131,15 +141,16 @@ static void delete_act_from_queue(sched_pool* pool, act_t * act, sched_status_e 
 	}
 
 	spinlock_acquire(&pool->queue_lock);
-	if(pool->act_queue[index] != act) {
+	if(q->act_queue[index] != act) {
 		spinlock_release(&pool->queue_lock);
 		goto restart;
 	}
-	pool->act_queue_end--;
-	pool->act_queue[index] = pool->act_queue[pool->act_queue_end];
-	pool->act_queue[pool->act_queue_end] = NULL;
+	q->act_queue_end--;
+	q->act_queue[index] = q->act_queue[q->act_queue_end];
+	q->act_queue[q->act_queue_end] = NULL;
 
 	act->sched_status = set_to;
+	pool->in_queues--;
 	spinlock_release(&pool->queue_lock);
 }
 
@@ -147,9 +158,10 @@ static act_t* get_idle(sched_pool* pool) {
     return pool->idle_act;
 }
 
-void sched_create(uint8_t pool_id, act_t * act) {
+void sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority) {
 	KERNEL_TRACE("sched", "create %s in pool %d", act->name, pool_id);
 	spinlock_init(&act->sched_access_lock);
+	act->priority = priority;
 	if(act->status == status_alive) {
 		KERNEL_TRACE("sched", "add %s  - adding to pool %x", act->name, pool_id);
         // FIXME: A bit of a hack
@@ -176,6 +188,21 @@ void sched_create(uint8_t pool_id, act_t * act) {
         }
 	} else {
 		act->sched_status = sched_terminated;
+	}
+}
+
+void sched_change_prio(act_t* act, enum sched_prio new_prio) {
+	if(act->priority != new_prio) {
+		uint8_t out_pool_id; // This is the pool id of the currently running thing
+		CRITICAL_LOCKED_BEGIN_ID(&act->sched_access_lock, out_pool_id);
+		if(act->sched_status <= sched_running) {
+			delete_act_from_queue(&sched_pools[act->pool_id], act, act->sched_status, 0);
+			act->priority = new_prio;
+			add_act_to_queue(&sched_pools[act->pool_id], act, act->sched_status);
+		} else {
+			act->priority = new_prio; // If blocked this wont be in queue;
+		}
+		CRITICAL_LOCKED_END(&act->sched_access_lock);
 	}
 }
 
@@ -250,6 +277,7 @@ void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events
     if(!got_event) {
 		if(timeout > 0) kernel_timer_subscribe(act, timeout);
         sched_block(act, events);
+		act->priority |= PRIO_IO;
     }
 
     CRITICAL_LOCKED_END(&act->sched_access_lock);
@@ -286,14 +314,30 @@ void sched_schedule(uint8_t pool_id, act_t * act) {
 static act_t * sched_picknext(sched_pool* pool) {
 	spinlock_acquire(&pool->queue_lock);
 
-	if(pool->act_queue_end == 0) {
+	if(pool->in_queues == 0) {
 		spinlock_release(&pool->queue_lock);
 		return get_idle(pool);
 	}
 
-	pool->act_queue_current = (pool->act_queue_current + 1) % pool->act_queue_end;
-	act_t * next = pool->act_queue[pool->act_queue_current];
+	uint8_t index = LEVEL_TO_NDX(PRIO_IO);
+	uint8_t index_found = LEVEL_TO_NDX(PRIO_IDLE);
 
+	// first select index from IO to LOW giving exponentially more priority to higher levels
+	while(index != LEVEL_TO_NDX(PRIO_LOW) &&
+			(pool->queues[index].act_queue_end == 0 ||
+					(index_found = index, ((pool->queues[index].queue_ctr++) & (SCHED_PRIO_FACTOR-1))) == 0))
+							index--;
+	// And only selecting PRIO_IDLE if no other priority was found
+	if(pool->queues[index].act_queue_end == 0) index = index_found;
+
+	kernel_assert(pool->queues[index].act_queue_end != 0);
+
+	sched_q* q = &pool->queues[index];
+
+	q->act_queue_current = (q->act_queue_current + 1) % q->act_queue_end;
+	act_t * next = q->act_queue[q->act_queue_current];
+
+    kernel_assert(LEVEL_TO_NDX(next->priority) == index);
 	// FIXME: I am worried about this ordering. If deadlock. look here.
 	spinlock_acquire(&next->sched_access_lock);
 	spinlock_release(&pool->queue_lock);
@@ -303,6 +347,13 @@ static act_t * sched_picknext(sched_pool* pool) {
         kernel_printf("%p: guard %lx. nxt %p. status %d. queue %p, mask %x\n", next, next->ctl.guard.guard, next->list_next,
                       next->sched_status, next->msg_queue, next->queue_mask);
 		kernel_assert(0);
+	}
+
+	if(next->priority & PRIO_IO) {
+		// IO priority gets scheduled once then set back to normal priority
+		delete_act_from_queue(pool, next, next->sched_status, q->act_queue_current);
+		next->priority &= ~PRIO_IO;
+		add_act_to_queue(pool, next, next->sched_status);
 	}
 
 	return next;

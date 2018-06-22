@@ -67,7 +67,8 @@
         ITEM(syscall_cond_notify, void, (act_kt waiter), __VA_ARGS__)\
         ITEM(syscall_cond_cancel, void, (void), __VA_ARGS__)\
         ITEM(syscall_now, register_t, (void), __VA_ARGS__)\
-        ITEM(syscall_vmem_notify, void, (act_kt waiter, int suggest_switch), __VA_ARGS__)
+        ITEM(syscall_vmem_notify, void, (act_kt waiter, int suggest_switch), __VA_ARGS__)\
+        ITEM(syscall_change_priority, void, (act_control_kt ctrl, enum sched_prio priority), __VA_ARGS__)
 
 // Fudge factor >> 15 to make this roughly in ms...
 #define CLOCK_TO_MS(X) (uint32_t)(X >> 14)
