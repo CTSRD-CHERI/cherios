@@ -972,12 +972,20 @@ destroy_context:
     beqz        $t1, destroy_context_end                    # if we are not destroying ourselves we can end now
 
     # If we are here we are destroying ourselves, thus we should restore restore_from
-    cunseal     $c3, $c4, $c5
+    cunseal     $c19, $c4, $c5
     dmfc0       $t1, $12
     ori         $t1, 2                                      # set SR(EXL)
     mtc0        $t1, $12
-    j           switch_restore
-    nop
+
+    # Will never return to user so we can safely clober c17/c18
+    # We first exit the critical section as we don't want to lose any interrupts
+    dla         $t0, critical_section_exit
+    cgetpccsetoffset $c12, $t0
+    cjalr       $c12, $c17
+    cmove       $c18, $idc
+
+    b           switch_restore
+    cmove       $c3, $c19
 
 destroy_context_end:
     CRETURN
@@ -1018,7 +1026,7 @@ critical_section_exit:
     dmfc0      $t1, $12
     ori        $t1, 3                                       # set SR(EXL) and SR(IE)
     mtc0       $t1, $12
-    j          context_switch_local_entry                   # calling context switch with k0 = cause will
+    b          context_switch_local_entry                   # calling context switch with k0 = cause will
     move       $k0, $t0                                     # will switch to the exception context
 
 kernel_critical_section_exit_end:
