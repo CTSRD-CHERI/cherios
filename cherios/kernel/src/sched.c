@@ -238,6 +238,11 @@ void sched_delete(act_t * act) {
 // This can be used to
 void sched_receive_event(act_t* act, sched_status_e events) {
 	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
+	/* Set condition variable */
+	if(events & sched_sync_block) {
+		kernel_assert(act->sync_state.sync_condition == 1);
+		act->sync_state.sync_condition = 0;
+	}
 	if(act->sched_status & events) {
 		if(act->sched_status & sched_wait_timeout) {
 			kernel_timer_unsubcsribe(act);

@@ -266,6 +266,7 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 
 int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token) {
 
+	//FIXME can get races if returned_from copies the return token to another thread
 	act_t * returned_from = (act_t*) CALLER;
 	act_t * returned_to =  act_unseal_sync_ref(caller);
 
@@ -293,11 +294,6 @@ int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* cal
 
 	/* Must no longer expect this sequence token */
 	returned_to->sync_state.sync_token = 0;
-
-	/* Set condition variable */
-	returned_to->sync_state.sync_condition = 0;
-
-	HW_SYNC;
 
 	/* Make the caller runnable again */
     sched_receive_event(returned_to, sched_sync_block);
