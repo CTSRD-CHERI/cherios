@@ -40,12 +40,17 @@ static register_t		kernel_last_timer[SMP_CORES];
 // TODO everyone may wait on timeout, maybe just walk the list?
 #define MAX_WAITERS 0x10
 act_t* sleeps[MAX_WAITERS];
+uint8_t init_sanity[SMP_CORES];
 
 void kernel_timer_init(uint8_t cpu_id) {
 	/*
 	 * Start timer.
 	 */
 	KERNEL_TRACE("timer", "starting timer");
+	uint8_t val;
+	ATOMIC_ADD(&init_sanity[cpu_id], 8, 1, val);
+
+	kernel_assert(val == 0);
 
 	kernel_last_timer[cpu_id] = cp0_count_get();
 	high_resolution_timers[cpu_id] = kernel_last_timer[cpu_id];
@@ -54,11 +59,22 @@ void kernel_timer_init(uint8_t cpu_id) {
 }
 
 uint64_t get_high_res_time(uint8_t cpu_id) {
-	uint32_t low_res = (uint32_t)cp0_count_get();
-	uint32_t old_low_res = (uint32_t)(high_resolution_timers[cpu_id] & 0xFFFFFFFF);
-	uint64_t top = high_resolution_timers[cpu_id] ^ (uint64_t)(old_low_res);
-	if(low_res < old_low_res) top += 0x100000000;
-	return (top | low_res);
+	uint64_t old_high_res, new_high_res;
+	register_t success;
+	uint64_t* old_ptr = &high_resolution_timers[cpu_id];
+	do {
+		// Although we do not plan to update the high res counter here (we do that in a timer interrupt) we still need
+		// to guard cp0_count_get inside a LL/SC otherwise we might double count the wrap around
+		LOAD_LINK(old_ptr, 64, old_high_res);
+		uint32_t low_res = (uint32_t)cp0_count_get();
+		uint32_t old_low_res = (uint32_t)(old_high_res & 0xFFFFFFFF);
+		uint64_t top = old_high_res ^ (uint64_t)(old_low_res);
+		if(low_res < old_low_res) top += 0x100000000;
+		new_high_res = top | low_res;
+		STORE_COND(old_ptr, 64, old_high_res, success);
+	} while(!success);
+
+	return new_high_res;
 }
 
 static inline register_t TMOD(register_t count) {
@@ -117,7 +133,10 @@ void kernel_timer(uint8_t cpu_id)
 	KERNEL_TRACE(__func__, "in %lu", cp0_count_get());
 
 	// Set the high solution timer. This must be done before it wraps around since last call.
-	high_resolution_timers[cpu_id] = get_high_res_time(cpu_id);
+	uint64_t old = high_resolution_timers[cpu_id];
+	uint64_t new = get_high_res_time(cpu_id);
+	kernel_assert(new > old);
+	high_resolution_timers[cpu_id] = new;
 
 	kernel_timer_check_sleepers();
 
