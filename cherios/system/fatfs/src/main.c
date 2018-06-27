@@ -51,6 +51,7 @@ struct sessions_t {
     uint64_t write_fptr;
     uint8_t current;
     spinlock_t session_lock;
+    uint8_t in_use;
 } sessions[MAX_HANDLES];
 
 size_t first_free = 0;
@@ -124,6 +125,8 @@ void handle(enum poll_events events, struct sessions_t* session) {
     ssize_t res;
     UINT bytes_handled = 0;
     UINT bytes_to_push;
+
+    assert_int_ex(session->in_use, ==, 1);
 
     if(events & POLL_IN) {
         // service write (we read)
@@ -239,6 +242,8 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
     size_t next = sessions[first_free].ndx;
     struct sessions_t* session = &sessions[first_free];
 
+    assert_int_ex(session->in_use, ==, 0);
+
     FIL * fp = &session->fil;
 
     BYTE mode = FA_OPEN_ALWAYS;
@@ -270,16 +275,19 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
         FRESULT fres;
         if((fres = f_open(fp, file_name, mode)) == 0) {
+            session->in_use = 1;
             n_files++;
             first_free = next;
             return 0;
         } // else printf("Error opening file %d\n", fres);
     }
-
+    session->ndx = next; // If we did not allocate restore free chain
     return -1;
 }
 
 void close_file(size_t sndx, struct sessions_t* session) {
+    assert_int_ex(session->in_use, ==, 1);
+
     // First close the unix socket
     socket_close(&session->sock);
 
@@ -302,6 +310,7 @@ void close_file(size_t sndx, struct sessions_t* session) {
     n_files--;
 
     // Then free struct
+    session->in_use = 0;
     session->ndx = first_free;
     first_free = sndx;
 }
@@ -336,6 +345,7 @@ void request_loop(void) {
             poll_sock_t* poll_sock = poll_socks+i;
             size_t sndx = session_ndx[i];
             struct sessions_t* session = &sessions[sndx];
+            assert_int_ex(session->in_use, ==, 1);
             if(poll_sock->revents & (POLL_IN | POLL_OUT)) {
                 assert_int_ex(poll_sock->events, !=, POLL_NONE);
                 poll_sock->events = POLL_NONE;

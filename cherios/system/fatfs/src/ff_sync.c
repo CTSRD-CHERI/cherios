@@ -28,22 +28,26 @@
  * SUCH DAMAGE.
  */
 
+#include "stdlib.h"
 #include "ff.h"
 
 int ff_cre_syncobj (BYTE vol, _SYNC_t* sobj) {    /* Create a sync object */
-    spinlock_init(&sobj->spin);
+    spinlock_t* sync = (spinlock_t*)malloc(sizeof(spinlock_t));
+    spinlock_init(sync);
+    *sobj = sync;
     return 1;
 }
 
 int ff_req_grant (_SYNC_t sobj) {                /* Lock sync object */
-    spinlock_acquire(&sobj.spin);
+    spinlock_acquire(sobj);
     return 1;
 }
 
 void ff_rel_grant (_SYNC_t sobj) {                /* Unlock sync object */
-    spinlock_release(&sobj.spin);
+    spinlock_release(sobj);
 }
 
 int ff_del_syncobj (_SYNC_t sobj) {                /* Delete a sync object */
+    free((capability)sobj);
     return 1;
 }

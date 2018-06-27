@@ -20,7 +20,7 @@
 #define _FATFS	88100	/* Revision ID */
 
 #include "sockets.h"
-#include "ff_sync.h"
+#include "spinlock.h"
 
 #ifdef __cplusplus
 extern "C" {
