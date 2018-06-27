@@ -790,8 +790,7 @@ switch_exception:                                       # void switch_exception(
     .endm
 
 switch_restore_final:
-    dli         $a0, CHERI_FRAME_SIZE
-    cld         $a0, $a0, 0($c3)
+    cld         $a0, $zero, CONTEXT_OFFSET_STATE($c3)
     bnez        $a0, nano_kernel_die                    # Check this context is still alive
 
     # c0 is not really stored in $c1, we just use it as temporary. $c3 will be overwritten so use $kr2c.
@@ -972,20 +971,14 @@ destroy_context:
     beqz        $t1, destroy_context_end                    # if we are not destroying ourselves we can end now
 
     # If we are here we are destroying ourselves, thus we should restore restore_from
-    cunseal     $c19, $c4, $c5
+    cunseal     $c3, $c4, $c5
     dmfc0       $t1, $12
     ori         $t1, 2                                      # set SR(EXL)
     mtc0        $t1, $12
 
-    # Will never return to user so we can safely clober c17/c18
-    # We first exit the critical section as we don't want to lose any interrupts
-    dla         $t0, critical_section_exit
-    cgetpccsetoffset $c12, $t0
-    cjalr       $c12, $c17
-    cmove       $c18, $idc
-
     b           switch_restore
-    cmove       $c3, $c19
+    cincoffset  $c13 , $kdc, CONTEXT_TYPE                   # Needed for sealing if we had a delayed exception
+                                                            # Putting here rather than in switch
 
 destroy_context_end:
     CRETURN
