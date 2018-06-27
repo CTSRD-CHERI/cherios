@@ -192,14 +192,14 @@ process_kt thread_create_process(const char* name, capability file, int secure_l
     assert(proc_man_ref != NULL);
     return message_send_c(secure_load, 0, 0, 0, name, file, NULL, NULL, proc_man_ref, SYNC_CALL, 0);
 }
-thread thread_start_process(process_kt* proc, startup_desc_t* desc) {
+thread thread_start_process(process_kt proc, startup_desc_t* desc) {
     if(proc_man_ref == NULL) {
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }
     assert(proc_man_ref != NULL);
     return message_send_c(0, 0, 0, 0, proc, desc, NULL, NULL, proc_man_ref, SYNC_CALL, 1);
 }
-thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* desc) {
+thread thread_create_thread(process_kt proc, const char* name, startup_desc_t* desc) {
     if(proc_man_ref == NULL) {
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }

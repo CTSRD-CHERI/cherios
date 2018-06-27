@@ -70,8 +70,8 @@ act_control_kt get_control_for_thread(thread t);
 /* These are wrappers for messages to the process manager */
 
 process_kt thread_create_process(const char* name, capability file, int secure_load);
-thread thread_start_process(process_kt* proc, startup_desc_t* desc);
-thread thread_create_thread(process_kt* proc, const char* name, startup_desc_t* desc);
+thread thread_start_process(process_kt proc, startup_desc_t* desc);
+thread thread_create_thread(process_kt proc, const char* name, startup_desc_t* desc);
 
 top_t get_top_for_process(process_kt proc);
 top_t get_own_top(void);
