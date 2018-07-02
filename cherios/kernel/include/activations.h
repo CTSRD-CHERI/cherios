@@ -116,7 +116,7 @@ typedef struct act_t
 
 } act_t;
 
-_Static_assert(ACT_REQUIRED_SPACE >= sizeof(act_t), "Increase the size of act required space");
+_Static_assert(ACT_REQUIRED_SPACE >= sizeof(act_t) + CONTEXT_SIZE + RES_META_SIZE, "Increase the size of act required space");
 
 #define FOR_EACH_ACT(act) for(act_t* act = act_list_start; act != NULL; act = act->list_next) { if(!act->list_del_prog)
 

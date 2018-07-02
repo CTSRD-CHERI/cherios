@@ -40,6 +40,7 @@
 #endif
 
 #ifdef HARDWARE_qemu
+	#define N_TLB_ENTS	32
     #define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
     #define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
 	#define ASM_TRACE_ON 	"li $zero, 0xbeef\n"
@@ -54,11 +55,16 @@
     #endif
 
 #else //qemu
-
+	#define N_TLB_ENTS	144 // And another 16 low entries ...
+	#define N_TLB_ASSO	16
+	#define N_TLB_DRCT	128
     #define HW_YIELD
     #define YIELD
 
 #endif
+
+#define REG_SIZE    8
+#define REG_SIZE_BITS 3
 
 #define SANE_ASM    \
 ".set noreorder\n"  \
@@ -197,7 +203,17 @@ INT_SIZES(define_intypes)
 #define	MIPS_CP0_REG_TAGLO		$28
 #define	MIPS_CP0_REG_TAGHI		$29
 #define	MIPS_CP0_REG_ERROREPC		$30
+#define MIPS_CP0_REG_REVOKE			$30
+#define MIPS_CP0_REG_REVOKE_BASE	2
+#define MIPS_CP0_REG_REVOKE_BOUND	3
+#define MIPS_CP0_REG_REVOKE_PERMS	4
+
 #define	MIPS_CP0_REG_RESERVED31		$31
+
+#define MIPS_ENTRYHI_ASID_SHIFT 	0
+#define MIPS_ENTRYHI_ASID_BITS		8
+#define MIPS_ENTRYHI_VPN_SHIFT		13
+#define MIPS_ENTRYHI_VPN_BITS		51
 
 /*
  * MIPS CP0 status register fields.

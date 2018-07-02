@@ -32,7 +32,7 @@
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "mips.h"
-.include "asm.S"
+#include "asm.S"
 #include "assembly_utils.h"
 #include "nano/nanokernel.h"
 #include "dylink.h"
@@ -105,6 +105,7 @@ local_array_start context_array, CAP_SIZE_BITS, SMP_CORES
 local_cap_var current_context
 local_cap_var exception_context
 local_cap_var victim_context
+local_cap_var switch_cap_tmp
 local_reg_var exception_level
 local_reg_var exception_cause
 local_reg_var exception_ccause
@@ -112,6 +113,8 @@ local_reg_var last_exception_cause
 local_reg_var last_exception_ccause
 local_reg_var last_bad_vaddr
 local_reg_var since_switched
+local_reg_var in_switch
+local_reg_var switch_reg_tmp
 #ifdef SMP_ENABLED
 local_array_end context_array, CAP_SIZE_BITS,  SMP_CORES
 #endif
@@ -124,6 +127,7 @@ local_reg_var made_first_res
 local_reg_var revoke_state
 local_reg_var revoke_base
 local_reg_var revoke_bound
+local_reg_var need_shootdown
 
 # Method table for nano kernel
 NANO_KERNEL_IF_LIST(LOCAL_CAP_VAR_MACRO)
@@ -208,6 +212,35 @@ nano_smp_spin:
     b           switch_restore_final
     dli         $k0, 0
 #endif
+
+
+# Notes on calling rescap_take: provide c4 as null to avoid write. Will return in c3 and c4. Will use c5 #
+# Subroutine will clober c3,c4,c5,c14,c15,t*,a7. c3_in=res.c3_out=code.c4_out=data #
+
+.macro SUBROUTINE_TAKE
+    cmove       $c14, $c17                          # save return code
+    cmove       $c15, $c18                          # save return data
+
+    dla         $t0, rescap_take
+    cgetpccsetoffset $c12, $t0
+    cjalr       $c12, $c17                          # call rescap_take
+    cnull       $c4                                 # null c4 for call to rescap_take
+
+    cmove       $c17, $c14                          # restore return code
+    cmove       $c18, $c15                          # restore return data
+.endm
+
+.macro SET_EXL tmp
+    #di <-- FIXME we really need this insutrction here for atomicity...
+    mfc0    \tmp, MIPS_CP0_REG_STATUS
+    ori     \tmp, 3                                      # set SR(EXL) and SR(IE)
+    mtc0    \tmp, MIPS_CP0_REG_STATUS
+.endm
+
+.macro QEMU_BUG_FIX tmp
+    cgetoffset \tmp, $epcc
+    dmtc0      \tmp, MIPS_CP0_REG_EPC
+.endm
 
 ############################################################### (safe)
 # int smp_context_start(context_t start_as, register_t cpu_id)
@@ -631,6 +664,36 @@ zero_page_range:
     csw         $a2, $zero, 0($c3)                  # set state cleaning
 #  From here on we are fine to zero. $a0 is page_n. $t2 is len
 
+    sync
+    cld         $t0, $zero, need_shootdown($idc)                            #ra/t0 clobbered
+    bnez        $t0, tlb_shootdown_local
+    li          $t3, 1
+    b           no_shootdown
+
+# Send a signal to every core to invalidate their TLB. Can also be called fr
+
+###########################
+# void tlb_shootdown(void)
+.global tlb_shootdown
+tlb_shootdown:
+###########################
+    li          $t3, 0
+tlb_shootdown_local:
+#ifdef SMP_ENABLED
+1:
+    dli         $t0, SMP_CORES-1
+    nop         # FIXME need to send signal here!
+    bnez        $t0, 1b
+    daddiu      $t0, -1
+#else
+    invalidate_tlb $t0, $t1
+#endif
+    bnez        $t3, no_shootdown
+    csd         $zero, $zero, need_shootdown($idc)
+    CRETURN
+    nop
+
+no_shootdown:
     dli         $t1, PHY_MEM_START_CACHED
     dsll        $a0, $a0, PHY_PAGE_SIZE_BITS
     daddu       $a0, $a0, $t1                          # a0 is the address of page
@@ -709,39 +772,54 @@ make_first_er:
     nop
 
 ##################################################################### (TODO unsafe? only when exl = 0)
-# void context_switch(context_t restore_from, context_t*  store_to);
+# void context_switch(context_t restore_from);
 .global context_switch
 context_switch:
 #####################################################################
 
     # Enter an exception level to turn off interrupts. We must at the least switch from restore_from.
     # However we might switch to the exception_context
+    li      $a4, 0                                      # a4 can't get clobbered by an exception
+context_switch_local_entry: # void context_switch_local_entry(a4: reg_t cause)
 
-    dmfc0   $t1, $12
-    ori     $t1, 2                                      # set SR(EXL)
-    mtc0    $t1, $12
+    SET_EXL $t0
 
-    dli     $k0, 0
-
-context_switch_local_entry:                             # void context_switch_local_entry(reg_t cause)
     # TODO unseal these (if sealed)
-    cmove   $idc, $c18
+    # WARN: We have changed idc here. If we ever get to user space this will leak. Must set in_switch before any exceptions
     cmove   $epcc, $c17
+    cmove   $idc, $c18
+    move    $k0, $a4
 
-context_switch_exception_entry:                         # kr1c should contain a good pointer to our locals
-    clc     $kr2c, $zero, current_context($kr1c)
+context_switch_exception_entry: # void context_switch_exception_entry(k0: reg_t cause)
+    li      $k1, 1
+    csd     $k1, $zero, in_switch($kr1c)
 
-    save_reg_frame_idc $kr2c, $k1, $c1, $epcc, $idc     # Save state
+    csc     $epcc, $zero, switch_cap_tmp($kr1c)
+    csd     $k0, $zero, switch_reg_tmp($kr1c)
+    clc     $kr2c, $zero, current_context($kr1c)        # kr2c not clobbered by refill
+
+    dmfc0   $k1, cp0_badvaddr                           # Hoisted setting this here from switch_exception
+                                                        # The value can change if we take a nested vmem fault
+    csd     $k1, $zero, last_bad_vaddr($kr1c)
+
+    cgetpcc $epcc                                       # Restart point
+    cld     $k1, $zero, 0($kr2c)                        # Touch frame to cause TLB fault
+    cld     $k1, $zero, (CONTEXT_OFFSET_STATE)($kr2c)
+                                                        # End restart point. Can't have TLB error here.
+
+    cld     $k0, $zero, switch_reg_tmp($kr1c)           # must be reloaded after restart
+
+    csc     $c0, $zero, MIPS_FRAME_SIZE($kr2c)
+    clc     $c0, $zero, switch_cap_tmp($kr1c)           # our first clobber. No exceptions now till next checkpoint.
+    csc     $idc, $zero, FRAME_idc_OFFSET($kr2c)
+    csc     $c0, $zero, FRAME_pcc_OFFSET($kr2c)
+
+    save_reg_frame_no_idc $kr2c, $k1                    # Save state (pcc and idc already saved)
 
     bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
     cincoffset  $c13 , $kdc, CONTEXT_TYPE               # meant to be in delay
 
     cunseal  $c3, $c3, $c13
-
-    # Save a context to
-    cseal    $kr2c, $kr2c, $c13                         # seal old context
-    csc      $kr2c, $zero, 0($c4)                       # save it in store_to
-
 
 switch_restore:                                         # void switch_restore(context_t restore_from)
 
@@ -767,8 +845,6 @@ switch_exception:                                       # void switch_exception(
     csd     $k0, $zero, last_exception_cause($kr1c)     # store cause
     csc     $c4, $zero, victim_context($kr1c)           # store victim
     csd     $t0, $zero, last_exception_ccause($kr1c)    # store ccause
-    dmfc0   $t0, cp0_badvaddr
-    csd     $t0, $zero, last_bad_vaddr($kr1c)
 
     clc     $c3, $zero, exception_context($kr1c)        # load exception context
     csc     $c3, $zero, current_context($kr1c)          # set it as current context
@@ -776,11 +852,6 @@ switch_exception:                                       # void switch_exception(
 
     # Restore everything, we dont have a register spare for $c0 so set default while restoring
     # We use exception registers here. These are not used by the critical section check in exception.S
-
-    # From here everything is saved out, and we are about to overwrite all registers.
-    # It should be safe to mark this core as having switched for revoke signal
-    li      $t0, 1
-    csd     $t0, $zero, since_switched($kr1c)
 
     .macro crestore_setc0 greg, offset, frame
         crestore \greg, \offset, \frame
@@ -790,17 +861,39 @@ switch_exception:                                       # void switch_exception(
     .endm
 
 switch_restore_final:
-    cld         $a0, $zero, CONTEXT_OFFSET_STATE($c3)
-    bnez        $a0, nano_kernel_die                    # Check this context is still alive
+    csd         $k0, $zero, switch_reg_tmp($kr1c)       # k0 could get clobbered by TLB exception
 
-    # c0 is not really stored in $c1, we just use it as temporary. $c3 will be overwritten so use $kr2c.
+    # Current context has been set. We must restart from here
+    li      $t0, 1
+    csd     $t0, $zero, in_switch($kr1c)
+
+    # $c3 will be overwritten so use $kr2c.
     cmove $kr2c, $c3
-    restore_reg_frame_gen crestore_setc0, grestore, $kr2c, $t0, $c1, $epcc
+
+    cgetpcc $epcc                                       # Restart point
+
+    # Force exception early
+    cld         $a0, $zero, CONTEXT_OFFSET_STATE($kr2c)
+    bnez        $a0, nano_kernel_die                    # Check this context is still alive
+    cld         $k1, $zero, 0($kr2c)
+    # No exceptions from now on
+
+    # c0 is not really stored in $c1, we just use it as temporary.
+    restore_reg_frame $kr2c, $k1, $epcc
+
+    # From here we can only do a restore, and we are about to overwrite all registers.
+    # It should be safe to mark this core as having switched for revoke signal
+    li          $k1, 1
+    csd         $k1, $zero, since_switched($kr1c)
+
+    # We can have no more exceptions now so its safe to deset the flag
+    csd         $zero, $zero, in_switch($kr1c)
+    cld         $k0, $zero, switch_reg_tmp($kr1c)       # restore k0 now we are not touching virtual memory
 
 return:
+
     # This tackles a qemu bug
-    cgetoffset $k1, $epcc
-    dmtc0      $k1, $14
+    QEMU_BUG_FIX $k1
 
     beqz       $k0, normal_return
     dmfc0      $k0, $12
@@ -905,26 +998,29 @@ get_phy_page_end:
 
 
 ########################################################
-# context_t create_context(reg_frame_t* initial_state);
+# context_t create_context(reg_frame_t* initial_state, res_t res);
 .global create_context
 create_context:
 ########################################################
 # TODO allow user to provide reservation
-# first check alignment
-    cgetbase    $t0, $c3
-    cgetoffset  $t1, $c3
-    daddu       $t0, $t0, $t1
-    andi        $t0, $t0, (CAP_SIZE-1)
-    bnez        $t0, 1f
+    cbtu        $c4, create_allocate_static
+    cmove       $c13, $c3
 
+create_allocate_dynamic:
+    cmove       $c3, $c4
+    SUBROUTINE_TAKE # Subroutine will clober c3,c4,c5,c14,c15,t*,a7. c3_in=res.c3_out=code.c4_out=data
+    b           allocated
+    # FIXME check that pcc is in the same page as idc.
 
-    dli         $t0,  CONTEXT_SIZE
+create_allocate_static:
+    dli         $t0,  CONTEXT_SIZE                          # needed in delay slot as well
 1:  cincoffset  $c6, $idc, next_context
     cllc        $c4, $c6
     cincoffset  $c5,  $c4, $t0
     cscc        $t3, $c5,  $c6                              # increment next context
     beqz        $t3, 1b
 
+allocated:
     csetboundsexact  $c4, $c4, $t0                               # will fail if we were out of space
     dli         $a0, CONTEXT_OFFSET_STATE
     csd         $zero, $a0, 0($c4)                          # set state to allocated for new context
@@ -934,7 +1030,7 @@ create_context:
     dli         $t0, 0
 
 memcpy_loop:
-    clc         $c5, $t0, 0($c3)
+    clc         $c5, $t0, 0($c13)
     daddiu      $t0, $t0, CAP_SIZE
     bne         $t0, $a0, memcpy_loop
     csc         $c5, $t0, (-CAP_SIZE)($c4)
@@ -944,7 +1040,7 @@ memcpy_loop:
 
 1:
     CRETURN
-    cclearlo    EN3(c4,c5,c6)                              # c3 is a return value
+    cclearlo    EN6(c4,c5,c6,c13,c14,c15)                              # c3 is a return value
 
 
 
@@ -972,9 +1068,7 @@ destroy_context:
 
     # If we are here we are destroying ourselves, thus we should restore restore_from
     cunseal     $c3, $c4, $c5
-    dmfc0       $t1, $12
-    ori         $t1, 2                                      # set SR(EXL)
-    mtc0        $t1, $12
+    SET_EXL     $t1
 
     b           switch_restore
     cincoffset  $c13 , $kdc, CONTEXT_TYPE                   # Needed for sealing if we had a delayed exception
@@ -1016,11 +1110,8 @@ critical_section_exit:
     beqz       $t0, kernel_critical_section_exit_end
     csd        $zero, $zero, exception_cause($kr1c)             # and set cause to 0
 
-    dmfc0      $t1, $12
-    ori        $t1, 3                                       # set SR(EXL) and SR(IE)
-    mtc0       $t1, $12
     b          context_switch_local_entry                   # calling context switch with k0 = cause will
-    move       $k0, $t0                                     # will switch to the exception context
+    move       $a4, $t0                                     # will switch to the exception context
 
 kernel_critical_section_exit_end:
     CRETURN
@@ -1370,9 +1461,9 @@ rescap_revoke_finish:
 
     # Blocking writing of the capability - should do as early as possible #
     dli         $t0, DEF_DATA_PERMS
-    dmtc0       $a2, $30, 2
-    dmtc0       $a3, $30, 3
-    dmtc0       $t0, $30, 4                 # only revoke Writable and Executable caps, not sealing caps
+    dmtc0       $a2, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BASE
+    dmtc0       $a3, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
+    dmtc0       $t0, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS # only revoke Writable and Executable caps, not sealing caps
 
     # Now blocking has started we can set that we need suspend/restore
     dli         $t0, (context_array_size) * (SMP_CORES-1)
@@ -1611,7 +1702,7 @@ revoke_loop_end:
     cmove       $c7, $c18
     li          $t0, 0
     cgetpcc     $c17     # this is mocking up a capability branch and link
-    beqz        $t0, 1f
+    beqz        $t0, 1f # FIXME wrong way around?
     cmove       $c18, $idc
     b           context_switch
     li          $t0, 1
@@ -1633,9 +1724,9 @@ revoke_check_switched:
 revoke_restore:
 
     # Allow any cap writes again #
-    dmtc0       $zero, $30, 4
-    dmtc0       $zero, $30, 3
-    dmtc0       $zero, $30, 2
+    dmtc0       $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS
+    dmtc0       $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
+    dmtc0       $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BASE
 
 
     # Mark vtable entries as free
@@ -2235,17 +2326,10 @@ free_mapping:
     csd         $t1, $zero, PHY_PAGE_OFFSET_status($c4)  # set p-entry back to whatever it was
 
 4:
-    # Invalidate TLB - could do this selectively for performance
 
-    .set N_TLB_ENTS, 32
-    dli     $t0, N_TLB_ENTS
-
-1:
-    dmtc0   $t0, $0
-    dmtc0   $t0, $10
-    tlbwi
-    bnez    $t0, 1b
-    daddiu  $t0, -1
+    li          $t0, 1
+    csd         $t0, $zero, need_shootdown($idc)        # only shootdown when we try to clear a page
+    sync                                                # need shootdown must be seen if the page is seen as being dirty
 
 # At this point we might be allowed to use the page again. TLB flush must have already happened
     csw         $a3, $zero, PHY_PAGE_OFFSET_status($c4)    # store to update phy page status
@@ -2259,21 +2343,6 @@ free_er:
     nop
 
 
-
-# Notes on calling rescap_take: provide c4 as null to avoid write. Will return in c3 and c4. Will use c5 #
-
-.macro SUBROUTINE_TAKE
-    cmove       $c14, $c17                          # save return code
-    cmove       $c15, $c18                          # save return data
-
-    dla         $t0, rescap_take
-    cgetpccsetoffset $c12, $t0
-    cjalr       $c12, $c17                          # call rescap_take
-    cnull       $c4                                 # null c4 for call to rescap_take
-
-    cmove       $c17, $c14                          # restore return code
-    cmove       $c18, $c15                          # restore return data
-.endm
 
 #struct foundation_metadata {
 #    found_id_t id;
@@ -2767,9 +2836,7 @@ exception_replay:
 ############################################################
 
     csetoffset  $c1, $kdc, $t1 # Got to save t1
-    dmfc0   $t1, $12
-    ori     $t1, 2                                      # set SR(EXL)
-    mtc0    $t1, $12
+    SET_EXL     $t1
     cgetoffset  $t1, $c1
 
     clcbi       $kr2c, current_context($kr1c)              # Our current context
@@ -2791,9 +2858,7 @@ exception_return:
 ############################################################
 
     csetoffset  $c1, $kdc, $t1 # Got to save t1
-    dmfc0   $t1, $12
-    ori     $t1, 2                                      # set SR(EXL)
-    mtc0    $t1, $12
+    SET_EXL     $t1
     cgetoffset  $t1, $c1
 
     clcbi       $kr2c, current_context($kr1c)              # Our current context
@@ -2854,6 +2919,7 @@ exception_user_handle: # TODO our idc needs an appropriate entry for this
     # ccause already stored
 
     # Can't write to any user registers while in exception as a TLB abort will kill us.
+    cld         $k1, $zero, (CONTEXT_OFFSET_EX_SAVED_IDC - INC_IM_MAX)($kr2c) # (cause TLB fault for context)
     clcbi       $kr2c, CTLP_OFFSET_EX_PCC($idc)          # kr2c = uex_pcc
     cbtu        $kr2c, context_switch_exception_entry    # if(untagged(uex_pcc))
     nop # By point we are definately going propagate to the user. But we need to take any TLB faults now.
@@ -2923,13 +2989,21 @@ nano_er:
 ############################################
 
 tlb_table_missing: # (safe)
-# FIXME: if we were in an nested exception, accessing this might get us stuck in an exception loop =(
 # Look for magic nop after this instruction. If it is present, we advance pcc and no exception
+    cld         $k1, $zero, in_switch($kr1c)
+    bnez        $k1, nano_kernel_die
+
+    cgetoffset  $k0, $epcc                  # Check we can actually dereference via this pcc one instruction later
+    daddiu      $k0, $k0, 7
+    cgetlen     $k1, $epcc
+    sltu        $k0, $k0, $k1
+    beqz        $k0, 1f
+
     li      $k0, 0x3400d00d
-    clw     $k1, $zero, 4($epcc)            # Might have problems if this is the last instruction ;)
+    clw     $k1, $zero, 4($epcc)
     beq     $k0, $k1, skip_and_return
 
-    cgetcause $k0
+1:  cgetcause $k0
     csd     $k0, $zero, exception_ccause($kr1c)
 
     cld     $k0, $zero, exception_level($kr1c)
@@ -2981,19 +3055,26 @@ kernel_exception_trampoline:
 1:      # If this is a TLB error, first go to the TLB handle. We must allow TLB faults in exception levels etc.1:
         daddiu      $k1, $k0, -(MIPS_CP0_EXCODE_TLBL << MIPS_CP0_CAUSE_EXCODE_SHIFT)
         beqz        $k1, tlb_trampoline
-        daddiu      $k1, $k0, -((MIPS_CP0_EXCODE_TLBS - MIPS_CP0_EXCODE_TLBL) << MIPS_CP0_CAUSE_EXCODE_SHIFT)
+        daddiu      $k1, $k0, -(MIPS_CP0_EXCODE_TLBS << MIPS_CP0_CAUSE_EXCODE_SHIFT)
         beqz        $k1, tlb_trampoline
 
 # If k0 is zero (this is a HW interrupt) We can supress with ex level. o/w it is a software exception.
 # These can be user handled or skipped with magic
+        cld         $k1, $zero, in_switch($kr1c)
+        bnez        $k1, nano_kernel_die
         cgetcause   $k1
         beqz        $k0, hw_ex
         csd         $k1, $zero, exception_ccause($kr1c)
 soft_ex:
 
         # We supress exception if a magic sequence is present. This is to allow default behavior with bad caps
+        cgetoffset  $k0, $epcc                      # Check we can actually dereference via this pcc one instruction later
+        daddiu      $k0, $k0, 7
+        cgetlen     $k1, $epcc
+        sltu        $k0, $k0, $k1
+        beqz        $k0, 1f
         li          $k0, 0x3400d00d                 # We should ignore other kinds of faults when the magic sequence is seen
-        clw         $k1, $zero, 4($epcc)            # Might have problems if this is the last instruction ;)
+        clw         $k1, $zero, 4($epcc)
         beq         $k0, $k1, skip_and_return
         dmfc0       $k0, $13
 
@@ -3034,6 +3115,7 @@ kernel_exception_trampoline_end:
     .ent tlb_trampoline
 tlb_trampoline: # TODO
 ################################################################################################
+# dont use kr2c unless context switch restores it
     dmfc0       $k0, cp0_badvaddr
     dla         $k1, top_virt_page_label                            # k1 = phy poiter to L0
 
@@ -3070,9 +3152,13 @@ tlb_trampoline: # TODO
     daddiu      $k1, $k1, (1 << PFN_SHIFT)                          # make second maping the next page
     dmtc0       $k1, cp0_entrylo1
 
+    cld         $k1, $zero, in_switch($kr1c)
+    bnez        $k1, 1f                                             # if we were switch epcc is a restart point
     tlbwr                                                           # write tlb entry
     eret
 
+1:  cjr         $epcc
+    nop
 tlb_trampoline_end:
     .global tlb_trampoline_end
     .end tlb_trampoline

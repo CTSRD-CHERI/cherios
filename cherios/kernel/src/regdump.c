@@ -208,7 +208,7 @@ static inline void dump_tlb() {
 #define ASM_MTCO(var, reg) "mtc0 %[" #var "], " STRINGIFY(reg) "\n"
 #define ASM_MFCO(var, reg) "dmfc0 %[" #var "], " STRINGIFY(reg) "\n"
 
-    register_t hi, lo0, lo1, pm;
+    register_t hi, lo0, lo1, pm, wired;
 
     printf("TLB status:\n\n");
 
@@ -218,7 +218,7 @@ static inline void dump_tlb() {
     printf("|        |  PAGE START  | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
-    for(int i = 0; i < 32; i++) {
+    for(int i = 0; i < N_TLB_ENTS; i++) {
         __asm__ __volatile__(
             ASM_MTCO(ndx, MIPS_CP0_REG_INDEX)
             "tlbr  \n"
@@ -226,7 +226,8 @@ static inline void dump_tlb() {
             ASM_MFCO(LO0, MIPS_CP0_REG_ENTRYLO0)
             ASM_MFCO(LO1, MIPS_CP0_REG_ENTRYLO1)
             ASM_MFCO(PM, MIPS_CP0_REG_PAGEMASK)
-        : [HI]"=r"(hi), [LO0]"=r"(lo0), [LO1]"=r"(lo1), [PM]"=r"(pm)
+            ASM_MFCO(W, MIPS_CP0_REG_WIRED)
+        : [HI]"=r"(hi), [LO0]"=r"(lo0), [LO1]"=r"(lo1), [PM]"=r"(pm),[W]"=r"(wired)
         : [ndx]"r"(i)
         :
         );
@@ -251,9 +252,9 @@ static inline void dump_tlb() {
         int is_m = pm_sz_k >= 1024;
         if(is_m) pm_sz_k /= 1024;
 
-        printf("|%4lx%sB*2|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|\n",
+        printf("|%4lx%sB*2|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|%s\n",
                pm_sz_k,is_m? "M" : "K", vpn, asid, pfn0, c0, d0, v0, g0,
-            pfn1, c1, d1, v1, g1);
+            pfn1, c1, d1, v1, g1, i < wired ? "(wired)" : "");
     }
 
     printf("\n\n");

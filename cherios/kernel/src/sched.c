@@ -421,7 +421,7 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
                 }
                 /* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
                 /* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
-                context_switch(to->context, &from->context);
+                context_switch(to->context);
             }
 		} else {
 			spinlock_release(&hint->sched_access_lock);

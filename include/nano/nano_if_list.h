@@ -37,12 +37,13 @@
 
 #define NANO_KERNEL_IF_RAW_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
-/* Creates a context from a intial reg_frame and returns a handle */\
-    ITEM(create_context, context_t, (reg_frame_t*, initial_state), __VA_ARGS__)  \
+/* Creates a context from a intial reg_frame and returns a handle. If the reservation provided is NULL will allocate\
+ * in a limited static region */\
+    ITEM(create_context, context_t, (reg_frame_t*, initial_state, res_t res), __VA_ARGS__)  \
 /* Deletes a context, restore_from is ONLY used if a context is destroying itself */\
     ITEM(destroy_context, context_t, (context_t, context, context_t, restore_from), __VA_ARGS__) \
 /* Switch to a handle, and store a handle for the suspended context to the location pointed to by store_to */\
-    ITEM(context_switch, void, (context_t, restore_from, context_t*,  store_to), __VA_ARGS__) \
+    ITEM(context_switch, void, (context_t, restore_from), __VA_ARGS__) \
 /* Delays interrupts until exit is called the same number of times OR context_switch is called */\
     ITEM(critical_section_enter, uint8_t, (void), __VA_ARGS__) \
     ITEM(critical_section_exit, void, (void), __VA_ARGS__) \

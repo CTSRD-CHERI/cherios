@@ -31,7 +31,7 @@
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "mips.h"
-.include "asm.S"
+#include "asm.S"
 
 # This is an implementation of sha256 that tries not to spill any registers - due to lack of stack trusted memory being
 # In short supply when we don't trust the system.

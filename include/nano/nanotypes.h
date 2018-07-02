@@ -101,7 +101,7 @@
 //   exception_saved_idc // IDC to do swapping with
 //};
 
-#define CONTEXT_SIZE                    (CHERI_FRAME_SIZE + (CAP_SIZE * 5))
+#define CONTEXT_SIZE                    (CHERI_FRAME_SIZE + (CAP_SIZE * 6))
 #define CONTEXT_OFFSET_STATE            CHERI_FRAME_SIZE
 
 #define CONTEXT_STATE_CREATED           0
@@ -114,10 +114,11 @@
 
 #define CONTEXT_OFFSET_CAUSE            (CHERI_FRAME_SIZE + (2 * REG_SIZE))
 #define CONTEXT_OFFSET_CCAUSE           (CHERI_FRAME_SIZE + (3 * REG_SIZE))
-#define CONTEXT_OFFSET_FOUND            (CHERI_FRAME_SIZE + CAP_SIZE)
-#define CONTEXT_OFFSET_EX_PCC           (CHERI_FRAME_SIZE + (2 * CAP_SIZE))
-#define CONTEXT_OFFSET_EX_IDC           (CHERI_FRAME_SIZE + (3 * CAP_SIZE))
-#define CONTEXT_OFFSET_EX_SAVED_IDC     (CHERI_FRAME_SIZE + (4 * CAP_SIZE))
+#define CONTEXT_OFFSET_FOUND            (CHERI_FRAME_SIZE + (2 * CAP_SIZE))
+#define CONTEXT_OFFSET_EX_PCC           (CHERI_FRAME_SIZE + (3 * CAP_SIZE))
+#define CONTEXT_OFFSET_EX_IDC           (CHERI_FRAME_SIZE + (4 * CAP_SIZE))
+#define CONTEXT_OFFSET_EX_SAVED_IDC     (CHERI_FRAME_SIZE + (5 * CAP_SIZE))
+
 // We never reallocate these, so its currently a huge limitation
 // Create context should take an optional reservation similar to the how the kernel gets non static space
 #define N_CONTEXTS                      (64)
@@ -228,10 +229,7 @@ DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
 
 #ifndef __ASSEMBLY__
 
-#define REG_SIZE        sizeof(register_t)
-#define REG_SIZE_BITS   3
-
-_Static_assert((1 << REG_SIZE_BITS) == REG_SIZE, "This should be true");
+_Static_assert(sizeof(register_t) == REG_SIZE, "This should be true");
 
 #define BOOK_END                        ((size_t)(TOTAL_PHY_PAGES))
 

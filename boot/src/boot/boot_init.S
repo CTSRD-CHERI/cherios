@@ -35,7 +35,7 @@
 
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
-.include "asm.S"
+#include "asm.S"
 #include "mips.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
@@ -99,6 +99,15 @@ start:
 
 cherios_init_jump_target:
 
+    # Set revoking nothing
+
+    dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS
+    dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BASE
+    dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
+
+    # Setup the TLB so it won't break on first miss
+    invalidate_tlb  $t0, $t1
+
 #ifdef SMP_ENABLED
 	# Send SMP cores other than 0 to trap
 
@@ -108,24 +117,6 @@ cherios_init_jump_target:
     nop
 
 #endif
-
-    # Set revoking nothing
-
-    dmtc0  $zero, $30, 4
-    dmtc0  $zero, $30, 2
-    dmtc0  $zero, $30, 3
-
-    .set N_TLB_ENTS, 32
-    # Setup the TLB so it won't break on first miss
-    dli     $t1, N_TLB_ENTS
-
-1:
-    move    $t0, $t1
-    dmtc0   $t0, $0
-    dmtc0   $t0, $10        # cretae a VPN 0, and a ASID of 77+i so it doesn't match anything else
-    tlbwi
-    bnez    $t1, 1b
-    daddiu  $t1, -1
 
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.

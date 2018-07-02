@@ -32,7 +32,7 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "mips.h"
 #include "dylink.h"
-.include "asm.S"
+#include "asm.S"
 
 
 #----   is  $cds (domain sealing capability)                        in a virtual reg, caller saved, can get from ctlp

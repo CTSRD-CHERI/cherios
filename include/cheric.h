@@ -39,10 +39,12 @@
 #define _CHERI256_
 	#define U_PERM_BITS 4
     #define CAP_SIZE 0x20
+    #define CAP_SIZE_BITS 5
 #elif _MIPS_SZCAP == 128
 #define _CHERI128_
 	#define U_PERM_BITS 4
     #define CAP_SIZE 0x10
+    #define CAP_SIZE_BITS 4
 #else
 #error Unknown capability size
 #endif
@@ -420,11 +422,19 @@ typedef struct reg_frame {
 	capability	cf_idc;
 
 	/* Program counter capability. */
-	capability	cf_pcc;
+	capability	cf_pcc; // WARN: Must be last for restore to work
 
 
 } reg_frame_t;
 
 #endif // ASSEMBLY
+
+#define MIPS_FRAME_SIZE        (32*REG_SIZE)
+#define CHERI_CAP_FRAME_SIZE   (28 * CAP_SIZE)
+#define CHERI_FRAME_SIZE       (MIPS_FRAME_SIZE + CHERI_CAP_FRAME_SIZE)
+#define FRAME_C3_OFFSET        (MIPS_FRAME_SIZE + (3 * CAP_SIZE))
+#define FRAME_a0_OFFSET        (3 * REG_RIZE)
+#define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
+#define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
 
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

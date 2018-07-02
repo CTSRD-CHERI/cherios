@@ -29,7 +29,7 @@
 #
 
 .set MIPS_SZCAP, _MIPS_SZCAP
-.include "asm.S"
+#include "asm.S"
 
 .section .trampoline_ccall, "ax"
 

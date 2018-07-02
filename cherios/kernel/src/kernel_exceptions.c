@@ -121,11 +121,15 @@ static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 static void handle_exception_loop(context_t* own_context_ptr) {
     context_t own_context = *own_context_ptr;
     exection_cause_t ex_info;
-    context_t own_save; // We never use this, there is currently no reason to restore the exception context
+
     uint8_t cpu_id = cp0_get_cpuid();
 
-    cp0_status_bev_set(0);
-    kernel_interrupts_init(1, cpu_id);
+    if(cpu_id != 0) {
+        // FIXME This means the timer on gets set on first exception which the first user a chance for denial of service
+        cp0_status_bev_set(0);
+        kernel_interrupts_init(1, cpu_id);
+    }
+
 
     while(1) {
 
@@ -186,7 +190,7 @@ static void handle_exception_loop(context_t* own_context_ptr) {
         kernel_curr_act = sched_get_current_act_in_pool(cp0_get_cpuid());
 
         KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
-        context_switch(kernel_curr_act->context, &own_save);
+        context_switch(kernel_curr_act->context);
     }
 }
 
@@ -221,7 +225,7 @@ static context_t make_exception_context(uint8_t cpu_id) {
 
     frame.cf_c3 = &(contexts[cpu_id]);
 
-    return create_context(&frame);
+    return create_context(&frame, NULL);
 }
 
 void kernel_exception(context_t swap_to, context_t own_context) {
@@ -233,11 +237,14 @@ void kernel_exception(context_t swap_to, context_t own_context) {
         set_exception_handler(ex_context, cpu_id);
     }
 
-    // This is only for core 0. All other cores are still idle.
-    context_t dummy;
+    // Exception contexts set up.
 
-    // Exception contexts set up. Switch core 0 to first non-exception context
-    context_switch(swap_to, &dummy);
+    cp0_status_bev_set(0);
+    kernel_interrupts_init(1, 0);
+
+    // Switch core 0 to first non-exception context
+
+    context_switch(swap_to);
 
     // This will be reached by the first exception for CPU 0.
     handle_exception_loop(&contexts[0]);

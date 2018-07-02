@@ -91,20 +91,20 @@ static int pmem_try_merge_after(size_t page_n) {
 size_t pmem_try_merge(size_t page_n) {
     assert(page_n < TOTAL_PHY_PAGES);
 
+    // This can now also fail to to racing the cleaning. We just do our best to merge
+
     size_t before = book[page_n].prev;
     size_t after = page_n + book[page_n].len;
 
     if(book[before].status == book[page_n].status) {
         merge_phy_page_range(before);
-        pmem_check_phy_entry(before);
-        assert(book[page_n].len == 0);
-        page_n = before;
+        if(book[page_n].len == 0) {
+            page_n = before;
+        }
     }
 
     if((after != BOOK_END) && book[page_n].status == book[after].status) {
         merge_phy_page_range(page_n);
-        pmem_check_phy_entry(page_n);
-        assert(book[after].len == 0);
     }
 
     return page_n;
@@ -242,25 +242,23 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
     return;
 }
 
-void clean_page(size_t page_n) {
-    //message_send(page_n,0,0,0,NULL,NULL,NULL,NULL,clean_act,SEND,0); <-- caused problems
-    zero_page_range(page_n);
-    pmem_try_merge(page_n);
-}
-
 void clean_loop(void) {
+    size_t page_n = 0;
+    syscall_change_priority(act_self_ctrl, PRIO_IDLE); // Only do this when idle.
+    sleep(0);
     while(1) {
-        // Get page to clean
-        msg_t* msg = get_message();
-        size_t page_n = msg->a0;
-        next_msg();
+        // Keep walking through the physical pages, if a dirty one is found, clean it
 
-        // Clean da page
+        if(page_n == BOOK_END || book[page_n].len == 0) {
+            page_n = 0;
+        }
 
-        // It is possible for the page states have been changed in the meantime, I didn't bother with any locking
-        if(book[page_n].status == page_dirty && book[page_n].len > 0) {
+        if(book[page_n].status == page_dirty) {
+            // We don't try merge afterwards. This would interfere with the main thread.
+            // Instead these are merged by subsequent searches
             zero_page_range(page_n);
         }
 
+        page_n +=book[page_n].len;
     }
 }

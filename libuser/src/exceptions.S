@@ -32,7 +32,7 @@
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "mips.h"
-.include "asm.S"
+#include "asm.S"
 #include "dylink.h"
 #include "cheriplt.h"
 

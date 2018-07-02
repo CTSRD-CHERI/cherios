@@ -346,8 +346,15 @@ act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const cha
 	// FIXME Only the caller really knows what base to use.
 	// FIXME The reason this is going wrong is that we really should be sending an address to proc_man to query
 	// FIXME what image it is in. This is hard to do when the system is dying however.
+    res_t context_res = res;
+    if(res != NULL) {
+        res = rescap_split(res, CONTEXT_SIZE); // split off enough for nano context
+        res_nfo_t nfo = rescap_nfo(context_res);
+        KERNEL_TRACE("Program %s has a context at %lx to %lx\n", name, nfo.base, nfo.base+nfo.length);
+    }
+
 	act_t* act = act_register(frame, queue, name, create_in_status, parent, frame->mf_t0, res);
-	act->context = create_context(frame);
+	act->context = create_context(frame, context_res);
     /* set scheduling status */
 
     if(cpu_hint >= SMP_CORES) cpu_hint = SMP_CORES-1;

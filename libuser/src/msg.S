@@ -35,7 +35,7 @@
 
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
-.include "asm.S"
+#include "asm.S"
 #include "queue.h"
 #include "syscalls.h"
 #include "mips.h"

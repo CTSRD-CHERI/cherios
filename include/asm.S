@@ -32,33 +32,13 @@
 
 #define __ASSEMBLY__ 1
 #include "cheric.h"
+#include "mips.h"
 
 .set noreorder
 .set nobopt
 .set noat
 
-.set CAP_SIZE, (MIPS_SZCAP/8)
-.set REG_SIZE, (64/8)
-.set MIPS_FRAME_SIZE, (32*REG_SIZE)
-.set REG_SIZE_BITS, 3
-.set CHERI_CAP_FRAME_SIZE, (28 * CAP_SIZE)
-.set CHERI_FRAME_SIZE, (MIPS_FRAME_SIZE + CHERI_CAP_FRAME_SIZE)
-.set FRAME_C3_OFFSET, MIPS_FRAME_SIZE + (3 * CAP_SIZE)
-.set FRAME_a0_OFFSET, 3 * REG_RIZE
-
 .set INC_IM_MAX, 0x3E0
-
-.ifeq MIPS_SZCAP-256
-.set CAP_SIZE_BITS, 5
-.set U_PERM_BITS, 16
-.else
-.ifeq MIPS_SZCAP-128
-.set CAP_SIZE_BITS, 4
-.set U_PERM_BITS, 4
-.else
-.error "Unknown cap size"
-.endif
-.endif
 
 .macro TRACE_ON
 li  $zero, 0xbeef
@@ -96,6 +76,28 @@ li  $zero, 0xdead
 #    daddiu  \reg, \reg, %tprel_lo(\sym)
 #.endm
 
+.macro invalidate_entry index, tmp
+        dmtc0   \index, MIPS_CP0_REG_INDEX
+        dsll    \tmp, \index, MIPS_ENTRYHI_VPN_SHIFT
+        daddiu  \tmp,\tmp,0xFF                    # use different ASID to rest of system so can't match
+        dmtc0   \tmp, MIPS_CP0_REG_ENTRYHI        # create a vpn of the index. Important if direct mapped.
+        dmtc0   $zero, MIPS_CP0_REG_ENTRYLO0
+        dmtc0   $zero, MIPS_CP0_REG_ENTRYLO1
+        tlbwi
+        dmtc0   $zero, MIPS_CP0_REG_ENTRYHI
+.endm
+
+.macro invalidate_up_to index, tmp
+    101:
+        invalidate_entry \index, \tmp
+        bnez    \index, 101b
+        daddiu  \index, -1
+.endm
+
+.macro invalidate_tlb tmp1, tmp2
+        dli     \tmp1, N_TLB_ENTS-1
+        invalidate_up_to \tmp1, \tmp2
+.endm
 
 .macro get_sym reg, sym
    clcbi	\reg, %captab20(\sym)($c25)
@@ -245,13 +247,12 @@ li  $zero, 0xdead
     # Notice also that KCC and KDC are not preserved.
     #
 
-.macro save_reg_frame_idc frame_ptr, tmp, ctmp, pcc, idc
+.macro save_reg_frame_no_idc frame_ptr, tmp
     # Expands to a list of the form
     # csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame_ptr)
-    foreachi csave, 1, \frame_ptr, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25, \idc, \pcc
 
-    cgetdefault \ctmp
-    csave \ctmp, 0, \frame_ptr
+    # Take exception early
+    foreachi csave, 1, \frame_ptr, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25
 
     # Expands to a list of the form
     # csd	$greg, $0, offset*REG_SIZE(frame_ptr)
@@ -275,7 +276,7 @@ li  $zero, 0xdead
     # to the layout of struct reg_frame.
     #
 
-.macro restore_reg_frame_gen macroc, macrog, frame_ptr, tmp, c0, pcc
+.macro restore_reg_frame_gen macroc, macrog, frame_ptr, tmp, pcc
 
     # tmp may be one of the gp registers we restore later - so we must use it for our purposes before gp restore
     cld	\tmp, $0, 29*REG_SIZE(\frame_ptr)
@@ -298,12 +299,12 @@ li  $zero, 0xdead
     #
     # Expands to a list of the form
     # clc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame_ptr)
-    foreachi \macroc, 0, \frame_ptr, \c0, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, \pcc
+    foreachi \macroc, 0, \frame_ptr, $c0, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, \pcc
 
 .endm
 
-.macro restore_reg_frame frame_ptr, tmp, c0, pcc
-    restore_reg_frame_gen crestore, grestore, \frame_ptr, \tmp, \c0, \pcc
+.macro restore_reg_frame frame_ptr, tmp, pcc
+    restore_reg_frame_gen crestore, grestore, \frame_ptr, \tmp, \pcc
 .endm
 
 .macro get_cpu_id reg

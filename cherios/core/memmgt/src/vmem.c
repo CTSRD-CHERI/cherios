@@ -120,7 +120,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
             CHERI_PRINT_CAP(activation);
             panic_proxy("Someone tried to use a virtual address (%lx) that was already freed!\n", activation);
         }
-        printf("spurious commit by %s at vaddr %lx -> %lx!\n", name, addr, ro->entries[ndx]);
+        printf(KRED"spurious commit by %s at vaddr %lx -> %lx!\n"KRST, name, addr, ro->entries[ndx]);
     }
     else vmem_create_mapping(l2, L2_INDEX(addr), TLB_FLAGS_DEFAULT);
 
@@ -242,7 +242,6 @@ void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, si
 
     if(page_n != 0) {
         pmem_try_merge(page_n);
-        clean_page(page_n);
     }
 }
 

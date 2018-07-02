@@ -33,7 +33,7 @@
 
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
-.include "asm.S"
+#include "asm.S"
 #include "mips.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are

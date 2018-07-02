@@ -69,9 +69,6 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
 /* Dumps the whole book */
 void full_dump(void);
 
-/* Send a page_n to the cleaner to clean */
-void clean_page(size_t page_n);
-
 /* The clean loop for the cleaner */
 void clean_loop(void);
 
