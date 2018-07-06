@@ -37,6 +37,8 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "asm.S"
 #include "mips.h"
+#include "assembly_utils.h"
+#include "macroutils.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
@@ -68,6 +70,9 @@ start:
     # Set UX, SX, and KSX
     li      $t1, (0b111 << 5)
     or      $t0, $t0, $t1
+
+    # Set user interrupt bits
+    or      $t0, $t0, (0x3 << 8)
 
     mtc0		$t0, $12
 
@@ -116,6 +121,45 @@ cherios_init_jump_target:
     bnez    $a0, bootload_smp_trap
     nop
 
+    # Enter config mode
+
+    mfc0    $t2, MIPS_CP0_REG_MVPControl
+    ori     $t2, $t2, MVPControl_VPC
+    dli     $t1, ~MVPControl_EVP
+    and     $t2, $t2, $t1
+    mtc0    $t2, MIPS_CP0_REG_MVPControl
+
+    li      $t0, 1
+1:
+    SET_VPE_CONTROL_TargTC $t1, $t0
+
+    # Activate Thread
+    MFTC0(t1, MIPS_CP0_REG_TCStatusX)
+    li      $t3, TCStatus_A
+    or      $t1, $t1, $t3
+    MTTC0(t1, MIPS_CP0_REG_TCStatusX)
+
+    # Unhalt Thread
+    MFTC0(t1, MIPS_CP0_REG_TCHaltX)
+    MTTC0(zero, MIPS_CP0_REG_TCHaltX)
+
+    # Activate VPE
+    MFTC0(t1, MIPS_CP0_REG_VPEConf0X)
+    ori     $t1, $t1, VPEConf0_MVP | VPEConf0_VPA
+    MTTC0(t1, MIPS_CP0_REG_VPEConf0X)
+
+    daddiu  $t0, $t0, -1
+    bnez     $t0, 1b
+    nop
+
+    # Now exit config
+
+    xori     $t2, $t2, MVPControl_VPC | MVPControl_EVP
+    mtc0    $t2, MIPS_CP0_REG_MVPControl
+
+    # And enable things
+
+    EVPE
 #endif
 
 	# Set up a boot-time stack using memory allocated by the linker;

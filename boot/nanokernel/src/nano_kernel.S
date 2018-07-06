@@ -103,18 +103,18 @@ local_array_start context_array, CAP_SIZE_BITS, SMP_CORES
 #endif
 
 local_cap_var current_context
+local_cap_var ex_pcc_dummy          # Set to null. This is here so we match the CTLP requirements for user exceptions
 local_cap_var exception_context
 local_cap_var victim_context
 local_cap_var switch_cap_tmp
 local_reg_var exception_level
-local_reg_var exception_cause
-local_reg_var exception_ccause
 local_reg_var last_exception_cause
 local_reg_var last_exception_ccause
 local_reg_var last_bad_vaddr
 local_reg_var since_switched
+local_reg_var since_shotdown
 local_reg_var in_switch
-local_reg_var switch_reg_tmp
+local_reg_var supressed
 #ifdef SMP_ENABLED
 local_array_end context_array, CAP_SIZE_BITS,  SMP_CORES
 #endif
@@ -208,9 +208,11 @@ nano_smp_spin:
     dli         $t1, ~(MIPS_CP0_STATUS_BEV)
     and         $t0, $t0, $t1
     dmtc0       $t0, $12
-# setting k0 to 0 as this signals not to perform an exceptional return
+
+    clc         $c3, $zero, exception_context($kr1c)        # load exception context
+# setting k0 to -1 to make fake exception
     b           switch_restore_final
-    dli         $k0, 0
+    dli         $k0, -1
 #endif
 
 
@@ -328,7 +330,6 @@ nano_kernel_init:
     csc         $kr2c, $zero, exception_context($kr1c)   # Set exception context = NULL
 
     csd         $zero, $zero, exception_level($kr1c)     # Set exception level to 0
-    csd         $zero, $zero, exception_cause($kr1c)     # Set exception cause to 0
 
 
 
@@ -680,11 +681,31 @@ tlb_shootdown:
     li          $t3, 0
 tlb_shootdown_local:
 #ifdef SMP_ENABLED
-1:
+
+    # Set all flags to 0
+    dli         $t0, (context_array_size) * (SMP_CORES-1)
+1:  csd         $zero, $t0, since_shotdown($idc)
+    bnez        $t0, 1b
+    daddiu      $t0, $t0, -(context_array_size)
+
+
     dli         $t0, SMP_CORES-1
-    nop         # FIXME need to send signal here!
+1:
+    SET_VPE_CONTROL_TargTC $t1, $t0
+    SEND_IPI(t1, 0)
     bnez        $t0, 1b
     daddiu      $t0, -1
+
+    # Set all flags to 0
+    dli         $t0, (context_array_size) * (SMP_CORES-1)
+
+2:  YIELD
+    sync
+1:  cld         $t1, $t0, since_shotdown($idc)
+    beqz        $t1, 2b
+    nop
+    bnez        $t0, 1b
+    daddiu      $t0, $t0, -(context_array_size)
 #else
     invalidate_tlb $t0, $t1
 #endif
@@ -791,23 +812,27 @@ context_switch_local_entry: # void context_switch_local_entry(a4: reg_t cause)
     move    $k0, $a4
 
 context_switch_exception_entry: # void context_switch_exception_entry(k0: reg_t cause)
+    cgetcause   $k1
+context_switch_exception_entry_custom_ccause: # (k0: reg_t cause, k1: reg_t ccause
+
+    csd     $k1, $zero, last_exception_ccause($kr1c)
+    csd     $k0, $zero, last_exception_cause($kr1c)
+    dmfc0   $k1, cp0_badvaddr                           # Hoisted setting this here from switch_exception
+                                                        # The value can change if we take a nested vmem fault
+    csd     $k1, $zero, last_bad_vaddr($kr1c)
+
     li      $k1, 1
     csd     $k1, $zero, in_switch($kr1c)
 
     csc     $epcc, $zero, switch_cap_tmp($kr1c)
-    csd     $k0, $zero, switch_reg_tmp($kr1c)
     clc     $kr2c, $zero, current_context($kr1c)        # kr2c not clobbered by refill
-
-    dmfc0   $k1, cp0_badvaddr                           # Hoisted setting this here from switch_exception
-                                                        # The value can change if we take a nested vmem fault
-    csd     $k1, $zero, last_bad_vaddr($kr1c)
 
     cgetpcc $epcc                                       # Restart point
     cld     $k1, $zero, 0($kr2c)                        # Touch frame to cause TLB fault
     cld     $k1, $zero, (CONTEXT_OFFSET_STATE)($kr2c)
                                                         # End restart point. Can't have TLB error here.
 
-    cld     $k0, $zero, switch_reg_tmp($kr1c)           # must be reloaded after restart
+    cld     $k0, $zero, last_exception_cause($kr1c)           # must be reloaded after restart
 
     csc     $c0, $zero, MIPS_FRAME_SIZE($kr2c)
     clc     $c0, $zero, switch_cap_tmp($kr1c)           # our first clobber. No exceptions now till next checkpoint.
@@ -817,37 +842,23 @@ context_switch_exception_entry: # void context_switch_exception_entry(k0: reg_t 
     save_reg_frame_no_idc $kr2c, $k1                    # Save state (pcc and idc already saved)
 
     bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
-    cincoffset  $c13 , $kdc, CONTEXT_TYPE               # meant to be in delay
+    cincoffset  $c13 , $kdc, CONTEXT_TYPE
 
-    cunseal  $c3, $c3, $c13
-
-switch_restore:                                         # void switch_restore(context_t restore_from)
-
-    csc      $c3, $zero, current_context($kr1c)         # set c3 it as the current context
-
-    # Check if we had supressed any interrupts. If we did, we can pretty much treat this like the
-    # Beginning of an exception and just restore the exception context
-
-    cld     $k0,   $zero, exception_cause($kr1c)        # load cause
-    csd     $zero, $zero, exception_cause($kr1c)        # and set to 0
-    beqz    $k0,   switch_restore_final                 # no exception
+    b        switch_restore_final
+    cunseal  $c3, $c3, $c13                             # meant to be in delay
 
 switch_exception:                                       # void switch_exception(context_t victim, reg_t cause)
-    csd     $zero, $zero, exception_level($kr1c)        # critical_state.level = 0 (should be in delay)
-    csd     $zero, $zero, exception_cause($kr1c)
+
+
                 # If we were doing it properly we would modify it to have the faulting instruction be from the new
                 # activation. However, for now as only the bits to check the type of
                 # interrupt we will just use this.
 
     clc     $c3, $zero, current_context($kr1c)          # Current context is the victim
-    cld     $t0, $zero, exception_ccause($kr1c)         # load ccause
     cseal   $c4, $c3, $c13                              # Seal c3 to pass to exception handler
-    csd     $k0, $zero, last_exception_cause($kr1c)     # store cause
     csc     $c4, $zero, victim_context($kr1c)           # store victim
-    csd     $t0, $zero, last_exception_ccause($kr1c)    # store ccause
-
     clc     $c3, $zero, exception_context($kr1c)        # load exception context
-    csc     $c3, $zero, current_context($kr1c)          # set it as current context
+
     # HERE # If you want to restore the exception context with magic values, store via c3
 
     # Restore everything, we dont have a register spare for $c0 so set default while restoring
@@ -860,8 +871,11 @@ switch_exception:                                       # void switch_exception(
         .endif
     .endm
 
-switch_restore_final:
-    csd         $k0, $zero, switch_reg_tmp($kr1c)       # k0 could get clobbered by TLB exception
+switch_restore_final:                                   # void switch_restore(context_t restore_from)
+    csd     $zero, $zero, exception_level($kr1c)        # critical_state.level = 0 (should be in delay)
+    csd     $zero, $zero, supressed($kr1c)
+    csc     $c3, $zero, current_context($kr1c)          # set c3 it as the current context
+    csd     $k0, $zero, last_exception_cause($kr1c)     # k0 could get clobbered by TLB exception
 
     # Current context has been set. We must restart from here
     li      $t0, 1
@@ -878,7 +892,6 @@ switch_restore_final:
     cld         $k1, $zero, 0($kr2c)
     # No exceptions from now on
 
-    # c0 is not really stored in $c1, we just use it as temporary.
     restore_reg_frame $kr2c, $k1, $epcc
 
     # From here we can only do a restore, and we are about to overwrite all registers.
@@ -888,7 +901,7 @@ switch_restore_final:
 
     # We can have no more exceptions now so its safe to deset the flag
     csd         $zero, $zero, in_switch($kr1c)
-    cld         $k0, $zero, switch_reg_tmp($kr1c)       # restore k0 now we are not touching virtual memory
+    cld         $k0, $zero, last_exception_cause($kr1c)       # restore k0 now we are not touching virtual memory
 
 return:
 
@@ -915,18 +928,19 @@ normal_return:
 .global get_last_exception
 get_last_exception:
 #################################################
+    cld        $v0, $zero, last_exception_cause($kr1c)
+    beqz       $v0, 1f
     clc        $c4, $zero, victim_context($kr1c)
-    cld        $t0, $zero, last_exception_cause($kr1c)
     cld        $t1, $zero, last_exception_ccause($kr1c)
     cld        $t2, $zero, last_bad_vaddr($kr1c)
     cld        $t3, $zero, exception_level($kr1c)
     csc        $c4, $zero, 0($c3)
-    csd        $t0, $zero, CAP_SIZE($c3)
+    csd        $v0, $zero, CAP_SIZE($c3)
     csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
     csd        $t2, $zero, (CAP_SIZE+(2*REG_SIZE))($c3)
     csd        $t3, $zero, (CAP_SIZE+(3*REG_SIZE))($c3)
-    CRETURN
-    nop
+1:  CRETURN
+    cclearlo    EN2(c3,c4) # If there was no exception do not leak any other field
 
 ################################################################################################################ (safe)
 # capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out, register_t IO)
@@ -1070,9 +1084,8 @@ destroy_context:
     cunseal     $c3, $c4, $c5
     SET_EXL     $t1
 
-    b           switch_restore
-    cincoffset  $c13 , $kdc, CONTEXT_TYPE                   # Needed for sealing if we had a delayed exception
-                                                            # Putting here rather than in switch
+    b           switch_restore_final
+    li          $k0, 0
 
 destroy_context_end:
     CRETURN
@@ -1106,12 +1119,15 @@ critical_section_exit:
     bnez       $v0, kernel_critical_section_exit_end
     csd        $v0, $zero, exception_level($kr1c)            # decrement level could take exception now
 
-    cld        $t0, $zero, exception_cause($kr1c)
-    beqz       $t0, kernel_critical_section_exit_end
-    csd        $zero, $zero, exception_cause($kr1c)             # and set cause to 0
+    # Re-enable interrupts if we turned them off.
 
-    b          context_switch_local_entry                   # calling context switch with k0 = cause will
-    move       $a4, $t0                                     # will switch to the exception context
+    cld        $t2, $zero, supressed($kr1c)
+    beqz       $t2, kernel_critical_section_exit_end
+    csd        $zero, $zero, supressed($kr1c)
+
+    mfc0       $t0, MIPS_CP0_REG_STATUS
+    ori        $t0, $t0, 1
+    mtc0       $t0, MIPS_CP0_REG_STATUS                     # exception will happen here
 
 kernel_critical_section_exit_end:
     CRETURN
@@ -1709,6 +1725,8 @@ revoke_loop_end:
 1:  cmove       $c17, $c6
     cmove       $c18, $c7
 
+#ifdef SMP_ENABLED
+
 revoke_check_switched:
     # TODO we should signal others with a dummy signal to force a switch
     # Check others. Currently we just yield.
@@ -1720,6 +1738,8 @@ revoke_check_switched:
     nop
     bnez        $t0, 2b
     daddiu      $t0, $t0, -(context_array_size)
+#endif
+
 
 revoke_restore:
 
@@ -2829,43 +2849,42 @@ exception_getcause:
     CRETURN
     cclearlo EN1(c1)
 
-############################################################ (safe)
-# void, exception_replay(void)
-.global exception_replay
-exception_replay:
-############################################################
-
-    csetoffset  $c1, $kdc, $t1 # Got to save t1
-    SET_EXL     $t1
-    cgetoffset  $t1, $c1
-
-    clcbi       $kr2c, current_context($kr1c)              # Our current context
-    clcbi       $c1, CONTEXT_OFFSET_EX_SAVED_IDC($kr2c)    # The idc to swap with
-    cincoffset  $kr2c, $kr2c, INC_IM_MAX
-
-     # store exception_ccause for replay
-    cld         $k0, $zero, (CONTEXT_OFFSET_CCAUSE-INC_IM_MAX)($kr2c)
-    csd         $k0, $zero, exception_ccause($kr1c)
-    # get cause as well
-    b           exception_return_main
-    cld         $k0, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($kr2c)
-
-
 ############################################################  (safe)
 # void exception_return(void)
 .global exception_return
 exception_return:
 ############################################################
 
-    csetoffset  $c1, $kdc, $t1 # Got to save t1
-    SET_EXL     $t1
+    clcbi       $c1, current_context($kr1c)
+    csd         $zero, $zero, CONTEXT_OFFSET_CAUSE($c1)
+
+############################################################ (safe)
+# void, exception_replay(void)
+.global exception_replay
+exception_replay:
+############################################################
+    csetoffset  $c1, $kdc, $t1 # Got to save t1 # restart point for vmem exception
+    SET_EXL     $t1             # is 3 instructions
     cgetoffset  $t1, $c1
+    cgetpcc     $epcc
+    cincoffset  $epcc, $epcc, -4 * (5)
+    QEMU_BUG_FIX $k1
 
     clcbi       $kr2c, current_context($kr1c)              # Our current context
+
+    # Force TLB exceptions. (from context)
+    cld         $k1, $zero, 0($kr2c)
+    cld         $k1, $zero, (CONTEXT_SIZE-REG_SIZE)($kr2c)
+
     clcbi       $c1, CONTEXT_OFFSET_EX_SAVED_IDC($kr2c)    # The idc to swap with
+
+    # Force TLB exceptions. (from ctlp)
+    cld         $k1, $zero, CTLP_OFFSET_EX_PCC($c1)
+    cld         $k1, $zero, CTLP_OFFSET_EX_C1($c1)
+
     cincoffset  $kr2c, $kr2c, INC_IM_MAX
 
-    li      $k0, 0                                         # Signal to do non exceptional return
+    cld         $k0, $zero, (CONTEXT_OFFSET_CAUSE - INC_IM_MAX)($kr2c)
 
 exception_return_main:
 
@@ -2879,6 +2898,9 @@ exception_return_main:
     daddiu      $k1, $k1, -(EX_STATE_EL)
     csd         $k1, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
 
+    # Restore ccause
+    cld         $k1, $zero, (CONTEXT_OFFSET_CCAUSE - INC_IM_MAX)($kr2c)
+
     # Swap pcc
     clcbi       $epcc, CTLP_OFFSET_EX_PCC($c1)
     clcbi       $idc, (CONTEXT_OFFSET_EX_PCC-INC_IM_MAX)($kr2c)          # idc used as tmp here
@@ -2890,7 +2912,7 @@ exception_return_main:
     cscbi       $kr2c, CTLP_OFFSET_EX_IDC($c1)
 
     # Load c1 - if this is a replay go on to do a normal exception
-    bnez        $k0, context_switch_exception_entry
+    bnez        $k0, context_switch_exception_entry_custom_ccause
     clcbi       $c1, CTLP_OFFSET_EX_C1($c1)
 
     # Otherwise eret
@@ -2919,12 +2941,14 @@ exception_user_handle: # TODO our idc needs an appropriate entry for this
     # ccause already stored
 
     # Can't write to any user registers while in exception as a TLB abort will kill us.
+    # We will restart the exception if we get a TLB fault, we should take the same exception
+
+    # the first entry we need for the context already touched
     cld         $k1, $zero, (CONTEXT_OFFSET_EX_SAVED_IDC - INC_IM_MAX)($kr2c) # (cause TLB fault for context)
-    clcbi       $kr2c, CTLP_OFFSET_EX_PCC($idc)          # kr2c = uex_pcc
+    clcbi       $kr2c, CTLP_OFFSET_EX_PCC($idc)          # kr2c = uex_pcc (also causes tlb fault)
     cbtu        $kr2c, context_switch_exception_entry    # if(untagged(uex_pcc))
     nop # By point we are definately going propagate to the user. But we need to take any TLB faults now.
-    clcbi       $kr2c, CTLP_OFFSET_EX_IDC($idc)          # (cause TLB fault for idc store)
-    cscbi       $c1, CTLP_OFFSET_EX_C1($idc)             # saved_c1 = c1
+    cscbi       $c1, CTLP_OFFSET_EX_C1($idc)             # saved_c1 = c1 (also causes TLB fault)
 
     # At this point we can no longer take a TLB fault. Safe to clobber user registers.
     # restore kr2c to our context
@@ -3003,10 +3027,7 @@ tlb_table_missing: # (safe)
     clw     $k1, $zero, 4($epcc)
     beq     $k0, $k1, skip_and_return
 
-1:  cgetcause $k0
-    csd     $k0, $zero, exception_ccause($kr1c)
-
-    cld     $k0, $zero, exception_level($kr1c)
+1:  cld     $k0, $zero, exception_level($kr1c)
     bnez    $k0, nano_kernel_die
     nop
 
@@ -3033,6 +3054,17 @@ skip_and_return:
 
     ERET_BUGLESS
 
+shootdown_request:
+    # Perform a shootdown then eret. We may take another exception immediately but this OK
+    invalidate_tlb  $k0, $k1
+    li          $k0, 1
+    csd         $k0, $zero, since_shotdown($kr1c)
+    dmfc0       $k0, MIPS_CP0_REG_CAUSE
+    li          $k1, ~(0b11 << MIPS_CP0_STATUS_IM_SHIFT)
+    and         $k0, $k0, $k1
+    dmtc0       $k0, MIPS_CP0_REG_CAUSE
+    eret
+
 .section .trampoline_exc, "ax"
 
 ###########################################################################################################
@@ -3047,9 +3079,11 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens in something like context switch we should die more nicely
-        dmfc0       $k0, $13
-        bnez        $a0, 1f
+        dmfc0       $k0, MIPS_CP0_REG_CAUSE
+        andi        $k1, $k0, (0b11 << MIPS_CP0_STATUS_IM_SHIFT)
+        bnez        $k1, shootdown_request
         andi        $k0, $k0, 0xFF        # k0 has cause
+        bnez        $a0, 1f
         daddiu      $k1, $k0, -(MIPS_CP0_EXCODE_SYSCALL << MIPS_CP0_CAUSE_EXCODE_SHIFT) # syscall with a0 = 0 results in getting nano kernel IF
         beqz        $k1, get_interface
 1:      # If this is a TLB error, first go to the TLB handle. We must allow TLB faults in exception levels etc.1:
@@ -3062,9 +3096,8 @@ kernel_exception_trampoline:
 # These can be user handled or skipped with magic
         cld         $k1, $zero, in_switch($kr1c)
         bnez        $k1, nano_kernel_die
-        cgetcause   $k1
+        nop
         beqz        $k0, hw_ex
-        csd         $k1, $zero, exception_ccause($kr1c)
 soft_ex:
 
         # We supress exception if a magic sequence is present. This is to allow default behavior with bad caps
@@ -3076,7 +3109,7 @@ soft_ex:
         li          $k0, 0x3400d00d                 # We should ignore other kinds of faults when the magic sequence is seen
         clw         $k1, $zero, 4($epcc)
         beq         $k0, $k1, skip_and_return
-        dmfc0       $k0, $13
+1:      dmfc0       $k0, MIPS_CP0_REG_CAUSE
 
         # We can also pass to the user
         clc     $kr2c, $zero, current_context($kr1c)
@@ -3092,10 +3125,10 @@ soft_ex:
 hw_ex:
         cld         $k1, $zero, exception_level($kr1c)
         beqz        $k1, context_switch_exception_entry
-        dmfc0       $k0, $13
-        csd         $k0, $zero, exception_cause($kr1c)
-        dmfc0       $k1, $12
+        dmfc0       $k0, MIPS_CP0_REG_CAUSE
+        dmfc0       $k1, MIPS_CP0_REG_STATUS
         li          $k0, 1
+        csd         $k0, $zero, supressed($kr1c)
         not         $k0, $k0
         and         $k1, $k1, $k0 # As interrupts had to be enabled
         mtc0        $k1, $12      # Disable interrupts, we are happy to take the hit as this is rare

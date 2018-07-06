@@ -87,6 +87,7 @@ typedef struct CTL_t {
     // On restore all 3 will be restored, and ex_pcc/_exidc will be what they originally were
     // BEFORE the exception (i.e. the handler is unchanged)
     // Note c1 is a SCRATCH register on entry to your exception routine
+    // WARN If the other of these is changed TLB faulting code in the nano kernel need changing
     ex_pcc_t* ex_pcc;
     capability ex_idc;
     capability ex_c1;

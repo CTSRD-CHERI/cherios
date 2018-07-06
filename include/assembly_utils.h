@@ -42,6 +42,46 @@
 #define cp0_context   $4
 #define cp0_badvaddr  $8
 
+// register numbers
+
+#define Reg_Encode_zero        0
+
+#define Reg_Encode_at          1
+#define Reg_Encode_v0          2
+#define Reg_Encode_v1          3
+
+#define Reg_Encode_a0          4
+#define Reg_Encode_a1          5
+#define Reg_Encode_a2          6
+#define Reg_Encode_a3          7
+#define Reg_Encode_a4          8
+#define Reg_Encode_a5          9
+#define Reg_Encode_a6          10
+#define Reg_Encode_a7          11
+
+#define Reg_Encode_t0          12
+#define Reg_Encode_t1          13
+#define Reg_Encode_t2          14
+#define Reg_Encode_t3          15
+
+#define Reg_Encode_s0          16
+#define Reg_Encode_s1          17
+#define Reg_Encode_s2          18
+#define Reg_Encode_s3          19
+#define Reg_Encode_s4          20
+#define Reg_Encode_s5          21
+#define Reg_Encode_s6          22
+#define Reg_Encode_s7          23
+
+#define Reg_Encode_t8          24
+#define Reg_Encode_t9          25
+#define Reg_Encode_k0          26
+#define Reg_Encode_k1          27
+#define Reg_Encode_gp          28
+#define Reg_Encode_sp          29
+#define Reg_Encode_fp          30
+#define Reg_Encode_ra          31
+
 // To make cclearhi and cclearlo easier to read
 
 #define Reg_Encode_all (1 << 16) - 1
@@ -99,5 +139,35 @@
 #define EN11(X,...) EncodeReg(X) | EN10(__VA_ARGS__)
 #define EN12(X,...) EncodeReg(X) | EN11(__VA_ARGS__)
 #define EN13(X,...) EncodeReg(X) | EN12(__VA_ARGS__)
+
+
+#define cop0_encode (0b010000 << 26)
+#define mftr_encode (0b01000 << 21)
+#define mttr_encode (0b01100 << 21)
+
+#define MFTC0_I(rd, rt, sel) .word (cop0_encode | mftr_encode | (rt << 16) | (EncodeReg(rd) << 11) | sel)
+
+#define MFTC0(...) MFTC0_I(__VA_ARGS__)
+
+
+#define MTTC0_I(rt, rd, sel) .word (cop0_encode | mttr_encode | (EncodeReg(rt) << 16) | (rd << 11) | sel)
+#define MTTC0(...) MTTC0_I(__VA_ARGS__)
+
+#define DVPE(rt) \
+.word (0b01000001011 << 21)  | (EncodeReg(rt) << 16) |  0b0000000000000001; \
+ehb
+
+#define EVPE .word   0x41600021; \
+ehb
+
+
+#define SEND_IPI(tmp, n) \
+    MFTC0(tmp, 13, 0); \
+    ori $ ## tmp, $ ## tmp, (1 << (MIPS_CP0_STATUS_IM_SHIFT + n)); \
+    MTTC0(tmp, 13, 0); \
+
+#define FORK(rs,rt,rd) .word (0b011111 << 26) | (EncodeReg(rs) << 21) | (EncodeReg(rt) << 16) | (EncodeReg(rd) << 11) | (0b001000)
+
+
 
 #endif //CHERIOS_ASSEMBLY_UTILS_H

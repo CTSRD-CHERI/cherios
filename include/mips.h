@@ -182,10 +182,13 @@ INT_SIZES(define_intypes)
 #define	MIPS_CP0_REG_RESERVED7		$7
 #define	MIPS_CP0_REG_BADVADDR		$8
 #define	MIPS_CP0_REG_COUNT		$9
+#define	MIPS_CP0_REG_COUNTX		9
 #define	MIPS_CP0_REG_ENTRYHI		$10
 #define	MIPS_CP0_REG_COMPARE		$11
+#define	MIPS_CP0_REG_COMPAREX		11
 #define	MIPS_CP0_REG_STATUS		$12
 #define	MIPS_CP0_REG_CAUSE		$13
+#define	MIPS_CP0_REG_CAUSEX		13
 #define	MIPS_CP0_REG_EPC		$14
 #define	MIPS_CP0_REG_PRID		$15
 #define	MIPS_CP0_REG_CONFIG		$16
@@ -207,8 +210,42 @@ INT_SIZES(define_intypes)
 #define MIPS_CP0_REG_REVOKE_BASE	2
 #define MIPS_CP0_REG_REVOKE_BOUND	3
 #define MIPS_CP0_REG_REVOKE_PERMS	4
-
 #define	MIPS_CP0_REG_RESERVED31		$31
+
+#define MIPS_CP0_REG_MVPControl $0, 1
+#define MIPS_CP0_REG_MVPControlX 0, 1
+#define MVPControl_EVP      (1 << 0)        // Enable VPEs. Use EVPE and DVPE.
+#define MVPControl_VPC      (1 << 1)        // Config enable. Must not have VPE set.
+
+#define MIPS_CP0_REG_MVPConf0 $0, 2
+#define MIPS_CP0_REG_MVPConf0X 0, 2
+#define MVPConf0_PTC        (0xFF)          // Total TC's - 1
+
+#define MIPS_CP0_REG_VPEControl $1, 1
+#define MIPS_CP0_REG_VPEControlX 1, 1
+#define VPEControl_TargTC   0xFF            // Target for mtt and mft
+
+#define MIPS_CP0_REG_VPEConf0   $1, 2
+#define MIPS_CP0_REG_VPEConf0X   1, 2
+#define VPEConf0_MVP        (1 << 1)        // Master. can mtt and mft.
+#define VPEConf0_VPA        (1 << 0)        // Active. Runs if EVP.
+
+#define MIPS_CP0_REG_TCHalt $2, 4
+#define MIPS_CP0_REG_TCHaltX 2, 4
+#define TCHalt_H             1
+
+#define MIPS_CP0_REG_TCStatus $2,1
+#define MIPS_CP0_REG_TCStatusX 2,1
+#define TCStatus_A          (1 << 13)
+
+#define MIPS_CP0_REG_TCRestart $2,3
+#define MIPS_CP0_REG_TCRestartX 2,3
+
+#define MIPS_CP0_REG_TCBind $2, 2
+#define MIPS_CP0_REG_TCBindX 2, 2
+#define TCBind_CurVPE 0xF
+#define TCBind_CurTC  (0xF << 21)
+#define TCBind_CurTcShift 21
 
 #define MIPS_ENTRYHI_ASID_SHIFT 	0
 #define MIPS_ENTRYHI_ASID_BITS		8

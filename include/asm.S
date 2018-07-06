@@ -395,3 +395,13 @@ li  $zero, 0xdead
     ccall $c17, $c18, 2
     cincoffset $c11, $c11, (frame_sz)
 .endm
+
+
+.macro SET_VPE_CONTROL_TargTC tmp, core
+    mfc0    \tmp, MIPS_CP0_REG_VPEControl
+    dsrl    \tmp, \tmp, 8
+    dsll    \tmp, \tmp, 8
+    or      \tmp, \tmp, \core
+    mtc0    \tmp, MIPS_CP0_REG_VPEControl
+    ehb
+.endm

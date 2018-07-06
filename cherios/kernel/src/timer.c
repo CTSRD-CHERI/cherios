@@ -36,7 +36,7 @@
 
 uint64_t high_resolution_timers[SMP_CORES];
 
-static register_t		kernel_last_timer[SMP_CORES];
+static uint32_t kernel_last_timer[SMP_CORES];
 // TODO everyone may wait on timeout, maybe just walk the list?
 #define MAX_WAITERS 0x10
 act_t* sleeps[MAX_WAITERS];
@@ -75,10 +75,6 @@ uint64_t get_high_res_time(uint8_t cpu_id) {
 	} while(!success);
 
 	return new_high_res;
-}
-
-static inline register_t TMOD(register_t count) {
-	return count & 0xFFFFFFFF;
 }
 
 static void kernel_timer_check_sleepers(void) {
@@ -150,9 +146,13 @@ void kernel_timer(uint8_t cpu_id)
 	 * tick, better to defer.
 	 */
 	/* count register is 32 bits */
-	register_t next_timer = TMOD(kernel_last_timer[cpu_id] + TIMER_INTERVAL);
-	while (next_timer < TMOD(cp0_count_get() + TIMER_INTERVAL_MIN)) {
-		next_timer = TMOD(next_timer + TIMER_INTERVAL);
+	uint32_t next_timer = kernel_last_timer[cpu_id] + TIMER_INTERVAL;
+    uint32_t cur = cp0_count_get();
+    int32_t diff;
+
+    // Catches either small, or negative timer offset
+	while ((diff = (int32_t)next_timer - (int32_t)cur),(diff < TIMER_INTERVAL_MIN)) {
+		next_timer = next_timer + TIMER_INTERVAL;
 	}
 	cp0_compare_set(next_timer);		/* Clears pending interrupt. */
 

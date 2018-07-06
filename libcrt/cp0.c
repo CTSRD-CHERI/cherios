@@ -150,17 +150,16 @@ cp0_hwrena_set(register_t hwrena)
  * Routines for managing the CP0 count and compare registers, used to
  * implement cycle counting and timers.
  */
-register_t
+uint32_t
 cp0_count_get(void)
 {
 	register_t count;
 
 	__asm__ __volatile__ ("dmfc0 %0, $9" : "=r" (count));
-	return (count & 0xFFFFFFFF);
 }
 
 void
-cp0_compare_set(register_t compare)
+cp0_compare_set(uint32_t compare)
 {
 
 	__asm__ __volatile__ ("dmtc0 %0, $11" : : "r" (compare));

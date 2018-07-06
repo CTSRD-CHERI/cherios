@@ -124,11 +124,11 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
     uint8_t cpu_id = cp0_get_cpuid();
 
-    if(cpu_id != 0) {
-        // FIXME This means the timer on gets set on first exception which the first user a chance for denial of service
-        cp0_status_bev_set(0);
-        kernel_interrupts_init(1, cpu_id);
-    }
+
+    // We fire a dummy exception for starting CPUs to give their exception context a chance
+    cp0_status_bev_set(0);
+    kernel_interrupts_init(1, cpu_id);
+    context_switch(sched_get_current_act_in_pool(cpu_id)->context);
 
 
     while(1) {
@@ -152,10 +152,11 @@ static void handle_exception_loop(context_t* own_context_ptr) {
                      (unsigned long)(ex_info.cause),
                     cpu_id);
 
+        // If we have interrupts to handle do this first. Then we can handle any other excodes
+        if((cp0_status_get() & ex_info.cause & 0xFF00)) kernel_interrupt(ex_info.cause, cpu_id);
 
         switch (excode) {
             case MIPS_CP0_EXCODE_INT:
-                kernel_interrupt(ex_info.cause, cpu_id);
                 break;
 
             case MIPS_CP0_EXCODE_SYSCALL:
@@ -237,15 +238,5 @@ void kernel_exception(context_t swap_to, context_t own_context) {
         set_exception_handler(ex_context, cpu_id);
     }
 
-    // Exception contexts set up.
-
-    cp0_status_bev_set(0);
-    kernel_interrupts_init(1, 0);
-
-    // Switch core 0 to first non-exception context
-
-    context_switch(swap_to);
-
-    // This will be reached by the first exception for CPU 0.
     handle_exception_loop(&contexts[0]);
 }
