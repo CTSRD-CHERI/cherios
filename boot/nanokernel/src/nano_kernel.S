@@ -331,10 +331,10 @@ nano_kernel_init:
     csc         $c13, $zero, next_context($kr1c)        # Initialise next context
 
     csetboundsexact  $c3, $kr2c, $k0
-    dli         $k0, CHERI_FRAME_SIZE
-    csd         $zero, $k0, 0($c3)                      # Set state to 0
+    cincoffset  $c3, $c3, INC_IM_MAX
+    csd         $zero, $zero, CONTEXT_OFFSET_STATE($c3)                      # Set state to 0
     cnull       $c4
-    csc         $c4, $k0, CAP_SIZE($c3)                 # Set foundation ref to NULL
+    csc         $c4, $zero, CONTEXT_OFFSET_FOUND($c3)    # Set foundation ref to NULL
     csc         $c3, $zero, current_context($kr1c)       # Create first context and make it the current context
 
 
@@ -886,16 +886,16 @@ context_switch_exception_entry_custom_ccause: # (k0: reg_t cause, k1: reg_t ccau
     clc     $kr2c, $zero, current_context($kr1c)        # kr2c not clobbered by refill
 
     cgetpcc $epcc                                       # Restart point
-    cld     $k1, $zero, 0($kr2c)                        # Touch frame to cause TLB fault
+    cld     $k1, $zero, (-INC_IM_MAX)($kr2c)            # Touch frame to cause TLB fault
     cld     $k1, $zero, (CONTEXT_OFFSET_STATE)($kr2c)
                                                         # End restart point. Can't have TLB error here.
 
     cld     $k0, $zero, last_exception_cause($kr1c)           # must be reloaded after restart
 
-    csc     $c0, $zero, MIPS_FRAME_SIZE($kr2c)
+    csc     $c0, $zero, (FRAME_C0_OFFSET-INC_IM_MAX)($kr2c)
     clc     $c0, $zero, switch_cap_tmp($kr1c)           # our first clobber. No exceptions now till next checkpoint.
-    csc     $idc, $zero, FRAME_idc_OFFSET($kr2c)
-    csc     $c0, $zero, FRAME_pcc_OFFSET($kr2c)
+    csc     $idc, $zero, (FRAME_idc_OFFSET-INC_IM_MAX)($kr2c)
+    csc     $c0, $zero, (FRAME_pcc_OFFSET-INC_IM_MAX)($kr2c)
 
     save_reg_frame_no_idc $kr2c, $k1                    # Save state (pcc and idc already saved)
 
@@ -947,7 +947,7 @@ switch_restore_final:                                   # void switch_restore(co
     # Force exception early
     cld         $a0, $zero, CONTEXT_OFFSET_STATE($kr2c)
     bnez        $a0, nano_kernel_die                    # Check this context is still alive
-    cld         $k1, $zero, 0($kr2c)
+    cld         $k1, $zero, (-INC_IM_MAX)($kr2c)
     # No exceptions from now on
 
     restore_reg_frame $kr2c, $k1, $epcc
@@ -1082,7 +1082,6 @@ create_allocate_dynamic:
     cmove       $c3, $c4
     SUBROUTINE_TAKE # Subroutine will clober c3,c4,c5,c14,c15,t*,a7. c3_in=res.c3_out=code.c4_out=data
     b           allocated
-    # FIXME check that pcc is in the same page as idc.
 
 create_allocate_static:
     dli         $t0,  CONTEXT_SIZE                          # needed in delay slot as well
@@ -1094,18 +1093,18 @@ create_allocate_static:
 
 allocated:
     csetboundsexact  $c4, $c4, $t0                               # will fail if we were out of space
-    dli         $a0, CONTEXT_OFFSET_STATE
-    csd         $zero, $a0, 0($c4)                          # set state to allocated for new context
+    cincoffset  $c4, $c4, (INC_IM_MAX)
+    csd         $zero, $zero, CONTEXT_OFFSET_STATE($c4)          # set state to allocated for new context
     cnull       $c5
-    csc         $c5, $a0, CAP_SIZE($c4)                     # set foundation ref to null
+    csc         $c5, $zero, CONTEXT_OFFSET_FOUND($c4)            # set foundation ref to null
     # memcpy a0 bytes from c3 to c4
     dli         $t0, 0
-
+    dli         $a0, CHERI_FRAME_SIZE
 memcpy_loop:
     clc         $c5, $t0, 0($c13)
     daddiu      $t0, $t0, CAP_SIZE
     bne         $t0, $a0, memcpy_loop
-    csc         $c5, $t0, (-CAP_SIZE)($c4)
+    csc         $c5, $t0, (-(CAP_SIZE + INC_IM_MAX))($c4)
 
     cincoffset  $c3, $kdc, CONTEXT_TYPE                    # Load sealing capability
     cseal       $c3, $c4, $c3                              # Return sealed cap
@@ -2545,10 +2544,9 @@ foundation_enter:
     clc         $c12, $zero, 0($c3)                     # get entry pcc
     csetoffset  $c3, $c3, $zero
     clc         $c4, $zero, current_context($kr1c)       # get current context
-    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     clc         $idc, $zero, FOUNDATION_ID_SIZE($c3)    # get entry data
 
-    csc         $c3, $t0, 0($c4)                        # set current context to point to id of foundation
+    csc         $c3, $zero, CONTEXT_OFFSET_FOUND($c4)     # set current context to point to id of foundation
 
     cjr         $c12
     cclearlo    EN2(c3,c4)
@@ -2591,13 +2589,10 @@ foundation_exit:
 ###########################################################################################
 
     clc         $c3, $zero, current_context($kr1c)       # get current context
-    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     cnull       $c4
-
-    csc         $c4, $t0, 0($c3)
-    cclearlo    EN2(c3,c4)
+    csc         $c4, $zero, CONTEXT_OFFSET_FOUND($c3)
     CRETURN
-    nop
+    cclearlo    EN2(c3,c4)
 
 
 ########################################################################################### (safe)
@@ -2607,9 +2602,8 @@ foundation_new_entry:
 ###########################################################################################
 
     # Get found struct from current context
-    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     clc         $c4, $zero, current_context($kr1c)
-    clc         $c4, $t0, 0($c4)
+    clc         $c4, $zero, CONTEXT_OFFSET_FOUND($c4)
 
     cbtu        $c4, new_entry_er
     nop
@@ -2646,9 +2640,8 @@ foundation_get_id:
 
     # Get found struct from current context
 
-    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     clc         $c3, $zero, current_context($kr1c)
-    clc         $c3, $t0, 0($c3)
+    clc         $c3, $zero, CONTEXT_OFFSET_FOUND($c3)
     cbtu        $c3, id_none
 
     # make cert for current foundation
@@ -2668,9 +2661,8 @@ rescap_take_cert:
 ###########################################################################################
 
     # get current foundation
-    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     clc         $c5, $zero, current_context($kr1c)
-    clc         $c5, $t0, 0($c5)
+    clc         $c5, $zero, CONTEXT_OFFSET_FOUND($c5)
     cbtu        $c5, take_cert_er
 
     # make cert for current foundation
@@ -2778,9 +2770,8 @@ rescap_unlock:
     cunseal     $c3, $c3, $c5
 
     # get current foundation
-    dli         $t0, CHERI_FRAME_SIZE + CAP_SIZE
     clc         $c5, $zero, current_context($kr1c)
-    clc         $c5, $t0, 0($c5)
+    clc         $c5, $zero, CONTEXT_OFFSET_FOUND($c5)
     cbtu        $c5, 1f
 
     # convert to same form as used for cert earlier
@@ -2886,10 +2877,9 @@ exception_subscribe:
 
     # Just set the user_handle bit in CONTEXT_EX_STATE
     clcbi   $c3, current_context($kr1c)
-    cincoffset  $c3, $c3,  INC_IM_MAX
-    cld     $t0, $zero, (CONTEXT_OFFSET_EX_STATE-INC_IM_MAX)($c3)
+    cld     $t0, $zero, (CONTEXT_OFFSET_EX_STATE)($c3)
     ori     $t0, $t0, EX_STATE_UH
-    csd     $t0, $zero, (CONTEXT_OFFSET_EX_STATE-INC_IM_MAX)($c3)
+    csd     $t0, $zero, (CONTEXT_OFFSET_EX_STATE)($c3)
     CRETURN
     cclearlo EN1(c3)
 
@@ -2901,9 +2891,8 @@ exception_getcause:
 ############################################################
 
     clcbi   $c1, current_context($kr1c)
-    cincoffset  $c1, $c1,  INC_IM_MAX
-    cld     $v0, $zero, (CONTEXT_OFFSET_CAUSE-INC_IM_MAX)($c1)
-    cld     $v1, $zero, (CONTEXT_OFFSET_CCAUSE-INC_IM_MAX)($c1)
+    cld     $v0, $zero, (CONTEXT_OFFSET_CAUSE)($c1)
+    cld     $v1, $zero, (CONTEXT_OFFSET_CCAUSE)($c1)
     CRETURN
     cclearlo EN1(c1)
 
@@ -2931,8 +2920,8 @@ exception_replay:
     clcbi       $kr2c, current_context($kr1c)              # Our current context
 
     # Force TLB exceptions. (from context)
-    cld         $k1, $zero, 0($kr2c)
-    cld         $k1, $zero, (CONTEXT_SIZE-REG_SIZE)($kr2c)
+    cld         $k1, $zero, (-INC_IM_MAX)($kr2c)
+    cld         $k1, $zero, (CONTEXT_SIZE-REG_SIZE-INC_IM_MAX)($kr2c)
 
     clcbi       $c1, CONTEXT_OFFSET_EX_SAVED_IDC($kr2c)    # The idc to swap with
 
@@ -2940,33 +2929,31 @@ exception_replay:
     cld         $k1, $zero, CTLP_OFFSET_EX_PCC($c1)
     cld         $k1, $zero, CTLP_OFFSET_EX_C1($c1)
 
-    cincoffset  $kr2c, $kr2c, INC_IM_MAX
-
-    cld         $k0, $zero, (CONTEXT_OFFSET_CAUSE - INC_IM_MAX)($kr2c)
+    cld         $k0, $zero, (CONTEXT_OFFSET_CAUSE)($kr2c)
 
 exception_return_main:
 
     # Check we were actually in exception level
 
-    cld         $k1, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    cld         $k1, $zero, (CONTEXT_OFFSET_EX_STATE)($kr2c)
     andi        $k1, $k1, EX_STATE_EL
     daddiu      $k1, $k1, -(EX_STATE_EL)
     bnez        $k1, bad_use_of_return
-    cld         $k1, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    cld         $k1, $zero, (CONTEXT_OFFSET_EX_STATE)($kr2c)
     daddiu      $k1, $k1, -(EX_STATE_EL)
-    csd         $k1, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    csd         $k1, $zero, (CONTEXT_OFFSET_EX_STATE)($kr2c)
 
     # Restore ccause
-    cld         $k1, $zero, (CONTEXT_OFFSET_CCAUSE - INC_IM_MAX)($kr2c)
+    cld         $k1, $zero, (CONTEXT_OFFSET_CCAUSE)($kr2c)
 
     # Swap pcc
     clcbi       $epcc, CTLP_OFFSET_EX_PCC($c1)
-    clcbi       $idc, (CONTEXT_OFFSET_EX_PCC-INC_IM_MAX)($kr2c)          # idc used as tmp here
+    clcbi       $idc, (CONTEXT_OFFSET_EX_PCC)($kr2c)          # idc used as tmp here
     cscbi       $idc, CTLP_OFFSET_EX_PCC($c1)
 
     # Swap idc
     clcbi       $idc, CTLP_OFFSET_EX_IDC($c1)
-    clcbi       $kr2c, (CONTEXT_OFFSET_EX_IDC-INC_IM_MAX)($kr2c)
+    clcbi       $kr2c, (CONTEXT_OFFSET_EX_IDC)($kr2c)
     cscbi       $kr2c, CTLP_OFFSET_EX_IDC($c1)
 
     # Load c1 - if this is a replay go on to do a normal exception
@@ -3002,7 +2989,7 @@ exception_user_handle: # TODO our idc needs an appropriate entry for this
     # We will restart the exception if we get a TLB fault, we should take the same exception
 
     # the first entry we need for the context already touched
-    cld         $k1, $zero, (CONTEXT_OFFSET_EX_SAVED_IDC - INC_IM_MAX)($kr2c) # (cause TLB fault for context)
+    cld         $k1, $zero, (CONTEXT_OFFSET_EX_SAVED_IDC)($kr2c) # (cause TLB fault for context)
     clcbi       $kr2c, CTLP_OFFSET_EX_PCC($idc)          # kr2c = uex_pcc (also causes tlb fault)
     cbtu        $kr2c, context_switch_exception_entry    # if(untagged(uex_pcc))
     nop # By point we are definately going propagate to the user. But we need to take any TLB faults now.
@@ -3011,30 +2998,29 @@ exception_user_handle: # TODO our idc needs an appropriate entry for this
     # At this point we can no longer take a TLB fault. Safe to clobber user registers.
     # restore kr2c to our context
     clc     $kr2c, $zero, current_context($kr1c)
-    cincoffset  $kr2c, $kr2c, INC_IM_MAX
 
     # Store causes for when the user requests them.
-    csd         $k0, $zero, (CONTEXT_OFFSET_CAUSE - INC_IM_MAX)($kr2c)
+    csd         $k0, $zero, (CONTEXT_OFFSET_CAUSE)($kr2c)
     cgetcause   $k0
-    csd         $k0, $zero, (CONTEXT_OFFSET_CCAUSE - INC_IM_MAX)($kr2c)
+    csd         $k0, $zero, (CONTEXT_OFFSET_CCAUSE)($kr2c)
 
     # Set User Exception Level - this is not re-entrant
-    cld         $k0, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    cld         $k0, $zero, (CONTEXT_OFFSET_EX_STATE)($kr2c)
     ori         $k0, $k0, EX_STATE_EL
-    csd         $k0, $zero, (CONTEXT_OFFSET_EX_STATE - INC_IM_MAX)($kr2c)
+    csd         $k0, $zero, (CONTEXT_OFFSET_EX_STATE)($kr2c)
 
     # Swap idc,pcc with uex. Save uex somewhere else for the next exception. Save eidc for restore help.
     # None of the below can take a TLB exception as we loaded all of them above.
 
     clcbi       $c1, CTLP_OFFSET_EX_PCC($idc)       # c1 = uex_pcc
     cscbi       $epcc, CTLP_OFFSET_EX_PCC($idc)     # saved_pcc = epcc
-    cscbi       $c1, (CONTEXT_OFFSET_EX_PCC - INC_IM_MAX)($kr2c)    # uex_pcc_to_next = uex_pcc (for next ex)
+    cscbi       $c1, (CONTEXT_OFFSET_EX_PCC)($kr2c)    # uex_pcc_to_next = uex_pcc (for next ex)
     cmove       $epcc, $c1                          # epcc = uex_pcc
 
     clcbi       $c1, CTLP_OFFSET_EX_IDC($idc)       # c1 = uex_idc
     cscbi       $idc, CTLP_OFFSET_EX_IDC($idc)      # uex_idc = eidc
-    cscbi       $c1, (CONTEXT_OFFSET_EX_IDC - INC_IM_MAX)($kr2c) # = uex_idc_to_next = uex_idc (for next ex)
-    cscbi       $idc, (CONTEXT_OFFSET_EX_SAVED_IDC - INC_IM_MAX)($kr2c) # saved_idc = eidc (to use for restore)
+    cscbi       $c1, (CONTEXT_OFFSET_EX_IDC)($kr2c) # = uex_idc_to_next = uex_idc (for next ex)
+    cscbi       $idc, (CONTEXT_OFFSET_EX_SAVED_IDC)($kr2c) # saved_idc = eidc (to use for restore)
     cmove       $idc, $c1                           # idc = uex_idc
 
     ERET_BUGLESS
@@ -3172,8 +3158,7 @@ soft_ex:
         # We can also pass to the user
         clc     $kr2c, $zero, current_context($kr1c)
         cbtu    $idc, context_switch_exception_entry # No IDC = no user interrupts
-        cincoffset  $kr2c, $kr2c, INC_IM_MAX
-        cld     $k1, $zero, (CONTEXT_OFFSET_EX_STATE-INC_IM_MAX)($kr2c)
+        cld     $k1, $zero, (CONTEXT_OFFSET_EX_STATE)($kr2c)
         daddiu  $k1, $k1, -EX_STATE_UH
         bnez    $k1, context_switch_exception_entry # Must have user bit set, and not already be in an exception
         nop

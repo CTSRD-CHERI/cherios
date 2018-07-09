@@ -103,22 +103,22 @@
 //};
 
 #define CONTEXT_SIZE                    (CHERI_FRAME_SIZE + (CAP_SIZE * 6))
-#define CONTEXT_OFFSET_STATE            CHERI_FRAME_SIZE
+#define CONTEXT_OFFSET_STATE            (CHERI_FRAME_SIZE - INC_IM_MAX)
 
 #define CONTEXT_STATE_CREATED           0
 #define CONTEXT_STATE_DESTROYED         1
 
-#define CONTEXT_OFFSET_EX_STATE         CHERI_FRAME_SIZE + REG_SIZE
+#define CONTEXT_OFFSET_EX_STATE         (CHERI_FRAME_SIZE + REG_SIZE - INC_IM_MAX)
 
 #define EX_STATE_UH                     1
 #define EX_STATE_EL                     2
 
-#define CONTEXT_OFFSET_CAUSE            (CHERI_FRAME_SIZE + (2 * REG_SIZE))
-#define CONTEXT_OFFSET_CCAUSE           (CHERI_FRAME_SIZE + (3 * REG_SIZE))
-#define CONTEXT_OFFSET_FOUND            (CHERI_FRAME_SIZE + (2 * CAP_SIZE))
-#define CONTEXT_OFFSET_EX_PCC           (CHERI_FRAME_SIZE + (3 * CAP_SIZE))
-#define CONTEXT_OFFSET_EX_IDC           (CHERI_FRAME_SIZE + (4 * CAP_SIZE))
-#define CONTEXT_OFFSET_EX_SAVED_IDC     (CHERI_FRAME_SIZE + (5 * CAP_SIZE))
+#define CONTEXT_OFFSET_CAUSE            (CHERI_FRAME_SIZE + (2 * REG_SIZE) - INC_IM_MAX)
+#define CONTEXT_OFFSET_CCAUSE           (CHERI_FRAME_SIZE + (3 * REG_SIZE) - INC_IM_MAX)
+#define CONTEXT_OFFSET_FOUND            (CHERI_FRAME_SIZE + (2 * CAP_SIZE) - INC_IM_MAX)
+#define CONTEXT_OFFSET_EX_PCC           (CHERI_FRAME_SIZE + (3 * CAP_SIZE) - INC_IM_MAX)
+#define CONTEXT_OFFSET_EX_IDC           (CHERI_FRAME_SIZE + (4 * CAP_SIZE) - INC_IM_MAX)
+#define CONTEXT_OFFSET_EX_SAVED_IDC     (CHERI_FRAME_SIZE + (5 * CAP_SIZE) - INC_IM_MAX)
 
 // We never reallocate these, so its currently a huge limitation
 // Create context should take an optional reservation similar to the how the kernel gets non static space

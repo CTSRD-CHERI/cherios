@@ -221,22 +221,22 @@ li  $zero, 0xdead
 
 # Saves capability register 'creg' to offset 'offset' of frame 'frame'
 .macro csave creg, offset, frame
-	csc	\creg, $0, \offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame)
+	csc	\creg, $0, ((\offset*CAP_SIZE+MIPS_FRAME_SIZE)-INC_IM_MAX)(\frame)
 .endm
 
 # Restores capability register 'creg' to offset 'offset' of frame 'frame'
 .macro crestore creg, offset, frame
-	clc	\creg, $0, \offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame)
+	clc	\creg, $0, ((\offset*CAP_SIZE+MIPS_FRAME_SIZE)-INC_IM_MAX)(\frame)
 .endm
 
 # Saves general-purpose register 'greg' to offset 'offset' of frame 'frame'
 .macro gsave greg, offset, frame
-	csd	\greg, $0, \offset*REG_SIZE(\frame)
+	csd	\greg, $0, ((\offset*REG_SIZE)-INC_IM_MAX)(\frame)
 .endm
 
 # Restores general-purpose register 'greg' to offset 'offset' of frame 'frame'
 .macro grestore greg, offset, frame
-	cld	\greg, $0, \offset*REG_SIZE(\frame)
+	cld	\greg, $0, ((\offset*REG_SIZE)-INC_IM_MAX)(\frame)
 .endm
 
 # Calls 'macro elem, index, global' for each 'elem' of the input list
@@ -268,12 +268,12 @@ li  $zero, 0xdead
     # csd	$greg, $0, offset*REG_SIZE(frame_ptr)
     foreachi gsave, 0, \frame_ptr, $at, $v0, $v1, $a0, $a1, $a2, $a3, $a4, $a5, $a6, $a7, $t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6, $s7, $t8, $t9, $gp, $sp, $fp, $ra
     mfhi	\tmp
-    csd	\tmp, $0, 29*REG_SIZE(\frame_ptr)
+    csd	\tmp, $0, ((29*REG_SIZE)-INC_IM_MAX)(\frame_ptr)
     mflo	\tmp
-    csd	\tmp, $0, 30*REG_SIZE(\frame_ptr)
+    csd	\tmp, $0, ((30*REG_SIZE)-INC_IM_MAX)(\frame_ptr)
 
     dmfc0       \tmp, $4, 2
-    csd	        \tmp, $0, 31*REG_SIZE(\frame_ptr)
+    csd	        \tmp, $0, ((31*REG_SIZE)-INC_IM_MAX)(\frame_ptr)
 
 .endm
 .macro save_reg_frame frame_ptr, tmp, c0, pcc
@@ -289,11 +289,11 @@ li  $zero, 0xdead
 .macro restore_reg_frame_gen macroc, macrog, frame_ptr, tmp, pcc
 
     # tmp may be one of the gp registers we restore later - so we must use it for our purposes before gp restore
-    cld	\tmp, $0, 29*REG_SIZE(\frame_ptr)
+    cld	\tmp, $0, ((29*REG_SIZE)-INC_IM_MAX)(\frame_ptr)
     mthi	\tmp
-    cld	\tmp, $0, 30*REG_SIZE(\frame_ptr)
+    cld	\tmp, $0, ((30*REG_SIZE)-INC_IM_MAX)(\frame_ptr)
     mtlo	\tmp
-    cld \tmp, $0, 31*REG_SIZE(\frame_ptr)
+    cld \tmp, $0, ((31*REG_SIZE)-INC_IM_MAX)(\frame_ptr)
     dmtc0   \tmp, $4, 2
 
     # Expands to a list of the form
