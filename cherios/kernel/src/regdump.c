@@ -297,7 +297,7 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 
 	printf("\n");
 
-	REG_DUMP_C(c0); printf("\n");
+	REG_DUMP_C(default); printf("\n");
 
 	REG_DUMP_C(c1); REG_DUMP_C(c2); printf("\n");
 

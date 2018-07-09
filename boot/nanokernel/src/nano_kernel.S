@@ -892,12 +892,12 @@ context_switch_exception_entry_custom_ccause: # (k0: reg_t cause, k1: reg_t ccau
 
     cld     $k0, $zero, last_exception_cause($kr1c)           # must be reloaded after restart
 
-    csc     $c0, $zero, (FRAME_C0_OFFSET-INC_IM_MAX)($kr2c)
-    clc     $c0, $zero, switch_cap_tmp($kr1c)           # our first clobber. No exceptions now till next checkpoint.
+    csc     $c1, $zero, (FRAME_C1_OFFSET-INC_IM_MAX)($kr2c)
+    clc     $c1, $zero, switch_cap_tmp($kr1c)           # our first clobber. No exceptions now till next checkpoint.
     csc     $idc, $zero, (FRAME_idc_OFFSET-INC_IM_MAX)($kr2c)
-    csc     $c0, $zero, (FRAME_pcc_OFFSET-INC_IM_MAX)($kr2c)
+    csc     $c1, $zero, (FRAME_pcc_OFFSET-INC_IM_MAX)($kr2c)
 
-    save_reg_frame_no_idc $kr2c, $k1                    # Save state (pcc and idc already saved)
+    save_reg_frame_no_idc $kr2c, $k1                    # Save state (pcc and idc already saved and c1 already saved)
 
     bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
     cincoffset  $c13 , $kdc, CONTEXT_TYPE

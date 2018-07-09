@@ -210,7 +210,7 @@ static context_t make_exception_context(uint8_t cpu_id) {
     frame.cf_pcc = frame.cf_c12 = &handle_exception_loop;
 
     // DDC
-    frame.cf_c0 = cheri_getdefault();
+    frame.cf_default = cheri_getdefault();
 
     // Stack
     frame.cf_c11 =

@@ -261,8 +261,10 @@ li  $zero, 0xdead
     # Expands to a list of the form
     # csc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame_ptr)
 
-    # Take exception early
-    foreachi csave, 1, \frame_ptr, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25
+    cgetdefault $c1
+    csave $c1, 0, \frame_ptr
+
+    foreachi csave, 2, \frame_ptr, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25
 
     # Expands to a list of the form
     # csd	$greg, $0, offset*REG_SIZE(frame_ptr)
@@ -309,7 +311,9 @@ li  $zero, 0xdead
     #
     # Expands to a list of the form
     # clc	$creg, $0, offset*CAP_SIZE+MIPS_FRAME_SIZE(\frame_ptr)
-    foreachi \macroc, 0, \frame_ptr, $c0, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, \pcc
+    crestore $c1, 0, \frame_ptr
+    csetdefault $c1
+    foreachi \macroc, 1, \frame_ptr, $c1, $c2, $c3, $c4, $c5, $c6, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18,	$c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, \pcc
 
 .endm
 

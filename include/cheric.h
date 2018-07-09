@@ -403,7 +403,7 @@ typedef struct reg_frame {
 	 * Capability registers.
 	 */
 	/* c0 has special properties for MIPS load/store instructions. */
-	capability	cf_c0;
+	capability	cf_default;
 
 	/*
 	 * General purpose capability registers.
@@ -432,7 +432,7 @@ typedef struct reg_frame {
 #define MIPS_FRAME_SIZE        (32*REG_SIZE)
 #define CHERI_CAP_FRAME_SIZE   (28 * CAP_SIZE)
 #define CHERI_FRAME_SIZE       (MIPS_FRAME_SIZE + CHERI_CAP_FRAME_SIZE)
-#define FRAME_C0_OFFSET         (MIPS_FRAME_SIZE)
+#define FRAME_C1_OFFSET         (MIPS_FRAME_SIZE + CAP_SIZE)
 #define FRAME_C3_OFFSET        (MIPS_FRAME_SIZE + (3 * CAP_SIZE))
 #define FRAME_a0_OFFSET        (3 * REG_RIZE)
 #define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))

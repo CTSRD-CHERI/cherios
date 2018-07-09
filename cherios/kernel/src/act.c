@@ -139,7 +139,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	bzero(&frame, sizeof(struct reg_frame));
 	size_t length = cheri_getlen(cheri_getdefault()) - init_base;
 
-    frame.cf_c0 = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
+    frame.cf_default = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
     capability pcc =  cheri_setbounds(cheri_setoffset(global_pcc, init_base), length);
 
 	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, init_entry);

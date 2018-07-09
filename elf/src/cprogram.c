@@ -93,8 +93,8 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     /* set c12 */
     frame->cf_c12	= frame->cf_pcc;
 
-    /* set c0 */
-    frame->cf_c0	= NULL;
+    /* set default */
+    frame->cf_default	= NULL;
 
     /* Setup args */
     frame->mf_a0 = arg;
