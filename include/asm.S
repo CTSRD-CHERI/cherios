@@ -149,6 +149,9 @@ li  $zero, 0xdead
     .set local_ctr, 0
 .endm
 
+.macro LOCAL_AT name
+    .set \name, (local_ctr) # Allows us to get more space with an immediate
+.endm
 # Manually does alignment so we can keep track of offsets
 .macro local_align align
     .set align_pow, (1 << \align)
@@ -164,8 +167,15 @@ li  $zero, 0xdead
 .macro local_var name, size, align
     local_align \align
     \name\()_label :
-    .set \name, local_ctr
+    LOCAL_AT \name
     .space \size
+    .set local_ctr, local_ctr + \size
+.endm
+
+.macro local_init_var name, size, align
+    local_align \align
+    \name\()_label :
+    LOCAL_AT \name
     .set local_ctr, local_ctr + \size
 .endm
 

@@ -55,6 +55,7 @@
 #include "lwip/apps/httpd.h"
 #include "lwip/timeouts.h"
 #include "lwip/dhcp.h"
+#include "cp0.h"
 
 // This driver is a stepping stone to get lwip working. It will eventually be extracted into into the stand-alone driver
 // and they will communicate via the socket API.
@@ -820,14 +821,6 @@ static void user_tcp_close(tcp_session* tcp) {
     return;
 }
 
-// We should not really be able to get this. But its nice for debugging.
-uint16_t
-cp0_status_im_get(void) {
-    register_t status;
-    __asm__ __volatile__ ("dmfc0 %0, $12" : "=r" (status)); // not technically possible.
-    return (uint16_t )((status >> MIPS_CP0_STATUS_IM_SHIFT) & 0xFF);
-}
-
 int main(register_t arg, capability carg) {
     // Init session
     printf("LWIP Hello World!\n");
@@ -875,7 +868,7 @@ int main(register_t arg, capability carg) {
                 n++;
             }
             printf("Sign of life now = %lx. (%d)(%d) IM = %x. RCV = %ld of %ld. Open TCPS = %lx\n",
-                   now, ints, fake_ints, cp0_status_im_get(), session.RECV, session.RECV_RDY, n);
+                   now, ints, fake_ints, (uint16_t)cp0_status_im_get(), session.RECV, session.RECV_RDY, n);
             stats_display();
         }
         sock_event = 0;

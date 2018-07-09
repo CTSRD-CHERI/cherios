@@ -64,10 +64,10 @@ static void kernel_exception_capability(register_t ccause, act_t* kernel_curr_ac
 	kernel_freeze();
 }
 
-static void kernel_exception_data(register_t excode, act_t* kernel_curr_act) __dead2;
-static void kernel_exception_data(register_t excode, act_t* kernel_curr_act) {
+static void kernel_exception_data(register_t excode, act_t* kernel_curr_act, size_t badvaddr) __dead2;
+static void kernel_exception_data(register_t excode, act_t* kernel_curr_act, size_t badvaddr) {
 	exception_printf(KRED"Data abort type %ld, BadVAddr:0x%lx in %s"KRST"\n",
-	       excode, cp0_badvaddr_get(),
+	       excode, badvaddr,
 	       kernel_curr_act->name);
 	regdump(-1, NULL);
 	kernel_freeze();
@@ -126,7 +126,6 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
 
     // We fire a dummy exception for starting CPUs to give their exception context a chance
-    cp0_status_bev_set(0);
     kernel_interrupts_init(1, cpu_id);
     context_switch(sched_get_current_act_in_pool(cpu_id)->context);
 
@@ -176,7 +175,7 @@ static void handle_exception_loop(context_t* own_context_ptr) {
             case MIPS_CP0_EXCODE_ADES:
             case MIPS_CP0_EXCODE_IBE:
             case MIPS_CP0_EXCODE_DBE:
-                kernel_exception_data(excode, kernel_curr_act);
+                kernel_exception_data(excode, kernel_curr_act, ex_info.badvaddr);
                 break;
 
             case MIPS_CP0_EXCODE_TRAP:

@@ -34,6 +34,7 @@
 #include "cheric.h"
 
 #include "string_enums.h"
+#include "nano_reg_list.h"
 
 #define TYPE_SPACE_BITS     20
 #define TYPE_SPACE          (1 << TYPE_SPACE_BITS)
@@ -214,6 +215,8 @@
 DECLARE_ENUM(e_res_status, NANO_KERNEL_RES_STATUS_ENUM_LIST)
 
 DECLARE_ENUM(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
+
+DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 
 /* Stuff to do with the foundation system */
 

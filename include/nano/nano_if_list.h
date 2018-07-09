@@ -148,7 +148,8 @@
     ITEM(exception_getcause, user_exception_cause_t, (void), __VA_ARGS__)\
 /* Get a capability that grants no permissions but can take any offset for sealing integers */\
     ITEM(get_integer_space_cap, capability, (void), __VA_ARGS__)\
-
+/* Gets the value of a hardware register, and also updates the bits set in mask to be those in value */\
+    ITEM(modify_hardware_reg, register_t, (e_reg_select, selector, register_t, mask, register_t, value), __VA_ARGS__)
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
 
 #define RAW_TO_NORMAL(name, ret, raw_sig, X, ...) X(name, ret, MAKE_SIG(raw_sig), __VA_ARGS__)

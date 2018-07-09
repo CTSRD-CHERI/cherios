@@ -32,7 +32,6 @@
 #include <elf.h>
 #include "mips.h"
 #include "cheric.h"
-#include "cp0.h"
 #include "plat.h"
 #include "boot/boot.h"
 #include "boot/boot_info.h"
@@ -228,5 +227,12 @@ void hw_init(void) {
     ucap = cheri_setbounds(ucap, uart_base_size);
     set_uart_cap(ucap);
 	uart_init();
-	cp0_hwrena_set(cp0_hwrena_get() | (1<<2));
+	__asm__ (
+		"mfc0	$t0, $7\n"
+		"ori	$t0, $t0, 1 << 2\n"
+		"mtc0	$t0, $7\n"
+		:
+		:
+		: "t0"
+    );
 }

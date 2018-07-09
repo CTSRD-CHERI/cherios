@@ -31,7 +31,6 @@
 
 #include "sys/types.h"
 #include "boot/boot.h"
-#include "cp0.h"
 #include "plat.h"
 #include "uart.h"
 #include "crt.h"
@@ -93,6 +92,22 @@ crt_init_globals_boot()
     cheri_setreg(25, &__cap_table_start);
 
     return &__cap_table_local_start;
+}
+
+
+static void
+cp0_status_bev_set(int bev)
+{
+    register_t status;
+
+    /* XXXRW: Non-atomic test-and-set. */
+
+    __asm__ __volatile__ ("dmfc0 %0, $12" : "=r" (status));
+    if (bev)
+        status |= MIPS_CP0_STATUS_BEV;
+    else
+        status &= ~MIPS_CP0_STATUS_BEV;
+    __asm__ __volatile__ ("dmtc0 %0, $12" : : "r" (status));
 }
 
 void bootloader_main(capability global_pcc);

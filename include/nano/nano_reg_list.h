@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,47 +27,22 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_NANO_REG_LIST_H
+#define CHERIOS_NANO_REG_LIST_H
 
-#ifndef _CHERI_CP0_H_
-#define	_CHERI_CP0_H_
+// Format: ITEM(Name, RegNum, Selector, WriteMask, __VA_ARGS__)
+// Will generate an enum with all names
+// Will generate a data block with all WriteMask fields concatanated (sets register_mask_table_size)
+// Will generate a code block with stubs for a modification
 
-#include "nano/nanokernel.h"
+#define NANO_REG_LIST(ITEM, ...)                                                            \
+    ITEM(COUNT, MIPS_CP0_REG_COUNT, 0, 0xFFFFFFFF, __VA_ARGS__)                             \
+    ITEM(COMPARE, MIPS_CP0_REG_COMPARE, 0, 0xFFFFFFFF, __VA_ARGS__)                         \
+    ITEM(STATUS, MIPS_CP0_REG_STATUS, 0, 0b00001000000000001111110000000111, __VA_ARGS__)   \
+    ITEM(EBASE, $15, 1, 0, __VA_ARGS__)                                                     \
+    ITEM(HWRENA, $7, 0, 0xFFFFFFFF, __VA_ARGS__)
 
-/*
- * CP0 manipulation routines.
- */
-int	cp0_status_bd_get(void);
-int	cp0_status_exl_get(void);
-void	cp0_status_ie_disable(void);
-void	cp0_status_ie_enable(void);
-int	cp0_status_ie_get(void);
-register_t cp0_status_im_get(void);
-void	cp0_status_im_enable(int mask);
-void	cp0_status_im_disable(int mask);
-register_t	cp0_cause_excode_get(register_t cause);
-register_t	cp0_cause_ipending_get(register_t cause);
-uint32_t	cp0_count_get(void);
-void	cp0_compare_set(uint32_t compare);
-register_t cp0_hwrena_get(void);
-void cp0_hwrena_set(register_t hwrena);
+#define REG_LIST_TO_ENUM_LIST(Name, Reg, Select, Mask, X, ...) X(NANO_REG_SELECT_ ## Name)
+#define NANO_REG_LIST_FOR_ENUM(ITEM) NANO_REG_LIST(REG_LIST_TO_ENUM_LIST, ITEM)
 
-static inline uint8_t cp0_get_cpuid(void) {
-
-	register_t EBase = modify_hardware_reg(NANO_REG_SELECT_EBASE, 0, 0);
-	return (char)EBase;
-}
-
-static inline register_t
-cp0_status_get(void)
-{
-	register_t status = modify_hardware_reg(NANO_REG_SELECT_STATUS, 0, 0);
-	return (status);
-}
-
-static inline void
-cp0_status_set(register_t status)
-{
-    modify_hardware_reg(NANO_REG_SELECT_STATUS, ~0, status);
-}
-
-#endif /* _CHERI_CP0_H_ */
+#endif //CHERIOS_NANO_REG_LIST_H
