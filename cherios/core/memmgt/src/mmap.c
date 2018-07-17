@@ -1118,6 +1118,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
 #ifdef MAX_POOLS
             vpage_range_desc_t* desc = peek_from_pool_head(PAGE_POOL_FREE);
+            assert(desc != NULL);
             assert(desc->allocation_type == open_node);
             search_page_n = desc->start;
 #else

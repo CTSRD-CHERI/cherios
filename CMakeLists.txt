@@ -142,6 +142,7 @@ set(ASMC_COMPILER_FLAGS
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -cheri-cap-table
+    -cheri-cap-table-abi=plt
     -cheri-linker
     -integrated-as
     -msoft-float
@@ -167,7 +168,7 @@ set(C_COMPILER_FLAGS
 set(C_WARNING_FLAGS
     -Wall
     -Wextra
-    -Weverything
+    # -Weverything // Clang broken with this
 
     # Explicitly error out on constructs that would always result in a crash.
     -Werror=cheri-capability-misuse

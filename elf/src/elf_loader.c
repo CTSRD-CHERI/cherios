@@ -115,7 +115,7 @@ int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
 		ERRORM("Bad EI_OSABI: %X", hdr->e_ident[EI_OSABI]);
 		return 0;
 	}
-	if(hdr->e_ident[EI_ABIVERSION] != 0) {
+	if(hdr->e_ident[EI_ABIVERSION] > 1) {
 		ERRORM("Bad EI_ABIVERSION: %X", hdr->e_ident[EI_ABIVERSION]);
 		return 0;
 	}

@@ -82,6 +82,7 @@ start_common:
 #########################################################################################################################
 
 	# Save arguments
+
 	cincoffset  $c11, $c11, -(6*CAP_SIZE)
 	move		$s0, $a0
     csc         $c3, $zero, 0($c11)
@@ -111,15 +112,15 @@ start_common:
 
     dla		    $t0, crt_init_new_globals
     dsubu       $t0, $t0, $a5
-    clc         $c12, $a4, 0($c4)
-    cincoffset  $c12, $c12, $t0                 # crt_init_new_globals
+    clc         $c13, $a4, 0($c4)               #   $c13 is data_seg cap
+    cincoffset  $c12, $c13, $t0                 # crt_init_new_globals
 
     # These are in the global address space
     dla         $t1, __start___cap_relocs
     dla         $t2, __stop___cap_relocs
-    # Now relative to the data segment
-    dsubu       $t1, $t1, $a3
-    dsubu       $t2, $t2, $a3
+    # Now relative to the code segment
+    dsubu       $t1, $t1, $a5
+    dsubu       $t2, $t2, $a5
 
     cmove       $c19, $c4                       #   segment_table
     cincoffset  $c20, $c13, $t1                 #   start_relocs
@@ -137,7 +138,7 @@ start_common:
     get_sym     $c25, __cap_table_start         # Bounded cap tab
     get_sym     $c13, __cap_table_local_start   # This is the prototype for cap_table_local
     cgetlen     $t0, $c13
-    csetbounds  $c26, $c26, $t0                 # bounds for local cap tab are same as prototype
+    csetboundsexact  $c26, $c26, $t0                 # bounds for local cap tab are same as prototype
 
     # Now we have processed any relocations that might target the prototype - we can copy from proto
     clc         $c3, $s1, 0($c19)               # dest = tls_seg

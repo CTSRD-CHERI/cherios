@@ -116,6 +116,7 @@ void revoke_finish(res_t res) {
 }
 
 size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size) {
+	assert(commit_act != NULL);
 	return message_send(addr, pages, block_size, 0, NULL, NULL, NULL, NULL, commit_act, SYNC_CALL, 12);
 }
 

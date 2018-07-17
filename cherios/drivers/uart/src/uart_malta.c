@@ -154,7 +154,7 @@ uart_read(void)
 void
 uart_write(char ch)
 {
-
+	if(ch == '\n') uart_data_transmit('\r');
 	uart_data_transmit(ch);
 }
 

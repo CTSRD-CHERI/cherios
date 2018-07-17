@@ -82,7 +82,7 @@ void hw_reboot(void) {
 	#ifdef HARDWARE_qemu
 		/* Used to quit Qemu */
 		capability reboot_cap = fpga_cap + FPGA_SHUTDOWN_OFFSET;
-		__asm__ __volatile__ ("csb %0, $zero, 0($1)"
+		__asm__ __volatile__ ("csb %0, $zero, 0(%1)"
 		:
 		: "r" (0x42), "C"(reboot_cap)
 		:

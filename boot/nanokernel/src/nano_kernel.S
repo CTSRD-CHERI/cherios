@@ -37,6 +37,9 @@
 #include "nano/nanokernel.h"
 #include "dylink.h"
 
+# FIXME. SPecial registers are now no longer general purpose. This makes things work:
+.set cheri_sysregs_accessible
+
 .set CACHE_LINE_SIZE,                64
 
 # Top bits of virtual address decide which range we are using
@@ -166,7 +169,7 @@ nano_kernel_start:
 # We have no stack, and this sub routine may need to be callable from a couple of places. Set appropriately.
 
 .set zero_page_tmp_1,   $t8
-.set zero_page_ctmp_1,  $c13
+.set zero_page_ctmp_1,  $cnull
 .set zero_page_arg,     $t0
 
 .set UNROLL_FACTOR,     8
@@ -174,7 +177,6 @@ nano_kernel_start:
 # Zeros page. I unrolled this a few times on point of principle. This is in no way optimal.
 
 nano_zero_page:
-    cnull       zero_page_ctmp_1
     daddiu      zero_page_tmp_1, zero_page_arg, (PHY_PAGE_SIZE) - (UNROLL_FACTOR * CAP_SIZE)
 
 1:
@@ -294,8 +296,10 @@ smp_context_start_er:
 nano_kernel_init:
 ################################################################
 	# Populate exception registers: $kdc and $kcc
-	cgetpccsetoffset $kcc, $zero                 # kdcc will hold the code global capability
+	cgetpccsetoffset $kcc, $zero                        # kdcc will hold the code global capability
 	cgetdefault	$kdc                                    # kdc will hold the data global capability
+
+    # FIXME move kcc and kdc to special registers
 
     cmove       $c15, $c3                               # save this for the end
 
@@ -333,8 +337,7 @@ nano_kernel_init:
     csetboundsexact  $c3, $kr2c, $k0
     cincoffset  $c3, $c3, INC_IM_MAX
     csd         $zero, $zero, CONTEXT_OFFSET_STATE($c3)                      # Set state to 0
-    cnull       $c4
-    csc         $c4, $zero, CONTEXT_OFFSET_FOUND($c3)    # Set foundation ref to NULL
+    csc         $cnull, $zero, CONTEXT_OFFSET_FOUND($c3)    # Set foundation ref to NULL
     csc         $c3, $zero, current_context($kr1c)       # Create first context and make it the current context
 
 
@@ -886,6 +889,7 @@ context_switch_exception_entry_custom_ccause: # (k0: reg_t cause, k1: reg_t ccau
     clc     $kr2c, $zero, current_context($kr1c)        # kr2c not clobbered by refill
 
     cgetpcc $epcc                                       # Restart point
+    SYNC_EPCC
     cld     $k1, $zero, (-INC_IM_MAX)($kr2c)            # Touch frame to cause TLB fault
     cld     $k1, $zero, (CONTEXT_OFFSET_STATE)($kr2c)
                                                         # End restart point. Can't have TLB error here.
@@ -943,6 +947,7 @@ switch_restore_final:                                   # void switch_restore(co
     cmove $kr2c, $c3
 
     cgetpcc $epcc                                       # Restart point
+    SYNC_EPCC
 
     # Force exception early
     cld         $a0, $zero, CONTEXT_OFFSET_STATE($kr2c)
@@ -965,7 +970,7 @@ return:
 
     # This tackles a qemu bug
     QEMU_BUG_FIX $k1
-
+    SYNC_EPCC
     beqz       $k0, normal_return
     dmfc0      $k0, $12
 
@@ -1095,8 +1100,7 @@ allocated:
     csetboundsexact  $c4, $c4, $t0                               # will fail if we were out of space
     cincoffset  $c4, $c4, (INC_IM_MAX)
     csd         $zero, $zero, CONTEXT_OFFSET_STATE($c4)          # set state to allocated for new context
-    cnull       $c5
-    csc         $c5, $zero, CONTEXT_OFFSET_FOUND($c4)            # set foundation ref to null
+    csc         $cnull, $zero, CONTEXT_OFFSET_FOUND($c4)         # set foundation ref to null
     # memcpy a0 bytes from c3 to c4
     dli         $t0, 0
     dli         $a0, CHERI_FRAME_SIZE
@@ -1519,8 +1523,7 @@ rescap_revoke_finish:
 #######################################
 
     cincoffset  $c4, $idc, revoke_state
-    cnull       $c9
-    csetoffset  $c9, $c9, $s0
+    inttoc      $c9, $s0
     li          $s0, REVOKE_ER_NOT_STARTED
 
     clld        $t0, $c4
@@ -1940,14 +1943,13 @@ clear_loop_l1_start_retry:
 
     csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
-    cgetoffset  $s0, $c9
+    ctoint      $s0, $c9
     CRETURN
     cclearlo    EN5(c4, c5, c6, c7, c8)
 
 revoke_er:
-    cnull       $c3
-    csetoffset  $c3, $c3, $s0
-    cgetoffset  $s0, $c9
+    inttoc      $c3, $s0
+    ctoint      $s0, $c9
     CRETURN
     cclearlo    EN5(c4, c5, c6, c7, c8)
 
@@ -2470,8 +2472,7 @@ foundation_create:
     cmove       $c14, $c4                           # save c4 for later
 
     # Make sure this is null for a public foundation
-    cnull       $c4
-    csc         $c4, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
+    csc         $cnull, $zero, FOUNDATION_META_DATA_OFFSET($c14) # store data for invocation
 
     cincoffset  $c4, $c14, $t1                       # c4 is the start of the user code/data
     dli         $t0, DEF_DATA_PERMS
@@ -2589,8 +2590,7 @@ foundation_exit:
 ###########################################################################################
 
     clc         $c3, $zero, current_context($kr1c)       # get current context
-    cnull       $c4
-    csc         $c4, $zero, CONTEXT_OFFSET_FOUND($c3)
+    csc         $cnull, $zero, CONTEXT_OFFSET_FOUND($c3)
     CRETURN
     cclearlo    EN2(c3,c4)
 
@@ -2910,10 +2910,11 @@ exception_return:
 .global exception_replay
 exception_replay:
 ############################################################
-    csetoffset  $c1, $kdc, $t1 # Got to save t1 # restart point for vmem exception
+    inttoc      $c1, $t1        # Got to save t1 # restart point for vmem exception
     SET_EXL     $t1             # is 3 instructions
-    cgetoffset  $t1, $c1
+    ctoint      $t1, $c1
     cgetpcc     $epcc
+    SYNC_EPCC
     cincoffset  $epcc, $epcc, -4 * (5)
     QEMU_BUG_FIX $k1
 
@@ -3060,6 +3061,7 @@ tlb_table_missing: # (safe)
 # Look for magic nop after this instruction. If it is present, we advance pcc and no exception
     cld         $k1, $zero, in_switch($kr1c)
     bnez        $k1, nano_kernel_die
+    cgetepcc    $epcc
 
     cgetoffset  $k0, $epcc                  # Check we can actually dereference via this pcc one instruction later
     daddiu      $k0, $k0, 7
@@ -3107,7 +3109,7 @@ shootdown_request:
     li          $k1, ~(0b11 << MIPS_CP0_STATUS_IM_SHIFT)
     and         $k0, $k0, $k1
     dmtc0       $k0, MIPS_CP0_REG_CAUSE
-    eret
+    ERET_LEGACY
 
 .section .trampoline_exc, "ax"
 
@@ -3123,6 +3125,7 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens in something like context switch we should die more nicely
+        cgetepcc    $epcc
         dmfc0       $k0, MIPS_CP0_REG_CAUSE
         andi        $k1, $k0, (0b11 << MIPS_CP0_STATUS_IM_SHIFT)
         bnez        $k1, shootdown_request
@@ -3175,7 +3178,7 @@ hw_ex:
         not         $k0, $k0
         and         $k1, $k1, $k0 # As interrupts had to be enabled
         mtc0        $k1, $12      # Disable interrupts, we are happy to take the hit as this is rare
-        eret
+        ERET_LEGACY
 
 kernel_exception_trampoline_end:
 		.global kernel_exception_trampoline_end
@@ -3231,7 +3234,8 @@ tlb_trampoline: # TODO
     cld         $k1, $zero, in_switch($kr1c)
     bnez        $k1, 1f                                             # if we were switch epcc is a restart point
     tlbwr                                                           # write tlb entry
-    eret
+    cgetepcc    $epcc
+    ERET_BUGLESS
 
 1:  cjr         $epcc
     nop

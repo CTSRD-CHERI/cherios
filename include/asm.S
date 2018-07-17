@@ -136,11 +136,19 @@ li  $zero, 0xdead
     cmove   $c18, $idc
 .endm
 
+.macro SYNC_EPCC
+    csetepcc    $epcc
+.endm
+
+.macro ERET_LEGACY
+    SYNC_EPCC
+    eret
+.endm
+
 .macro ERET_BUGLESS
     cgetoffset $k1, $epcc                                # counters an eret bug
     dmtc0      $k1, $14
-    eret
-    nop
+    ERET_LEGACY
 .endm
 
 .macro START_LOCALS align
@@ -332,8 +340,15 @@ li  $zero, 0xdead
 .endm
 
 .macro cnull reg
-    cfromptr    \reg, $idc, $zero
-    # csetbounds  \reg, \reg, $zero ???
+    cmove    \reg, $cnull
+.endm
+
+.macro inttoc cap, reg
+    csetoffset \cap, $cnull, \reg
+.endm
+
+.macro ctoint reg, cap
+    cgetoffset \reg, \cap
 .endm
 
 .macro CRETURN

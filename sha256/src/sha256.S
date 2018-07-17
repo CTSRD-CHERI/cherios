@@ -142,12 +142,11 @@ sha256:
 
 # save the registers we use
 
-cnull       $c6
-csetoffset  $c6, $c6, $s0
-csetoffset  $c7, $c6, $s1
-csetoffset  $c8, $c6, $s2
-csetoffset  $c9, $c6, $s3
-csetoffset  $c13, $c6, $s4
+inttoc      $c6, $s0
+inttoc      $c7, $s1
+inttoc      $c8, $s2
+inttoc      $c9, $s3
+inttoc      $c13, $s4
 
 ##########
 # Init H #
@@ -245,6 +244,7 @@ cld         w14_15, $zero, 0x38(IN_CAP)
 #endif
 
 #ifdef SHA_COPY
+.set cheri_sysregs_accessible
 dla         tmp0, k_words
 dli         tmp1, 64 * 4
 csetoffset  K_CAP, $kdc, tmp0
@@ -456,20 +456,19 @@ or          out_h6_7, out_h6_7, tmp1
 
 # restore
 
-cgetoffset  $s0, $c6
-cgetoffset  $s1, $c7
-cgetoffset  $s2, $c8
-cgetoffset  $s3, $c9
-
+ctoint      $s0, $c6
+ctoint      $s1, $c7
+ctoint      $s2, $c8
+ctoint      $s3, $c9
 
 #ifdef SHA_COPY
 cjr         $c17
-cgetoffset  $s4, $c13
+ctoint      $s4, $c13
 # results how in the 4 return registers
 
 #else
 
-cgetoffset  $s4, $c13
+ctoint      $s4, $c13
 csd         $v0, $zero, 0(OUT_CAP)
 csd         $v1, $zero, 8(OUT_CAP)
 csd         $t0, $zero, 16(OUT_CAP)

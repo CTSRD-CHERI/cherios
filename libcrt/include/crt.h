@@ -73,7 +73,7 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
 
         if ((reloc->size != 0))
         {
-            ob_cap = cheri_setbounds(ob_cap, reloc->size);
+            ob_cap = cheri_setbounds_exact(ob_cap, reloc->size);
         }
 
         ob_cap = cheri_incoffset(ob_cap, reloc->offset);
