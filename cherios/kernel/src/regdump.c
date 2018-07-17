@@ -272,7 +272,7 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	int creg = 0;
 	printf("Regdump:\n");
 	CHERI_PRINT_CAP(kernel_curr_act->context);
-	reg_frame_t* frame = kernel_unseal_any(kernel_curr_act->context, all_powerfull);
+	reg_frame_t* frame = cheri_incoffset(kernel_unseal_any(kernel_curr_act->context, all_powerfull), -0x3E0); // Magic number from asm.S
 	CHERI_PRINT_CAP(frame);
 	printf("Died in: %s\n", kernel_curr_act->name);
     dump_tlb();
