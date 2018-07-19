@@ -127,6 +127,20 @@ else()
     message(FATAL_ERROR "Invalid choice for HARDWARE: ${HARDWARE}")
 endif()
 
+# Configure Multicore
+
+set(SMP_CORES "1" CACHE STRING "Number of virtual cores for target system")
+
+if("${SMP_CORES}" STREQUAL "1" OR (NOT ${SMP_CORES}))
+    set(SMP_FLAGS
+    )
+else()
+    set(SMP_FLAGS
+            -DSMP_ENABLED
+            -DSMP_CORES=${SMP_CORES}
+    )
+endif()
+
 include_directories(include)
 include_directories(include/sys)
 include_directories(elf/include)
@@ -139,6 +153,7 @@ include_directories(lwip/src/include)
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
     -DHARDWARE_${HARDWARE}
+    ${SMP_FLAGS}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -cheri-cap-table

@@ -32,9 +32,6 @@
 #ifndef _CHERIOS_MIPS_H_
 #define	_CHERIOS_MIPS_H_
 
-#define SMP_CORES 2
-#define SMP_ENABLED
-
 #ifndef SMP_ENABLED
 	#define SMP_CORES 1
 #endif
