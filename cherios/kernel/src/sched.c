@@ -171,6 +171,7 @@ void sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority) {
             act->pool_id = idles_registered;
             sched_pools[idles_registered].idle_act = act;
 
+#ifdef SMP_ENABLED
             if(idles_registered != 0) {
                 act->sched_status = sched_running;
 				// Schedule the idle process when created for cores other than 0.
@@ -178,7 +179,7 @@ void sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority) {
                 sched_pools[idles_registered].current_act = act;
                 int result = smp_context_start(act->context, idles_registered);
             }
-
+#endif
             idles_registered++;
         } else {
             act->pool_id = pool_id;

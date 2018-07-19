@@ -256,6 +256,7 @@ nano_smp_spin:
     dmtc0      \tmp, MIPS_CP0_REG_EPC
 .endm
 
+#ifdef SMP_ENABLED
 ############################################################### (safe)
 # int smp_context_start(context_t start_as, register_t cpu_id)
 .global smp_context_start
@@ -289,6 +290,7 @@ smp_context_start_er:
     cclearlo    EN3(c3, c4, c5)
     CRETURN
     nop
+#endif
 
 ################################################################# (TODO unsafe)
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
@@ -1252,6 +1254,7 @@ set_exception_handler:
     cincoffset  $c4, $kdc, CONTEXT_TYPE
     cunseal     $c3, $c3, $c4
 
+#ifdef SMP_ENABLED
     dli         $t0, context_array_size
     multu       $t0, $a0
     mflo        $t0
@@ -1259,6 +1262,9 @@ set_exception_handler:
 
     csc         $c3, $t0, exception_context($idc)
     sync
+#else
+    csc         $c3, $zero, exception_context($idc)
+#endif
 1:
     cclearlo    EN2(c3,c4)
     CRETURN
@@ -1585,11 +1591,13 @@ rescap_revoke_finish:
     dmtc0       $a3, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
     dmtc0       $t0, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS # only revoke Writable and Executable caps, not sealing caps
 
+#ifdef SMP_ENABLED
     # Now blocking has started we can set that we need suspend/restore
     dli         $t0, (context_array_size) * (SMP_CORES-1)
 1:  csd         $zero, $t0, since_switched($idc)
     bnez        $t0, 1b
     daddiu      $t0, $t0, -(context_array_size)
+#endif
 
     # TODO check vtables (should all be -1, or 0 and then set to -1
     dli         $t0, top_virt_page
@@ -1829,9 +1837,10 @@ revoke_loop_end:
 1:  cmove       $c17, $c6
     cmove       $c18, $c7
 
+revoke_check_switched:
+
 #ifdef SMP_ENABLED
 
-revoke_check_switched:
     # TODO we should signal others with a dummy signal to force a switch
     # Check others. Currently we just yield.
     dli         $t0, (context_array_size) * (SMP_CORES-1)

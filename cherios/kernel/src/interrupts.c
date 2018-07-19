@@ -45,7 +45,7 @@ typedef struct interrupt_register_t {
 static interrupt_register_t int_child[INTERRUPTS_N*SMP_CORES];
 static uint64_t masks[SMP_CORES];
 
-#define GET_REG(core,id) int_child[id + (core * SMP_CORES)]
+#define GET_REG(core,id) int_child[id + (core * INTERRUPTS_N)]
 
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */
 

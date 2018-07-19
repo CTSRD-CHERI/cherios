@@ -35,6 +35,14 @@
 
 /* Define the arguments with commas so we can extract just arguments if we want */
 
+#ifdef SMP_ENABLED
+#define NANO_KERNEL_IF_RAW_LIST_SMP(ITEM, ...)
+        /* Switches an -IDLE- SMP core to context start_as */\
+        ITEM(smp_context_start, int, (context_t, start_as, register_t, cpu_id), __VA_ARGS__)
+#else
+#define NANO_KERNEL_IF_RAW_LIST_SMP(ITEM, ...)
+#endif
+
 #define NANO_KERNEL_IF_RAW_LIST(ITEM, ...)                                          \
 /* TODO in order to do SGX like things we may have an argument that means "and give them a new capability" */\
 /* Creates a context from a intial reg_frame and returns a handle. If the reservation provided is NULL will allocate\
@@ -126,8 +134,7 @@
     ITEM(rescap_unlock, void, (locked_t, locked, cap_pair*, out), __VA_ARGS__)\
 /* If in a foundation get own foundation_id */\
     ITEM(foundation_get_id, found_id_t*, (void), __VA_ARGS__)\
-/* Switches an -IDLE- SMP core to context start_as */\
-    ITEM(smp_context_start, int, (context_t, start_as, register_t, cpu_id), __VA_ARGS__)\
+    NANO_KERNEL_IF_RAW_LIST_SMP(ITEN,__VA_ARGS__)\
 /* Gets a type reservation */\
     ITEM(tres_get, tres_t, (register_t, type), __VA_ARGS__)\
 /* Turns in a type reservation for a sealing capability */\
