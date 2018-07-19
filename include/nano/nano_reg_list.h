@@ -38,7 +38,7 @@
 #define NANO_REG_LIST(ITEM, ...)                                                            \
     ITEM(COUNT, MIPS_CP0_REG_COUNT, 0, 0xFFFFFFFF, __VA_ARGS__)                             \
     ITEM(COMPARE, MIPS_CP0_REG_COMPARE, 0, 0xFFFFFFFF, __VA_ARGS__)                         \
-    ITEM(STATUS, MIPS_CP0_REG_STATUS, 0, 0b00001000000000001111110000000111, __VA_ARGS__)   \
+    ITEM(STATUS, MIPS_CP0_REG_STATUS, 0, 0b00001000000000001000000000000111, __VA_ARGS__)   \
     ITEM(EBASE, $15, 1, 0, __VA_ARGS__)                                                     \
     ITEM(HWRENA, $7, 0, 0xFFFFFFFF, __VA_ARGS__)
 

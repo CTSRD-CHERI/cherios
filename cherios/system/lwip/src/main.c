@@ -867,8 +867,8 @@ int main(register_t arg, capability carg) {
             FOR_EACH_TCP(T) {
                 n++;
             }
-            printf("Sign of life now = %lx. (%d)(%d) IM = %x. RCV = %ld of %ld. Open TCPS = %lx\n",
-                   now, ints, fake_ints, (uint16_t)cp0_status_im_get(), session.RECV, session.RECV_RDY, n);
+            printf("Sign of life now = %lx. (%d)(%d) IM = %lx. RCV = %ld of %ld. Open TCPS = %lx\n",
+                   now, ints, fake_ints, interrupts_get(0), session.RECV, session.RECV_RDY, n);
             stats_display();
         }
         sock_event = 0;

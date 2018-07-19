@@ -148,8 +148,16 @@
     ITEM(exception_getcause, user_exception_cause_t, (void), __VA_ARGS__)\
 /* Get a capability that grants no permissions but can take any offset for sealing integers */\
     ITEM(get_integer_space_cap, capability, (void), __VA_ARGS__)\
-/* Gets the value of a hardware register, and also updates the bits set in mask to be those in value */\
-    ITEM(modify_hardware_reg, register_t, (e_reg_select, selector, register_t, mask, register_t, value), __VA_ARGS__)
+/* Gets the value of a hardware register, and also updates the bits set in mask to be those in value TODO: this is temporary*/\
+    ITEM(modify_hardware_reg, register_t, (e_reg_select, selector, register_t, mask, register_t, value), __VA_ARGS__)\
+/* Mask an interrupt 'n' on 'cpu' according to enable */\
+    ITEM(interrupts_mask, void, (uint8_t, cpu, register_t, n, int, enable), __VA_ARGS__)\
+/* Set the interrupt state of a software interrupt bit */\
+    ITEM(interrupts_soft_set, void, (uint8_t, cpu, register_t, n, int, enable), __VA_ARGS__)\
+/* Get a 64 bit value of IPs of interrupts. [0-INTERRUPTS_N_SW) are SOFTWARE. [INTERRUPTS_N_SW, INTERRUPTS_N) are HARDWARE*/\
+/* The last HW bit is the timer */\
+    ITEM(interrupts_get, uint64_t, (uint8_t, cpu), __VA_ARGS__)
+
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
 
 #define RAW_TO_NORMAL(name, ret, raw_sig, X, ...) X(name, ret, MAKE_SIG(raw_sig), __VA_ARGS__)

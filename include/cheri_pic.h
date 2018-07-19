@@ -1,9 +1,9 @@
 /*-
- * Copyright (c) 2011 Robert N. M. Watson
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
+ * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
  * ("CTSRD"), as part of the DARPA CRASH research programme.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,44 +27,29 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_CHERI_PIC_H
+#define CHERIOS_CHERI_PIC_H
 
-#ifndef _CHERI_CP0_H_
-#define	_CHERI_CP0_H_
+#define CHERI_PIC_SOFT          64
+#define CHERI_PIC_SOFT_LENGTH   64
+#define CHERI_PIC_HARD          0
+#define CHERI_PIC_HARD_LENGTH   64
 
-#include "nano/nanokernel.h"
+#define PIC_CONFIG_SZ           0x4000
+#define PIC_CONFIG_SZ_LOG_2     (14)
+#define PIC_CONFIG_START        0x7f804000
 
-/*
- * CP0 manipulation routines.
- */
-int	cp0_status_bd_get(void);
-int	cp0_status_exl_get(void);
-void	cp0_status_ie_disable(void);
-void	cp0_status_ie_enable(void);
-int	cp0_status_ie_get(void);
-register_t	cp0_cause_excode_get(register_t cause);
-register_t	cp0_cause_ipending_get(register_t cause);
-uint32_t	cp0_count_get(void);
-void	cp0_compare_set(uint32_t compare);
-register_t cp0_hwrena_get(void);
-void cp0_hwrena_set(register_t hwrena);
+#define PIC_CONFIG_BASE(C)     (PIC_CONFIG_START + (PIC_CONFIG_SZ * (C)))
+#define PIC_CONFIG_X(C, X)     (PIC_CONFIG_BASE((C)) + (8 * X))         // access via word or double word
+#define PIC_IP_READ_BASE(C)    (PIC_CONFIG_BASE(C) + (8 * 1024))
+#define PIC_IP_SET_BASE(C)     (PIC_IP_READ_BASE(C) + 128)              // 1 bit per entry
+#define PIC_IP_CLEAR_BASE(C)   (PIC_IP_READ_BASE(C) + 256)              // 1 bit per entry
 
-static inline uint8_t cp0_get_cpuid(void) {
+#define PIC_CONFIG_OFFSET_E     31 // Enable/disable
+#define PIC_CONFIG_OFFSET_TID   8  // Thread ID (why do we have different config registers...?)
+#define PIC_CONFIG_SIZE_TID     8
+#define PIC_CONFIG_OFFSET_IRQ   0
+#define PIC_CONFIG_SIZE_IRQ     3 // MIPS external 0-4 map to IP2-6. 5 is or'd with timer. 6/7 unsupported
 
-	register_t EBase = modify_hardware_reg(NANO_REG_SELECT_EBASE, 0, 0);
-	return (char)EBase;
-}
 
-static inline register_t
-cp0_status_get(void)
-{
-	register_t status = modify_hardware_reg(NANO_REG_SELECT_STATUS, 0, 0);
-	return (status);
-}
-
-static inline void
-cp0_status_set(register_t status)
-{
-    modify_hardware_reg(NANO_REG_SELECT_STATUS, ~0, status);
-}
-
-#endif /* _CHERI_CP0_H_ */
+#endif //CHERIOS_CHERI_PIC_H

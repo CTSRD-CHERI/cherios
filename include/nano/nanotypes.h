@@ -230,6 +230,33 @@ DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 
 #define RES_CERT_META_SIZE                      (3 * CAP_SIZE)
 
+#ifdef HARDWARE_qemu
+// In queue we will use the cause mips directly and propagate all HW bits, and no software bits.
+    #define INTERRUPTS_N_HW     5
+    #define INTERRUPTS_N_SW     0
+    #define INTERRUPTS_NANO_OWNED   0b11
+
+// Timer is kept seperate and can be accessed via status/cause
+
+#else
+// On beri we will cascade all of the systems interrupts to 3:
+    #define INTERRUPTS_SYSTEM_N 3
+
+    // we will reformat like this:
+    #define INTERRUPTS_N_HW     32
+    #define INTERRUPTS_N_SW     32
+
+    // And cascade nano onto 2
+    #define INTERRUPTS_NANO_N    2
+
+    #define INTERRUPTS_NANO_OWNED   0b1110100
+    #define INTERRUPTS_NANO_PIC_SHOOTDOWN_N   96
+    #define INTERRUPTS_NANO_PIC_SHOOTDOWN_OFF (INTERRUPTS_NANO_PIC_SHOOTDOWN_N/8)
+    #define INTERRUPTS_NANO_PIC_SHOOTDOWN_BIT (1 << (INTERRUPTS_NANO_PIC_SHOOTDOWN_N & 0b111))
+
+#endif
+#define INTERRUPTS_N (INTERRUPTS_N_HW + INTERRUPTS_N_SW)
+
 #ifndef __ASSEMBLY__
 
 _Static_assert(sizeof(register_t) == REG_SIZE, "This should be true");

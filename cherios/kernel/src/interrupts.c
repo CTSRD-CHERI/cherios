@@ -42,14 +42,14 @@ typedef struct interrupt_register_t {
 	register_t arg;
 } interrupt_register_t;
 
-static interrupt_register_t int_child[7*SMP_CORES];
+static interrupt_register_t int_child[INTERRUPTS_N*SMP_CORES];
+static uint64_t masks[SMP_CORES];
 
 #define GET_REG(core,id) int_child[id + (core * SMP_CORES)]
 
-/* FIXME This entire thing will break when remove access from the kernel to CP0
- * FIXME the solution will be to have the nano kernel expose a suitable interface
-
 /* Does NOT include IM7 (timer) which is handled directly by the kernel */
+
+// WARN: We are ignoring cpu numbers in qemu. Only 0 will work. For BERI PIC interrupts will work correctly
 
 void kernel_interrupts_init(int enable_timer, uint8_t cpu_id) {
 	KERNEL_TRACE("interrupts", "enabling interrupts");
@@ -59,20 +59,23 @@ void kernel_interrupts_init(int enable_timer, uint8_t cpu_id) {
 	if(enable_timer) {
 		/* Start timer */
 		kernel_timer_init(cpu_id);
-		cp0_status_im_enable(MIPS_CP0_STATUS_IM_TIMER);
+		register_t shifted = (1 << MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER);
+		modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, shifted);
 	}
 }
 
 static void kernel_interrupt_others(register_t pending, uint8_t cpu_id) {
-	for(uint8_t i=0; i<7; i++) {
-		if(pending & (1<<i)) {
+	for(register_t i=0; i<INTERRUPTS_N; i++) {
+		if(pending & (1L<<i)) {
 			interrupt_register_t* registration = &GET_REG(cpu_id,i);
 			if(registration->target == NULL) {
-				KERNEL_ERROR("Interrupt with no handle %d",i);
+				KERNEL_ERROR("Interrupt with no handle %ld",i);
 				continue;
 			}
-            KERNEL_TRACE("interrupt disable", "%d", i);
-			cp0_status_im_disable(1<<i);
+            KERNEL_TRACE("interrupt disable", "%ld", i);
+
+			interrupts_mask(cpu_id, i, 0);
+			masks[cpu_id] &=~(1L << i);
 			// FIXME we probabably want a seperate interrupt source from the kernel
 
 			// FIXME this breaks as we can't take a proper TLB fault in exception levels
@@ -87,12 +90,18 @@ static void kernel_interrupt_others(register_t pending, uint8_t cpu_id) {
 }
 
 void kernel_interrupt(register_t cause, uint8_t cpu_id) {
-	register_t ipending = cp0_cause_ipending_get(cause);
-	register_t mask = cp0_status_im_get();
-	register_t toprocess = ipending & (~MIPS_CP0_CAUSE_IP_TIMER) & mask;
+	uint64_t ipending = interrupts_get(cpu_id);
+	register_t mask = masks[cpu_id];
+
+	register_t toprocess = ipending & mask;
+
+    register_t handle_time = cause & (1 << (MIPS_CP0_INTERRUPT_TIMER + MIPS_CP0_STATUS_IM_SHIFT));
 
 	KERNEL_TRACE("interrupt", "pending: %lx, to_process: %lx cpu: %d ", ipending, toprocess, cpu_id);
-	if (ipending & MIPS_CP0_CAUSE_IP_TIMER) {
+
+    kernel_assert(handle_time || toprocess);
+
+	if (handle_time) {
 		kernel_timer(cpu_id);
 	}
 	if(toprocess) {
@@ -101,7 +110,7 @@ void kernel_interrupt(register_t cause, uint8_t cpu_id) {
 }
 
 static int validate_number(int number) {
-	if(number<0 || number>7) {
+	if(number<0 || number>=INTERRUPTS_N) {
 		return -1;
 	}
 	return number;
@@ -118,8 +127,10 @@ int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 	if(GET_REG(cpu_id,number).target != ctrl) {
 		return -1;
 	}
-    // This will eventually fail when we can no longer access cp0
-	cp0_status_im_enable(1<<number);
+
+	masks[cpu_id] |= 1L << number;
+	interrupts_mask(cpu_id, number, 1);
+
 	return 0;
 }
 

@@ -33,10 +33,10 @@
 #include "virtio_mmio.h"
 
 #define VIRTIO_MMIO_MMAP_BASE   0x1e400000ULL
-#define VIRTIO_MMIO_IRQ         5
+#define VIRTIO_MMIO_IRQ         3               // These are EXTERNAL numbers. Corresponds to ISA IP5
 
 #define VIRTIO_MMIO_NET_BASE    0x1e400200ULL
-#define VIRTIO_MMIO_NET_IRQ     6
+#define VIRTIO_MMIO_NET_IRQ     4
 
 #define VIRTIO_QEMU_VENDOR   0x554d4551
 #endif //CHERIOS_MALTA_VIRTIO_MMIO_H

@@ -71,28 +71,6 @@ cp0_status_ie_get(void)
 	return (cp0_status_get() & MIPS_CP0_STATUS_IE);
 }
 
-void
-cp0_status_im_enable(int mask)
-{
-	register_t shifted = ((register_t)mask << MIPS_CP0_STATUS_IM_SHIFT);
-    modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, shifted);
-}
-
-register_t
-cp0_status_im_get(void) {
-	register_t status;
-
-	status = cp0_status_get();
-	return (status >> MIPS_CP0_STATUS_IM_SHIFT) & 0xFF;
-}
-
-void
-cp0_status_im_disable(int mask)
-{
-    register_t shifted = ((register_t)mask << MIPS_CP0_STATUS_IM_SHIFT);
-    modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, 0);
-}
-
 /*
  * Routines for managing the CP0  HWREna register, used to
  * determine which hardware registers are accessible via the RDHWR

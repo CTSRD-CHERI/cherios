@@ -318,6 +318,40 @@ nano_kernel_init:
 #ifdef SMP_ENABLED
 	# Send SMP TCs other than 0 to trap to let nano perform init
 	get_cpu_id  $t0
+
+#ifndef HARDWARE_qemu
+
+    dli         $t1, PHY_MEM_START_UNCACHED + 0x7f804000
+    dli         $t2, INTERRUPTS_SYSTEM_N
+
+    // System HW cascades (disabled)
+    daddiu      $t3, $t1, (8 * (INTERRUPTS_N_HW - 1))
+1:  csw         $t2, $t1, 0($kdc)
+    bne         $t1, $t3, 1b
+    daddiu      $t1, $t1, 8
+
+    // skip rest of hardware
+
+    daddiu      $t1, $t1, (8 * (64 - INTERRUPTS_N_HW))
+
+    // System SW cascades (disabled)
+
+    daddiu      $t3, $t1, (8 * (INTERRUPTS_N_HW - 1))
+1:  csw         $t2, $t1, 0($kdc)
+    bne         $t1, $t3, 1b
+    daddiu      $t1, $t1, 8
+
+    // Nano SW cascades (enabled)
+
+    dli         $t2, (1 << PIC_CONFIG_OFFSET_E) | (INTERRUPTS_NANO_N)
+
+    daddiu      $t3, $t1, (8 * ((64 - INTERRUPTS_N_HW) - 1))
+1:  csw         $t2, $t1, 0($kdc)
+    bne         $t1, $t3, 1b
+    daddiu      $t1, $t1, 8
+
+#endif
+
     bnez        $t0, nano_smp_trap
     nop
 #endif
@@ -749,15 +783,25 @@ tlb_shootdown_local:
     bnez        $t0, 1b
     daddiu      $t0, $t0, -(context_array_size)
 
+# Send shootdown IPC
+#ifndef HARDWARE_qemu
+    dli         $t1, (PHY_MEM_START_UNCACHED + PIC_CONFIG_START + (8 * 1024) + 128 + INTERRUPTS_NANO_PIC_SHOOTDOWN_OFF)
+    dli         $t8, INTERRUPTS_NANO_PIC_SHOOTDOWN_BIT
+#endif
 
     dli         $t0, SMP_CORES-1
 1:
+#ifdef HARDWARE_qemu
     SET_VPE_CONTROL_TargTC $t1, $t0
     SEND_IPI(t1, 0)
+#else
+    csb         $t8, $t1, 0($kdc)
+    daddiu      $t1, $t1, PIC_CONFIG_SZ
+#endif
     bnez        $t0, 1b
     daddiu      $t0, -1
 
-    # Set all flags to 0
+    # Check all flags 1
     dli         $t0, (context_array_size) * (SMP_CORES-1)
 
 2:  YIELD
@@ -2869,6 +2913,135 @@ tres_revoke:
     CRETURN
     nop
 
+# Gets a base for PIC config (v0), and maps an interrupt number to a PIC number (v1). Returns via at. clobbers t0/t1
+interrupt_common:
+    move    $at, $ra
+    move    $ra, $t0
+
+    sltiu   $t0, $a0, SMP_CORES
+    beqz    $t0, mask_er
+    sltiu   $t0, $a1, INTERRUPTS_N
+    beqz    $t0, mask_er
+    sltu    $a2, $zero, $a2                         # postive->1, 0->0
+
+#ifdef HARDWARE_qemu
+    jr      $at
+    nop
+#else
+    # Get a config base for this cpu
+    dli     $v0, PHY_MEM_START_UNCACHED + PIC_CONFIG_START # v0 is CONFIG_START
+    dslli   $t0, $a0, PIC_CONFIG_SZ_LOG_2
+    daddu   $v0, $v0, $t0                           # CONFIG_BASE(cpu)
+
+    # System: [0,31] -> [0, 31], [32,63] -> [64,95]
+    # Nano software used: [96,127]
+
+    # Map onto pic registers
+    sltiu   $t0, $a1, 32
+    daddiu  $v1, $a1, 32                            # the software interrupts
+    jr      $at
+    movn    $v1, $a1, $t0                           # v1 = (a1 if (a1 < 32) else a1 + 32)
+#endif
+
+
+############################################################ (safe)
+# void interrupts_mask(uint8_t cpu, register_t n, int enable)
+.global interrupts_mask
+interrupts_mask:
+############################################################
+
+    move    $t0, $ra
+    bal     interrupt_common
+    nop
+
+#ifdef HARDWARE_qemu
+
+    # Ignores CPU. Must pin things to 0.
+
+    daddiu  $a1, $a1, MIPS_CP0_STATUS_IM_SHIFT + 2
+    li      $t0, 1
+    dsll    $t0, $t0, $a1                           # bit in correct position to mask
+
+
+    dmfc0   $t1, MIPS_CP0_REG_STATUS
+    or      $t2, $t1, $t0                           # t2 bit set
+    not     $t0, $t0
+    and     $t1, $t1, $t0                           # t1 bit unset
+    movn    $t1, $t2, $a2                           # t1 = (t2 if enable else t1)
+
+    dmtc0   $t1, MIPS_CP0_REG_STATUS
+
+#else // qemu
+
+    dslli   $v1, $v1, 3                             # each is 8 bytes
+    daddu   $v0, $v0, $v1                           # CONFIG_X(cpu, n)
+
+    dsll    $a2, $a2, PIC_CONFIG_OFFSET_E
+    daddiu  $a2, $a2, INTERRUPTS_SYSTEM_N
+    csw     $a2, $v0, 0($kdc)
+
+#endif
+
+mask_er:
+    CRETURN
+    nop
+
+############################################################ (safe)
+# void interrupts_soft_set(uint8_t cpu, register_t n, int enable)
+.global interrupts_soft_set
+interrupts_soft_set:
+############################################################
+
+#ifdef HARDWARE_qemu
+    CRETURN
+    nop
+#else // qemu
+
+    move    $t0, $ra
+    bal     interrupt_common
+    nop
+    daddiu  $v0, $v0, (8 * 1024) + 128      # Set
+    daddiu  $t0, $v0, 128                   # Clear
+    movz    $v0, $t0, $a2                   # v0 = (set if enable else clear)
+
+    # low 3 bits are byte index. Upper bits index into bytes.
+    andi    $t0, $v1, 0x0b111               # byte index
+    li      $t1, 1
+    sll     $t0, $t1, $t0                   # a '1' in the correct bit position of the byte
+    srl     $t1, $v1, 3
+    daddiu  $v0, $v0, $t1
+    CRETURN
+    csb     $t0, $v0, 0($kdc)
+
+#endif
+
+############################################################ (safe)
+# uint64_t interrupts_get(uint8_t cpu)
+.global interrupts_get
+interrupts_get:
+############################################################
+
+#ifdef HARDWARE_qemu
+    # Ignores CPU. Must pin to 0.
+    dmfc0   $v0, MIPS_CP0_REG_CAUSE
+    dsrl    $v0, $v0, (MIPS_CP0_STATUS_IM_SHIFT+2)
+    CRETURN
+    andi    $v0, $v0, ((1 << INTERRUPTS_N_HW)-1)
+
+#else // qemu
+    move    $t0, $ra
+    bal     interrupt_common
+    li      $a1, 0                  # Dummy, we will be getting many of these
+    daddiu  $v0, $v0, (8 * 1024)
+    # System: [0,31] -> [0, 31], [32,63] -> [64,95]
+    # Nano software used: [96,127]
+    clw     $t0, $v0, 0($kdc)      # [0,31] <- [0, 31]
+    clw     $t1, $v0, (64/8)($kdc) # [32,63] <- [64,95]
+    dsll    $t1, $t1, 32
+    CRETURN
+    daddu   $v0, $t0, $t1
+#endif
+
 ############################################################ (safe)
 # void exception_subscribe(void)
 .global exception_subscribe
@@ -3063,6 +3236,7 @@ tlb_table_missing: # (safe)
     bnez        $k1, nano_kernel_die
     cgetepcc    $epcc
 
+    cbtu        $epcc, 1f
     cgetoffset  $k0, $epcc                  # Check we can actually dereference via this pcc one instruction later
     daddiu      $k0, $k0, 7
     cgetlen     $k1, $epcc
@@ -3105,10 +3279,20 @@ shootdown_request:
     invalidate_tlb  $k0, $k1
     li          $k0, 1
     csd         $k0, $zero, since_shotdown($kr1c)
+
+#ifdef HARDWARE_qemu
     dmfc0       $k0, MIPS_CP0_REG_CAUSE
     li          $k1, ~(0b11 << MIPS_CP0_STATUS_IM_SHIFT)
     and         $k0, $k0, $k1
     dmtc0       $k0, MIPS_CP0_REG_CAUSE
+#else
+    dli         $k0, (PHY_MEM_START_UNCACHED + PIC_CONFIG_START + (8 * 1024) + 256 + INTERRUPTS_NANO_PIC_SHOOTDOWN_OFF)
+    get_cpu_id  $k1
+    dsll        $k1, $k1, PIC_CONFIG_SZ_LOG_2
+    daddu       $k0, $k0, $k1
+    dli         $k1, INTERRUPTS_NANO_PIC_SHOOTDOWN_BIT
+    csb         $k1, $k0, 0($kdc)
+#endif
     ERET_LEGACY
 
 .section .trampoline_exc, "ax"
@@ -3127,7 +3311,7 @@ kernel_exception_trampoline:
 # TODO if an exception happens in something like context switch we should die more nicely
         cgetepcc    $epcc
         dmfc0       $k0, MIPS_CP0_REG_CAUSE
-        andi        $k1, $k0, (0b11 << MIPS_CP0_STATUS_IM_SHIFT)
+        andi        $k1, $k0, (INTERRUPTS_NANO_OWNED << MIPS_CP0_STATUS_IM_SHIFT)
         bnez        $k1, shootdown_request
         andi        $k0, $k0, 0xFF        # k0 has cause
         bnez        $a0, 1f
@@ -3149,6 +3333,7 @@ soft_ex:
 
         # We supress exception if a magic sequence is present. This is to allow default behavior with bad caps
         cgetoffset  $k0, $epcc                      # Check we can actually dereference via this pcc one instruction later
+        cbtu        $epcc, 1f
         daddiu      $k0, $k0, 7
         cgetlen     $k1, $epcc
         sltu        $k0, $k0, $k1
