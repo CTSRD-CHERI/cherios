@@ -48,7 +48,11 @@
 
 #define REG_DUMP_C(_reg) \
 	regdump_c(#_reg, creg++==reg_num, \
-		frame->cf_##_reg);
+		frame->cf_##_reg, "");
+
+#define REG_DUMP_C_extra(_reg, extra) \
+	regdump_c(#_reg, creg++==reg_num, \
+		frame->cf_##_reg, extra);
 
 #define __REGDUMP(elem, cond, name, bits) { \
 	printf("%s"name":"KFNT"0x", cond?"":KFNT); \
@@ -57,7 +61,7 @@
 	if(elem) { printf(KREG"%jx ", elem); } else { printf(" "KREG);} \
 	}
 
-static void regdump_c(const char * str_cap, int hl, const void * cap) {
+static void regdump_c(const char * str_cap, int hl, const void * cap, const char* extra) {
 	printf("%s%-3s:"KREG, hl?KBLD KUND:"", str_cap);
 	int tag  = cheri_gettag(cap);
 	printf("%s", tag?" t:1 ":KFNT" t:0 "KREG);
@@ -73,7 +77,7 @@ static void regdump_c(const char * str_cap, int hl, const void * cap) {
 	printf("%s", seal?"s:1 ":KFNT"s:0 "KREG);
 	size_t otype = cheri_gettype(cap);
 	__REGDUMP(otype, otype||seal, "otype", 24);
-	printf(KRST"\n");
+	printf("%s"KRST"\n", extra);
 }
 
 static inline size_t correct_base(size_t image_base, capability pcc) {
@@ -155,6 +159,11 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 	do {
 		print_frame(i++, return_address, stack_pointer);
 
+        // This handles a branch out of the current function
+		if(i == 1 && cheri_getoffset(return_address) >= cheri_getlen(return_address)) {
+			return_address = cheri_setoffset(return_address, cheri_getlen(return_address)-4);
+		}
+
 		//scan backwards for cincoffset
 		int16_t stack_size = 0;
 		int16_t offset = 0;
@@ -210,14 +219,16 @@ static inline void dump_tlb() {
 
     register_t hi, lo0, lo1, pm, wired;
 
-    printf("TLB status:\n\n");
+    __asm__ __volatile__(ASM_MFCO(W, MIPS_CP0_REG_WIRED):[W]"=r"(wired)::);
+
+    printf("TLB status: \n\n");
 
     printf("|------------------------------------------------------------------------------|\n");
     printf("|        |        EntryHi      |         EntryLO0      |         EntryLO1      |\n");
     printf("|PageSize|---------------------|-----------------------|-----------------------|\n");
     printf("|        |  PAGE START  | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
-    printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
+    printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|%s\n", wired == 0 ? "<-wired" : "");
     for(int i = 0; i < N_TLB_ENTS; i++) {
         __asm__ __volatile__(
             ASM_MTCO(ndx, MIPS_CP0_REG_INDEX)
@@ -226,8 +237,8 @@ static inline void dump_tlb() {
             ASM_MFCO(LO0, MIPS_CP0_REG_ENTRYLO0)
             ASM_MFCO(LO1, MIPS_CP0_REG_ENTRYLO1)
             ASM_MFCO(PM, MIPS_CP0_REG_PAGEMASK)
-            ASM_MFCO(W, MIPS_CP0_REG_WIRED)
-        : [HI]"=r"(hi), [LO0]"=r"(lo0), [LO1]"=r"(lo1), [PM]"=r"(pm),[W]"=r"(wired)
+
+        : [HI]"=r"(hi), [LO0]"=r"(lo0), [LO1]"=r"(lo1), [PM]"=r"(pm)
         : [ndx]"r"(i)
         :
         );
@@ -254,7 +265,7 @@ static inline void dump_tlb() {
 
         printf("|%4lx%sB*2|%14lx|  %2lx  |%15lx|%1lx|%1lx|%1lx|%1lx|%15lx|%1lx|%1lx|%1lx|%1lx|%s\n",
                pm_sz_k,is_m? "M" : "K", vpn, asid, pfn0, c0, d0, v0, g0,
-            pfn1, c1, d1, v1, g1, i < wired ? "(wired)" : "");
+            pfn1, c1, d1, v1, g1, i < wired ? "<-wired" : "");
     }
 
     printf("\n\n");
@@ -312,7 +323,10 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	REG_DUMP_C(c18); REG_DUMP_C(c19); REG_DUMP_C(c20); REG_DUMP_C(c21); printf("\n");
 	REG_DUMP_C(c22); REG_DUMP_C(c23); REG_DUMP_C(c24); REG_DUMP_C(c25); printf("\n");
 
-	REG_DUMP_C(idc); creg = 31; REG_DUMP_C(pcc); printf("\n");
+    register_t cause;
+    __asm__ ("mfc0 %[c], $13" : [c]"=r"(cause) ::);
+
+	REG_DUMP_C(idc); creg = 31; REG_DUMP_C_extra(pcc, cause & (1 << 31) ? " (delay slot)" : ""); printf("\n");
 
 	printf("\nLoaded images:\n");
 	FOR_EACH_ACT(act) {
