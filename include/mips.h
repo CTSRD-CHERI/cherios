@@ -59,6 +59,9 @@
 	#define N_TLB_DRCT	128
     #define HW_YIELD
     #define YIELD
+
+    // Currently turns off revoke registers. Can't turn off call variant 2 or sealing mode 2 requirements
+    #define CHERI_LEGACY_COMPAT // Turn off as many of the CHERI features I added as possible. Security is lost.
 #endif
 
 #define REG_SIZE    8
@@ -348,6 +351,20 @@ INT_SIZES(define_intypes)
  */
 #define	MIPS_CP0_CAUSE_IP_TIMER		(1 << MIPS_CP0_INTERRUPT_TIMER)
 
+#define CACHE_L1_INDEXS             ((16 * 1024) / 32) // 16K, 32 byte entries
+
+#define CACHE_L1_INST               0
+#define CACHE_L1_DATA               1
+#define CACHE_L2                    3
+
+#define CACHE_OP_INDEX_INVAL(X)     X
+#define CACHE_OP_INDEX_LOAD_TAG(X)  ((0b001 << 2) | X)
+#define CACHE_OP_INDEX_STORE_TAG(X) ((0b010 << 2) | X)
+#define CACHE_OP_ADDR_HIT_INVAL(X)  ((0b100 << 2) | X)
+#define CACHE_OP_ADDR_FILL(X)       ((0b101 << 2) | X) // Only for L1_INST
+
+#define CACHE_OP(Op, Off, Base) \
+    __asm ("cache %[op], %[off](%[base])"::[op]"i"(Op),[off]"i"(Off),[base]"r"(Base))
 /*
  * MIPS address space layout.
  */
