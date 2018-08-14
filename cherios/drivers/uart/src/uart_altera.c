@@ -31,8 +31,11 @@
 #include "mips.h"
 #include "uart.h"
 
-extern void * uart_cap;
+static capability uart_cap;
 #define	CHERI_UART_BASE			uart_cap	/* JTAG UART */
+
+size_t uart_base_phy_addr = 0x7f000000;
+size_t uart_base_size = 64;
 
 /*-
  * Routines for interacting with the CHERI console UART.  Programming details
@@ -173,4 +176,9 @@ uart_init(void)
 {
 
 	/* Nothing required. */
+}
+
+void
+set_uart_cap(capability cap) {
+	uart_cap = cap;
 }
