@@ -118,6 +118,7 @@ local_reg_var since_switched
 local_reg_var since_shotdown
 local_reg_var in_switch
 local_reg_var supressed
+local_reg_var unested_cause
 #ifdef SMP_ENABLED
 local_array_end context_array, CAP_SIZE_BITS,  SMP_CORES
 #endif
@@ -444,6 +445,15 @@ nano_kernel_init:
     PHY_LINK_LEN
     PHY_SET_STATE   page_dirty
 
+#if RAM_TAGS != 0
+    # Then the tag block
+    PHY_NEXT
+    PHY_LINK_PREV
+    PHY_NEXT_PREV
+    PHY_SET_STATE   page_nano_owned
+    PHY_LINK_LEN_N  (RAM_TAGS / PHY_PAGE_SIZE)
+#endif
+
     # Then IO pages
     PHY_NEXT
     PHY_LINK_PREV
@@ -451,11 +461,13 @@ nano_kernel_init:
     PHY_SET_STATE   page_io
     PHY_LINK_LEN_N  TOTAL_IO_PAGES
 
+#ifdef RAM_SPLIT
     # Then free high pages
     PHY_NEXT
     PHY_LINK_PREV
     PHY_NEXT_PREV
     PHY_LINK_LEN_N  TOTAL_HIGH_RAM_PAGES
+#endif
 
     # Then a terminal page
     PHY_NEXT
@@ -936,6 +948,7 @@ context_switch_exception_entry_custom_ccause: # (k0: reg_t cause, k1: reg_t ccau
 
     cgetpcc $epcc                                       # Restart point
     SYNC_EPCC
+    QEMU_BUG_FIX $k1
     cld     $k1, $zero, (-INC_IM_MAX)($kr2c)            # Touch frame to cause TLB fault
     cld     $k1, $zero, (CONTEXT_OFFSET_STATE)($kr2c)
                                                         # End restart point. Can't have TLB error here.
@@ -994,6 +1007,7 @@ switch_restore_final:                                   # void switch_restore(co
 
     cgetpcc $epcc                                       # Restart point
     SYNC_EPCC
+    QEMU_BUG_FIX $a0
 
     # Force exception early
     cld         $a0, $zero, CONTEXT_OFFSET_STATE($kr2c)
@@ -1092,7 +1106,7 @@ get_phy_page:
 
     dli         $t1, PHY_MEM_START_CACHED_TOP
     dli         $t2, PHY_MEM_START_UNCACHED_TOP
-    movn        $t1, $t2, $a1                           # 0: uncached. ow: cached
+    movz        $t1, $t2, $a1                           # 0: uncached. ow: cached
     dsll        $t1, $t1, TOP_ADDR_SHIFT
 
     dsll        $t2, $a0, PHY_PAGE_SIZE_BITS
@@ -1278,6 +1292,10 @@ nano_kernel_die:
 #############################
     li  $zero, 0xbeef
     li  $v0,   0xbad
+    mfc0        $a0, MIPS_CP0_REG_CAUSE
+    cgetcause   $a1
+    cgetepcc    $c3
+
     dli $k0,  ((0x1f000000 + 0x00500) | 0x9000000000000000)
     li  $k1,  0x42
     csb $k1, $k0, 0($kdc)
@@ -1322,12 +1340,11 @@ rescap_take:
     cld         $t1, $zero, RES_LENGTH_OFFSET($c3)      # get length (protected by load linked)
     bnez        $t2, take_er                # error if not open
     dli         $t2, res_taken
-    csb         $t8, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # set not subfield by setting size to not field
-                                                          # this will not matter even if this store cond fails
     STOREC_RES_STATE $t3, $t2, $c3          # try set to taken
     beqz        $t3, 1b
-    nop
-
+    csb         $t8, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # set not subfield by setting size to not field
+                                                          # this will not matter even if this store cond fails
+                                                          # FIXME: This was meant to be before state change, does not work on fpga
     b           take_make
     nop
 
@@ -1586,10 +1603,12 @@ rescap_revoke_finish:
     cld         $a3, $zero, revoke_bound($idc)
 
     # Blocking writing of the capability - should do as early as possible #
+#ifndef CHERI_LEGACY_COMPAT
     dli         $t0, DEF_DATA_PERMS
     dmtc0       $a2, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BASE
     dmtc0       $a3, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
     dmtc0       $t0, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS # only revoke Writable and Executable caps, not sealing caps
+#endif
 
 #ifdef SMP_ENABLED
     # Now blocking has started we can set that we need suspend/restore
@@ -1857,10 +1876,11 @@ revoke_check_switched:
 revoke_restore:
 
     # Allow any cap writes again #
+#ifndef CHERI_LEGACY_COMPAT
     dmtc0       $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS
     dmtc0       $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
     dmtc0       $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BASE
-
+#endif
 
     # Mark vtable entries as free
 
@@ -2148,10 +2168,10 @@ rescap_parent:
     bnez        $t1, parent_er              # reservation must be open
     cld         $t8, $zero, (RES_LENGTH_OFFSET)($c3) # get length
     beqz        $t8, parent_er              # empty reservation will not have enough space
-    csb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # fine to do to anything open
+    nop # Had the store here. Doesn't work on FPGA.
     STOREC_RES_STATE $t1, $t2, $c3          # set state field for parent
     beqz        $t1, 1b
-
+    csb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # fine to do to anything open
 
     cgetbase    $t0, $c3                    # parent base is id for child
     dli         $a0, RES_META_SIZE
@@ -2939,7 +2959,7 @@ interrupt_common:
 #else
     # Get a config base for this cpu
     dli     $v0, PHY_MEM_START_UNCACHED + PIC_CONFIG_START # v0 is CONFIG_START
-    dslli   $t0, $a0, PIC_CONFIG_SZ_LOG_2
+    dsll    $t0, $a0, PIC_CONFIG_SZ_LOG_2
     daddu   $v0, $v0, $t0                           # CONFIG_BASE(cpu)
 
     # System: [0,31] -> [0, 31], [32,63] -> [64,95]
@@ -2982,7 +3002,7 @@ interrupts_mask:
 
 #else // qemu
 
-    dslli   $v1, $v1, 3                             # each is 8 bytes
+    dsll    $v1, $v1, 3                             # each is 8 bytes
     daddu   $v0, $v0, $v1                           # CONFIG_X(cpu, n)
 
     dsll    $a2, $a2, PIC_CONFIG_OFFSET_E
@@ -3018,7 +3038,7 @@ interrupts_soft_set:
     li      $t1, 1
     sll     $t0, $t1, $t0                   # a '1' in the correct bit position of the byte
     srl     $t1, $v1, 3
-    daddiu  $v0, $v0, $t1
+    daddu   $v0, $v0, $t1
     CRETURN
     csb     $t0, $v0, 0($kdc)
 
@@ -3096,8 +3116,8 @@ exception_replay:
     SET_EXL     $t1             # is 3 instructions
     ctoint      $t1, $c1
     cgetpcc     $epcc
-    SYNC_EPCC
     cincoffset  $epcc, $epcc, -4 * (5)
+    SYNC_EPCC
     QEMU_BUG_FIX $k1
 
     clcbi       $kr2c, current_context($kr1c)              # Our current context
@@ -3239,29 +3259,27 @@ nano_er:
 # Some stuff used by the exception vectors #
 ############################################
 
-tlb_table_missing: # (safe)
+tlb_table_missing: # (safe) (k1 will contain bad entry. 0 = needs mapping. -1 = already used (supressable)
 # Look for magic nop after this instruction. If it is present, we advance pcc and no exception
-    cld         $k1, $zero, in_switch($kr1c)
-    bnez        $k1, nano_kernel_die
+    cld         $k0, $zero, in_switch($kr1c)
+    bnez        $k0, nano_kernel_die
     cgetepcc    $epcc
+    cld         $k0, $zero, exception_level($kr1c)
+    bnez        $k0, nano_kernel_die
+    mfc0        $k0, $14                # TODO FPGA BUG
+    csetoffset  $epcc, $epcc, $k0       # TODO FPGA BUG
 
-    cbtu        $epcc, 1f
-    cgetoffset  $k0, $epcc                  # Check we can actually dereference via this pcc one instruction later
-    daddiu      $k0, $k0, 7
-    cgetlen     $k1, $epcc
-    sltu        $k0, $k0, $k1
-    beqz        $k0, 1f
-
-    li      $k0, 0x3400d00d
-    clw     $k1, $zero, 4($epcc)
-    beq     $k0, $k1, skip_and_return
-
-1:  cld     $k0, $zero, exception_level($kr1c)
-    bnez    $k0, nano_kernel_die
-    nop
-
-    b context_switch_exception_entry
-    dmfc0 $k0, $13
+    cld         $k0, $zero, unested_cause($kr1c)      # If we took an exception trying this last time - report FIRST exception
+    bnez        $k0, context_switch_exception_entry
+    csd         $zero, $zero, unested_cause($kr1c)
+    dmfc0       $k0, MIPS_CP0_REG_CAUSE
+    csd         $k0, $zero, unested_cause($kr1c)     # store our current cause. If this causes an exception don't try again
+    li          $k0, 0x3400d00d
+    clw         $k1, $zero, 4($epcc)
+    beq         $k0, $k1, skip_and_return
+    csd         $zero, $zero, unested_cause($kr1c)
+    b           context_switch_exception_entry
+    dmfc0       $k0, MIPS_CP0_REG_CAUSE
 
 
 get_interface: # (safe)
@@ -3318,7 +3336,13 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens in something like context switch we should die more nicely
+
+        # Temporary hack coz hardware is wrong
+        dmfc0       $k0, $14            # TODO FPGA BUG
         cgetepcc    $epcc
+        csetoffset  $epcc, $epcc, $k0   # TODO FPGA BUG
+
+        # End hack
         dmfc0       $k0, MIPS_CP0_REG_CAUSE
         andi        $k1, $k0, (INTERRUPTS_NANO_OWNED << MIPS_CP0_STATUS_IM_SHIFT)
         bnez        $k1, shootdown_request
@@ -3341,17 +3365,17 @@ kernel_exception_trampoline:
 soft_ex:
 
         # We supress exception if a magic sequence is present. This is to allow default behavior with bad caps
-        cgetoffset  $k0, $epcc                      # Check we can actually dereference via this pcc one instruction later
-        cbtu        $epcc, 1f
-        daddiu      $k0, $k0, 7
-        cgetlen     $k1, $epcc
-        sltu        $k0, $k0, $k1
-        beqz        $k0, 1f
-        li          $k0, 0x3400d00d                 # We should ignore other kinds of faults when the magic sequence is seen
+        cld         $k0, $zero, unested_cause($kr1c)      # If we took an exception trying this last time - report FIRST exception
+        bnez        $k0, 2f
+        csd         $zero, $zero, unested_cause($kr1c)
+        dmfc0       $k0, MIPS_CP0_REG_CAUSE
+        csd         $k0, $zero, unested_cause($kr1c)     # store our current cause. If this causes an exception don't try again
+        li          $k0, 0x3400d00d
         clw         $k1, $zero, 4($epcc)
         beq         $k0, $k1, skip_and_return
-1:      dmfc0       $k0, MIPS_CP0_REG_CAUSE
-
+        csd         $zero, $zero, unested_cause($kr1c)
+        dmfc0       $k0, MIPS_CP0_REG_CAUSE
+2:
         # We can also pass to the user
         clc     $kr2c, $zero, current_context($kr1c)
         cbtu    $idc, context_switch_exception_entry # No IDC = no user interrupts
@@ -3416,6 +3440,7 @@ tlb_trampoline: # TODO
     bnez        $k0, tlb_table_missing
     nop
 
+    csd         $zero, $zero, unested_cause($kr1c)                 # if this was a nested exception we are restarting now
     # Setup virtual page mask
     # dli         $k0, (1 << (PHY_PAGE_SIZE_BITS - 12)) - 1
     # TODO check the top bits of the vaddr
@@ -3428,8 +3453,11 @@ tlb_trampoline: # TODO
     cld         $k1, $zero, in_switch($kr1c)
     bnez        $k1, 1f                                             # if we were switch epcc is a restart point
     tlbwr                                                           # write tlb entry
-    cgetepcc    $epcc
-    ERET_BUGLESS
+    # We are here from either...
+    #   a) A normal TLB miss, just eret
+    #   b) A TLB exception from one of our 'checkpoints'
+    eret
+
 
 1:  cjr         $epcc
     nop

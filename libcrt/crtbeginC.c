@@ -109,6 +109,14 @@ crt_init_bss(void)
 	// The nano kernel is eventually going to zero everything (if it doesn't already) so we are guaranteed zeroes
 }
 
+void
+crt_init_boot_bss(void)
+{
+	ssize_t bss_len;
+	bss_len = (size_t)&__stop_bss - (size_t)&__start_bss;
+	bzero(&__start_bss, bss_len);
+}
+
 void __attribute__((always_inline)) crt_init_new_globals(capability* segment_table, struct capreloc* start, struct capreloc* end) {
     crt_init_common(segment_table, start, end, RELOC_FLAGS_TLS);
 }

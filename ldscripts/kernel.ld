@@ -75,10 +75,12 @@ SECTIONS
         KEEP (*/crtendC.o(.dtors))
     }
 	.bss ALIGN(CAP_ALIGN): {
-		__start_bss = .;
 		*(.bss)
-		__stop_bss = ALIGN(., CAP_ALIGN);
 	}
+
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+
 	.stack ALIGN(PAGE_ALIGN): {
 		__start_exception_stack	= .;
 		. += __size_exception_stack;

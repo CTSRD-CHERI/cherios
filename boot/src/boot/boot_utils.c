@@ -80,9 +80,11 @@ static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env) {
         phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + nano_size);
         BOOT_PRINT_CAP(phy_mem);
         alloc = cheri_getdefault();
+		bzero(alloc + MIPS_KSEG0, nano_size);
         alloc_direct = 0;
     } else {
         alloc = phy_mem;
+		bzero(alloc, _size);
         size_t align_off = (K_ALLOC_ALIGN - (_size & (K_ALLOC_ALIGN-1)) & (K_ALLOC_ALIGN-1));
         phy_mem += _size + align_off;
     }

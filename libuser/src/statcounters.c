@@ -169,10 +169,6 @@ void diff_statcounters (
     }
 }
 
-int	kernel_vprintf(const char *fmt, va_list ap);
-#define vprintf kernel_vprintf
-// fixme ^
-
 static int
 echo(FILE *f, const char *fmt, ...)
 {

@@ -36,10 +36,13 @@
 
 #define MAX_STATIC_ACTIVATIONS 8 // kernel + init + namespace + proc + memgt + memmgt worker *2. Then we need reservations.
 
-#define	TIMER_INTERVAL		400000
-#define	TIMER_INTERVAL_MIN	200000  // We can miss interrupts in QEMU because min does not keep up
-//#define	TIMER_INTERVAL		40000000
-//#define	TIMER_INTERVAL_MIN	20000000
+#ifdef HARDWARE_qemu
+    #define	TIMER_INTERVAL		400000
+    #define	TIMER_INTERVAL_MIN	200000  // We can miss interrupts in QEMU because min does not keep up
+#else
+    #define	TIMER_INTERVAL		40000000
+    #define	TIMER_INTERVAL_MIN	20000000
+#endif
 
 extern void	__start_bss;
 extern void	__stop_bss;

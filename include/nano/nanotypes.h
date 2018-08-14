@@ -126,18 +126,33 @@
 
 //TODO make this dynamic
 /* Page sizes etc */
-#define PHY_RAM_SIZE                    (1L << 31)
-#define RAM_PRE_IO_END                  0x10000000
-#define RAM_POST_IO_START               0x20000000
-#define IO_HOLE                         (RAM_POST_IO_START - RAM_PRE_IO_END)
-
 /* TODO: Would like to increase this but QEMU does not seem to support a page pask not 0 */
 #define PHY_PAGE_SIZE_BITS              (12)
 #define PHY_PAGE_SIZE                   (1 << PHY_PAGE_SIZE_BITS)
+
+#ifdef HARDWARE_qemu
+
+#define PHY_RAM_SIZE                    (1L << 31)
+#define RAM_PRE_IO_END                  0x10000000
+#define RAM_POST_IO_START               0x20000000
+#define RAM_SPLIT
+#define RAM_TAGS                        0
+
+#else // qemu
+
+#define PHY_RAM_SIZE                    (1024 * 1024 * 1024) // 1GB
+#define RAM_PRE_IO_END                  PHY_RAM_SIZE
+#define RAM_POST_IO_START               0x80000000
+#define RAM_TAGS                        ((((PHY_RAM_SIZE + (1024 * 1024)) / (8 * CAP_SIZE)) + (PHY_PAGE_SIZE-1)) & ~(PHY_PAGE_SIZE-1))
+#endif
+
+#define IO_HOLE                         (RAM_POST_IO_START - RAM_PRE_IO_END)
+
 #define TOTAL_PHY_PAGES                 ((PHY_RAM_SIZE+IO_HOLE)/PAGE_SIZE)
-#define TOTAL_LOW_RAM_PAGES             (RAM_PRE_IO_END/PHY_PAGE_SIZE)
+#define TOTAL_LOW_RAM_PAGES             ((RAM_PRE_IO_END-RAM_TAGS)/PHY_PAGE_SIZE)
 #define TOTAL_IO_PAGES                  (IO_HOLE/PHY_PAGE_SIZE)
 #define TOTAL_HIGH_RAM_PAGES            ((PHY_RAM_SIZE - RAM_PRE_IO_END)/PHY_PAGE_SIZE)
+
 #define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS))
 
 

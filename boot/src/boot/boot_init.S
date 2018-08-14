@@ -81,7 +81,13 @@ start:
 
 	# Clear other capability registers to ensure we don't retain any
 	# executable capabilities: everything but $pcc and $c0.
+
+# In the current QEMU register 0 is $ddc, in hardware it is $c0 still
+#ifdef HARDWARE_qemu
 	CClearLo	0xfffe
+#else
+    CClearLo	0xffff
+#endif
 	CClearHi	0xffff
 
 	# W^X for pointers: ensure $c0 is never executable.
@@ -104,16 +110,27 @@ start:
 
 cherios_init_jump_target:
 
-    # Set revoking nothing
-
+#ifndef CHERI_LEGACY_COMPAT
     dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS
     dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BASE
     dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
+#endif
+
+    # For BERI we need to enable the larger TLB first
+
+#ifndef HARDWARE_qemu
+    mfc0    $t0, MIPS_CP0_REG_CONFIG, 6
+    li      $t1, (1 << 2)
+    or      $t0, $t0, $t1
+    mtc0    $t0, MIPS_CP0_REG_CONFIG, 6
+#endif
 
     # Setup the TLB so it won't break on first miss
     invalidate_tlb  $t0, $t1
 
 #ifdef SMP_ENABLED
+
+    #FIXME this is for QEMU not FPGA
 	# Send SMP cores other than 0 to trap
 
     dmfc0   $a0, $15, 1
@@ -184,7 +201,7 @@ cherios_init_jump_target:
 
     cmove   $idc, $c3
 	# Zero BSS.
-	call_func crt_init_bss
+	call_func crt_init_boot_bss
 
 	# Call C constructors.
 	call_func crt_call_constructors

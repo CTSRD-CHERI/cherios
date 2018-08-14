@@ -116,7 +116,10 @@ int cherios_main(nano_kernel_if_t* interface,
 
 
 	capability  cap_for_uart = get_phy_cap(book, uart_base_phy_addr, uart_base_size, 0, 1);
+
+#ifdef HARDWARE_qemu
     fpga_cap = get_phy_cap(book, FPGA_BASE, FPGA_SIZE, 0, 1);
+#endif
 
 	set_uart_cap(cap_for_uart);
 

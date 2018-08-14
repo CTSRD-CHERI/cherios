@@ -111,12 +111,14 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_uart,	"uart.elf",		0,	1)
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
+#ifdef HARDWARE_qemu
 	B_DENTRY(m_virtblk,	"virtio-blk.elf",	0,	1)
 //    B_DENTRY(m_virtnet, "virtio-net.elf", 0, 1)
     B_PENTRY(m_virtnet, "lwip.elf", VIRTIO_MMIO_NET_IRQ, 1)
 	B_FENCE
 	B_DENTRY(m_fs,		"fatfs.elf",		0,	1)
 	B_FENCE
+#endif
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
 	B_FENCE
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
@@ -130,7 +132,9 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user, "unsafe_test.elf", 0, 1)
     B_PENTRY(m_user,    "dedup_test.elf", 0, 1)
     B_PENTRY(m_user,    "socket_test.elf", 0 ,1)
+#ifdef HARDWARE_QEMU
     B_PENTRY(m_user, "fs_test.elf", 0, 1)
+#endif
     B_DENTRY(m_user, "server.elf", 0, 1)
     B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
