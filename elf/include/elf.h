@@ -182,7 +182,7 @@ static inline capability make_global_pcc(image* im) {
 	capability pcc = im->seg_table[im->code_index];
 	pcc = cheri_setoffset(pcc, im->entry - im->code_vaddr);
 	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-							  | CHERI_PERM_LOAD_CAP));
+							  | CHERI_PERM_LOAD_CAP | CHERI_PERM_CCALL));
 	return pcc;
 }
 
