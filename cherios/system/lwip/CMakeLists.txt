@@ -5,6 +5,13 @@ include_directories(${LWIP_INCLUDE})
 include_directories(${DRIVERS_DIR}/virtio/include)
 include_directories(${DRIVERS_DIR}/virtio/virtio-net/include)
 
+if("${HARDWARE}" STREQUAL "qemu")
+    set(DRIVER_SRCS src/virtio/virtio_driver.c)
+elseif("${HARDWARE}" STREQUAL "fpga")
+    set(DRIVER_SRCS src/megacore/megacore_driver.c)
+endif()
+
+
 set(X_SRCS
     ${INIT_ASM}
     ${lwipcore_SRCS}
@@ -19,7 +26,7 @@ set(X_SRCS
     src/main.c
     src/httpd.c
     ${DRIVERS_DIR}/virtio/src/virtio.c
-
+    ${DRIVER_SRCS}
 )
 
 add_cherios_executable(${ACT_NAME} ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
