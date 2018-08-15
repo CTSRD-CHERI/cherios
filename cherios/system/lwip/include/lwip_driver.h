@@ -78,7 +78,7 @@
     #define CHERIOS_MAC         {0xba,0xdb,0xab,0xe5,0xca,0xfe}
     #define CHERIOS_HOST        "cherios-fpga"
 
-    typedef void lwip_driver_mmio_t;
+    typedef mac_control lwip_driver_mmio_t;
 
 #endif
 

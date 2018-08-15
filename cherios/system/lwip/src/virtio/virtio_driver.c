@@ -40,7 +40,7 @@ static void alloc_recv(net_session* session) {
         // We create a custom pbuf here thats is malloc'd. We do this because they _may_ be passed to userspace if TCP
         custom_for_tcp* custom = alloc_custom(session);
 
-        struct pbuf* pb =  pbuf_alloced_custom(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM, &custom->as_pbuf.custom, custom->as_pbuf.buf, TCP_MSS+PBUF_TRANSPORT);
+        struct pbuf* pb = &custom->as_pbuf.custom.pbuf;
 
 
         le16 head = virtio_q_alloc(&session->virtq_recv, &session->free_head_recv);

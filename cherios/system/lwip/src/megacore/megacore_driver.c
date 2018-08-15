@@ -32,25 +32,155 @@
 
 int lwip_driver_init(net_session* session) {
     // TODO
+    mac_control* ctrl = session->mmio;
+
+    // Use scratch register to check we have mapped the right place
+    MAC_DWORD test = 0xfefe;
+    ctrl->base_config.scratch = test;
+    if(test != ctrl->base_config.scratch) return -1;
+
+
+    // Do an initial reset to clear everything
+    ctrl->base_config.command_config = CC_N_MASK(COMMAND_CONFIG_SW_RESET) | CC_N_MASK(COMMAND_CONFIG_CNT_RESET);
+
+    // Wait for it to happen (should only take a few cycles so we don't sleep)
+    while(ctrl->base_config.command_config & CC_N_MASK(COMMAND_CONFIG_SW_RESET));
+
+    MAC_DWORD mac0 = (((((session->mac[0] << 8) | session->mac[1]) << 8) | session->mac[2]) << 8) | session->mac[3];
+    MAC_DWORD mac1 = ((session->mac[4] << 8) | session->mac[5]) << 16;
+
+    ctrl->base_config.mac_0 = mac0;
+    ctrl->base_config.mac_1 = mac1;
+
+    for(size_t i = 0; i < 4; i++) {
+        ctrl->smacs[(2*i) + 0] = mac0;
+        ctrl->smacs[(2*i) + 1] = mac1;
+    }
+
+    MAC_DWORD config = 0;
+
+    // Also for 32bit align
+
+    config = CC_N_MASK(COMMAND_CONFIG_PAD_EN);
+
+    ctrl->base_config.command_config = config;
+
+    // These will shift alignment to achieve 32 bit align for ethernet headers
+
+    MAC_DWORD tx_cmd = CC_N_MASK(CMD_STAT_TX_SHIFT16);
+    MAC_DWORD rx_cmd = CC_N_MASK(CMD_STAT_RX_SHIFT16);
+
+    ctrl->tx_cmd_stat = tx_cmd;
+    ctrl->rx_cmd_stat = rx_cmd;
+
+    // Finally enable TX/RX
+
+    config |= CC_N_MASK(COMMAND_CONFIG_TX_ENA) | CC_N_MASK(COMMAND_CONFIG_RX_ENA);
+
+    ctrl->base_config.command_config = config;
+
+    MAC_DWORD got_config = ctrl->base_config.command_config;
+    MAC_DWORD tx_cmd_got = ctrl->tx_cmd_stat;
+    MAC_DWORD rx_cmd_got = ctrl->rx_cmd_stat;
+
+    // Check we got the config options we asked for
+    if(config != got_config || tx_cmd_got != tx_cmd || rx_cmd_got != rx_cmd) return -2;
+
     return 0;
 }
 
 int lwip_driver_init_postup(net_session* session) {
-    // TODO
+    // TODO once we work out hor interrupts work - this is where we should enable
     return 0;
 }
 
 void lwip_driver_handle_interrupt(net_session* session) {
-    // TODO
+    // To read: Read data (triggers change of meta), then you can read meta
+
+    ALTERA_FIFO* rx_fifo = &session->mmio->recv_fifo;
+
+    custom_for_tcp* custom = NULL;
+    uint32_t* payload;
+
+    u16_t len;
+
+    while(rx_fifo->ctrl_fill_level != 0) {
+
+
+
+        uint32_t data = rx_fifo->symbols;
+        uint32_t meta = rx_fifo->metadata;
+
+        uint32_t sop = meta & (NTOH32(A_ONCHIP_FIFO_MEM_CORE_SOP));
+        uint32_t eop = meta & (NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP));
+
+        if(sop) {
+            if(custom != NULL) {
+                printf(KRED"FREE BROKEN PACKET\n");
+                pbuf_free(&custom->as_pbuf.custom.pbuf);
+            }
+            custom = alloc_custom(session);
+            payload = (uint32_t*)custom->as_pbuf.custom.pbuf.payload;
+            len = 0;
+        }
+
+        if(custom) {
+            *(payload++) = data;
+            len +=4;
+        }
+
+        if(eop) {
+            if(custom) {
+                // Hand up to LWIP
+                custom->as_pbuf.custom.pbuf.len = len;
+                session->nif->input(&custom->as_pbuf.custom.pbuf, session->nif);
+            }
+            custom = NULL;
+        }
+    }
+
+    if(custom != NULL) {
+        printf(KRED"FREE BROKEN PACKET\n");
+        pbuf_free(&custom->as_pbuf.custom.pbuf);
+    }
+
+
     return;
 }
 
 err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
-    // TODO
+
+    // To write: Set meta (if needed), then set symbols
+    net_session* session = netif->state;
+
+    ALTERA_FIFO* tx_fifo = &session->mmio->tran_fifo;
+
+    tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_SOP);
+
+    int more;
+
+    do {
+        uint32_t* payload = (uint32_t*)p->payload;
+        uint32_t* end = (uint32_t*)(p->payload + p->len);
+
+        more = p->len != p->tot_len;
+
+        while(payload != end) {
+            uint32_t word = *payload;
+            payload++;
+            while(tx_fifo->ctrl_fill_level == AVALON_FIFO_TX_BASIC_OPTS_DEPTH);
+            if(payload == end && !more) tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP);
+            tx_fifo->symbols = word;
+        }
+
+
+    } while(more && (p = p->next));
+
     return ERR_OK;
 }
 
 int lwip_driver_poll(net_session* session) {
-    // TODO
-    return 0;
+    ALTERA_FIFO* rx_fifo = &session->mmio->recv_fifo;
+
+    return (rx_fifo->ctrl_fill_level != 0);
 }
