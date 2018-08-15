@@ -134,6 +134,11 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
         get_last_exception(&ex_info);
 
+        // TODO I figure this is hardwares fault. Remove when bug is fixed.
+        if(!cheri_gettag(&sched_get_current_act)) {
+            kernel_printf("Has lost tag!!!\n will crash\n");
+        }
+
         act_t* kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
 
         if(ex_info.victim_context != own_context) {
