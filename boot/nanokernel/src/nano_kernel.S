@@ -975,10 +975,12 @@ switch_exception:                                       # void switch_exception(
                 # activation. However, for now as only the bits to check the type of
                 # interrupt we will just use this.
 
-    clc     $c3, $zero, current_context($kr1c)          # Current context is the victim
-    cseal   $c4, $c3, $c13                              # Seal c3 to pass to exception handler
-    csc     $c4, $zero, victim_context($kr1c)           # store victim
+    clc     $c5, $zero, current_context($kr1c)          # Current context is the victim
+    cseal   $c4, $c5, $c13                              # Seal c3 to pass to exception handler
     clc     $c3, $zero, exception_context($kr1c)        # load exception context
+    CEXEQ   $t0, $c3, $c5
+    bnez    $t0, nano_kernel_die
+    csc     $c4, $zero, victim_context($kr1c)           # store victim
 
     # HERE # If you want to restore the exception context with magic values, store via c3
 
@@ -1298,6 +1300,8 @@ nano_kernel_die:
 
     dli $k0,  ((0x1f000000 + 0x00500) | 0x9000000000000000)
     li  $k1,  0x42
+1:
+    b   1b
     csb $k1, $k0, 0($kdc)
 
 ############################################# (TODO (maybe remove?)

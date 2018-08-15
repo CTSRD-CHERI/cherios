@@ -587,6 +587,8 @@ int main(register_t arg, capability carg) {
     // Advertise self for tcp/socket layer
     namespace_register(namespace_num_tcp, act_self_ref);
 
+    printf("LWIP Should now be responsive\n");
+
     int sock_sleep = 0;
     int sock_event = 0;
 
@@ -597,7 +599,7 @@ int main(register_t arg, capability carg) {
     // Main loop
     while(1) {
         register_t now = syscall_now();
-        if((now - time) >= 200000000) {
+        if((now - time) >= MS_TO_CLOCK(10 * 1000)) { // Give a status report every 10 seconds
             time = now;
             size_t n = 0;
             FOR_EACH_TCP(T) {

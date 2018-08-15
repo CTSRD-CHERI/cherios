@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2018 Lawrence Esswood
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,29 +28,27 @@
  * SUCH DAMAGE.
  */
 
-#include "lwip_driver.h"
+#include "cheric.h"
+#include "namespace.h"
+#include "object.h"
+#include "sockets.h"
+#include "misc.h"
 
-int lwip_driver_init(net_session* session) {
-    // TODO
-    return 0;
+static int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester* write_requester, const char* file_name) {
+    return -1;
 }
 
-int lwip_driver_init_postup(net_session* session) {
-    // TODO
-    return 0;
+static int make_dir(const char* name) {
+    return -1;
 }
 
-void lwip_driver_handle_interrupt(net_session* session) {
-    // TODO
-    return;
-}
+void (*msg_methods[]) = {new_file, make_dir};
+size_t msg_methods_nb = countof(msg_methods);
+void (*ctrl_methods[]) = {NULL};
+size_t ctrl_methods_nb = countof(ctrl_methods);
 
-err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
-    // TODO
-    return ERR_OK;
-}
-
-int lwip_driver_poll(net_session* session) {
-    // TODO
+int main(register_t arg, capability carg) {
+    namespace_register(namespace_num_fs, act_self_ref);
+    msg_enable = 1;
     return 0;
 }

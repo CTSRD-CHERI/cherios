@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2018 Lawrence Esswood
+ * Copyright (c) 2017 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,29 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include "lwip_driver.h"
+#ifndef CHERIOS_TEMPLATE_H
+#define CHERIOS_TEMPLATE_H
 
-int lwip_driver_init(net_session* session) {
-    // TODO
-    return 0;
-}
-
-int lwip_driver_init_postup(net_session* session) {
-    // TODO
-    return 0;
-}
-
-void lwip_driver_handle_interrupt(net_session* session) {
-    // TODO
-    return;
-}
-
-err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
-    // TODO
-    return ERR_OK;
-}
-
-int lwip_driver_poll(net_session* session) {
-    // TODO
-    return 0;
-}
+#endif //CHERIOS_TEMPLATE_H

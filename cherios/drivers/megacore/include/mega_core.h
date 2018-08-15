@@ -34,7 +34,13 @@
 #include "cdefs.h"
 
 #define MEGA_CORE_BASE_0 0x7f007000         // 1024
+#define MEGA_CORE_IRQ_RECV_0  1
+#define MEGA_CORE_IRQ_TRAN_0  2
 #define MEGA_CORE_BASE_1 0x7f005000
+#define MEGA_CORE_IRQ_RECV_1  12
+#define MEGA_CORE_IRQ_TRAN_1  11
+#define MEGA_CORE_SIZE   0x600
+
 
 #define MEGA_CORE_MAC_TRAN  0x400           // 8
 #define MEGA_CORE_MAC_TRAN_CNTRL 0x420      // 32

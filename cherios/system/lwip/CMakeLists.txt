@@ -4,6 +4,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${LWIP_INCLUDE})
 include_directories(${DRIVERS_DIR}/virtio/include)
 include_directories(${DRIVERS_DIR}/virtio/virtio-net/include)
+include_directories(${DRIVERS_DIR}/megacore/include)
 
 if("${HARDWARE}" STREQUAL "qemu")
     set(DRIVER_SRCS src/virtio/virtio_driver.c)

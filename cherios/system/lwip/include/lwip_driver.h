@@ -53,8 +53,8 @@
 
 #else
 
-#include "megacore/a_api.h"
-#include "megacore/mega_core.h"
+#include "a_api.h"
+#include "mega_core.h"
 
 #endif
 

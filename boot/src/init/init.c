@@ -47,7 +47,6 @@
 #include "capmalloc.h"
 #include "../../../cherios/kernel/include/sched.h"
 #include "crt.h"
-#include "malta_virtio_mmio.h"
 
 #define B_FS 0
 #define B_SO 0
@@ -55,6 +54,32 @@
 #define B_T1 0
 #define B_T2 0
 #define B_T3 0
+
+#ifdef HARDWARE_qemu
+    #include "malta_virtio_mmio.h"
+
+    #define NET_MMIO_BASE   VIRTIO_MMIO_NET_BASE
+    #define NET_MMIO_SIZE   VIRTIO_MMIO_SIZE
+    #define NET_MMIO_IRQ    VIRTIO_MMIO_NET_IRQ
+
+    #define BLK_MMIO_BASE   VIRTIO_MMIO_MMAP_BASE
+    #define BLK_MMIO_SIZE   VIRTIO_MMIO_SIZE
+    #define BLK_MMIO_IRQ    VIRTIO_MMIO_IRQ
+
+    #define FS_ELF          "fatfs.elf"
+#else
+    #include "mega_core.h"
+
+    #define NET_MMIO_BASE   MEGA_CORE_BASE_0
+    #define NET_MMIO_SIZE   MEGA_CORE_SIZE
+    #define NET_MMIO_IRQ    MEGA_CORE_IRQ_RECV_0
+
+    #define BLK_MMIO_BASE   0
+    #define BLK_MMIO_SIZE   0
+    #define BLK_MMIO_IRQ    0
+
+    #define FS_ELF          "dummyfs.elf"
+#endif
 
 #define B_ENTRY(_type, _name, _arg, _daemon, _cond) \
 	{_type,	_cond, _name, _arg, _daemon, 0, NULL},
@@ -113,12 +138,11 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 #ifdef HARDWARE_qemu
 	B_DENTRY(m_virtblk,	"virtio-blk.elf",	0,	1)
-//    B_DENTRY(m_virtnet, "virtio-net.elf", 0, 1)
-    B_PENTRY(m_virtnet, "lwip.elf", VIRTIO_MMIO_NET_IRQ, 1)
-	B_FENCE
-	B_DENTRY(m_fs,		"fatfs.elf",		0,	1)
-	B_FENCE
 #endif
+    B_PENTRY(m_virtnet, "lwip.elf", NET_MMIO_IRQ, 1)
+	B_FENCE
+	B_DENTRY(m_fs,	FS_ELF	,		0,	1)
+	B_FENCE
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
 	B_FENCE
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
@@ -134,9 +158,9 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user,    "socket_test.elf", 0 ,1)
 #ifdef HARDWARE_QEMU
     B_PENTRY(m_user, "fs_test.elf", 0, 1)
-#endif
     B_DENTRY(m_user, "server.elf", 0, 1)
     B_PENTRY(m_user, "client.elf", 0, 1)
+#endif
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
 
@@ -201,11 +225,13 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             return &memmgt_init;
 
         case m_fs:{}
+            if(BLK_MMIO_BASE == 0) return NULL;
             cap_pair pair;
-            get_physical_capability(VIRTIO_MMIO_MMAP_BASE, VIRTIO_MMIO_SIZE, 1, 0, own_mop, &pair);
+            get_physical_capability(BLK_MMIO_BASE, BLK_MMIO_SIZE, 1, 0, own_mop, &pair);
             return pair.data;
         case m_virtnet:
-            get_physical_capability(VIRTIO_MMIO_NET_BASE, VIRTIO_MMIO_SIZE, 1, 0, own_mop, &pair);
+            if(NET_MMIO_BASE == 0) return NULL;
+            get_physical_capability(NET_MMIO_BASE, NET_MMIO_SIZE, 1, 0, own_mop, &pair);
             return pair.data;
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;

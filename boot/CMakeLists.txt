@@ -1,6 +1,7 @@
 include_directories(include)
 include_directories(${DRIVERS_DIR}/uart/include)
 include_directories(${DRIVERS_DIR}/virtio/include)
+include_directories(${DRIVERS_DIR}/megacore/include)
 include_directories(${CMAKE_SOURCE_DIR}/elf/include)
 include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
 include_directories(${UFS_DIR}/include)
