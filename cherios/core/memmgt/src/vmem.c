@@ -162,7 +162,12 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size) {
 
     // Get a block of physical pages to map to
     size_t phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused);
-    assert(phy_pagen != BOOK_END);
+    if(phy_pagen == BOOK_END) {
+        printf("Tried to find a block of %lx for range commit\n", block_size);
+        pmem_print_book(book, 0, -1);
+        assert(phy_pagen != BOOK_END);
+    }
+
     size_t in_block = book[phy_pagen].len;
 
     size_t contig_base = phy_pagen;

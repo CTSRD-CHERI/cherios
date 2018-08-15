@@ -95,7 +95,9 @@ typedef struct dypool {
 
 #define N_FIXED_POOLS 10
 #define FIXED_POOL_RES_N
-#define DYNAMIC_POOL_SIZE ((1 << 30) - RES_META_SIZE)
+#define DYNAMIC_POOL_SIZE ((1 << 30) - RES_META_SIZE) // This is OK for late commit. This is stupidly large for commit!
+#define DYNAMIC_POOL_SIZE_DMA ((1 << 26)) // Still pretty big!
+
 #define FIXED_POOL_SIZE   (UNTRANSLATED_PAGE_SIZE -  RES_META_SIZE)
 
 #define BIG_OBJECT_THRESHOLD (1 << 27)
@@ -286,19 +288,20 @@ static res_t alloc_from_dynamic(size_t size, arena_t* arena, size_t* dma_off) {
             finish_dynamic_pool(arena);
         }
 
+        size_t pool_size = arena->dma ? DYNAMIC_POOL_SIZE_DMA : DYNAMIC_POOL_SIZE;
         ERROR_T(res_t) res;
         // Need new pool
         if(arena->dma) {
-           res = mem_request_phy_out(0, DYNAMIC_POOL_SIZE - RES_META_SIZE, COMMIT_DMA, own_mop, &dynamic_pool->dma_off);
+           res = mem_request_phy_out(0, pool_size - RES_META_SIZE, COMMIT_DMA, own_mop, &dynamic_pool->dma_off);
         } else {
-           res = mem_request(0, DYNAMIC_POOL_SIZE - RES_META_SIZE, NONE, own_mop);
+           res = mem_request(0, pool_size - RES_META_SIZE, NONE, own_mop);
         }
 
         assert(IS_VALID(res));
 
         dynamic_pool->head = res.val;
 
-        dynamic_pool->length = DYNAMIC_POOL_SIZE;
+        dynamic_pool->length = pool_size;
 
         res_nfo_t nfo = rescap_nfo(dynamic_pool->head);
 
@@ -307,7 +310,7 @@ static res_t alloc_from_dynamic(size_t size, arena_t* arena, size_t* dma_off) {
         }
 
         dynamic_pool->range.start = align_down_to(nfo.base, UNTRANSLATED_PAGE_SIZE);
-        dynamic_pool->range.end = dynamic_pool->range.start + DYNAMIC_POOL_SIZE + RES_META_SIZE;
+        dynamic_pool->range.end = dynamic_pool->range.start + pool_size + RES_META_SIZE;
         dynamic_pool->range.outstanding_claims = 0;
         dynamic_pool->page_offset = RES_META_SIZE;
     }
