@@ -311,25 +311,21 @@ nano_kernel_init:
     csetoffset  $kr1c, $kdc, $k0
     csetboundsexact  $kr1c, $kr1c, $k1                       # kr1c will hold a capability to our locals
 
-    # Move from BEV
-
-    li          $t0, ~MIPS_CP0_STATUS_BEV
-    mfc0        $t1, MIPS_CP0_REG_STATUS
-    and         $t1, $t1, $t0
-    mtc0        $t1, MIPS_CP0_REG_STATUS
-
 #ifdef SMP_ENABLED
 	# Send SMP TCs other than 0 to trap to let nano perform init
 	get_cpu_id  $t0
+#endif
 
 #ifndef HARDWARE_qemu
 
+    #FIXME need to use different PIC for each cpu core
+
     dli         $t1, PHY_MEM_START_UNCACHED + 0x7f804000
-    dli         $t2, INTERRUPTS_SYSTEM_N
+    dli         $t2, STATUS_BIT_TO_BERI_IRQ(INTERRUPTS_SYSTEM_N) //
 
     // System HW cascades (disabled)
     daddiu      $t3, $t1, (8 * (INTERRUPTS_N_HW - 1))
-1:  csw         $t2, $t1, 0($kdc)
+1:  csd         $t2, $t1, 0($kdc)
     bne         $t1, $t3, 1b
     daddiu      $t1, $t1, 8
 
@@ -339,22 +335,34 @@ nano_kernel_init:
 
     // System SW cascades (disabled)
 
-    daddiu      $t3, $t1, (8 * (INTERRUPTS_N_HW - 1))
-1:  csw         $t2, $t1, 0($kdc)
+    daddiu      $t3, $t1, (8 * (INTERRUPTS_N_SW - 1))
+1:  csd         $t2, $t1, 0($kdc)
     bne         $t1, $t3, 1b
     daddiu      $t1, $t1, 8
 
     // Nano SW cascades (enabled)
 
-    dli         $t2, (1 << PIC_CONFIG_OFFSET_E) | (INTERRUPTS_NANO_N)
+    dli         $t2, (1 << PIC_CONFIG_OFFSET_E) | (STATUS_BIT_TO_BERI_IRQ(INTERRUPTS_NANO_N))
 
-    daddiu      $t3, $t1, (8 * ((64 - INTERRUPTS_N_HW) - 1))
-1:  csw         $t2, $t1, 0($kdc)
+    daddiu      $t3, $t1, (8 * ((64 - INTERRUPTS_N_SW) - 1))
+1:  csd         $t2, $t1, 0($kdc)
     bne         $t1, $t3, 1b
     daddiu      $t1, $t1, 8
 
 #endif
 
+    # Move from BEV
+
+    li          $t0, ~MIPS_CP0_STATUS_BEV
+    mfc0        $t1, MIPS_CP0_REG_STATUS
+    and         $t1, $t1, $t0
+#ifndef HARDWARE_qemu
+    // Also enable these interrupts
+    ori         $t1, $t1, ((1 << INTERRUPTS_NANO_N) | (1 << INTERRUPTS_SYSTEM_N)) << 8
+#endif
+    mtc0        $t1, MIPS_CP0_REG_STATUS
+
+#ifdef SMP_ENABLED
     bnez        $t0, nano_smp_trap
     nop
 #endif
@@ -3010,8 +3018,8 @@ interrupts_mask:
     daddu   $v0, $v0, $v1                           # CONFIG_X(cpu, n)
 
     dsll    $a2, $a2, PIC_CONFIG_OFFSET_E
-    daddiu  $a2, $a2, INTERRUPTS_SYSTEM_N
-    csw     $a2, $v0, 0($kdc)
+    daddiu  $a2, $a2, STATUS_BIT_TO_BERI_IRQ(INTERRUPTS_SYSTEM_N)
+    csd     $a2, $v0, 0($kdc)
 
 #endif
 
@@ -3037,6 +3045,7 @@ interrupts_soft_set:
     daddiu  $t0, $v0, 128                   # Clear
     movz    $v0, $t0, $a2                   # v0 = (set if enable else clear)
 
+# FIXME pretty sure I cant use byte access. Word or double word seem to be allowed.
     # low 3 bits are byte index. Upper bits index into bytes.
     andi    $t0, $v1, 0x0b111               # byte index
     li      $t1, 1
@@ -3068,8 +3077,8 @@ interrupts_get:
     daddiu  $v0, $v0, (8 * 1024)
     # System: [0,31] -> [0, 31], [32,63] -> [64,95]
     # Nano software used: [96,127]
-    clw     $t0, $v0, 0($kdc)      # [0,31] <- [0, 31]
-    clw     $t1, $v0, (64/8)($kdc) # [32,63] <- [64,95]
+    clw     $t0, $v0, 4($kdc)      # [0,31] <- [0, 31]
+    clw     $t1, $v0, ((64/8)+4)($kdc) # [32,63] <- [64,95]
     dsll    $t1, $t1, 32
     CRETURN
     daddu   $v0, $t0, $t1

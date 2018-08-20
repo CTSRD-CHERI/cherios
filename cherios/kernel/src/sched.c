@@ -365,6 +365,17 @@ static act_t * sched_picknext(sched_pool* pool) {
 	return next;
 }
 
+// This will cause a switch if the activation that recieves an interrupt is on the current core
+// and whatever is currently scheduled does not have high priority
+void sched_got_int(act_t* act, uint8_t cpu_id) {
+	spinlock_acquire(&act->sched_access_lock);
+	int should_switch = (act->pool_id == cpu_id) && (sched_pools[cpu_id].current_act->priority != PRIO_IO);
+	spinlock_release(&act->sched_access_lock);
+	if(should_switch) {
+		sched_reschedule(act, 1);
+	}
+}
+
 void sched_reschedule(act_t *hint, int in_exception_handler) {
 
 	uint8_t pool_id;

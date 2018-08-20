@@ -255,6 +255,9 @@ DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 
 #else
 // On beri we will cascade all of the systems interrupts to 3:
+    #define STATUS_BIT_TO_BERI_IRQ(X) (X - 2)
+    #define BERI_IRQ_TO_STATUS_BIT(X) (X + 2)
+
     #define INTERRUPTS_SYSTEM_N 3
 
     // we will reformat like this:

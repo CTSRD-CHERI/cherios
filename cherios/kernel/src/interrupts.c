@@ -51,6 +51,35 @@ static uint64_t masks[SMP_CORES];
 
 // WARN: We are ignoring cpu numbers in qemu. Only 0 will work. For BERI PIC interrupts will work correctly
 
+/*
+ *
+ * Will not actually be accessible. This is for debug purposes.
+uint64_t* pic_config;
+uint64_t* pic_read;
+
+void dump_config(size_t index, uint64_t config) {
+    kernel_printf("%4ld: %lx : (%lx,%ld)\n", index, config, config & ((1 << PIC_CONFIG_SIZE_IRQ)-1), (config >> PIC_CONFIG_OFFSET_E) & 1);
+}
+
+void dump_pic(void) {
+
+    size_t i;
+
+    for(i = 0; i != 8; i++) {
+        dump_config(i, pic_config[i]);
+    }
+
+    kernel_printf("Read: %lx, %lx", pic_read[0], pic_read[1]);
+}
+
+void debug_pic(void) {
+    page_t* book = get_book();
+
+    pic_config = (uint64_t*)get_phy_cap(book, 0x7f804000, 1024, 0, 1);
+    pic_read = (uint64_t*)get_phy_cap(book, 0x7f804000 + ((8 * 1024)), 128, 0 ,1);
+}
+*/
+
 void kernel_interrupts_init(int enable_timer, uint8_t cpu_id) {
 	KERNEL_TRACE("interrupts", "enabling interrupts");
 	kernel_assert(cp0_status_ie_get() == 0);
@@ -85,6 +114,9 @@ static void kernel_interrupt_others(register_t pending, uint8_t cpu_id) {
 						registration->v0, registration->target, &kernel_acts[0], NULL)) {
                 kernel_printf(KRED"Could not send interrupt to %s. Queue full\n"KRST, registration->target->name);
 			}
+
+            // DOES NOT WAKE UP. This is to go to higher priority as the quantum are currently very long
+            sched_got_int(registration->target, cpu_id);
 		}
 	}
 }

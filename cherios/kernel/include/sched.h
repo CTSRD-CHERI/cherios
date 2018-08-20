@@ -43,6 +43,7 @@ void    sched_init(sched_idle_init_t*);
 
 void    sched_schedule(uint8_t pool_id, act_t * act);
 void    sched_reschedule(act_t *hint, int in_exception_handler);
+void    sched_got_int(act_t* act, uint8_t cpu_id);
 
 void	sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority);
 void	sched_delete(act_t * act);
