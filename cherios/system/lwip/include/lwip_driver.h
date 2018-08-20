@@ -130,6 +130,7 @@ typedef struct custom_for_tcp {
 
 // Generic things
 
+#define CUSTOM_BUF_PAYLOAD_SIZE (TCP_MSS + PBUF_TRANSPORT)
 struct custom_for_tcp* alloc_custom(net_session* session);
 
 // Per driver

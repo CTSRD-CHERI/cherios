@@ -159,7 +159,7 @@ struct custom_for_tcp* alloc_custom(net_session* session) {
 
     c->as_pbuf.custom.custom_free_function = &free_malloc_pbuf;
 
-    pbuf_alloced_custom(PBUF_RAW, TCP_MSS + PBUF_TRANSPORT, PBUF_RAM, &c->as_pbuf.custom, c->as_pbuf.buf, TCP_MSS+PBUF_TRANSPORT);
+    pbuf_alloced_custom(PBUF_RAW, CUSTOM_BUF_PAYLOAD_SIZE, PBUF_RAM, &c->as_pbuf.custom, c->as_pbuf.buf, TCP_MSS+PBUF_TRANSPORT);
 
     return c;
 }
