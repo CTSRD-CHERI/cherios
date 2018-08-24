@@ -218,6 +218,33 @@ typedef uni_dir_socket_requester* requester_ptr_t;
 DEC_ERROR_T(requester_ptr_t);
 
 
+// Some helpful macros as using poll has a lot of cookie cutter at present =(
+#define POLL_LOOP_START(sleep_var, event_var, messages)             \
+    int sleep_var = 0;                                              \
+    int event_var = 0;                                              \
+                                                                    \
+    while(1) {                                                      \
+        if(messages && !msg_queue_empty()) {                        \
+        msg_entry(1);                                               \
+        }                                                           \
+                                                                    \
+        if(sleep_var) syscall_cond_cancel();                        \
+        event_var = 0;
+
+
+#define POLL_ITEM_F(event, sleep_var, event_var, item, events, from_check)                          \
+    enum poll_events event = socket_internal_fulfill_poll(item, events, sleep_var, from_check);     \
+    if(event) {                                                                                     \
+        event_var = 1;                                                                              \
+        sleep_var = 0;                                                                              \
+    }
+
+#define POLL_LOOP_END(sleep_var, event_var, messages, timeout)      \
+    if(!event_var) {                                                \
+        if(sleep_var) syscall_cond_wait(messages, timeout);         \
+        sleep_var = 1;                                              \
+    }                                                               \
+}
 // Init //
 int socket_internal_fulfiller_init(uni_dir_socket_fulfiller* fulfiller, uint8_t socket_type);
 int socket_internal_requester_init(uni_dir_socket_requester* requester, uint16_t buffer_size, uint8_t socket_type, data_ring_buffer* paired_drb);
