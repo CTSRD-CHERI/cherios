@@ -783,9 +783,11 @@ visit_free(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t 
 
     /* Now is a good time to decide to revoke something, we sub the revoke request to a worker thread */
     if(desc_being_revoked == NULL && desc->allocated_length >= MIN_REVOKE && desc->length == desc->allocated_length) {
+#ifndef CHERI_LEGACY_COMPAT
         revoke_start(desc);
         printf("Sending revoke request...\n");
         revoke();
+#endif
     } else if(DUMP_INTERVAL != 0) {
         static register_t last = 0;
         register_t now = syscall_now();
