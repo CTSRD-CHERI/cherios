@@ -47,10 +47,10 @@ void kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priorit
 	sched_change_prio((act_t*)control, priority);
 }
 
-DECLARE_WITH_CD(void, kernel_sleep(int time));
-void kernel_sleep(int time) {
-	if(time != 0) {
-		KERNEL_ERROR("sleep >0 not implemented");
+DECLARE_WITH_CD(void, kernel_sleep(register_t timeout));
+void kernel_sleep(register_t timeout) {
+	if(timeout != 0) {
+		sched_block_until_event(NULL, NULL, sched_runnable, timeout, 0);
 	} else {
 		sched_reschedule(NULL, 0);
 	}

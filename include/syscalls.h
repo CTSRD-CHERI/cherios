@@ -46,7 +46,8 @@
                                         act_kt dest, register_t selector, register_t v0), __VA_ARGS__,                          \
                                          ".global message_send_c \n message_send_c: \n")                                         \
         ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, capability sync_token), __VA_ARGS__)          \
-        ITEM(sleep, void, (int time), __VA_ARGS__)                                                                           \
+/* In mips clock ticks*/\
+        ITEM(sleep, void, (register_t timeout), __VA_ARGS__)                                                                           \
         ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
         ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, res_t res, uint8_t cpu_hint), __VA_ARGS__)\
         ITEM(syscall_act_ctrl_get_ref, act_kt, (act_control_kt ctrl), __VA_ARGS__)                                                          \
