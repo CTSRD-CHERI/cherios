@@ -15,6 +15,7 @@
 / by use of this software.
 /----------------------------------------------------------------------------*/
 
+#include <stdio.h>
 #include "unistd.h"
 #include "ff.h"			/* Declarations of FatFs API */
 #include "diskio.h"		/* Declarations of disk I/O functions */
@@ -3377,6 +3378,8 @@ static ssize_t proxy_amount(uni_dir_socket_requester* requester, size_t* ss, uni
 	// TODO fulfill using a proxy to the block devices sectors [sect,sect+count)
 	ssize_t res;
 
+    assert((length & (SS(NULL)-1)) == 0);
+
 	// 1: Emit seek if not at the correct sector
 	if(*ss != sect) {
 		res = socket_internal_requester_lseek(requester, sect, SEEK_SET, 0);
@@ -3392,7 +3395,7 @@ static ssize_t proxy_amount(uni_dir_socket_requester* requester, size_t* ss, uni
 	res = socket_internal_request_proxy(requester, fulfill, length, 0);
 	assert_int_ex(-res, ==, 0);
 
-    (*ss)++;
+    (*ss) += length / SS(NULL);
 
 	return 0;
 }

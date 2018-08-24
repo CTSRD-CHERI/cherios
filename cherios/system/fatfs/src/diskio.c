@@ -23,10 +23,6 @@
 #define USB		2	/* Example: Map USB MSD to physical drive 2 */
 
 const size_t sector_sz = 512;
-#ifndef VIRTIO_BLOCK
-const size_t idisk_sz = 800*sector_sz;
-char idisk[idisk_sz];
-#endif
 
 
 /*-----------------------------------------------------------------------*/
@@ -38,13 +34,7 @@ DSTATUS disk_status (
 )
 {
 	assert(pdrv == 0);
-	#ifdef VIRTIO_BLOCK
-	int vret = virtio_blk_status();
-	if(vret != 0) {
-		return FR_DISK_ERR;
-	}
-	#endif
-	return FR_OK;
+	return (DSTATUS)virtio_blk_status();
 }
 
 
@@ -58,13 +48,11 @@ DSTATUS disk_initialize (
 )
 {
 	assert(pdrv == 0);
-	#ifdef VIRTIO_BLOCK
 	int vret = virtio_blk_init();
 	if(vret != 0) {
-		return FR_NOT_READY;
+		return STA_NODISK;
 	}
-	#endif
-	return FR_OK;
+	return 0;
 }
 
 
@@ -82,7 +70,6 @@ DRESULT disk_read (
 {
 	assert(pdrv == 0);
 	//printf("%s %ld %u\n", __func__, sector, count);
-	#ifdef VIRTIO_BLOCK
 	for(size_t i=0; i<count; i++) {
 		int ret = virtio_read(buff+(sector_sz*i), sector+i);
 		if(ret) {
@@ -90,15 +77,6 @@ DRESULT disk_read (
 			return RES_ERROR;
 		}
 	}
-	#else
-	size_t start = sector * sector_sz;
-	size_t len   = count * sector_sz;
-	if(start + len >= idisk_sz) {
-		assert(0);
-		return RES_PARERR;
-	}
-	memcpy(buff, idisk+start, len);
-	#endif
 	return RES_OK;
 }
 
@@ -117,7 +95,6 @@ DRESULT disk_write (
 {
 	assert(pdrv == 0);
 	//printf("%s %ld %u\n", __func__, sector, count);
-	#ifdef VIRTIO_BLOCK
 	for(size_t i=0; i<count; i++) {
 		int ret = virtio_write(buff+(sector_sz*i), sector+i);
 		if(ret) {
@@ -125,15 +102,6 @@ DRESULT disk_write (
 			return RES_ERROR;
 		}
 	}
-	#else
-	size_t start = sector * sector_sz;
-	size_t len   = count * sector_sz;
-	if(start + len >= idisk_sz) {
-		assert(0);
-		return RES_PARERR;
-	}
-	memcpy(idisk+start, buff, len);
-	#endif
 	return RES_OK;
 }
 
@@ -159,11 +127,7 @@ DRESULT disk_ioctl (
 			res = RES_OK;
 			break;
 		case GET_SECTOR_COUNT:{}
-			#ifdef VIRTIO_BLOCK
 			size_t disk_sz = virtio_blk_size();
-			#else
-			size_t disk_sz = idisk_sz;
-			#endif
 			*buf = disk_sz;
 			res = RES_OK;
 			break;

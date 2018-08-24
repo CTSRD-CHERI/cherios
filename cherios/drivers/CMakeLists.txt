@@ -1,2 +1,9 @@
+include_directories(include)
+
 add_subdirectory(uart)
-add_subdirectory(virtio)
+
+if("${HARDWARE}" STREQUAL "qemu")
+    add_subdirectory(virtio)
+elseif("${HARDWARE}" STREQUAL "fpga")
+    add_subdirectory(alteraSD)
+endif()

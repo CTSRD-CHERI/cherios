@@ -381,12 +381,18 @@ int main(capability fs_cap) {
 
     if (res == FR_NO_FILESYSTEM) {
         already_existed = 0;
+        printf("Fatfs: Making FS. This may take some time. Hope you don't need that disk...\n");
         if ((res = f_mkfs("", 0, 0))) {
             printf("MK:%d\n", res);
             goto er;
         }
     } else {
         already_existed = 1;
+    }
+
+    if(!already_existed && (res = f_mount(&fs, "", 1))) {
+        printf("MT(2):%d\n", res);
+        goto er;
     }
 
     spawn_workers();

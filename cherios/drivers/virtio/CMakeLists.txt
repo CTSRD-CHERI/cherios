@@ -5,4 +5,4 @@ set(VIRTIO_SRCS
 )
 
 add_subdirectory(virtio-blk)
-add_subdirectory(virtio-net)
+#add_subdirectory(virtio-net)
