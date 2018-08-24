@@ -210,6 +210,9 @@ void handle_loop(void) {
 
     ssize_t res = mkdir(ROOT);
 
+    if(!(res == 0 || res == 8)) {
+        printf("RES: %ld\n", res);
+    }
     assert(res == 0 || res == 8);
 
     assert(namespace_register(namespace_num_webserver, act_self_ref) == 0);
