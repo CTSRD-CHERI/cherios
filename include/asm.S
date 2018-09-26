@@ -351,10 +351,21 @@ li  $zero, 0xdead
     cgetoffset \reg, \cap
 .endm
 
-.macro CRETURN
-    ccall $c17, $c18, 2
+.macro ccall_slotless a, b, c
+    ccall \a, \b, \c
+    nop # Remove when hardware is fixed
 .endm
 
+.macro CRETURN
+    ccall_slotless $c17, $c18, 2
+.endm
+
+.macro ccall_l code, data, select, link
+cgetpcc     \link
+cincoffset  \link, \link, 16
+ccall       \code, \data, \select
+nop
+.endm
 
 .macro for_each_reg caps_rem, macro index, global, head, save_ls:vararg
     .if \caps_rem == 0
@@ -421,8 +432,8 @@ li  $zero, 0xdead
     calc_frame \n_caps, \save_ls
     for_each_cap \n_caps, pop_cap, 0, 0, \save_ls
     for_each_reg \n_caps, pop_reg, 0, (cap_sz), \save_ls
-    ccall $c17, $c18, 2
     cincoffset $c11, $c11, (frame_sz)
+    CRETURN
 .endm
 
 

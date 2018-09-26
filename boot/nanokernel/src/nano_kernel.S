@@ -107,6 +107,7 @@ local_array_start context_array, CAP_SIZE_BITS, SMP_CORES
 
 local_cap_var current_context
 local_cap_var ex_pcc_dummy          # Set to null. This is here so we match the CTLP requirements for user exceptions
+local_cap_var K_CAP                 # used by sha256 WARN: DONT MOVE, I HAVE HARDCODED THIS IN sha256.S (sorry)
 local_cap_var exception_context
 local_cap_var victim_context
 local_cap_var switch_cap_tmp
@@ -290,7 +291,6 @@ smp_signal_loop:
 smp_context_start_er:
     cclearlo    EN3(c3, c4, c5)
     CRETURN
-    nop
 #endif
 
 ################################################################# (TODO unsafe)
@@ -353,9 +353,9 @@ nano_kernel_init:
 
     # Move from BEV
 
-    li          $t0, ~MIPS_CP0_STATUS_BEV
+    li          $t2, ~MIPS_CP0_STATUS_BEV
     mfc0        $t1, MIPS_CP0_REG_STATUS
-    and         $t1, $t1, $t0
+    and         $t1, $t1, $t2
 #ifndef HARDWARE_qemu
     // Also enable these interrupts
     ori         $t1, $t1, ((1 << INTERRUPTS_NANO_N) | (1 << INTERRUPTS_SYSTEM_N)) << 8
@@ -397,6 +397,13 @@ nano_kernel_init:
     csd         $zero, $zero, exception_level($kr1c)     # Set exception level to 0
 
 
+    # This setus up stuff for sha256
+
+    dla         $t0, k_words
+    dli         $t1, 64 * 4
+    csetoffset  $c13, $kdc, $t0
+    csetbounds  $c13, $c13, $t1
+    csc         $c13, $zero, K_CAP($kr1c)
 
     # This sets up the physical book
 
@@ -597,8 +604,9 @@ modify_hardware_reg:
 
     table_end:
 
-    CRETURN
     cclearlo    EN1(c1)
+    CRETURN
+
 
 ####################################### (safe)
 # capaiblity get_integer_space_cap(void)
@@ -606,8 +614,9 @@ modify_hardware_reg:
 get_integer_space_cap:
 #######################################
 
-    CRETURN
     candperm    $c3, $kdc, $zero
+    CRETURN
+
 
 ####################################### (safe)
 # capability obtain_super_powers(void)
@@ -622,7 +631,6 @@ obtain_super_powers:
     cmove       $c3, $kdc
     csetoffset  $c17, $c17, $t2
     CRETURN
-    nop
 
 ################################### (safe)
 # page_t* get_book(void)
@@ -636,7 +644,6 @@ get_book:
     csetboundsexact $c3, $c3, $t1
     candperm   $c3, $c3, $t2
     CRETURN
-    nop
 
 # Notes: Locks the page being split, but not the next page (which will have its back ptr updated) #
 # This is O.K. is the prev pointer is never read by the nano kernel. Only updated. #
@@ -690,7 +697,6 @@ split_phy_undo:
 split_phy_er:
     cclearlo    EN3(c3,c4,c5)
     CRETURN
-    nop
 
 # Notes: Locks pagen and the next page. Not the page after that even though the back pointer is updated #
 ############################################## (safe)
@@ -750,7 +756,6 @@ merge_phy_er_1:
 merge_phy_page_range_end:
     cclearlo    EN2(c3,c4)
     CRETURN
-    nop
 
 ################################### (safe)
 # void zero_page_range(register_t pagen)
@@ -839,7 +844,6 @@ tlb_shootdown_local:
     bnez        $t3, no_shootdown
     csd         $zero, $zero, need_shootdown($idc)
     CRETURN
-    nop
 
 no_shootdown:
     dli         $t1, PHY_MEM_START_CACHED
@@ -862,8 +866,8 @@ no_shootdown:
     csw         $a1, $zero, 0($c3)                # set state clean or dirty depending how we got here
 
     zero_er:
-    CRETURN
     cclearlo    EN2(c3, c13)
+    CRETURN
 
 ################################### (safe)
 # ptable get_top_level_table(void)
@@ -880,7 +884,6 @@ get_top_level_table:
 
     clearlo     EN1(c4)
     CRETURN
-    nop
 
 ##################################### (safe)
 # res_t make_first_reservation(void)
@@ -917,7 +920,6 @@ make_first_reservation:
 make_first_er:
     cclearlo    EN2(c4, c5)
     CRETURN
-    nop
 
 ##################################################################### (TODO unsafe? only when exl = 0)
 # void context_switch(context_t restore_from);
@@ -1072,8 +1074,10 @@ get_last_exception:
     csd        $t1, $zero, (CAP_SIZE+REG_SIZE)($c3)
     csd        $t2, $zero, (CAP_SIZE+(2*REG_SIZE))($c3)
     csd        $t3, $zero, (CAP_SIZE+(3*REG_SIZE))($c3)
-1:  CRETURN
+1:
     cclearlo    EN2(c3,c4) # If there was no exception do not leak any other field
+    CRETURN
+
 
 ################################################################################################################ (safe)
 # capability get_phy_page(register_t page_n, register_t cached, register_t npages, cap_pair* out, register_t IO)
@@ -1140,8 +1144,8 @@ get_phy_page:
 get_phy_page_backout:
     csw         $t3, $zero, PHY_PAGE_OFFSET_status($c6)
 get_phy_page_end:
-    CRETURN
     cclearlo    EN1 (c6)
+    CRETURN
 
 
 ########################################################
@@ -1184,8 +1188,8 @@ memcpy_loop:
     cseal       $c3, $c4, $c3                              # Return sealed cap
 
 1:
-    CRETURN
     cclearlo    EN6(c4,c5,c6,c13,c14,c15)                              # c3 is a return value
+    CRETURN
 
 
 
@@ -1219,8 +1223,8 @@ destroy_context:
     li          $k0, 0
 
 destroy_context_end:
-    CRETURN
     cclearlo    EN4(c3,c4,c5,c6)
+    CRETURN
 
 ################################# (safe)
 # uint8_t critical_section_enter();
@@ -1231,8 +1235,8 @@ critical_section_enter:
     daddiu     $v0, 1
     csd        $v0, $zero, exception_level($kr1c) # This has efftively turned off interrupts so getting cpu_id is ok
     dmfc0      $v0, $15, 1
-    CRETURN
     andi       $v0, $v0, 0xFF
+    CRETURN
 
 
 
@@ -1262,7 +1266,6 @@ critical_section_exit:
 
 kernel_critical_section_exit_end:
     CRETURN
-    nop
 
 
 
@@ -1292,7 +1295,6 @@ set_exception_handler:
 1:
     cclearlo    EN2(c3,c4)
     CRETURN
-    nop
 
 
 ############################# (safe)
@@ -1327,7 +1329,6 @@ get_userdata_for_res:
     csetboundsexact  $c3, $c3, $t2
     cclearlo    EN1(c4)
     CRETURN
-    nop
 
 
 
@@ -1423,10 +1424,9 @@ take_make:
 
 take_end:
     CRETURN
-    nop
 take_er:
-    CRETURN
     clearlo     EN2(c3, c4)
+    CRETURN
 
 ################################################## (safe)
 # res_t rescap_getsub(res_t res, register_t index)
@@ -1451,8 +1451,9 @@ rescap_getsub:
     cseal       $c3, $c3, $c4
 
 getsub_er:
-    CRETURN
     cclearlo    EN2(c4, c5)
+    CRETURN
+
 
 #################################################### (safe)
 # res_t rescap_splitsub(res_t res, register_t scale)
@@ -1478,8 +1479,8 @@ rescap_splitsub:
     STORE_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)
     cseal       $c3, $c3, $c4
 
-    CRETURN
     cclearlo    EN1(c4)
+    CRETURN
 
 #################################### (safe)
 # size_t rescap_nfo(res_t res)
@@ -1506,8 +1507,8 @@ rescap_nfo:
     daddu       $v1, $v1, $t3
 
     normal_info:
-    CRETURN
     cclearlo    EN2(c3,c4)
+    CRETURN
 
 
 .macro EXTRACT_AND_SCALE_L0 addr, out, scale
@@ -1578,8 +1579,8 @@ rescap_revoke_start:
 revoke_start_er_backout1:
     STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3) # Mark reservation as revoking or open again
 revoke_start_er:
-    CRETURN
     cclearlo    EN4(c3, c4, c5, c6)
+    CRETURN
 
 
 #define REVOKE_ER_NOT_STARTED       1
@@ -2029,14 +2030,14 @@ clear_loop_l1_start_retry:
     csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
     ctoint      $s0, $c9
-    CRETURN
     cclearlo    EN5(c4, c5, c6, c7, c8)
+    CRETURN
 
 revoke_er:
     inttoc      $c3, $s0
     ctoint      $s0, $c9
-    CRETURN
     cclearlo    EN5(c4, c5, c6, c7, c8)
+    CRETURN
 
 
 ################################################### (safe)
@@ -2092,14 +2093,14 @@ rescap_split:
     csd         $t0, $zero, (RES_PID_OFFSET)($c3)           # set parent
 
     cseal        $c3, $c3, $c4
-    CRETURN
     cclearlo    EN1(c4)
+    CRETURN
 
 split_er_backout:
     STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)
 split_er:
-    CRETURN
     cclearlo    EN2(c3, c4)
+    CRETURN
 
 
 ############################################# (safe)
@@ -2154,15 +2155,14 @@ rescap_merge:
     cseal       $c3, $c3, $c5               # although the caller can just use the first argument, its nice to return it
     cclearlo    EN3(c4, c5, c6)
     CRETURN
-    nop
 
 merge_er_backout2:
     STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c4)     # set higher address reservation back to open
 merge_er_backout1:
     STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c3)     # set lower address back to open
 merge_er:
-    CRETURN
     cclearlo    EN4(c3, c4, c5, c6)
+    CRETURN
 
 ################################# (safe)
 # res_t rescap_parent(res_t res)
@@ -2202,11 +2202,12 @@ rescap_parent:
 
     cseal       $c3, $c3, $c4               # seal child for return
 
-    CRETURN
     cclearlo    EN1(c4)
-parent_er:
     CRETURN
+
+parent_er:
     cclearlo    EN2(c3, c4)
+    CRETURN
 
 # Notes: will lock the physical page, and atomically updates the vtable entry #
 ######################################################################## (safe)
@@ -2289,7 +2290,6 @@ good_level: #t2 now contains the type we will seal the next level with
 
     cclearlo    EN4(c4,c17, c5, c6)
     CRETURN
-    nop
 
 create_ptable_er_restore_state:
     csw         $t9, $zero, 0($c5)
@@ -2297,7 +2297,6 @@ create_ptable_er_restore_state:
 create_ptable_er:
     cclearlo    EN5(c3, c17, c4, c5, c7)
     CRETURN
-    nop
 
 
 # checked untranslated # l0_index # l1_index # l2_index # unchecked untranslated bits
@@ -2337,12 +2336,10 @@ get_sub_table:
     get_sub_table_end:
     cclearlo    EN1(c4)
     CRETURN
-    nop
 
     get_sub_table_er:
     cclearlo    EN2(c3,c4)
     CRETURN
-    nop
 
 ########################################################### (safe)
 # readable_table_t* get_read_only_table(ptable_t table,)
@@ -2364,7 +2361,6 @@ get_read_only_table:
 1:
     cclearlo    EN1(c4)
     CRETURN
-    nop
 
 # Notes: Locks the physical page, and atomically updates the vtable entry #
 ######################################################################################### (safe)
@@ -2416,8 +2412,8 @@ create_mapping_er_restore_phy:
     csw         $t9, $zero, PHY_PAGE_OFFSET_status($c6)
 
 create_mapping_er:
-    CRETURN
     cclearlo    EN4(c3,c4,c5,c6)
+    CRETURN
 
 
 
@@ -2504,7 +2500,6 @@ free_to_used:
 free_er:
     cclearlo    EN2(c3, c4)
     CRETURN
-    nop
 
 
 
@@ -2609,12 +2604,10 @@ foundation_create:
 
     cclearlo    EN11(c4,c5,c6,c7,c8,c9,c12,c13,c14,c15,c16)
     CRETURN
-    nop
 
     found_er:
     cclearlo    EN12(c3,c4,c5,c6,c7,c8,c9,c12,c13,c14,c15,c16)
     CRETURN
-    nop
 
 
 ########################################################################################### (safe)
@@ -2649,8 +2642,8 @@ foundation_entry_expose:
     clc         $c4, $zero, (FOUNDATION_META_DATA_OFFSET)($c4)   # check is public
     cbts        $c4, nano_er
     clc         $c3, $zero, 0($c3)                      # get pcc
-    CRETURN
     cclearlo    EN1(c4)
+    CRETURN
 
 ########################################################################################### (safe)
 # found_id_t* foundation_entry_get_id(entry_t entry)
@@ -2665,8 +2658,8 @@ foundation_entry_get_id:
     csetboundsexact  $c3, $c3, $t1                      # set bounds
     dli         $t0, Perm_Load
     candperm    $c3, $c3, $t0                           # read only
-    CRETURN
     cclearlo    EN1(c4)
+    CRETURN
 
 ########################################################################################### (safe)
 # void foundation_exit(void)
@@ -2676,8 +2669,8 @@ foundation_exit:
 
     clc         $c3, $zero, current_context($kr1c)       # get current context
     csc         $cnull, $zero, CONTEXT_OFFSET_FOUND($c3)
-    CRETURN
     cclearlo    EN2(c3,c4)
+    CRETURN
 
 
 ########################################################################################### (safe)
@@ -2715,7 +2708,6 @@ foundation_new_entry:
 new_entry_er:
     cclearlo    EN1(c4)
     CRETURN
-    nop
 
 ####################################### (safe)
 # found_id_t* foundation_get_id (void)
@@ -2737,7 +2729,6 @@ foundation_get_id:
 
 id_none:
     CRETURN
-    nop
 
 ########################################################################################### (safe)
 # cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms)
@@ -2811,12 +2802,10 @@ rescap_take_locked_cert_shared:
 
     cclearlo    EN7(c4,c5,c6,c7,c13,c14,c15)
     CRETURN
-    nop
 
 take_cert_er:
     cclearlo    EN8(c3,c4,c5,c6,c7,c13,c14,c15)
     CRETURN
-    nop
 
 ########################################################################################### (safe)
 # found_id_t* rescap_check_cert(cert_t cert, cap_pair* out)
@@ -2840,7 +2829,6 @@ rescap_check_cert:
 
     cclearlo    EN2(c4,c5)
     CRETURN
-    nop
 
 
 ########################################################################################### (safe)
@@ -2881,12 +2869,10 @@ rescap_unlock:
 
     cclearlo    EN2(c5,c6)
     CRETURN
-    nop
 
 1:
     cclearlo    EN4(c3,c4,c5,c6)
     CRETURN
-    nop
 
 
 ################################### (safe)
@@ -2909,8 +2895,8 @@ tres_get:
     csetboundsexact $c3, $c3, $t0
     cseal   $c3, $c3, $c4
 
-    CRETURN
     cclearlo    EN1(c4)
+    CRETURN
 
 ################################### (safe)
 # sealing_cap tres_take(tres_t tres)
@@ -2940,8 +2926,8 @@ tres_take:
     beqz        $t0, 1b                     # store cond fail, try this again
     nop
 
-    CRETURN
     cclearlo    EN1(c4)
+    CRETURN
 
 ############################################################ (safe)
 # capability tres_revoke(register_t start, register_t end)
@@ -2952,7 +2938,6 @@ tres_revoke:
 #  TODO:
 
     CRETURN
-    nop
 
 # Gets a base for PIC config (v0), and maps an interrupt number to a PIC number (v1). Returns via at. clobbers t0/t1
 interrupt_common:
@@ -3025,7 +3010,6 @@ interrupts_mask:
 
 mask_er:
     CRETURN
-    nop
 
 ############################################################ (safe)
 # void interrupts_soft_set(uint8_t cpu, register_t n, int enable)
@@ -3035,7 +3019,6 @@ interrupts_soft_set:
 
 #ifdef HARDWARE_qemu
     CRETURN
-    nop
 #else // qemu
 
     move    $t0, $ra
@@ -3052,8 +3035,8 @@ interrupts_soft_set:
     sll     $t0, $t1, $t0                   # a '1' in the correct bit position of the byte
     srl     $t1, $v1, 3
     daddu   $v0, $v0, $t1
-    CRETURN
     csb     $t0, $v0, 0($kdc)
+    CRETURN
 
 #endif
 
@@ -3067,8 +3050,8 @@ interrupts_get:
     # Ignores CPU. Must pin to 0.
     dmfc0   $v0, MIPS_CP0_REG_CAUSE
     dsrl    $v0, $v0, (MIPS_CP0_STATUS_IM_SHIFT+2)
-    CRETURN
     andi    $v0, $v0, ((1 << INTERRUPTS_N_HW)-1)
+    CRETURN
 
 #else // qemu
     move    $t0, $ra
@@ -3080,8 +3063,8 @@ interrupts_get:
     clw     $t0, $v0, 4($kdc)      # [0,31] <- [0, 31]
     clw     $t1, $v0, ((64/8)+4)($kdc) # [32,63] <- [64,95]
     dsll    $t1, $t1, 32
-    CRETURN
     daddu   $v0, $t0, $t1
+    CRETURN
 #endif
 
 ############################################################ (safe)
@@ -3095,8 +3078,8 @@ exception_subscribe:
     cld     $t0, $zero, (CONTEXT_OFFSET_EX_STATE)($c3)
     ori     $t0, $t0, EX_STATE_UH
     csd     $t0, $zero, (CONTEXT_OFFSET_EX_STATE)($c3)
-    CRETURN
     cclearlo EN1(c3)
+    CRETURN
 
 # WARN: Trying to guarentee this only clobers c1/v0/v1 so exception handlers can be fast #
 ############################################################ (safe)
@@ -3108,8 +3091,8 @@ exception_getcause:
     clcbi   $c1, current_context($kr1c)
     cld     $v0, $zero, (CONTEXT_OFFSET_CAUSE)($c1)
     cld     $v1, $zero, (CONTEXT_OFFSET_CCAUSE)($c1)
-    CRETURN
     cclearlo EN1(c1)
+    CRETURN
 
 ############################################################  (safe)
 # void exception_return(void)
@@ -3191,7 +3174,6 @@ exception_signal:
     # If not, we just modify its saved context so next time it restores the exception will have happened
     # TODO
     CRETURN
-    nop
 
 exception_user_handle: # TODO our idc needs an appropriate entry for this
 
@@ -3257,16 +3239,16 @@ tres_get_ro_bitfield:
     dli         $t0, TRES_BITFIELD_SIZE
     csetboundsexact  $c3, $c3, $t0
     dli         $t0, (Perm_Load)
-    CRETURN
     candperm    $c3, $c3, $t0
+    CRETURN
 
 
 
 # TODO we have way too many error returns. This one is pretty general, use it in lots of places
 # TODO to make the nano kernel smaller
 nano_er:
-    CRETURN
     cclearlo    EN11(c3,c4,c5,c6,c7,c8,c9,c10,c13,c14,c15)
+    CRETURN
 
 ############################################
 # Some stuff used by the exception vectors #

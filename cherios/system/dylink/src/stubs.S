@@ -141,6 +141,7 @@
 .endmacro
 
 .macro STUB_END name
+    .p2align 3
     .end \name
 .endmacro
 
@@ -196,8 +197,8 @@ sync
 DOMAIN_CHANGE ctlp, callable_taken, callable_ready, 0
 
 cclearhi    0                                       # TODO all argument regs (not c3) and tmp regs and stacks etc
-ccall       cra, crd, 2
 cclearlo    0                                       # TODO
+ccall_slotless cra, crd, 2
 
 
 STUB_END entry_stub
@@ -232,8 +233,7 @@ STUB_END plt_stub
 
 STUB_BEGIN plt_common_single_domain
 
-ccall           $c1, $c2, 2
-nop
+ccall_slotless $c1, $c2, 2
 
 STUB_END plt_common_single_domain
 
@@ -248,14 +248,13 @@ cincoffset      csp, csp, -CAP_SIZE
 csc             cra, $zero, (0)(csp)
 csc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 csc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
-ccall           $c1, $c2, 2
-cgetpcc         cra
+ccall_l         $c1, $c2, 2, cra
 clc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 clc             cra, $zero, (0)(csp)
 clc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
-ccall           cra, crd, 2
 cincoffset      csp, csp, CAP_SIZE
+ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_complete_trusting
 
@@ -272,8 +271,7 @@ csc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 csc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 sync
 DOMAIN_CHANGE ctlp, callable_taken, callable_ready, 1
-ccall           $c1, $c2, 2
-cgetpcc         cra
+ccall_l         $c1, $c2, 2, cra
 
 1:
 DOMAIN_CAS ctlp, callable_ready, callable_taken, -1
@@ -281,8 +279,8 @@ clc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 clc             cra, $zero, (0)(csp)
 clc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
-ccall           cra, crd, 2
 cincoffset      csp, csp, CAP_SIZE
+ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_trusting
 
@@ -340,7 +338,7 @@ SAVE_R  $s6
 SAVE_R  $s7
 
 cgetpcc         cra
-cincoffset      cra, cra, (4 * 14)
+cincoffset      cra, cra, (4 * 15)
 
 clc             cds,    $zero,  CTLP_OFFSET_CDS(ctlp)                                        # seal our return closure
 cincoffset      csp,    csp,    (CLO_SIZE - REG_SIZE)
@@ -356,8 +354,8 @@ daddiu          $at, $at, ((callable_ready - callable_taken) + (1 * 256))
 csd             $at, $zero, 0(ctlp)                                                  # set type of ctlp
 
 cclearhi        0b0000011111111001                                                  # this passes c17/c18
-ccall           $c1, $c2, 2
 cclearlo        0b1111110000000001                                                  # this passes c1/c2 and arg regs
+ccall_slotless  $c1, $c2, 2
 
 # Here is the return code
 
@@ -418,7 +416,7 @@ beqz            $t0,    2b
 clc             ctmp,   $zero,  CTLP_OFFSET_CUSP(ctlp)
 # -MIGHT- need to store csp and cusp if someone got the address of this from another function. unsure.
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
-ccall           cra,    crd, 2
 csc             ctmp,   $zero,  CSP_OFF_NEXT(cusp)
+ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_untrusting

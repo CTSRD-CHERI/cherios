@@ -59,5 +59,5 @@ clc	$c18, $zero, (RET_T_size + CAP_SIZE)($c11)
 clc	$c3, $zero, 0($c11)
 cld    $v0, $zero, (RET_T_v0_offset)($c11)
 cld    $v1, $zero, (RET_T_v1_offset)($c11)
-ccall  $c17, $c18, 2
 cincoffset $c11, $c11, ((2 * CAP_SIZE) + RET_T_size)
+ccall_slotless  $c17, $c18, 2

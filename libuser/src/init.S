@@ -187,5 +187,4 @@ start_common:
 
 	get_sym_val_array $c1, kernel_if, c, $c17, $zero, syscall_act_terminate_offset
 	# We don't bother setting up a return as this will terminate us
-	ccall   $c1, $c2, 2
-	nop
+	ccall_slotless   $c1, $c2, 2
