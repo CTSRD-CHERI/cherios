@@ -32,6 +32,7 @@
 #define CHERIOS_MMAP_H_H
 
 #include "mman.h"
+#include "stdio.h"
 
 #define DUMP_INTERVAL   0 // 1000000000ULL
 
@@ -177,6 +178,11 @@ extern vpage_range_desc_table_t desc_table_root;
 
 static inline mop_internal_t* unseal_mop(mop_t mop) {
 
+    if(!cheri_gettag(mop)) {
+        CHERI_PRINT_CAP(mop);
+        CHERI_PRINT_CAP(mop_sealing_cap);
+    }
+
     mop_internal_t* unsealed = (mop_internal_t*)cheri_unseal_2(mop, mop_sealing_cap);
     if(unsealed == NULL) return NULL;
 
@@ -198,7 +204,7 @@ extern act_kt commit_act;
 extern act_kt revoke_act;
 extern act_kt clean_act;
 
-size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size);
+size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_request_flags flags);
 
 void revoke(void);
 void revoke_finish(res_t res);

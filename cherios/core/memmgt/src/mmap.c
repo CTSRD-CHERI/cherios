@@ -1184,7 +1184,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         // TODO think of a good default for how pages to allocate contiguously for commit now
         if(npages > 1) {
             size_t contig_base = vmem_commit_vmem_range(page_n << UNTRANSLATED_BITS, npages,
-                                                        (flags & COMMIT_DMA) ? npages : 0x10);
+                                                        (flags & COMMIT_DMA) ? npages : 0x10, flags);
             if (phy_base) *phy_base = contig_base;
         } else if(phy_base) {
             *phy_base = virtual_to_physical(page_n << UNTRANSLATED_BITS) + RES_META_SIZE;

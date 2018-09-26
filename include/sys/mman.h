@@ -73,6 +73,7 @@ typedef enum mem_request_flags {
     ALIGN_TOP = 1,
     COMMIT_NOW = 2,
     COMMIT_DMA = 4,
+    COMMIT_UNCACHED = 8 // Only currently used with commit now as tracking would otherwise need additional plumbing
 } mem_request_flags;
 
 /* 'You' is defined by a system given token "memory ownership principle" (mop). You must quote this to the system.
@@ -152,4 +153,49 @@ void mmap_based_free(capability c, Elf_Env* env);
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);
 
 int munmap(void *addr, size_t length);
+
+typedef enum {
+    PHY_HANDLE_NONE = 0,
+    PHY_HANDLE_SOP = 1,
+    PHY_HANDLE_EOP = 2,
+} phy_handle_flags;
+
+typedef int phy_handle_func(capability arg, phy_handle_flags flags, size_t phy_addr, size_t length);
+
+static inline int for_each_phy(capability arg, phy_handle_flags flags, phy_handle_func* func, char* addr, size_t length) {
+    addr = cheri_setbounds(addr, length); // Force an exception here
+
+    int num = 0;
+    // This breaks the virtual range into (maybe many) physically contiguous block
+    size_t start_v = (size_t)addr;
+    size_t start_p = mem_paddr_for_vaddr(start_v);
+
+    size_t conti_len = UNTRANSLATED_PAGE_SIZE - (start_v & (UNTRANSLATED_PAGE_SIZE-1));
+    size_t conti_v = start_v + conti_len;
+    // The length that is definately contiguous
+    while (conti_len < length) {
+        // check where conti_v is
+        size_t check_p = mem_paddr_for_vaddr(conti_v);
+        if(check_p == start_p+conti_len) {
+            // Last page was physically contiguous to the last
+            conti_len += UNTRANSLATED_PAGE_SIZE;
+        } else {
+            // Break here
+            num ++;
+            int res = func(arg, flags &~PHY_HANDLE_EOP, start_p, conti_len);
+            flags = flags & ~PHY_HANDLE_SOP;
+            if(res != 0) return res;
+            length-=conti_len;
+            conti_len = UNTRANSLATED_PAGE_SIZE;
+            start_p = check_p;
+        }
+        conti_v += UNTRANSLATED_PAGE_SIZE;
+    }
+
+    int res = func(arg, flags, start_p, length);
+    if(res != 0) return res;
+
+    return num+1;
+}
+
 #endif // SYS_MMAN_H

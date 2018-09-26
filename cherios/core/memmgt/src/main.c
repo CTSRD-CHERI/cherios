@@ -115,9 +115,9 @@ void revoke_finish(res_t res) {
     message_send(0, 0, 0, 0, res, NULL, NULL, NULL, general_act, SEND, 11);
 }
 
-size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size) {
+size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_request_flags flags) {
 	assert(commit_act != NULL);
-	return message_send(addr, pages, block_size, 0, NULL, NULL, NULL, NULL, commit_act, SYNC_CALL, 12);
+	return message_send(addr, pages, block_size, flags, NULL, NULL, NULL, NULL, commit_act, SYNC_CALL, 12);
 }
 
 static void revoke_worker_start(register_t arg, capability carg) {

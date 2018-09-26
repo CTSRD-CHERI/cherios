@@ -140,7 +140,7 @@ void pmem_break_page_to(size_t page_n, size_t len) {
 }
 
 size_t pmem_get_valid_page_entry(size_t page_n) {
-    assert(page_n < TOTAL_PHY_PAGES);
+    assert_int_ex(page_n, <, TOTAL_PHY_PAGES);
 
     if(book[page_n].len != 0) return page_n;
 

@@ -43,11 +43,13 @@
 
 #define TLB_FLAGS_DEFAULT                               (TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT |\
                                                         TLB_ENTRY_VALID | TLB_ENTRY_DIRTY | TLB_ENTRY_GLOBAL)
+#define TLB_FLAGS_UNCACHED                              (TLB_ENTRY_CACHE_ALGORITHM_UNCACHED |\
+                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY | TLB_ENTRY_GLOBAL)
 
 mop_t	mem_minit(capability mop_sealing_cap);
 
 void vmem_commit_vmem(act_kt activation, char* name, size_t addr);
-size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size);
+size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_request_flags flags);
 
 /* Allocates a page table, but finds a physical page for you */
 ptable_t vmem_create_table(ptable_t parent, register_t index, int level);

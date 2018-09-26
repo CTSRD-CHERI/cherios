@@ -128,7 +128,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
     // TODO bump counters on commits for MOPs
 }
 
-size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size) {
+size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_request_flags flags) {
     assert(worker_id == 0);
 
     pages <<=1; // How many physical pages this will be
@@ -210,7 +210,7 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size) {
         }
 
         assert(book[phy_pagen].status == page_unused);
-        create_mapping(phy_pagen, l2, ndx, TLB_FLAGS_DEFAULT);
+        create_mapping(phy_pagen, l2, ndx, (flags & COMMIT_UNCACHED) ? TLB_FLAGS_UNCACHED : TLB_FLAGS_DEFAULT);
         assert(book[phy_pagen].status == page_mapped);
 
         in_block-=2;
