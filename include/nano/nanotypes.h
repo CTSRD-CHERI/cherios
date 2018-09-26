@@ -142,7 +142,7 @@
 
 #define PHY_RAM_SIZE                    (1024 * 1024 * 1024) // 1GB
 #define RAM_PRE_IO_END                  PHY_RAM_SIZE
-#define RAM_POST_IO_START               0x80000000
+#define RAM_POST_IO_START               0x80008000
 #define RAM_TAGS                        ((((PHY_RAM_SIZE + (1024 * 1024)) / (8 * CAP_SIZE)) + (PHY_PAGE_SIZE-1)) & ~(PHY_PAGE_SIZE-1))
 #endif
 
@@ -153,7 +153,7 @@
 #define TOTAL_IO_PAGES                  (IO_HOLE/PHY_PAGE_SIZE)
 #define TOTAL_HIGH_RAM_PAGES            ((PHY_RAM_SIZE - RAM_PRE_IO_END)/PHY_PAGE_SIZE)
 
-#define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS))
+#define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS) & 0xFFFFFFFF)
 
 
 /* Physical page records */
