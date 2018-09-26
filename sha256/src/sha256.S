@@ -48,7 +48,7 @@
 
 #define K_CAP       $c5
 
-# Message schedule. This is actually one big shift register of words, each register holds 2 '
+# Message schedule. This is actually one big shift register of words, each register holds 2 words
 
 #define w0_1        $t0
 #define w2_3        $t1
@@ -84,6 +84,9 @@
 
 #define rot_tmp     $s4
 
+# How many bytes we have processed
+#define ctr    $s5
+
 # The registers for the un-permutated output. Can be duplicates
 
 #define out_h0_1    $v0
@@ -94,6 +97,7 @@
 .data
 
 .align 5
+.global k_words
 k_words:
 .word	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5
 .word	0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5
@@ -135,11 +139,6 @@ sha256_copy:
 sha256:
 #endif
 
-
-###############################################
-# Create a capability to the k_words in K_CAP #
-###############################################
-
 # save the registers we use
 
 inttoc      $c6, $s0
@@ -147,6 +146,7 @@ inttoc      $c7, $s1
 inttoc      $c8, $s2
 inttoc      $c9, $s3
 inttoc      $c13, $s4
+inttoc      $c12, $s5 # I _think_ this is safe? If the caller expects c12 to still be this function, just restore at the end
 
 ##########
 # Init H #
@@ -157,107 +157,162 @@ dli         h1_5, 0xbb67ae859b05688c
 dli         h2_6, 0x3c6ef3721f83d9ab
 dli         h3_7, 0xa54ff53a5be0cd19
 
-###########################################################################################################################
-# Load first (partial) block. Put length in first two words, then pad with 000...01 to align. Then maybe load a few words #
-###########################################################################################################################
-
-.set align_mask, (64-1)
-
-
-# ***NOTE*** We are assuming here the message is a multiple of TWO WORDS. It makes lots of logic easier.
-
-daddiu      tmp0, len_arg, (16 + align_mask) # We will need at least 4 words extra. 2 for the length field, 2 for the 0000001 piece.
-dli         tmp1, ~(align_mask)
-and        tmp1, tmp0, tmp1                # Total length of our padded message
-dsubu       tmp0, tmp1, len_arg             # Non input bytes. First 2 words are the length. Then zeroes. Then 2 words storing a 1.
-move        len_arg, tmp1                   # message length is now with padding
-
-move        w0_1, len_arg
-li          w2_3, 0
-li          w4_5, 0
-li          w6_7, 0
-li          w8_9, 0
-li          w10_11, 0
-li          w12_13, 0
-li          w14_15, 0
-
-# Get pcc NEEDS to be 16 bytes before the start of the table
-cgetpcc     K_CAP                           # -16: 8 for the length. 8 for a '1'. The rest are zeros (done above)
-cincoffset  K_CAP, K_CAP, tmp0
-cjr         K_CAP
-dneg        tmp1, tmp0                      # hoisted from set1_table_end
-
-set1_table_start: # each of these is 8 bytes long. So shift by 3 to get correct index
-
-b           set1_table_end
-li          w2_3, 1
-b           set1_table_end
-li          w4_5, 1
-b           set1_table_end
-li          w6_7, 1
-b           set1_table_end
-li          w8_9, 1
-b           set1_table_end
-li          w10_11, 1
-b           set1_table_end
-li          w12_13, 1
-b           set1_table_end
-li          w14_15, 1
-
-set1_table_end:
-
-
-cincoffset  IN_CAP, IN_CAP, tmp1                  # Offset by non input bytes so that the cursour is aligned.
-#ifdef SHA_COPY
-cincoffset  OUT_CAP, OUT_CAP, tmp1
-#else
-dsrl        tmp0, tmp0, 1                           # Each entry half the size
-daddiu      tmp0, tmp0, 8                           # Offset of cgetpcc still -16 bytes from table
-#endif
-
-cgetpcc     K_CAP
-cincoffset  K_CAP, K_CAP, tmp0
-cjr          K_CAP
-nop
-
-chunk_table_begin:
-#ifdef SHA_COPY
-cld         w4_5, $zero, 0x10(IN_CAP)
-csd         w4_5, $zero, 0x10(OUT_CAP)
-cld         w6_7, $zero, 0x18(IN_CAP)
-csd         w6_7, $zero, 0x18(OUT_CAP)
-cld         w8_9, $zero, 0x20(IN_CAP)
-csd         w8_9, $zero, 0x20(OUT_CAP)
-cld         w10_11, $zero, 0x28(IN_CAP)
-csd         w10_11, $zero, 0x28(OUT_CAP)
-cld         w12_13, $zero, 0x30(IN_CAP)
-csd         w12_13, $zero, 0x30(OUT_CAP)
-cld         w14_15, $zero, 0x38(IN_CAP)
-csd         w14_15, $zero, 0x38(OUT_CAP)
-#else
-cld         w4_5, $zero, 0x10(IN_CAP)
-cld         w6_7, $zero, 0x18(IN_CAP)
-cld         w8_9, $zero, 0x20(IN_CAP)
-cld         w10_11, $zero, 0x28(IN_CAP)
-cld         w12_13, $zero, 0x30(IN_CAP)
-cld         w14_15, $zero, 0x38(IN_CAP)
-#endif
 
 #ifdef SHA_COPY
 .set cheri_sysregs_accessible
-dla         tmp0, k_words
-dli         tmp1, 64 * 4
-csetoffset  K_CAP, $kdc, tmp0
-csetbounds  K_CAP, K_CAP, tmp1
+#endif
+
+li      ctr, 0
+move    tmp1, len_arg
+b       load_chunk
+daddiu      tmp0, tmp1, -(0x40-1)   # hoisted from process chunk
+
+##########################################################
+# Add to hash values. Reset K. Load next chunk or finish #
+##########################################################
+
+chunk_end:
+
+.macro VECTOR_ADD A, B, tmp0, tmp1, mask
+    and     \tmp0, \A, \mask
+    and     \tmp1, \B, \mask
+    addu    \A, \A, \B
+    daddu   \tmp0, \tmp0, \tmp1
+    TRUNCATE32 \A
+    or      \A, \A, \tmp0
+.endm
+
+dli         tmp2, ~((1 << 32) - 1)
+VECTOR_ADD  h0_4, ae, tmp0, tmp1, tmp2
+VECTOR_ADD  h1_5, bf, tmp0, tmp1, tmp2
+VECTOR_ADD  h2_6, cg, tmp0, tmp1, tmp2
+VECTOR_ADD  h3_7, dh, tmp0, tmp1, tmp2
+
+# tmp1 is how many bytes are left. We must have processed at least 16 more than there were
+
+dsubu           tmp1, len_arg, ctr
+daddiu          tmp0, tmp1, 16-1
+bltz            tmp0, hash_finish
+daddiu          tmp0, tmp1, -(0x40-1)  # hoisted from process chunk
+
+###################################
+# Load a chunk (and maybe pad it) #
+###################################
+
+load_chunk:
+
+# tmp1 is how many bytes are left to process
+bgtz            tmp0, whole_chunk #  if there are less than 0x40 bytes left we are padding
+
+
+# Pad with 0s
+
+li              w0_1, 0
+li              w2_3, 0
+li              w4_5, 0
+li              w6_7, 0
+li              w8_9, 0
+li              w10_11, 0
+li              w12_13, 0
+
+# Put the original length at the end
+bltz            tmp1, process_chunk               # edge case where we padded the previous block
+dsll            w14_15, len_arg, 3                # 8 bits per byte. Length is in bits.
+
+
+# Append a trailing 1 (is allowed to overwrite the length, in which case we will do this again on next iter)
+dli             tmp3, (1 << 63)
+
+# Compute jump to set a 1
+daddiu          tmp0, tmp1, 16
+cgetpcc         K_CAP
+cincoffset      K_CAP, K_CAP, tmp0
+cjr             K_CAP
+neg             tmp0, tmp1
+b               set1_table_end              # tmp1 = 0
+move            w0_1, tmp3
+b               set1_table_end              # tmp1 = 8
+move            w2_3, tmp3
+b               set1_table_end              # tmp1 = 0x10...
+move            w4_5, tmp3
+b               set1_table_end
+move            w6_7, tmp3
+b               set1_table_end
+move            w8_9, tmp3
+b               set1_table_end
+move            w10_11, tmp3
+b               set1_table_end
+move            w12_13, tmp3
+nop                                         # tmp1 = 0x38 (overwrites length, we will put length in next block)
+move            w14_15, tmp3
+set1_table_end:
+
+
+# Compute jump to load some bytes
+
+#ifdef SHA_COPY
+daddiu          tmp0, tmp0, (20 * 4)
+#else
+dsra            tmp0, tmp0, 1
+daddiu          tmp0, tmp0, (12 * 4)
+#endif
+
+cgetpcc         K_CAP
+cincoffset      K_CAP, K_CAP, tmp0
+cjr             K_CAP
+nop
+
+whole_chunk:
+
+#ifdef SHA_COPY
+
+cld         w14_15, ctr, 0x38(IN_CAP)
+csd         w14_15, ctr, 0x38(OUT_CAP)
+cld         w12_13, ctr, 0x30(IN_CAP)   # tmp1 = 0x38
+csd         w12_13, ctr, 0x30(OUT_CAP)
+cld         w10_11, ctr, 0x28(IN_CAP)
+csd         w10_11, ctr, 0x28(OUT_CAP)
+cld         w8_9, ctr, 0x20(IN_CAP)
+csd         w8_9, ctr, 0x20(OUT_CAP)
+cld         w6_7, ctr, 0x18(IN_CAP)
+csd         w6_7, ctr, 0x18(OUT_CAP)
+cld         w4_5, ctr, 0x10(IN_CAP)
+csd         w4_5, ctr, 0x10(OUT_CAP)
+cld         w2_3, ctr, 0x08(IN_CAP)
+csd         w2_3, ctr, 0x08(OUT_CAP)
+cld         w0_1, ctr, 0x00(IN_CAP)     # tmp1 = 8
+csd         w0_1, ctr, 0x00(OUT_CAP)
+                                        # tmp1 = 0
+#else
+
+cld         w14_15, ctr, 0x38(IN_CAP)
+cld         w12_13, ctr, 0x30(IN_CAP)   # tmp1 = 0x38
+cld         w10_11, ctr, 0x28(IN_CAP)
+cld         w8_9, ctr, 0x20(IN_CAP)
+cld         w6_7, ctr, 0x18(IN_CAP)
+cld         w4_5, ctr, 0x10(IN_CAP)
+cld         w2_3, ctr, 0x08(IN_CAP)
+cld         w0_1, ctr, 0x00(IN_CAP)     # tmp1 = 8
+                                        # tmp1 = 0
+#endif
+
+############################################
+# Perform a hash of the values in w[0..16] #
+############################################
+
+process_chunk:
+
+###############################################
+# Create a capability to the k_words in K_CAP #
+###############################################
+
+// We need to keep getting this because I clobbered K_CAP
+#ifdef SHA_COPY
+clc         K_CAP, $zero, (2 * CAP_SIZE)($idc) // Ugly constant
 #else
 clcbi       K_CAP, %captab20(k_words)($c25)
 #endif
 
-##############
-# Hash chunk #
-##############
-
-process_chunk:
     move            ae, h0_4
     move            bf, h1_5
     move            cg, h2_6
@@ -313,10 +368,10 @@ dsrl    tmp2, w2_3, 32
 HASH_ROUND cg, dh, ae, bf, 8, tmp2
 HASH_ROUND bf, cg, dh, ae, 12 w2_3
 
-daddiu      len_arg, -4
-andi        tmp0, len_arg, (64-1)
+daddiu      ctr, 4
+andi        tmp0, ctr, (64-1)
 
-beqz        tmp0, load_chunk
+beqz        tmp0, chunk_end
 
 # Shift W down by 4.
 
@@ -329,8 +384,9 @@ move        w0_1, w4_5
 move        w4_5, w8_9
 move        w8_9, w12_13
 
-daddiu      tmp0, tmp0, -16
-bltz        tmp0, continue_chunk # skip calculating new w values
+# When tmp0 is 52 or higher (i.e. 12 rounds left) we already have the message schedule
+daddiu      tmp0, tmp0, -51
+bgtz        tmp0, continue_chunk # skip calculating new w values
 cincoffset  K_CAP, K_CAP, (4 * 4)       # used 4 words from K
 
 
@@ -338,7 +394,7 @@ cincoffset  K_CAP, K_CAP, (4 * 4)       # used 4 words from K
 .macro CALC_WINDOW _w16_17, _w0_1, _w2_3, _w8_9, _w10_11, _w14_15
     #w16_17 = w0_1 + w9_10 + s0:s0' + s1:s1'
     # dont use tmp3, its already holding something
-
+    # this clobers _w0_1
     dsrl    tmp1, \_w14_15,32       #s1(w14)
    Mrotr    \_w16_17, \_w0_1, 7          #s0(w1)
    Mrotr    tmp0, tmp1, 17          #s1(w14)
@@ -383,59 +439,6 @@ nop
 
 # update message schedule and repeat a total of 64/4 = 16 times
 
-##########################################################
-# Add to hash values. Reset K. Load next chunk or finish #
-##########################################################
-
-load_chunk:
-
-.macro VECTOR_ADD A, B, tmp0, tmp1, mask
-    and     \tmp0, \A, \mask
-    and     \tmp1, \B, \mask
-    addu    \A, \A, \B
-    daddu   \tmp0, \tmp0, \tmp1
-    TRUNCATE32 \A
-    or      \A, \A, \tmp0
-.endm
-
-dli         tmp2, ~((1 << 32) - 1)
-VECTOR_ADD  h0_4, ae, tmp0, tmp1, tmp2
-VECTOR_ADD  h1_5, bf, tmp0, tmp1, tmp2
-VECTOR_ADD  h2_6, cg, tmp0, tmp1, tmp2
-VECTOR_ADD  h3_7, dh, tmp0, tmp1, tmp2
-
-beqz        len_arg, hash_finish
-csetoffset  K_CAP, K_CAP, $zero
-cincoffset  IN_CAP, IN_CAP, 64
-cincoffset  OUT_CAP, OUT_CAP, 64
-
-cld         w0_1, $zero, 0x00(IN_CAP)
-cld         w2_3, $zero, 0x08(IN_CAP)
-cld         w4_5, $zero, 0x10(IN_CAP)
-cld         w6_7, $zero, 0x18(IN_CAP)
-cld         w8_9, $zero, 0x20(IN_CAP)
-cld         w10_11, $zero, 0x28(IN_CAP)
-cld         w12_13, $zero, 0x30(IN_CAP)
-
-#ifdef SHA_COPY
-cld         w14_15, $zero, 0x38(IN_CAP)
-
-csd         w0_1, $zero, 0x00(OUT_CAP)
-csd         w2_3, $zero, 0x08(OUT_CAP)
-csd         w4_5, $zero, 0x10(OUT_CAP)
-csd         w6_7, $zero, 0x18(OUT_CAP)
-csd         w8_9, $zero, 0x20(OUT_CAP)
-csd         w10_11, $zero, 0x28(OUT_CAP)
-csd         w12_13, $zero, 0x30(OUT_CAP)
-
-b           process_chunk
-csd         w14_15, $zero, 0x38(OUT_CAP)
-
-#else
-b           process_chunk
-cld         w14_15, $zero, 0x38(IN_CAP)
-#endif
-
 hash_finish:
 
 dli         tmp0, ~((1 << 32) - 1)
@@ -460,6 +463,7 @@ ctoint      $s0, $c6
 ctoint      $s1, $c7
 ctoint      $s2, $c8
 ctoint      $s3, $c9
+ctoint      $s5, $c12
 
 #ifdef SHA_COPY
 cjr         $c17
@@ -472,8 +476,8 @@ ctoint      $s4, $c13
 csd         $v0, $zero, 0(OUT_CAP)
 csd         $v1, $zero, 8(OUT_CAP)
 csd         $t0, $zero, 16(OUT_CAP)
-ccall       $c17, $c18, 2
 csd         $t1, $zero, 24(OUT_CAP)
+CRETURN
 
 .end sha256
 #endif
