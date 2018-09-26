@@ -69,7 +69,8 @@
         ITEM(syscall_cond_cancel, void, (void), __VA_ARGS__)\
         ITEM(syscall_now, register_t, (void), __VA_ARGS__)\
         ITEM(syscall_vmem_notify, void, (act_kt waiter, int suggest_switch), __VA_ARGS__)\
-        ITEM(syscall_change_priority, void, (act_control_kt ctrl, enum sched_prio priority), __VA_ARGS__)
+        ITEM(syscall_change_priority, void, (act_control_kt ctrl, enum sched_prio priority), __VA_ARGS__)\
+        ITEM(syscall_dump_tlb, void, (void), __VA_ARGS__)
 
 // Found by trial and error
 #ifdef HARDWARE_qemu

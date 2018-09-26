@@ -271,6 +271,11 @@ static inline void dump_tlb() {
     printf("\n\n");
 }
 
+void kernel_dump_tlb(void) {
+	capability all_powerfull = obtain_super_powers(); // Super magic wow!
+	dump_tlb();
+}
+
 void regdump(int reg_num, act_t* kernel_curr_act) {
     // Note, dumping will not be possible when we enforce things properly
     // For now we use the obtain super powers to make it possible.

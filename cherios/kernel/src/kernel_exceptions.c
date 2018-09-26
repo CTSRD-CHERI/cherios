@@ -60,7 +60,7 @@ static void kernel_exception_capability(register_t ccause, act_t* kernel_curr_ac
 	        kernel_curr_act->name,
 		exception.cause, enum_cap_cause_exception_t_tostring(exception.cause), exception.reg_num);
 
-	regdump(exception.reg_num, NULL);
+	regdump(exception.reg_num, kernel_curr_act);
 	kernel_freeze();
 }
 
@@ -69,7 +69,7 @@ static void kernel_exception_data(register_t excode, act_t* kernel_curr_act, siz
 	exception_printf(KRED"Data abort type %ld, BadVAddr:0x%lx in %s"KRST"\n",
 	       excode, badvaddr,
 	       kernel_curr_act->name);
-	regdump(-1, NULL);
+	regdump(-1, kernel_curr_act);
 	kernel_freeze();
 }
 
@@ -77,7 +77,7 @@ static void kernel_exception_trap(act_t* kernel_curr_act) __dead2;
 static void kernel_exception_trap(act_t* kernel_curr_act) {
 	exception_printf(KRED"trap in %s"KRST"\n"
 					 , kernel_curr_act->name);
-	regdump(-1, NULL);
+	regdump(-1, kernel_curr_act);
 	kernel_freeze();
 }
 
@@ -85,7 +85,7 @@ static void kernel_exception_unknown(register_t excode, act_t* kernel_curr_act) 
 static void kernel_exception_unknown(register_t excode, act_t* kernel_curr_act) {
 	exception_printf(KRED"Unknown exception type '%ld' in  %s"KRST"\n",
 	       excode, kernel_curr_act->name);
-	regdump(-1, NULL);
+	regdump(-1, kernel_curr_act);
 	kernel_freeze();
 }
 
@@ -94,12 +94,12 @@ static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act);
 static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 	if(memgt_ref == NULL) {
 		exception_printf(KRED"Virtual memory exception (%lx) before memmgt created\n"KRST, badvaddr);
-        regdump(-1, NULL);
+        regdump(-1, kernel_curr_act);
         kernel_freeze();
 	}
 	if(kernel_curr_act == memgt_ref) {
 		exception_printf(KRED"Virtual memory exception in memmgt is not allowed\n"KRST);
-		regdump(-1, NULL);
+		regdump(-1, kernel_curr_act);
 		kernel_freeze();
 	}
 
@@ -134,11 +134,6 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
         get_last_exception(&ex_info);
 
-        // TODO I figure this is hardwares fault. Remove when bug is fixed.
-        if(!cheri_gettag(&sched_get_current_act)) {
-            kernel_printf("Has lost tag!!!\n will crash\n");
-        }
-
         act_t* kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
 
         if(ex_info.victim_context != own_context) {
@@ -165,7 +160,7 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
             case MIPS_CP0_EXCODE_SYSCALL:
                 exception_printf(KRED"Synchronous syscalls now use the ccall interface"KRST"\n");
-                regdump(-1, NULL);
+                regdump(-1, kernel_curr_act);
                 kernel_freeze();
                 break;
 

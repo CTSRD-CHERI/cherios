@@ -155,6 +155,8 @@ int	act_revoke(act_control_t * ctrl);
 int	act_terminate(act_control_t * ctrl);
 capability act_seal_identifier(capability identifier);
 
+// Only possible while debugging
+void kernel_dump_tlb(void);
 void	regdump(int reg_num, act_t* act);
 
 void setup_syscall_interface(kernel_if_t* kernel_if);

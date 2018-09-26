@@ -40,6 +40,12 @@
 
 #define DECLARE_WITH_CD(A, B) A B; A __cross_domain_## B; A __cross_domain_trusted_## B
 
+DECLARE_WITH_CD(void, kernel_syscall_dump_tlb(void));
+void kernel_syscall_dump_tlb(void) {
+	kernel_dump_tlb();
+}
+
+
 DECLARE_WITH_CD(void, kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority));
 void kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority) {
 	if(priority > PRIO_HIGH) return;
