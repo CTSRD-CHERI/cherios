@@ -95,8 +95,15 @@ static void free_send(net_session* session) {
 }
 
 int lwip_driver_init(net_session* session) {
-    // Setup queues
+
     cap_pair pair;
+
+    // Get MMIO
+    get_physical_capability(VIRTIO_MMIO_NET_BASE, VIRTIO_MMIO_SIZE, 1, 0, own_mop, &pair);
+
+    session->mmio = (lwip_driver_mmio_t*)pair.data;
+
+    // Setup queues
 #define GET_A_PAGE (rescap_take(mem_request(0, MEM_REQUEST_MIN_REQUEST, NONE, own_mop).val, &pair), pair.data)
 
     assert(is_power_2(QUEUE_SIZE));
@@ -133,15 +140,19 @@ int lwip_driver_init(net_session* session) {
 
     alloc_recv(session);
 
+    session->irq = VIRTIO_MMIO_NET_IRQ;
+    syscall_interrupt_register(session->irq, act_self_ctrl, -1, 0, session);
+
     return 0;
 }
 
 int lwip_driver_init_postup(net_session* session) {
     virtio_device_ack_used(session->mmio);
+    syscall_interrupt_enable(session->irq, act_self_ctrl);
     return 0;
 }
 
-void lwip_driver_handle_interrupt(net_session* session) {
+void lwip_driver_handle_interrupt(net_session* session, register_t arg, register_t irq) {
     free_send(session);
 
     // Then process incoming packets and pass them up to lwip
@@ -169,6 +180,9 @@ void lwip_driver_handle_interrupt(net_session* session) {
 
     if(any_in) alloc_recv(session);
     virtio_device_ack_used(session->mmio);
+
+    // Renable interrupts
+    syscall_interrupt_enable((int)irq, act_self_ctrl);
 }
 
 err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {

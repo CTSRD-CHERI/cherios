@@ -124,12 +124,12 @@ err_t netsession_init(struct netif* nif) {
 
     session->dma_arena = new_arena(1);
 
-    lwip_driver_init(session);
+    int res = lwip_driver_init(session);
 
-    // session->RECV = 0;
-    // session->RECV_RDY = 0;
-
-    syscall_interrupt_register(session->irq, act_self_ctrl, -1, 0, nif);
+    if(res < 0) {
+        printf("LWIP: Got error: %d trying to init device\n", res);
+        return ERR_IF;
+    }
 
     return 0;
 }
@@ -159,7 +159,15 @@ struct custom_for_tcp* alloc_custom(net_session* session) {
 
     c->as_pbuf.custom.custom_free_function = &free_malloc_pbuf;
 
-    pbuf_alloced_custom(PBUF_RAW, CUSTOM_BUF_PAYLOAD_SIZE, PBUF_RAM, &c->as_pbuf.custom, c->as_pbuf.buf, TCP_MSS+PBUF_TRANSPORT);
+    char* buffer = c->as_pbuf.buf;
+
+#ifdef FORCE_PAYLOAD_CACHE_ALIGN
+    size_t align = (CUSTOM_ALIGN - ((size_t)buffer)) & (CUSTOM_ALIGN - 1);
+    buffer += align;
+    buffer = cheri_setbounds(buffer, CUSTOM_BUF_PAYLOAD_SIZE);
+#endif
+
+    pbuf_alloced_custom(PBUF_RAW, CUSTOM_BUF_PAYLOAD_SIZE, PBUF_RAM, &c->as_pbuf.custom, buffer, CUSTOM_BUF_PAYLOAD_SIZE);
 
     return c;
 }
@@ -190,18 +198,7 @@ int init_net(net_session* session, struct netif* nif) {
 
     lwip_driver_init_postup(session);
 
-    syscall_interrupt_enable(session->irq, act_self_ctrl);
-
     return 0;
-}
-
-void interrupt(struct netif* nif) {
-
-    net_session* session = nif->state;
-
-    lwip_driver_handle_interrupt(session);
-
-    syscall_interrupt_enable(session->irq, act_self_ctrl);
 }
 
 // Application (ack) -> TCP
@@ -564,9 +561,6 @@ int main(register_t arg, capability carg) {
     printf("LWIP Hello World!\n");
 
     net_session session;
-    session.irq = (uint8_t)arg;
-
-    session.mmio = (lwip_driver_mmio_t*)carg;
 
     inet_aton(CHERIOS_NET_MASK, &session.netmask.addr);
     inet_aton(CHERIOS_IP, & session.my_ip.addr);
@@ -636,7 +630,7 @@ int main(register_t arg, capability carg) {
                 msg_entry(1);
             } else {
                 fake_ints++;
-                interrupt(session.nif); // Fake an interrupt
+                lwip_driver_handle_interrupt(&session, 0, session.irq); // Fake an interrupt
             }
         }
 
@@ -693,5 +687,5 @@ int main(register_t arg, capability carg) {
 
 void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets};
 size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, interrupt};
+void (*ctrl_methods[]) = {NULL, lwip_driver_handle_interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);

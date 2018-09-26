@@ -54,6 +54,7 @@
 #else
 
 #include "a_api.h"
+#include "msgdma.h"
 #include "mega_core.h"
 
 #endif
@@ -63,6 +64,8 @@
 
 #define CHERIOS_NET_MASK    "255.255.255.0"
 #define CHERIOS_GATEWAY     "128.232.18.1"
+
+#define LOCAL
 
 #ifdef HARDWARE_qemu
 
@@ -74,9 +77,15 @@
     typedef virtio_mmio_map lwip_driver_mmio_t;
 #else
 
-    #define CHERIOS_IP          "128.232.18.245"
     #define CHERIOS_MAC         {0xba,0xdb,0xab,0xe5,0xca,0xfe}
+
+#ifdef LOCAL
+    #define CHERIOS_IP          "10.0.0.245"
+    #define CHERIOS_HOST        "cherios-fpga-local"
+#else
+    #define CHERIOS_IP          "128.232.18.245"
     #define CHERIOS_HOST        "cherios-fpga"
+#endif
 
     typedef mac_control lwip_driver_mmio_t;
 
@@ -107,38 +116,63 @@ typedef struct net_session {
     struct pbuf* pbuf_send_map[QUEUE_SIZE];
 #else
 
+#ifdef SGDMA
+#define SGDMA_DESCS_RX  0x20
+#define SGDMA_DESCS_TX  0x100
+
+    sgdma_mmio* sgdma_mmio;
+    msgdma_desc* tx_descs;
+    msgdma_desc* rx_descs;
+    struct pbuf* pbuf_tx_map[SGDMA_DESCS_TX];
+    struct pbuf* pbuf_rx_map[SGDMA_DESCS_RX];
+    size_t tx_free_index;
+    size_t tx_freed_index;
+    size_t rx_index;
+#endif
+
 #endif
 
 } net_session;
 
-#define DEFAULT_USES 64;
+#define DEFAULT_USES 64
+#define CUSTOM_BUF_PAYLOAD_SIZE (TCP_MSS + PBUF_TRANSPORT)
+#define FORCE_PAYLOAD_CACHE_ALIGN
+
+#ifdef FORCE_PAYLOAD_CACHE_ALIGN
+    #define CUSTOM_ALIGN L2_LINE_SIZE
+#else
+    #define CUSTOM_ALIGN 0
+#endif
 
 typedef struct custom_for_tcp {
+    uint64_t reuse;
+    size_t offset;
     union {
         struct {
             struct pbuf_custom custom;
-            char buf[TCP_MSS + PBUF_TRANSPORT];
+            char buf[CUSTOM_BUF_PAYLOAD_SIZE + CUSTOM_ALIGN]; // memory for payload. DO NOT ACCESS. Use custom->payload
         } as_pbuf;
         struct {
             struct custom_for_tcp* next_free;
         } as_free;
     };
-    uint64_t reuse;
-    size_t offset;
 } custom_for_tcp;
 
 
 // Generic things
 
-#define CUSTOM_BUF_PAYLOAD_SIZE (TCP_MSS + PBUF_TRANSPORT)
 struct custom_for_tcp* alloc_custom(net_session* session);
 
 // Per driver
 
 int lwip_driver_init(net_session* session);
 int lwip_driver_init_postup(net_session* session);
-void lwip_driver_handle_interrupt(net_session* session);
+void lwip_driver_handle_interrupt(net_session* session, register_t arg, register_t irq);
 err_t lwip_driver_output(struct netif *netif, struct pbuf *p);
 int lwip_driver_poll(net_session* session);
+
+#ifdef HARDWARE_fpga
+int altera_transport_init(net_session* session);
+#endif
 
 #endif //CHERIOS_LWIP_DRIVER_H

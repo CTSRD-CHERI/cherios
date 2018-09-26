@@ -58,10 +58,6 @@
 #ifdef HARDWARE_qemu
     #include "malta_virtio_mmio.h"
 
-    #define NET_MMIO_BASE   VIRTIO_MMIO_NET_BASE
-    #define NET_MMIO_SIZE   VIRTIO_MMIO_SIZE
-    #define NET_MMIO_IRQ    VIRTIO_MMIO_NET_IRQ
-
     #define BLK_MMIO_BASE   VIRTIO_MMIO_MMAP_BASE
     #define BLK_MMIO_SIZE   VIRTIO_MMIO_SIZE
     #define BLK_MMIO_IRQ    VIRTIO_MMIO_IRQ
@@ -69,11 +65,7 @@
     #define FS_ELF          "fatfs.elf"
     #define BLK_ELF         "virtio-blk.elf"
 #else
-    #include "mega_core.h"
     #include "alteraSD.h"
-    #define NET_MMIO_BASE   MEGA_CORE_BASE_0
-    #define NET_MMIO_SIZE   MEGA_CORE_SIZE
-    #define NET_MMIO_IRQ    MEGA_CORE_IRQ_RECV_0
 
     #define BLK_MMIO_BASE   ALTERA_SD_BASE
     #define BLK_MMIO_SIZE   ALTERA_SD_SIZE
@@ -140,7 +132,7 @@ init_elem_t init_list[] = {
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	1)
-    B_PENTRY(m_virtnet, "lwip.elf", NET_MMIO_IRQ, 1)
+    B_PENTRY(m_virtnet, "lwip.elf", 0, 1)
 	B_FENCE
 	B_DENTRY(m_fs,	FS_ELF	,		0,	1)
 	B_FENCE
@@ -229,9 +221,7 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             get_physical_capability(BLK_MMIO_BASE, BLK_MMIO_SIZE, 1, 0, own_mop, &pair);
             return pair.data;
         case m_virtnet:
-            if(NET_MMIO_BASE == 0) return NULL;
-            get_physical_capability(NET_MMIO_BASE, NET_MMIO_SIZE, 1, 0, own_mop, &pair);
-            return pair.data;
+            return NULL;
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;
             procman_arg.nano_if = info->nano_if;

@@ -127,6 +127,12 @@ else()
     message(FATAL_ERROR "Invalid choice for HARDWARE: ${HARDWARE}")
 endif()
 
+option(MSGDMA "Use altera MSGDMA for the ethernet" OFF)
+
+if("${MSGDMA}")
+    set(MSGDMA_FLAGS -DSGDMA)
+endif()
+
 # Configure Multicore
 
 set(SMP_CORES "1" CACHE STRING "Number of virtual cores for target system")
@@ -178,6 +184,7 @@ set(C_COMPILER_FLAGS
     -ffreestanding
     -O1 # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
+    ${MSGDMA_FLAGS}
     -fpic
 )
 set(C_WARNING_FLAGS

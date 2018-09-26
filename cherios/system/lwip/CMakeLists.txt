@@ -9,7 +9,11 @@ include_directories(${DRIVERS_DIR}/megacore/include)
 if("${HARDWARE}" STREQUAL "qemu")
     set(DRIVER_SRCS src/virtio/virtio_driver.c)
 elseif("${HARDWARE}" STREQUAL "fpga")
-    set(DRIVER_SRCS src/megacore/megacore_driver.c)
+    if("${MSGDMA}")
+        set(DRIVER_SRCS src/megacore/megacore_driver.c src/megacore/altera_sgdma.c)
+    else()
+        set(DRIVER_SRCS src/megacore/megacore_driver.c src/megacore/altera_fifo.c)
+    endif()
 endif()
 
 

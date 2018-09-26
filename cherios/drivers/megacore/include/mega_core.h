@@ -33,7 +33,13 @@
 #include "mips.h"
 #include "cdefs.h"
 
+#ifdef SGDMA
+#define MEGA_CORE_BASE_0 0x80007000         // 1024
+#else
 #define MEGA_CORE_BASE_0 0x7f007000         // 1024
+#endif
+
+
 #define MEGA_CORE_IRQ_RECV_0  1
 #define MEGA_CORE_IRQ_TRAN_0  2
 #define MEGA_CORE_BASE_1 0x7f005000
@@ -46,8 +52,6 @@
 #define MEGA_CORE_MAC_TRAN_CNTRL 0x420      // 32
 #define MEGA_CORE_MAC_RECV  0x500           // 8
 #define MEGA_CORE_MAC_RECV_CNTRL 0x520      // 32
-
-#define BIGBUFSIZE 1536
 
 typedef uint32_t MAC_DWORD; // This came from an intel doc so I assume...
 
@@ -182,19 +186,23 @@ typedef struct mac_control {
 
     // 0xC8
 
+#ifndef SGDMA
     volatile MAC_DWORD pad2[(MEGA_CORE_MAC_TRAN/4)-0xC9];
 
     ALTERA_FIFO tran_fifo;
 
     ALTERA_FIFO recv_fifo;
+#endif
 
 } mac_control;
 
 _Static_assert(__offsetof(mac_control,tx_cmd_stat) == (0x3A * 4), "Alignment check");
 _Static_assert(__offsetof(mac_control,rx_cmd_stat) == (0x3B * 4), "Alignment check");
+
+
+#ifndef SGDMA
 _Static_assert(__offsetof(mac_control,tran_fifo) == (MEGA_CORE_MAC_TRAN), "Alignment check");
 _Static_assert(__offsetof(mac_control,recv_fifo) == (MEGA_CORE_MAC_RECV), "Alignment check");
-
-void fast_boot_main(void);
+#endif
 
 #endif //FASTBOOT_MEGA_CORE_H
