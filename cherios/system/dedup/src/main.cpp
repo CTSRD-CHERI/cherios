@@ -39,6 +39,7 @@ extern "C" {
     #include "stdio.h"
     #include "namespace.h"
     #include "deduplicate.h"
+    #include "string.h"
 }
 
 
@@ -142,6 +143,42 @@ private:
 
 cuckoomap<0x100,0x10,entry_t, nullptr> map;
 
+void hash_test(void) {
+    // Check hashing is working...
+    uint64_t aligned[64];
+    sha256_hash hash;
+
+#define TEST_STR(len, str, W1, W2, W3, W4)  \
+    memcpy(aligned,str, len);               \
+    sha256(len, aligned, &hash);                \
+    assert_int_ex(hash.doublewords[0], ==, W1); \
+    assert_int_ex(hash.doublewords[1], ==, W2); \
+    assert_int_ex(hash.doublewords[2], ==, W3); \
+    assert_int_ex(hash.doublewords[3], ==, W4)
+
+
+    TEST_STR(56, "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq",
+             0x248D6A61D20638B8,
+             0xE5C026930C3E6039,
+             0xA33CE45964FF2167,
+             0xF6ECEDD419DB06C1
+    );
+
+    TEST_STR(0, "",
+             0xe3b0c44298fc1c14,
+             0x9afbf4c8996fb924,
+             0x27ae41e4649b934c,
+             0xa495991b7852b855
+    );
+
+    TEST_STR(0x10, "Hello World!----",
+             0x269e4f72239aee77,
+             0xa468234fe51600c1,
+             0x75690beee5d8a699,
+             0x460365f37df5b9a3
+    );
+}
+
 entry_t create(uint64_t* data, size_t length) {
 
     sha256_hash hash;
@@ -187,8 +224,11 @@ entry_t dont_create(uint64_t* data, size_t length) {
 
 
 extern "C" {
+
     int main(register_t arg, capability carg) {
         printf("Deduplicate Hello World!\n");
+
+        hash_test();
 
         namespace_register(namespace_num_dedup_service, act_self_ref);
 
