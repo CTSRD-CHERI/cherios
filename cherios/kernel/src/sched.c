@@ -343,6 +343,7 @@ static act_t * sched_picknext(sched_pool* pool) {
 	q->act_queue_current = (q->act_queue_current + 1) % q->act_queue_end;
 	act_t * next = q->act_queue[q->act_queue_current];
 
+	kernel_assert(next != NULL);
     kernel_assert(LEVEL_TO_NDX(next->priority) == index);
 	// FIXME: I am worried about this ordering. If deadlock. look here.
 	spinlock_acquire(&next->sched_access_lock);
@@ -369,7 +370,9 @@ static act_t * sched_picknext(sched_pool* pool) {
 // and whatever is currently scheduled does not have high priority
 void sched_got_int(act_t* act, uint8_t cpu_id) {
 	spinlock_acquire(&act->sched_access_lock);
-	int should_switch = (act->pool_id == cpu_id) && (sched_pools[cpu_id].current_act->priority != PRIO_IO);
+	int should_switch = (act->pool_id == cpu_id) &&
+			(sched_pools[cpu_id].current_act->priority != PRIO_IO) &&
+			(act->sched_status == sched_runnable);
 	spinlock_release(&act->sched_access_lock);
 	if(should_switch) {
 		sched_reschedule(act, 1);
