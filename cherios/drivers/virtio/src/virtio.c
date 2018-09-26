@@ -189,37 +189,24 @@ int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 ad
     return 0;
 }
 
+struct virtq_arg {
+    struct virtq *queue;
+    le16* free_head;
+    le16 *tail;
+    le16 flags;
+};
+
+int virtio_phy_handle_func(capability arg, phy_handle_flags flags, size_t phy_addr, size_t length) {
+    struct virtq_arg* virtq_args = (struct virtq_arg*)arg;
+    int res = virtio_q_chain_add(virtq_args->queue, virtq_args->free_head, virtq_args->tail, phy_addr, (le16)length, virtq_args->flags);
+    if(res != 0) return res; // Failed to add a link
+}
+
 int virtio_q_chain_add_virtual(struct virtq *queue, le16* free_head, le16 *tail, capability addr, le32 length, le16 flags) {
-    addr = cheri_setbounds(addr, length); // Force an exception here
-
-    int num = 0;
-    // This breaks the virtual range into (maybe many) physically contiguous block
-    size_t start_v = (size_t)addr;
-    size_t start_p = mem_paddr_for_vaddr(start_v);
-
-    size_t conti_len = UNTRANSLATED_PAGE_SIZE - (start_v & (UNTRANSLATED_PAGE_SIZE-1));
-    size_t conti_v = start_v + conti_len;
-    // The length that is definately contiguous
-    while (conti_len < length) {
-        // check where conti_v is
-        size_t check_p = mem_paddr_for_vaddr(conti_v);
-        if(check_p == start_p+conti_len) {
-            // Last page was physically contiguous to the last
-            conti_len += UNTRANSLATED_PAGE_SIZE;
-        } else {
-            // Break here
-            num ++;
-            int res = virtio_q_chain_add(queue, free_head, tail, start_p, (le16)conti_len, flags);
-            if(res != 0) return res; // Failed to add a link
-            length-=conti_len;
-            conti_len = UNTRANSLATED_PAGE_SIZE;
-            start_p = check_p;
-        }
-        conti_v += UNTRANSLATED_PAGE_SIZE;
-    }
-
-    int res = virtio_q_chain_add(queue, free_head, tail, start_p, (le16)length, flags);
-    if(res != 0) return res;
-
-    return num+1;
+    struct virtq_arg arg;
+    arg.flags = flags;
+    arg.queue = queue;
+    arg.free_head = free_head;
+    arg.tail = tail;
+    return for_each_phy((capability)&arg, PHY_HANDLE_NONE, &virtio_phy_handle_func, (char*)addr, length);
 }
