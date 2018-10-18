@@ -180,13 +180,6 @@ li  $zero, 0xdead
     .set local_ctr, local_ctr + \size
 .endm
 
-.macro local_init_var name, size, align
-    local_align \align
-    \name\()_label :
-    LOCAL_AT \name
-    .set local_ctr, local_ctr + \size
-.endm
-
 .macro END_LOCALS
     locals_end:
     .set locals_size, local_ctr

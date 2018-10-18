@@ -50,7 +50,7 @@ SECTIONS
 	    KEEP(*(.text))
 	} :text = 0
 
-	.data ALIGN(CAP_ALIGN): { *(.data) } : data = 0
+	.bss ALIGN(CAP_ALIGN): { *(.bss) }
 
     /DISCARD/ :
     {
@@ -58,8 +58,9 @@ SECTIONS
        *(.MIPS.abiflags)
        *(.pdr)
        *(.comment)
-       *(.bss)
+       *(.data)
        *(.got)
+       *(.cap_table_local)
     }
 }
 
@@ -67,5 +68,5 @@ PHDRS
 {
 	header PT_PHDR PHDRS ;
 	text PT_LOAD AT (__cached_exception_vector_xtlbrefill);
-	data PT_LOAD;
+	bss PT_LOAD;
 }

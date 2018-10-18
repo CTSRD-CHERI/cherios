@@ -92,13 +92,9 @@
 ####################################################################################################################
 
 # The small locals can be accessed from idc with a constant. The others need dli. The address you get is relative
-# to idc. If you want a global address to use name_label.
+# to idc. If you want a global address to use name_label. Boot guarantees these are all zero.
 
-# Fixme: This is really quite large, and is in .data not .bss. This makes the boot image massive and slows down boot.
-# Fixme: As our boot ensures all memory is zero on allocation, we should really move ALL of the locals stuff to .bss
- #Fixme: Currently only the register access table as non zero starting values. But thats a hack anyway!
-
-.data
+.bss
 
 
 .set align_require, 14
@@ -141,16 +137,6 @@ local_reg_var revoke_state
 local_reg_var revoke_base
 local_reg_var revoke_bound
 local_reg_var need_shootdown
-
-# A list of masks for which hardware register fields can be accessed
-.set register_mask_table_size, 0
-#define CALC_SIZE(...) .set register_mask_table_size, register_mask_table_size+1;
-NANO_REG_LIST(CALC_SIZE)
-#define EMIT_DATA(name, num, selector, mask, ...) .word mask;
-local_init_var register_mask_table, (4 * register_mask_table_size), 2
-NANO_REG_LIST(EMIT_DATA)
-#undef CALC_SIZE
-#undef EMIT_DATA
 
 # Method table for nano kernel
 NANO_KERNEL_IF_LIST(LOCAL_CAP_VAR_MACRO)
@@ -578,6 +564,12 @@ nano_kernel_init:
 
 .text
 
+# A list of masks for which hardware register fields can be accessed
+.set register_mask_table_size, 0
+#define CALC_SIZE(...) .set register_mask_table_size, register_mask_table_size+1;
+NANO_REG_LIST(CALC_SIZE)
+#undef CALC_SIZE
+
 #########################################################################################
 # register_t modify_hardware_reg(register_t selector, register_t mask, register_t value)
 .global modify_hardware_reg
@@ -586,31 +578,31 @@ modify_hardware_reg:
 
     sltiu   $t0, $a0, register_mask_table_size
     beqz    $t0, table_end
-    dsll    $t0, $a0, 2       # selector * 4 to index words
-    clw     $t1, $t0, register_mask_table($idc)
-                              # selector * 20 to index trampoline. (20 is 16 + 4)
-    dsll    $t3, $a0, 4       # *16
-    daddu   $t0, $t0, $t3     # *20  (using the 4 we calculated earlier)
+    dsll    $t0, $a0, 3       # selector * 8
+    dsll    $t1, $a0, 4       # selector * 16
+    daddu   $t0, $t0, $t1     # selector * 24 (size of each entry in the table)
 
-
-    and     $t1, $t1, $a1     # update mask
-    not     $t2, $t1          # ~mask
-    and     $t3, $t1, $a2     # mask & value
-
-    daddiu  $t0, $t0, 16      # distance from getpcc to table
+    daddiu  $t0, $t0, (7 * 4) # distance from getpcc to table
     cgetpcc $c1
     cincoffset  $c1, $c1, $t0
+
+    clw     $t1, $zero, 20($c1) # The word in the block
+
+    # Common code to make masks
+    and     $t1, $t1, $a1     # update mask
+    not     $t2, $t1          # ~mask
     cjr     $c1
-    nop
+    and     $t3, $t1, $a2     # mask & value
 
     jump_table:
 
-    #define JUMP_ENTRY(name, num, selector, ...)                        \
+    #define JUMP_ENTRY(name, num, selector, mask, ...)                  \
     mfc0    $v0, num, selector;                                         \
     and     $t0, $v0, $t2;                                              \
     or      $t0, $t0, $t3;                                              \
     b       table_end;                                                  \
-    mtc0    $t0, num, selector;
+    mtc0    $t0, num, selector;                                         \
+    .word   mask;
     NANO_REG_LIST(JUMP_ENTRY)
     #undef JUMP_ENTRY
 
