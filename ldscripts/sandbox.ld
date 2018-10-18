@@ -29,27 +29,17 @@
  */
 
 /*
- * Linker definition for a relocatable sandbox.  Each one begins with a
- * 0x1000 byte "guard" region to catch NULL pointer dereferences.
+ * We don't get loaded at 0, nor do we use a global cap, so null is not the start of our address space.
+ * Therefore no padding is needed
  */
 
 INCLUDE "common.ld"
 
-__code_base__ = 0x1000;
-
 SECTIONS
 {
-	. = __code_base__;
 	.text ALIGN(CAP_ALIGN): { *(.text) }
-	.bss  ALIGN(CAP_ALIGN): { *(.bss) }
 	.data ALIGN(CAP_ALIGN): { *(.data) }
-
-	/*
-	 * Force zero-filling of previous segments in generated image.
-	 */
-	sandbox_trailer : {
-		QUAD(0xffffffffffffffff)
-	}
+	.bss  ALIGN(CAP_ALIGN): { *(.bss) }
 
 	__start_bss = ADDR(.bss);
 	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
