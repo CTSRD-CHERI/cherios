@@ -65,7 +65,7 @@
 #define CHERIOS_NET_MASK    "255.255.255.0"
 #define CHERIOS_GATEWAY     "128.232.18.1"
 
-#define LOCAL
+// #define LOCAL
 
 #ifdef HARDWARE_qemu
 

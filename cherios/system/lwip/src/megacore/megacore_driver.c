@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include <mega_core.h>
+#include "mega_core.h"
 #include "lwip_driver.h"
 #include "mman.h"
 
@@ -53,8 +53,17 @@ int lwip_driver_init(net_session* session) {
     // Do an initial reset to clear everything
     ctrl->base_config.command_config = CC_N_MASK(COMMAND_CONFIG_SW_RESET) | CC_N_MASK(COMMAND_CONFIG_CNT_RESET);
 
+    int retry = 0;
+
+    CHERI_PRINT_CAP(ctrl);
+
     // Wait for it to happen (should only take a few cycles so we don't sleep)
-    while(ctrl->base_config.command_config & CC_N_MASK(COMMAND_CONFIG_SW_RESET));
+    while(ctrl->base_config.command_config & CC_N_MASK(COMMAND_CONFIG_SW_RESET)) {
+        if((++retry & 0xF) == 0) {
+            printf("LWIP still waiting for ethernet reset... %d\n", retry);
+            sleep(MS_TO_CLOCK(5000));
+        }
+    };
 
     MAC_DWORD mac0 = (((((session->mac[0] << 8) | session->mac[1]) << 8) | session->mac[2]) << 8) | session->mac[3];
     MAC_DWORD mac1 = ((session->mac[4] << 8) | session->mac[5]) << 16;
