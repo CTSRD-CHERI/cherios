@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <math.h>
 #include "elf.h"
 #include "mips.h"
 #include "sys/mman.h"
@@ -116,12 +117,25 @@ cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
     assert(env != NULL);
     assert(env->handle != NULL);
 	cap_pair p;
-	ERROR_T(res_t) res = mem_request(0, s, NONE, env->handle);
+
+    precision_rounded_length pr;
+
+    pr.mask = 0;
+
+    pr = round_cheri_length(s);
+
+	ERROR_T(res_t) res = mem_request(0, pr.length + pr.mask, NONE, env->handle);
+
+	/*
 	if(!IS_VALID(res))  {
 		printf("mmap based alloc failed %ld\n", (long)res.er);
 		return NULL_PAIR;
 	}
-	rescap_take(res.val, &p);
+	*/
+
+	res_t reser = reservation_precision_align(res.val, pr.length, pr.mask);
+
+	rescap_take(reser, &p);
 	return p;
 }
 

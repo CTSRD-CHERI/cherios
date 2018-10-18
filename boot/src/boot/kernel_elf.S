@@ -30,8 +30,10 @@
 
 .global __kernel_elf_start
 .global __kernel_elf_end
+.p2align 10
 __kernel_elf_start:
 .incbin "kernel.elf"
+.p2align 10
 __kernel_elf_end:
 nop
 .size __kernel_elf_start, __kernel_elf_end - __kernel_elf_start

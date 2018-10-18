@@ -30,6 +30,7 @@
 
 #include <queue.h>
 #include <nano/nanotypes.h>
+#include <atomic.h>
 #include "syscalls.h"
 #include "pmem.h"
 #include "nano/nanokernel.h"
@@ -170,24 +171,60 @@ void unblock_finding_page(void) {
     blocked = 0;
 }
 
-size_t pmem_find_page_type(size_t required_len, e_page_status required_type) {
+size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int precise) {
     size_t search_index = 0;
 
-    while((search_index != BOOK_END) && (search_index == blocked || book[search_index].len < required_len || book[search_index].status != required_type)) {
+    // Align a bit more than precision requires so carrys that make top differ a lot are uncommon
+
+    precision_rounded_length pr;
+
+    pr.length = required_len << PHY_PAGE_SIZE_BITS;
+    pr.mask = 0;
+
+    if(precise) {
+        pr = round_cheri_length(required_len << PHY_PAGE_SIZE_BITS);
+    }
+
+    //required_len = pr.length;
+
+    size_t imask = pr.mask >> PHY_PAGE_SIZE_BITS;
+    required_len = pr.length >> PHY_PAGE_SIZE_BITS;
+
+    size_t rounded_index;
+
+    if(imask) {
+        printf("Trying to find page range length %lx with mask  %lx\n", required_len, imask);
+    }
+
+    while((search_index != BOOK_END) &&
+                    (search_index == blocked                                                    ||
+                    book[search_index].status != required_type                                  ||
+                    ((rounded_index = (search_index + imask) &~ imask),
+                        book[search_index].len  < required_len + (rounded_index - search_index))
+                    )) {
         search_index = search_index + book[search_index].len;
     }
 
     if(search_index == BOOK_END) return BOOK_END;
 
-    if(book[search_index].len != required_len) {
-        pmem_break_page_to(search_index, required_len);
+    // If we need an aligned page number then
+
+    if(rounded_index != search_index) {
+        size_t break_len = rounded_index - search_index;
+        printf("Found index %lx. Need %lx. Breaking off %lx. rl = %lx\n", search_index, rounded_index, break_len, required_len);
+        printf("Record: %lx\n", book[search_index].len);
+        pmem_break_page_to(search_index, break_len);
     }
 
-    return search_index;
+    if(book[rounded_index].len != required_len) {
+        pmem_break_page_to(rounded_index, required_len);
+    }
+
+    return rounded_index;
 }
 
 size_t pmem_get_free_page() {
-    return pmem_find_page_type(1, page_unused);
+    return pmem_find_page_type(1, page_unused, 0);
 }
 
 void full_dump(void) {
@@ -203,7 +240,7 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
     size_t page_len = align_up_to(length + base - (page_n << PHY_PAGE_SIZE_BITS), PHY_PAGE_SIZE) >> PHY_PAGE_SIZE_BITS;
 
     if(base == 0) {
-        page_n = pmem_find_page_type(page_len, page_unused);
+        page_n = pmem_find_page_type(page_len, page_unused, 1);
         if(page_n == BOOK_END) {
             goto er;
         }

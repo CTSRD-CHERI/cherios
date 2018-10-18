@@ -67,16 +67,20 @@ static vpage_range_desc_table_t* desc_table_alloc(void) {
 
         if(desc_table_pool_alloc_n == DESC_ALLOC_N_PER_POOL) {
             desc_table_pool_alloc_n = 0;
-            size_t pagen = pmem_find_page_type(DESC_ALLOC_CHUNK_PAGES, page_unused);
+            size_t pagen = pmem_find_page_type(DESC_ALLOC_CHUNK_PAGES, page_unused, 1);
+            assert_int_ex(pagen, !=, BOOK_END);
             cap_pair pr;
+            pr.data = NULL;
             get_phy_page(pagen, 1, DESC_ALLOC_CHUNK_PAGES, &pr, 0);
             assert(pr.data != NULL);
+            CHERI_PRINT_CAP(pr.data);
             desc_table_pool = pr.data;
         }
 
         n_desc_tables_used++;
         res = & desc_table_pool[desc_table_pool_alloc_n++];
 
+        CHERI_PRINT_CAP(res);
         init_desc_table(res);
     }
 
@@ -1218,19 +1222,21 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
     base = (page_n << UNTRANSLATED_BITS) + (2 * RES_META_SIZE);
     length = (npages << UNTRANSLATED_BITS) - (2 * RES_META_SIZE);
 
-    if(base < req_base) {
-        size_t bytes_too_many = req_base-base;
-        result = rescap_split(result, bytes_too_many-RES_META_SIZE);
-        assert(result != NULL);
-        base += bytes_too_many;
-        length -= bytes_too_many;
-    }
+    // Only trim the reservation if a specific range was requested. Otherwise we are happy to give extra so more alignment can happen
+    if(req_base) {
+        if(base < req_base) {
+            size_t bytes_too_many = req_base-base;
+            result = rescap_split(result, bytes_too_many-RES_META_SIZE);
+            assert(result != NULL);
+            base += bytes_too_many;
+            length -= bytes_too_many;
 
-    if(length > req_length) {
-        rescap_split(result, length);
-        assert(result != NULL);
+            if(length > req_length) {
+                rescap_split(result, length);
+                assert(result != NULL);
+            }
+        }
     }
-
     return MAKE_VALID(res_t, result);
 }
 

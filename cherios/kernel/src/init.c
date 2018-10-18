@@ -65,8 +65,8 @@ crt_init_globals_kernel()
 
     // These are all set up by the linker script
     segment_table[0] = NULL;
-    segment_table[2] = pcc + text_start;
-    segment_table[3] = gdc + data_start;
+    segment_table[2] = text_segment;
+    segment_table[3] = data_segment;
 
     // Get something usable
     uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;

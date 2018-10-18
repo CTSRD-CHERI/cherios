@@ -87,7 +87,7 @@ typedef struct old_claim_t {
 typedef struct dypool {
     res_t head;
     size_t length;
-    size_t page_offset;
+    size_t res_at_base;
 
     dy_pool_range_t range;
     size_t dma_off;
@@ -96,7 +96,7 @@ typedef struct dypool {
 #define N_FIXED_POOLS 10
 #define FIXED_POOL_RES_N
 #define DYNAMIC_POOL_SIZE ((1 << 30) - RES_META_SIZE) // This is OK for late commit. This is stupidly large for commit!
-#define DYNAMIC_POOL_SIZE_DMA ((1 << 26)) // Still pretty big!
+#define DYNAMIC_POOL_SIZE_DMA ((1 << 26) - RES_META_SIZE) // Still pretty big!
 
 #define FIXED_POOL_SIZE   (UNTRANSLATED_PAGE_SIZE -  RES_META_SIZE)
 
@@ -278,10 +278,13 @@ static void finish_dynamic_pool(arena_t* arena) {
 static res_t alloc_from_dynamic(size_t size, arena_t* arena, size_t* dma_off) {
 
     dypool* dynamic_pool = &arena->dynamic_pool;
-    size_t aligned_size = align_up_to(size, RES_META_SIZE);
+
+    precision_rounded_length pr = round_cheri_length(align_up_to(size,RES_META_SIZE));
+
+    size_t aligned_size = pr.length;
     size_t size_with_meta = aligned_size + RES_META_SIZE;
 
-    if(dynamic_pool->head == NULL || dynamic_pool->length < size_with_meta) {
+    if(dynamic_pool->head == NULL || dynamic_pool->length < size_with_meta + pr.mask) {
 
         if(dynamic_pool->head != NULL) {
             // Finish off the pool. It is not big enough to allocate the next object
@@ -312,22 +315,27 @@ static res_t alloc_from_dynamic(size_t size, arena_t* arena, size_t* dma_off) {
         dynamic_pool->range.start = align_down_to(nfo.base, UNTRANSLATED_PAGE_SIZE);
         dynamic_pool->range.end = dynamic_pool->range.start + pool_size + RES_META_SIZE;
         dynamic_pool->range.outstanding_claims = 0;
-        dynamic_pool->page_offset = RES_META_SIZE;
+
+        dynamic_pool->res_at_base = nfo.base;
     }
 
     res_t head = dynamic_pool->head;
+
+    size_t rounded_base = (dynamic_pool->res_at_base + pr.mask) & ~pr.mask;
+    size_t skip = rounded_base - dynamic_pool->res_at_base;
+    if(skip) {
+        head = rescap_split(head, skip - RES_META_SIZE);
+        size_with_meta +=skip;
+    }
     res_t tail = rescap_split(head, aligned_size);
 
     if(arena->dma && dma_off) *dma_off = dynamic_pool->dma_off;
     dynamic_pool->head = tail;
     dynamic_pool->range.outstanding_claims++;
-    dynamic_pool->page_offset = (dynamic_pool->page_offset + size_with_meta) & (UNTRANSLATED_PAGE_SIZE-1);
+    dynamic_pool->res_at_base += size_with_meta;
     dynamic_pool->length -=size_with_meta;
 
-    if(dynamic_pool->length < (1 << (N_FIXED_POOLS-1))) {
-        finish_dynamic_pool(arena);
-    }
-
+    // We are tracking over the entire pool range, not on a page bases, so this is not needed
     /* else if(dynamic_pool->page_offset == UNTRANSLATED_PAGE_SIZE - RES_META_SIZE) {
         // If we transfer claim management to the central allocator we must do this.
         dynamic_pool->head = rescap_split(dynamic_pool->head, 0);

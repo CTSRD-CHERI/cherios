@@ -142,7 +142,7 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
     memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, cheri_getlen(tls_segment_prototype));
 
     struct capreloc* r_start = &__start___cap_relocs;
-    struct capreloc* r_stop = cheri_setoffset(r_start, cheri_getlen(r_start));
+    struct capreloc* r_stop = cheri_incoffset(r_start, (size_t)&__stop___cap_relocs - (size_t)&__start___cap_relocs);
     crt_init_new_locals(segment_table, r_start, r_stop);
 
     object_init(self_ctrl, queue, NULL, NULL);

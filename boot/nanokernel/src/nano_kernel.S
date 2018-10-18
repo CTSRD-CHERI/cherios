@@ -36,6 +36,7 @@
 #include "assembly_utils.h"
 #include "nano/nanokernel.h"
 #include "dylink.h"
+#include "math.h"
 
 # FIXME. SPecial registers are now no longer general purpose. This makes things work:
 .set cheri_sysregs_accessible
@@ -87,15 +88,22 @@
 ####################################################################################################################
 # The (very incorrectly named) global data for the nano kernel. idc will hold a capability that covers the range
 # locals_start to locals_end.
+# kr1c holds a capability to the context_array entry for the current PHYSICAL cpu. It is always safe to use.
 ####################################################################################################################
 
 # The small locals can be accessed from idc with a constant. The others need dli. The address you get is relative
 # to idc. If you want a global address to use name_label.
 
+# Fixme: This is really quite large, and is in .data not .bss. This makes the boot image massive and slows down boot.
+# Fixme: As our boot ensures all memory is zero on allocation, we should really move ALL of the locals stuff to .bss
+ #Fixme: Currently only the register access table as non zero starting values. But thats a hack anyway!
+
 .data
 
+
+.set align_require, 14
 # We would like to bound these exactly. Help with a few bits
-.p2align 8
+.p2align align_require
 
 START_LOCALS CAP_SIZE_BITS
 
@@ -154,9 +162,10 @@ local_var tres_bitfield, TRES_BITFIELD_SIZE, 1
 
 local_var context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
-local_var phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, 8
+# Keep as the last thing so we can
+local_var phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, align_require
 
-local_align 8
+local_align align_require
 
 END_LOCALS
 
@@ -309,7 +318,10 @@ nano_kernel_init:
     dla         $k0, locals_start
     dli         $k1, locals_size
     csetoffset  $kr1c, $kdc, $k0
-    csetboundsexact  $kr1c, $kr1c, $k1                       # kr1c will hold a capability to our locals
+
+    // Don't bother with exact bounds here.
+    // The nano kernel can't afford bugs anyway so we might has well have relaxed bounds
+    csetbounds  $kr1c, $kr1c, $k1                       # kr1c will hold a capability to our locals
 
 #ifdef SMP_ENABLED
 	# Send SMP TCs other than 0 to trap to let nano perform init
@@ -638,7 +650,8 @@ obtain_super_powers:
 get_book:
 ###################################
     dli        $t0, phy_page_table
-    dli        $t1, (TOTAL_PHY_PAGES) * PHY_PAGE_ENTRY_SIZE
+    # We need to give the system a read only table. There is some apdding after it thats ok for the system to read.
+    dli        $t1, ALIGN_UP_2((TOTAL_PHY_PAGES) * PHY_PAGE_ENTRY_SIZE, align_require)
     cincoffset $c3, $idc, $t0
     dli        $t2, Perm_Load
     csetboundsexact $c3, $c3, $t1

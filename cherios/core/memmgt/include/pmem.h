@@ -46,7 +46,8 @@ void block_finding_page(size_t pagen);
 void unblock_finding_page(void);
 
 /* Searches for a range of pages of a particular size and minimum length */
-size_t pmem_find_page_type(size_t required_len, e_page_status required_type);
+/* If align_precision is true then a range will be returned that will meet cheri precision requirements */
+size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int precise);
 
 /* Get one free page */
 size_t pmem_get_free_page();

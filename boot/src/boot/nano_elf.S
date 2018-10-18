@@ -30,8 +30,10 @@
 
 .global __nano_elf_start
 .global __nano_elf_end
+.p2align 10
 __nano_elf_start:
 .incbin "nano.elf"
+.p2align 10
 __nano_elf_end:
 nop
 .size __nano_elf_start, __nano_elf_end - __nano_elf_start

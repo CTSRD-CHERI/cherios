@@ -40,11 +40,19 @@
 	#define U_PERM_BITS 4
     #define CAP_SIZE 0x20
     #define CAP_SIZE_BITS 5
+	#define SMALL_PRECISION 64
+	#define LARGE_PRECISION 64
+    #define CAP_EXTRA_ALIGN 0
+    #define SMALL_OBJECT_THRESHOLD (~0)
 #elif _MIPS_SZCAP == 128
 #define _CHERI128_
 	#define U_PERM_BITS 4
     #define CAP_SIZE 0x10
     #define CAP_SIZE_BITS 4
+	#define SMALL_PRECISION 15
+	#define LARGE_PRECISION	12
+    #define SMALL_OBJECT_THRESHOLD  (1 << (SMALL_PRECISION)) // Can set bounds with byte align on objects less than this
+
 #else
 #error Unknown capability size
 #endif
@@ -56,6 +64,25 @@
 
 #define _safe __attribute__((temporal_safe))
 #define _unsafe __attribute__((temporal_unsafe))
+
+typedef struct {
+    size_t length;
+    size_t mask;
+} precision_rounded_length;
+
+static precision_rounded_length round_cheri_length(size_t length) {
+    if(length < SMALL_OBJECT_THRESHOLD) return (precision_rounded_length){.length = length, .mask = 0};
+    size_t mask = length >> (LARGE_PRECISION-1);
+    mask++; // to avoid edge case where rounding length would actually change exponent
+    mask |= mask >> 1L;
+    mask |= mask >> 2L;
+    mask |= mask >> 4L;
+    mask |= mask >> 8L;
+    mask |= mask >> 16L;
+    mask |= mask >> 32L;
+    size_t rounded_length = (length + mask) & ~mask;
+    return (precision_rounded_length){.length = rounded_length, .mask = mask};
+}
 
 #define SUF_8  "b"
 #define SUF_16 "h"
@@ -148,6 +175,8 @@ typedef unsigned int stype;
 #define	cheri_setbounds(x, y)	__builtin_cheri_bounds_set(		\
 				    __DECONST(capability, (x)), (y))
 // TODO find instrinsic
+// FIXME: Currently this does not set bounds exact =(. The reason being the compiler needs to allocate large globals
+// FIXME: on better boundries. It currently does not do this.
 #define	cheri_setbounds_exact(x, y)	                        \
 ({                                                          \
 capability __exact;                                         \

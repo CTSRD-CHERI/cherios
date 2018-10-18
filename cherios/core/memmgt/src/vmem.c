@@ -41,7 +41,7 @@
 
 ptable_t vmem_create_table(ptable_t parent, register_t index, int level) { // FIXME: Races with main thread
     //printf("memmgt: creating a l%d table at index %lx\n", level, index);
-    size_t page = pmem_find_page_type(1, page_ptable_free);
+    size_t page = pmem_find_page_type(1, page_ptable_free, 0);
 
     if(page == BOOK_END) page = pmem_get_free_page();
 
@@ -63,7 +63,7 @@ ptable_t vmem_create_table(ptable_t parent, register_t index, int level) { // FI
 }
 
 int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) { // FIXME: Races with other thread
-    size_t page = pmem_find_page_type(2, page_unused);
+    size_t page = pmem_find_page_type(2, page_unused, 0);
     if(page == BOOK_END) return -1;
 
     assert(L2_table != NULL);
@@ -161,7 +161,7 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, me
     size_t ndx = L2_INDEX(addr);
 
     // Get a block of physical pages to map to
-    size_t phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused);
+    size_t phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused, 0);
     if(phy_pagen == BOOK_END) {
         printf("Tried to find a block of %lx for range commit\n", block_size);
         pmem_print_book(book, 0, -1);
@@ -176,7 +176,7 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, me
 
         if(in_block == 0) {
             contig_base = (size_t)-1;
-            phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused);
+            phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused, 0);
             in_block = book[phy_pagen].len;
         }
 
