@@ -41,9 +41,9 @@
 
 #define printf kernel_printf
 
-#define REG_DUMP_M(_reg) {\
+#define REG_DUMP_M(_reg, _extra) {\
 	register_t reg = frame->mf_##_reg; \
-	__REGDUMP(reg, reg, #_reg, 64); \
+	__REGDUMP(reg, reg, #_reg _extra, 64); \
 	}
 
 #define REG_DUMP_C(_reg) \
@@ -293,23 +293,23 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	printf("Died in: %s\n", kernel_curr_act->name);
     dump_tlb();
 
-	REG_DUMP_M(at); REG_DUMP_M(v0); REG_DUMP_M(v1); printf("\n");
+	REG_DUMP_M(at, "($1)"); REG_DUMP_M(v0,"($2)"); REG_DUMP_M(v1,"($3)"); printf("\n");
 
-	REG_DUMP_M(a0); REG_DUMP_M(a1); REG_DUMP_M(a2); REG_DUMP_M(a3); printf("\n");
-	REG_DUMP_M(a4); REG_DUMP_M(a5); REG_DUMP_M(a6); REG_DUMP_M(a7); printf("\n");
+	REG_DUMP_M(a0, "($4)"); REG_DUMP_M(a1, "($5)"); REG_DUMP_M(a2,"($6)"); REG_DUMP_M(a3,"($7)"); printf("\n");
+	REG_DUMP_M(a4, "($8)"); REG_DUMP_M(a5, "($9)"); REG_DUMP_M(a6, "($10)"); REG_DUMP_M(a7, "($11)"); printf("\n");
 
-	REG_DUMP_M(t0); REG_DUMP_M(t1); REG_DUMP_M(t2); REG_DUMP_M(t3); printf("\n");
+	REG_DUMP_M(t0, "($12)"); REG_DUMP_M(t1, "($13)"); REG_DUMP_M(t2, "($14)"); REG_DUMP_M(t3, "($15)"); printf("\n");
 
-	REG_DUMP_M(s0); REG_DUMP_M(s1); REG_DUMP_M(s2); REG_DUMP_M(s3); printf("\n");
-	REG_DUMP_M(s4); REG_DUMP_M(s5); REG_DUMP_M(s6); REG_DUMP_M(s7); printf("\n");
+	REG_DUMP_M(s0, "($16)"); REG_DUMP_M(s1, "($17)"); REG_DUMP_M(s2, "($18)"); REG_DUMP_M(s3, "($19)"); printf("\n");
+	REG_DUMP_M(s4, "($20)"); REG_DUMP_M(s5, "($21)"); REG_DUMP_M(s6, "($22)"); REG_DUMP_M(s7, "($23)"); printf("\n");
 
-	REG_DUMP_M(t8); REG_DUMP_M(t9); printf("\n");
+	REG_DUMP_M(t8, "($24)"); REG_DUMP_M(t9, "($25)"); printf("\n");
 
-	REG_DUMP_M(gp); REG_DUMP_M(sp); REG_DUMP_M(fp); REG_DUMP_M(ra); printf("\n");
+	REG_DUMP_M(gp, "($28)"); REG_DUMP_M(sp, "($29)"); REG_DUMP_M(fp, "($30)"); REG_DUMP_M(ra, "($31)"); printf("\n");
 
-	REG_DUMP_M(hi); REG_DUMP_M(lo); printf("\n");
+	REG_DUMP_M(hi,""); REG_DUMP_M(lo,""); printf("\n");
 
-	REG_DUMP_M(user_loc); printf("\n");
+	REG_DUMP_M(user_loc,""); printf("\n");
 
 	printf("\n");
 
