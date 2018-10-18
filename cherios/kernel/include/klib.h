@@ -67,15 +67,15 @@
 // FIXME we need to really think about the types of IDs and REFs
 
 /* The type of object activation references */
-static const uint64_t act_ref_type = 0x42002;
+static const uint64_t act_ref_type = 0x4202;
 /* The type of object activation control references */
-static const uint64_t act_ctrl_ref_type = 0x42001;
+static const uint64_t act_ctrl_ref_type = 0x4201;
 /* The type of the synchronous sequence reply tokens */
-static const uint64_t act_sync_type = 0x42000;
+static const uint64_t act_sync_type = 0x4200;
 /* The type of object activation response references */
-static const uint64_t act_sync_ref_type = 0x42003;
+static const uint64_t act_sync_ref_type = 0x4203;
 /* The type of object activation notification references */
-static const uint64_t act_notify_ref_type = 0x42004;
+static const uint64_t act_notify_ref_type = 0x4204;
 
 capability act_seal_for_call(act_t * act, sealing_cap sealer);
 act_t* act_unseal_callable(act_t * act, sealing_cap sealer);

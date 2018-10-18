@@ -36,7 +36,7 @@
 #include "string_enums.h"
 #include "nano_reg_list.h"
 
-#define TYPE_SPACE_BITS     20
+#define TYPE_SPACE_BITS     16
 #define TYPE_SPACE          (1 << TYPE_SPACE_BITS)
 
 
@@ -120,9 +120,8 @@
 #define CONTEXT_OFFSET_EX_IDC           (CHERI_FRAME_SIZE + (4 * CAP_SIZE) - INC_IM_MAX)
 #define CONTEXT_OFFSET_EX_SAVED_IDC     (CHERI_FRAME_SIZE + (5 * CAP_SIZE) - INC_IM_MAX)
 
-// We never reallocate these, so its currently a huge limitation
-// Create context should take an optional reservation similar to the how the kernel gets non static space
-#define N_CONTEXTS                      (64)
+// These are never re-used are are here for before reservations are working.
+#define N_CONTEXTS                      (16)
 
 //TODO make this dynamic
 /* Page sizes etc */
