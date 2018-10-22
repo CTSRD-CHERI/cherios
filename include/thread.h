@@ -57,6 +57,8 @@ typedef capability process_kt;
 /* A global reference to the handle for the process this thread belongs to */
 extern process_kt proc_handle;
 
+#define thread_handle ((thread)act_self_ctrl)
+
 /* Create a thread with the same c0 and pcc capabilities as the caller,
  * but with its own stack and queue and ref/ctrl ref */
 thread thread_new(const char* name, register_t arg, capability carg, thread_start_func_t* start);
