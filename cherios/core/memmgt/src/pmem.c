@@ -192,10 +192,6 @@ size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int
 
     size_t rounded_index;
 
-    if(imask) {
-        printf("Trying to find page range length %lx with mask  %lx\n", required_len, imask);
-    }
-
     while((search_index != BOOK_END) &&
                     (search_index == blocked                                                    ||
                     book[search_index].status != required_type                                  ||
@@ -211,8 +207,6 @@ size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int
 
     if(rounded_index != search_index) {
         size_t break_len = rounded_index - search_index;
-        printf("Found index %lx. Need %lx. Breaking off %lx. rl = %lx\n", search_index, rounded_index, break_len, required_len);
-        printf("Record: %lx\n", book[search_index].len);
         pmem_break_page_to(search_index, break_len);
     }
 
