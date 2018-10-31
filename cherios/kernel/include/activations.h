@@ -95,6 +95,7 @@ typedef struct act_t
 	sched_status_e sched_status;	/* Current status */
 	uint8_t early_notify;
 	uint8_t pool_id;
+	uint8_t is_idle;
 	register_t 	timeout_start;				/* To deal with trap around, store start + length , not end */
 	register_t 	timeout_length;
 	size_t 		timeout_indx;

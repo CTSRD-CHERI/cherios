@@ -47,6 +47,7 @@ int main(register_t arg, capability carg) {
             // Otherwise yield to another core if virtualised
             //printf("CPU %d idle\n", cpu_id);
             HW_YIELD;
+            HW_SYNC; // To make sure we see the queue fill
         }
     }
 }

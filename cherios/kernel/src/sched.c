@@ -114,6 +114,7 @@ act_t* sched_get_current_act(void) {
 static void add_act_to_queue(sched_pool* pool, act_t * act, sched_status_e set_to) {
 	sched_q* q = &pool->queues[LEVEL_TO_NDX(act->priority)];
 	kernel_assert(q->act_queue_end != SCHED_QUEUE_LENGTH);
+    kernel_assert(!act->is_idle);
 	spinlock_acquire(&pool->queue_lock);
 	q->act_queue[q->act_queue_end++] = act;
 	act->sched_status = set_to;
@@ -123,6 +124,9 @@ static void add_act_to_queue(sched_pool* pool, act_t * act, sched_status_e set_t
 
 static void delete_act_from_queue(sched_pool* pool, act_t * act, sched_status_e set_to, size_t index_hint) {
     size_t index;
+
+	kernel_assert(!act->is_idle);
+
 	restart: index = 0;
 	sched_q* q = &pool->queues[LEVEL_TO_NDX(act->priority)];
 
@@ -162,6 +166,7 @@ void sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority) {
 	KERNEL_TRACE("sched", "create %s in pool %d", act->name, pool_id);
 	spinlock_init(&act->sched_access_lock);
 	act->priority = priority;
+	act->is_idle = 0;
 	if(act->status == status_alive) {
 		KERNEL_TRACE("sched", "add %s  - adding to pool %x", act->name, pool_id);
         // FIXME: A bit of a hack
@@ -170,7 +175,8 @@ void sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority) {
             act->sched_status = sched_runnable;
             act->pool_id = idles_registered;
             sched_pools[idles_registered].idle_act = act;
-
+			act->is_idle = 1;
+            act->priority = PRIO_IDLE;
 #ifdef SMP_ENABLED
             if(idles_registered != 0) {
                 act->sched_status = sched_running;
