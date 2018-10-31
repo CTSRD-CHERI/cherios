@@ -47,6 +47,8 @@
 
 #define DLL_FOREACH(T, Item, List) for(T* (Item) = (List)->first; (Item) != NULL; (Item) = (Item->next))
 
+#define DLL_FOREACH_RESET(T, Item, List) do {Item = (List)->first; continue; } while(0)
+
 #define DLL_ADD_START(List, Item)                       \
     (Item)->prev = NULL;                                \
     (Item)->next = (List)->first;                       \
