@@ -39,7 +39,9 @@ void __kernel_assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
 	kernel_printf(KMAJ"assertion failure in %s at %s:%d: %s"KRST"\n", assert_function,
 			assert_file, assert_lineno, assert_message);
-	regdump(-1, NULL);
+	//regdump(-1, NULL);
+	kernel_dump_tlb();
+	backtrace(cheri_getreg(11),cheri_getpcc(),cheri_getreg(17));
 	kernel_freeze();
 }
 

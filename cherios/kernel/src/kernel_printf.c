@@ -28,9 +28,10 @@
  * SUCH DAMAGE.
  */
 
+// TODO: Eventually we want to remove the uart driver from the kernel, but it is very useful for debugging
 #include "klib.h"
 #ifndef __LITE__
-#include "stdio.h"
+int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
 #endif
 #include "uart.h"
 
