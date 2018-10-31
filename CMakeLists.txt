@@ -289,6 +289,11 @@ function(add_cherios_executable _target)
   target_link_libraries(${_target} CheriOS::LibUser)
 endfunction()
 
+function(add_cherios_executable_early _target)
+    add_cherios_module(${_target} ${ARGN})
+    target_link_libraries(${_target} CheriOS::LibUserEarly)
+endfunction()
+
 function(add_cherios_kernel _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
@@ -308,19 +313,19 @@ endfunction()
 function(add_cherios_init _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
 function(add_cherios_memmgr _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
 function(add_cherios_namespace _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
 function(add_cherios_module _target)
@@ -393,6 +398,8 @@ add_subdirectory(fs_test)
 
 add_subdirectory(server)
 add_subdirectory(client)
+
+#add_subdirectory(nginx)
 
 #add_subdirectory(prga)
 #add_subdirectory(sockets)

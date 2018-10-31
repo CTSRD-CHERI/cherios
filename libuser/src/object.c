@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <sockets.h>
 #include "mips.h"
 #include "object.h"
 #include "cheric.h"
@@ -60,6 +61,21 @@ ALLOCATE_PLT_SYSCALLS
 ALLOCATE_PLT_NANO
 
 extern void memset_c(void);
+
+#ifndef USE_SYSCALL_PUTS
+
+#define STD_BUF_SIZE 0x100
+
+typedef struct {
+    unix_like_socket sock;
+    struct requester_32 reqs;
+    char buf[STD_BUF_SIZE];
+} std_sock;
+
+std_sock std_out_sock;
+std_sock std_err_sock;
+
+#endif
 
 void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c, capability plt_auth) {
 
@@ -94,6 +110,39 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     init_cap_malloc();
 
     thread_init();
+
+    // This creates two sockets with the UART driver and sets stdout/stderr to them
+#ifndef USE_SYSCALL_PUTS
+
+    act_kt uart;
+
+    while((uart = namespace_get_ref(namespace_num_uart)) == NULL) {
+        sleep(0);
+    }
+
+    int res;
+
+#define MAKE_STD_SOCK(S,IPC_NO)                                                                                 \
+        S.sock.write.push_writer = &S.reqs.r;                                                                   \
+        socket_internal_requester_init(S.sock.write.push_writer, 32, SOCK_TYPE_PUSH, &S.sock.write_copy_buffer);                   \
+            res = message_send(0,0,0,0,                                                                         \
+                               socket_internal_make_read_only(S.sock.write.push_writer), NULL, NULL, NULL,      \
+                               uart, SYNC_CALL, IPC_NO);                                                        \
+        assert(res == 0);                                                                                       \
+        socket_internal_requester_connect(S.sock.write.push_writer);                                            \
+        socket_init(&S.sock, MSG_NO_CAPS, S.buf, STD_BUF_SIZE, CONNECT_PUSH_WRITE);
+
+    MAKE_STD_SOCK(std_out_sock, 2);
+    MAKE_STD_SOCK(std_err_sock, 3);
+
+    stderr = &std_err_sock.sock;
+    stdout = &std_out_sock.sock;
+
+#else
+    stderr = NULL;
+    stdout = NULL;
+#endif
+
 }
 
 void ctor_null(void) {

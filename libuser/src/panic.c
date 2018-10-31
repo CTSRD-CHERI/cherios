@@ -34,16 +34,14 @@
 
 __attribute__((noreturn))
 void panic(const char *str) {
-	printf(KMAJ"user panic: %s"KRST"\n", str);
-
+	syscall_puts(str);
 	syscall_panic();
 	for(;;);
 }
 
 __attribute__((noreturn))
 void panic_proxy(const char *str, act_kt act) {
-	printf(KMAJ"user proxy panic: %s"KRST"\n", str);
-
+	syscall_puts(str);
 	syscall_panic_proxy(act);
 	for(;;);
 }

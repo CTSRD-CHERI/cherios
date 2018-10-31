@@ -49,7 +49,6 @@ static int fputs ( const char * str, FILE * stream ) {
 }
 
 static FILE * stdin = NULL;
-static FILE * stdout = NULL;
 
 #define BUFINLEN 0x10000
 static size_t bufinlen = BUFINLEN;

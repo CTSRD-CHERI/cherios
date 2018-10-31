@@ -69,7 +69,15 @@ enum SOCKET_FLAGS {
     MSG_EMULATE_SINGLE_PTR = 16,
 };
 
-#define SOCK_TRACING        1
+// If we are not using syscall puts then stdout uses this code
+// Trying to printf would therefore cause an unbounded recursion
+// We could solve these with a second printf that uses snprintf/syscall_puts (like assert)
+// But for now just remove printing
+#ifdef USE_SYSCALL_PUTS
+    #define SOCK_TRACING        1
+#else
+    #define SOCK_TRACING        0
+#endif
 
 enum FULFILL_FLAGS {
     F_NONE                  = 0x0,
@@ -108,16 +116,13 @@ typedef enum {
 #define SEEK_CUR    1
 #define SEEK_END    2
 
-struct seek_desc {
-    union {
+typedef union {
         intptr_t as_intptr_t;
         struct v_t {
             int64_t offset;
             int whence;
         } v;
-    };
-
-};
+} seek_desc;
 
 typedef struct request {
     uint64_t length;
@@ -129,12 +134,21 @@ typedef struct request {
         char im[CAP_SIZE];
         volatile act_notify_kt barrier_waiting;
         struct request* barrier_target;
-        struct seek_desc seek_desc;
+        seek_desc seek_desc;
         intptr_t oob;
     } request;
 } request_t;
 
 _Static_assert(sizeof(request_t) ==  2*sizeof(capability), "Make sure each request type is small enough");
+
+enum poll_events {
+    POLL_NONE = 0,
+    POLL_IN = 1,
+    POLL_OUT = 2,
+    POLL_ER = 4,
+    POLL_HUP = 8,
+    POLL_NVAL = 16,
+};
 
 // Uni-directional socket.
 typedef struct uni_dir_socket_requester_fulfiller_component  {
@@ -178,11 +192,12 @@ typedef struct uni_dir_socket_fulfiller {
     uni_dir_socket_requester* proxyied_in;  // set if proxied
 } uni_dir_socket_fulfiller;
 
-// Ring buffer for copy in for unix abstraction
+// Ring buffer for copy in for unix abstraction or to not reveal original capability
 typedef struct data_ring_buffer {
     volatile uint64_t requeste_ptr;
     volatile uint64_t fulfill_ptr;
     uint32_t buffer_size;
+    uint32_t partial_length;
     char* buffer;
 } data_ring_buffer;
 
@@ -209,6 +224,9 @@ typedef struct unix_like_socket {
     enum socket_connect_type con_type;
     data_ring_buffer write_copy_buffer; // If we push write and are worried about delays we need a buffer
     // data_ring_buffer read_copy_buffer; // Do we copy for pull reading? Otherwise how do we know when consume has happened?
+    // If we emulate a single pointer these are used to track how far behind we are with read/write
+    uint64_t read_behind;
+    uint64_t write_behind;
     socket_reader_t read;
     socket_writer_t write;
 } unix_like_socket;
@@ -326,7 +344,7 @@ static ssize_t copy_out(capability user_buf, char* req_buf, uint64_t offset, uin
 }
 
 static ssize_t copy_out_no_caps(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
-    req_buf = cheri_andperm(req_buf, CHERI_PERM_LOAD);
+    req_buf = (char*)cheri_andperm(req_buf, CHERI_PERM_LOAD);
     memcpy((char*)user_buf+offset, req_buf, length);
     return (ssize_t)length;
 }
@@ -355,14 +373,23 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
 ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count);
 
-enum poll_events {
-    POLL_NONE = 0,
-    POLL_IN = 1,
-    POLL_OUT = 2,
-    POLL_ER = 4,
-    POLL_HUP = 8,
-    POLL_NVAL = 16,
-};
+static inline void catch_up_write(unix_like_socket* file) {
+    if(file->write_behind) {
+        socket_internal_requester_lseek(file->write.push_writer,
+                                        file->write_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
+        file->write_behind = 0;
+    }
+}
+
+static inline void catch_up_read(unix_like_socket* file) {
+    if(file->read_behind) {
+        socket_internal_requester_lseek(file->read.pull_reader,
+                                        file->read_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
+        file->read_behind = 0;
+    }
+}
+
+ssize_t socket_flush_drb(unix_like_socket* socket);
 
 typedef struct poll_sock {
     unix_like_socket* sock;

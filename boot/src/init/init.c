@@ -104,31 +104,35 @@ init_elem_t init_list[] = {
    * following:
    *
    * - the namespace-mgr is initialized with enough memory to track at
-   *   least one service, i.e. enough to last it until the first
-   *   service announcement it receives.  by convention, it will be
-   *   the first service started. Init will allocate memory for it. // NOTE: this is currently not true
+   *   all services, i.e. it will not call malloc. By convention, it will be
+   *   the first service started. Init will allocate memory for it.
    *
-   * - The process manager is started second. It will be passed the remainging pool from init and announce itself
-   *   to the namespace manager
+   * - The process manager is started second. Init will alloc space for it. It will be passed the remaining
+   *   allocation pool from init and announce itself to the namespace manager.
    *
    * - by convention, the memory-mgr will be the third service
    *   started.  it will be passed the id of the namespace-mgr service
    *   as an initialization argument.  its very first action will be to
-   *   announce itself to the namespace-mgr.
+   *   announce itself to the namespace-mgr and the kernel for virtual memory trap handling.
    *
-   * - the init process will query the namespace-mgr for the number of
-   *   registered services.  it will start the remaining services once
-   *   it can be sure that the mem-mgr service has registered itself. // NOTE: Not needed. We check every registration
+   * - the init process will query the namespace-mgr until these core services are all registered and only then
+   *   continue with loading.
    *
+   * Many other services are quite critical, but there should be no mutual dependencies. However, if an application
+   * needs one of these services (e.g. the type manager), it should spin until it gets a result from the namespace
+   * manager
    */
+
 	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
     B_DENTRY(m_proc,     "proc.elf", 0, 1)
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
+// NOTE: IDLE processes are loaded here
+    B_DENTRY(m_uart,	"uart.elf",		0,	1)      // Needed for stdout so bring up asap
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
     B_DENTRY(m_user,    "dedup.elf", 0 ,1)
     B_DENTRY(m_tman, "type_manager.elf",0,1)
     B_FENCE
-	B_DENTRY(m_uart,	"uart.elf",		0,	1)
+
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	1)
@@ -138,6 +142,7 @@ init_elem_t init_list[] = {
 	B_FENCE
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
 	B_FENCE
+    B_DENTRY(m_user,    "nginx.elf", 0, 0)
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
 	B_PENTRY(m_user,	"prga.elf",		2,	B_SO)
@@ -289,7 +294,7 @@ static void load_modules(init_info_t * init_info) {
     procbe->ctrl =
             simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info), NULL, &proc_im);
 
-    /* FIXME technically a bit of a race. This global will be read by proc so it needs to be set before context switch */
+    /* No longer a race, procman while wait for this */
 
     procman_arg.pool_from_init = get_remaining();
     /* Wait for registration */

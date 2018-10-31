@@ -70,4 +70,17 @@ int netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
 int netsock_connect_tcp(struct tcp_bind* bind, struct tcp_bind* server,
                         capability callback_arg);
 NET_SOCK netsock_accept(enum SOCKET_FLAGS flags);
+
+
+struct hostent {
+    char  *h_name;            /* official name of host */
+    char **h_aliases;         /* alias list */
+    int    h_addrtype;        /* host address type */
+    int    h_length;          /* length of address */
+    char **h_addr_list;       /* list of addresses */
+};
+
+struct hostent *gethostbyname(const char *name);
+
+
 #endif //CHERIOS_NET_H

@@ -173,7 +173,10 @@ start_common:
 	# Restore arguments
 	move		$a0, $s0
 	clc		    $c3, $zero, 0($c11)
-	cincoffset  $c11, $c11, (6*CAP_SIZE)
+
+	# Reclaim our stack frame and any stack passed arguments needed for init
+	cgetlen     $t0, $c11
+	csetoffset  $c11, $c11, $t0
 
 	# Call main().
 	call_func   main

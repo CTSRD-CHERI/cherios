@@ -30,4 +30,5 @@
 
 #include "stdio.h"
 
-FILE * stderr = NULL;
+FILE * stderr;
+FILE * stdout;

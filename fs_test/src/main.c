@@ -138,7 +138,7 @@ int main(register_t arg, capability carg) {
     result = read(file2, dest, BIG_SIZE);
     assert_int_ex(result, ==, BIG_SIZE);
 
-    assert_int_ex(file2->sock.read.pull_reader->requeste_ptr, ==, file2->sock.read.pull_reader->fulfiller_component.fulfill_ptr);
+    assert_int_ex(file2->read.pull_reader->requeste_ptr, ==, file2->read.pull_reader->fulfiller_component.fulfill_ptr);
     int once = 1;
     for(size_t i = 0; i < BIG_SIZE; i++) {
         if(LOREM[i] != dest[i]) {

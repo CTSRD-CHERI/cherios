@@ -10,4 +10,4 @@ set(PROC_SRCS
     ${CMAKE_SOURCE_DIR}/tmpalloc/src/alloc.c
 )
 
-add_cherios_executable(proc ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${PROC_SRCS})
+add_cherios_executable_early(proc ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${PROC_SRCS})

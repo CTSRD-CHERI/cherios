@@ -12,6 +12,7 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/atoi.c
     ${CMAKE_SOURCE_DIR}/libcrt/strchr.c
     ${CMAKE_SOURCE_DIR}/libcrt/strstr.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strbprk.c
 )
 
 set(LIBUSER_ASM_SRCS
@@ -51,7 +52,12 @@ set(LIBUSER_SRCS
     ${LWIP_DIR}/src/core/ipv4/ip4_addr.c
 )
 
+add_library(user_early STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
+add_library(CheriOS::LibUserEarly ALIAS user_early)
+set_target_properties(user_early PROPERTIES COMPILE_FLAGS -DUSE_SYSCALL_PUTS)
+
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
 add_library(CheriOS::LibUser ALIAS user)
+
 add_library(libcrt STATIC ${LIBCRT_SRCS})
 add_library(CheriOS::LibCRT ALIAS libcrt)

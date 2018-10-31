@@ -36,9 +36,12 @@
 #include "stdarg.h"
 #include "colors.h"
 #include "types.h"
+#include "sockets.h"
 
-typedef void FILE;
+typedef unix_like_socket FILE;
+
 extern FILE * stderr;
+extern FILE * stdout;
 
 int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
 int	vsprintf(char *buf, const char *cfmt, va_list ap);
@@ -46,8 +49,10 @@ int	vsnprintf(char *str, size_t size, const char *format, va_list ap);
 int	printf(const char *fmt, ...) __printflike(1, 2);
 int	vprintf(const char *fmt, va_list ap);
 int	fprintf(FILE * f, const char *fmt, ...) __printflike(2, 3);
+int sprintf ( char * str, const char * format, ... );
+int snprintf(char *str, size_t size, const char *format, ...);
 int	puts(const char *s);
-int	putc(int character, FILE * stream);
+#define putc(c,s) fputc(c,s)
 int	fputc(int character, FILE * stream);
 void	panic(const char *str) __dead2;
 void panic_proxy(const char *str, act_kt act) __dead2;

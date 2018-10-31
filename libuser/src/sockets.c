@@ -102,6 +102,7 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
                 "bnez   %[res], 1f                  \n"
                 "li     %[res], 2                   \n"
                 "clhu   %[res], $zero, 0(%[mc])     \n"
+                        MAGIC_SAFE
                 "subu   %[res], %[res], %[im]       \n"
                 "andi   %[res], %[res], 0xFFFF      \n"
                 "sltu   %[res], %[res], %[cmp]      \n"
@@ -872,7 +873,7 @@ int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_
     buffer->buffer = cheri_setbounds(char_buffer, data_buffer_size);
     buffer->fulfill_ptr = 0;
     buffer->requeste_ptr = 0;
-
+    buffer->partial_length = 0;
     return 0;
 }
 
@@ -892,6 +893,7 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
         if((con_type & (CONNECT_PUSH_WRITE | CONNECT_PULL_READ)) && (flags & MSG_DONT_WAIT)) return E_SOCKET_WRONG_TYPE;
         if((con_type & CONNECT_PUSH_WRITE) && !(flags & MSG_NO_COPY)) return E_COPY_NEEDED;
 
+        sock->write_copy_buffer.buffer = NULL;
         return 0;
     }
 }
@@ -912,19 +914,25 @@ ssize_t socket_requester_request_wait_for_fulfill(uni_dir_socket_requester* requ
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags) {
     // Need to copy to buffer in order not to expose buf
 
+    socket_flush_drb(sock);
+    if((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR) catch_up_write(sock);
+
     int dont_wait;
     dont_wait = (flags | sock->flags) & MSG_DONT_WAIT;
 
     if((sock->flags | flags) & MSG_NO_CAPS) buf = cheri_andperm(buf, CHERI_PERM_LOAD);
 
+
+    ssize_t ret = E_SOCKET_WRONG_TYPE;
     if(sock->con_type & CONNECT_PUSH_WRITE) {
         uni_dir_socket_requester* requester = sock->write.push_writer;
 
         if((sock->flags | flags) & MSG_NO_COPY) {
             if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 
-            ssize_t ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length), length);
-            if(ret < 0) return  ret;
+            ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length), length);
+            if(ret >= 0) ret = length;
+
             return length;
 
         } else {
@@ -932,26 +940,31 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
             register_t perms = CHERI_PERM_LOAD;
             if(!((flags | sock->flags) & MSG_NO_CAPS)) perms |= CHERI_PERM_LOAD_CAP;
 
-            return socket_internal_request_ind_db(requester, buf, length, &sock->write_copy_buffer, dont_wait, perms);;
+            ret = socket_internal_request_ind_db(requester, buf, length, &sock->write_copy_buffer, dont_wait, perms);
         }
 
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
         uni_dir_socket_fulfiller* fulfiller = &sock->write.pull_writer;
         ful_func * ff = &copy_in;
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
-        return socket_internal_fulfill_progress_bytes(fulfiller, length,
+        ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       F_CHECK | progress | dont_wait,
                                                       ff, (capability)buf, 0, NULL);
-    } else {
-        return E_SOCKET_WRONG_TYPE;
     }
 
+    if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->read_behind+=ret;
+    return ret;
 }
 
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags) {
+
+    socket_flush_drb(sock);
+    if(((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) catch_up_read(sock);
+
     int dont_wait;
     dont_wait = (flags | sock->flags) & MSG_DONT_WAIT;
 
+    ssize_t ret = E_SOCKET_WRONG_TYPE;
     if(sock->con_type & CONNECT_PULL_READ) {
         uni_dir_socket_requester* requester = sock->read.pull_reader;
 
@@ -961,30 +974,30 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         if((sock->flags | flags) & MSG_NO_COPY) {
             if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 
-            int ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length), length);
-            if(ret < 0) return ret;
-            return length;
+            ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length), length);
+            if(ret >= 0) ret = length;
         } else {
-
-            return E_UNSUPPORTED;
+            ret = E_UNSUPPORTED;
         }
 
     } else if(sock->con_type & CONNECT_PUSH_READ) {
         uni_dir_socket_fulfiller* fulfiller = &sock->read.push_reader;
         ful_func * ff = ((sock->flags | flags) & MSG_NO_CAPS) ? &copy_out_no_caps : copy_out;
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
-        return socket_internal_fulfill_progress_bytes(fulfiller, length,
+        ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       F_CHECK | progress | dont_wait,
                                                       ff, (capability)buf, 0, NULL);
-    } else {
-        return E_SOCKET_WRONG_TYPE;
     }
+
+    if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->write_behind+=ret;
+
+    return ret;
 }
 
 ssize_t socket_internal_requester_lseek(uni_dir_socket_requester* requester, int64_t offset, int whence, int dont_wait) {
     ssize_t ret;
     if((ret = socket_internal_requester_space_wait(requester, 1, dont_wait, 0)) != 0) return ret;
-    struct seek_desc desc;
+    seek_desc desc;
     desc.v.offset = offset;
     desc.v.whence = whence;
 
@@ -1058,6 +1071,15 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
     uint8_t in_type;
     uint8_t out_type;
 
+    socket_flush_drb(sockout);
+    socket_flush_drb(sockin);
+
+    int em_w = sockout->flags & MSG_EMULATE_SINGLE_PTR;
+    int em_r = sockin->flags & MSG_EMULATE_SINGLE_PTR;
+
+    if(em_w) catch_up_write(sockout);
+    if(em_r) catch_up_read(sockin);
+
     if(sockin->con_type & CONNECT_PULL_READ) in_type = SOCK_TYPE_PULL;
     else if(sockin->con_type & CONNECT_PUSH_READ) in_type = SOCK_TYPE_PUSH;
     else return E_SOCKET_WRONG_TYPE;
@@ -1069,20 +1091,22 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
     int dont_wait = (sockin->flags | sockout->flags) & MSG_DONT_WAIT;
     int no_caps = (sockin->flags | sockout->flags) & MSG_NO_CAPS;
 
+    ssize_t ret;
+
     if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PULL) {
         // Proxy
         uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
         uni_dir_socket_fulfiller* pull_write = &sockout->write.pull_writer;
 
-        ssize_t ret = socket_internal_request_proxy(pull_read, pull_write, count, 0);
-        return (ret < 0) ? ret : count;
+        ret = socket_internal_request_proxy(pull_read, pull_write, count, 0);
+        if(ret >= 0) ret = count;
 
     } else if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PUSH) {
         // Create custom buffer and generate a request (or few) for each
         uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
         uni_dir_socket_requester* push_write = sockout->write.push_writer;
 
-        return socket_internal_request_join(pull_read, push_write, 0, &sockout->write_copy_buffer, count, dont_wait);
+        ret = socket_internal_request_join(pull_read, push_write, 0, &sockout->write_copy_buffer, count, dont_wait);
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PULL) {
         // fullfill one read with a function that fulfills write
@@ -1093,7 +1117,7 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
         args.writer = pull_write;
         args.dont_wait = dont_wait;
 
-        return socket_internal_fulfill_progress_bytes(push_read, count, F_CHECK | F_PROGRESS | dont_wait,
+        ret = socket_internal_fulfill_progress_bytes(push_read, count, F_CHECK | F_PROGRESS | dont_wait,
                                                       &socket_internal_fulfill_with_fulfill, (capability)&args, 0, NULL);
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PUSH) {
@@ -1101,9 +1125,45 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
         uni_dir_socket_fulfiller* push_read = &sockin->read.push_reader;
         uni_dir_socket_requester* push_write = sockout->write.push_writer;
 
-        ssize_t ret = socket_internal_request_proxy(push_write, push_read, count, 0);
-        return (ret < 0) ? ret : count;
+        socket_internal_request_proxy(push_write, push_read, count, 0);
+        if(ret >= 0) ret = count;
     }
+
+    if(ret > 0) {
+        if(em_w) sockout->read_behind+=ret;
+        if(em_r) sockin->write_behind+=ret;
+    }
+
+    return ret;
+}
+
+ssize_t socket_flush_drb(unix_like_socket* socket) {
+    uint32_t len = socket->write_copy_buffer.partial_length;
+    if(socket->write_copy_buffer.buffer && len != 0) {
+        if(socket->flags & MSG_EMULATE_SINGLE_PTR) catch_up_write(socket);
+        // FIXME respect dont_wait
+        // FIXME handle error returns
+        char* c1;
+        char* c2;
+        size_t p1;
+        ssize_t align_extra = socket_internal_drb_space_alloc(&socket->write_copy_buffer,
+                                        ((size_t)socket->write_copy_buffer.buffer)+socket->write_copy_buffer.requeste_ptr,
+                                        len,
+                                        0,
+                                        &c1,
+                                        &c2,
+                                        &p1,
+                                        socket->write.push_writer);
+        assert_int_ex(align_extra, ==, 0);
+        socket->write_copy_buffer.partial_length = 0;
+
+        socket_internal_request_ind(socket->write.push_writer, c1, p1, p1);
+        if(p1 != len) {
+            socket_internal_request_ind(socket->write.push_writer, c2, len - p1, len - p1);
+        }
+        return len;
+    }
+    return 0;
 }
 
 static void socket_internal_fulfill_cancel_wait(uni_dir_socket_fulfiller* fulfiller) {

@@ -31,21 +31,19 @@
 #define CHERIOS_UNISTD_H
 
 #include "sockets.h"
+#include "stdio.h"
 
-struct socket_seek_manager {
-    unix_like_socket sock;
-    uint64_t read_behind;
-    uint64_t write_behind;
-};
+typedef FILE* FILE_t;
 
-typedef struct socket_seek_manager* FILE_t;
+// Open/close will contact the FS activation for you and also do allocation for you
+// ONLY use close on something created by open. Otherwise the other functions are just wrappers for the socket_* family
 
 FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags);
 ssize_t close(FILE_t file);
-ssize_t write(FILE_t file, const void* buf, size_t nbyte);
-ssize_t read(FILE_t file, void* buf, size_t nbyte);
+#define write(A,B,C) socket_send(A,B,C,0)
+#define read(A,B,C) socket_recv(A,B,C,0)
 ssize_t lseek(FILE_t file, int64_t offset, int whence);
-ssize_t sendfile(FILE_t f_out, FILE_t f_in, size_t count);
+#define sendfile(A,B,C) socket_sendfile(A,B,C)
 int mkdir(const char* name);
 ssize_t flush(FILE_t file);
 ssize_t filesize(FILE_t file);
