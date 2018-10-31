@@ -43,7 +43,11 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
     uint32_t mask = 0; // If we don't care exactly what the immediate/reg/exact instruction is
 
     uint32_t handle_instr = 0x480f7848;
-    uint32_t fault_instr = *((uint32_t*)get_ctl()->ex_pcc) &~mask;
+    uint32_t * epcc = (uint32_t*)get_ctl()->ex_pcc;
+
+    if(!((cheri_getoffset(epcc) >= 0) && (cheri_getoffset(epcc) < cheri_getlen(epcc)))) return 1;
+
+    uint32_t fault_instr = *(epcc) &~mask;
 
     // We might fail because we have no unsafe stack, or because its not large enough to use
     if(handle_instr != fault_instr) return 1;
