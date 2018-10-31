@@ -126,12 +126,10 @@ cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
 
 	ERROR_T(res_t) res = mem_request(0, pr.length + pr.mask, NONE, env->handle);
 
-	/*
 	if(!IS_VALID(res))  {
 		printf("mmap based alloc failed %ld\n", (long)res.er);
 		return NULL_PAIR;
 	}
-	*/
 
 	res_t reser = reservation_precision_align(res.val, pr.length, pr.mask);
 
