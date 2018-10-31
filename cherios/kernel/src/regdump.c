@@ -109,7 +109,8 @@ static act_t* get_act_for_pcc(capability pcc) {
     return get_act_for_address(cheri_getcursor(pcc));
 }
 
-static inline void print_frame(int num, capability ra, char * sp) {
+static inline void print_frame(int num, capability ra) {
+    if(cheri_getoffset(ra) > cheri_getlen(ra)) ra = cheri_setoffset(ra, 0);
     act_t* act = get_act_for_pcc(ra);
     size_t base = MIPS_KSEG0;
     char* name = "nano";
@@ -119,7 +120,23 @@ static inline void print_frame(int num, capability ra, char * sp) {
     }
 
     size_t correct = correct_base(base, ra);
-	printf("%2d| [0x%016lx] in %16s (sp=%p). PCC offset = 0x%016lx\n", num, correct, name, (void*)sp, cheri_getoffset(ra));
+    // (sp=%p). PCC offset = 0x%016lx
+
+    printf("%3d| [0x%016lx] in %16s.", num, correct, name);
+}
+
+static inline void print_frame_info(int16_t size, char* stack) {
+    uint32_t on_stack = cheri_getlen(stack) - cheri_getoffset(stack);
+    printf(" Frame size: %4x. Left On Stack: %4x. ", -size, on_stack);
+}
+
+static inline void print_change_stack(char* stack) {
+    uint32_t on_stack = cheri_getlen(stack) - cheri_getoffset(stack);
+    printf("\n Swap to new stack with size %4x\n", on_stack);
+}
+
+static inline void print_end(void) {
+    printf("\n");
 }
 
 int check_cap(capability cap) {
@@ -129,7 +146,10 @@ int check_cap(capability cap) {
 	(cap == NULL));
 }
 
-static inline void backtrace(char* stack_pointer, capability return_address, capability r17) {
+
+// TODO handle frames that are larger than the immediate field (need to decode a
+
+void backtrace(char* stack_pointer, capability return_address, capability r17) {
 	int i = 0;
 
 
@@ -138,26 +158,43 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 	// ...
 	// csc     c17,$zero,offset(c11)		// stores return address
 
-	// Instruction Format
+    // Or a prolog with unsafe mem allocates space like this...
+    // csc              $c11, $zero, -48($c10)
+    // cincoffset       $c11, $c10, -size
 
-	// cincoffset i						// 010010 | 10011 | cd | cb | im(11) |
+    // Or a prolog with a particularly big frame
+    // daddiu $1, $zero, -size
+    // incoffset $c11, $c1_ , $1
+
+	// Instruction Formats:
+
+	// cincoffset i						// |010010|10011| cd  | cb  | im(11)
+    // cincoffset                       // |010010|01101| cd  | cb  | rt  | (6) <- FIXME: LIES got from docs, is wrong
 
 	// csc     cs,rt,im(cb)				// |111110|cs   |cb   |rt   |im(11)
-	// |111110|10001|01011|00000|im(11)
+	// csc     c17, $zero, offset(c11)  // |111110|10001|01011|00000|im(11)
 
-	uint32_t cinc_form_mask = 	0xFFFFF800;
+	uint32_t cinc_c11_mask    = 0xFFFF0000;
 	uint32_t csc_form_mask    = 0xFFFFF800;
 
-	uint32_t cinc_form_val    = 0b010010100110101101011U << 11U;
+	uint32_t cinci_form_val   = 0b0100101001101011U << 16U; // An inc offset immediate to c11
+    uint32_t cinc_from_val    = 0x480b << 16U; // An inc offset to c11 // FIXME: Grabbed from dissassembler, not docs
+
 	uint32_t csc_form_val	  = 0b111110100010101100000U << 11U;
 
 	uint32_t cinc_i_mask 	  = (1 << 11) - 1;
+    uint32_t cinc_cb_shift    = 11;
+    uint32_t cinc_cb_mask     = (1 << 5) - 1;
+
 	uint32_t csc_i_mask		  = (1 << 11) - 1;
+    uint32_t daddiu_i_mask    = 0x0000FFFF;
 
 	// FIXME maybe use frame pointer?
 
+    int unsafe = 0;
+
 	do {
-		print_frame(i++, return_address, stack_pointer);
+		print_frame(i++, return_address);
 
         // This handles a branch out of the current function
 		if(i == 1 && cheri_getoffset(return_address) >= cheri_getlen(return_address)) {
@@ -171,15 +208,36 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 		if(((size_t)return_address & 0xffffffff80000000) != 0xffffffff80000000) {
 			for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
 				if(check_cap(instr)) {
-					printf("***bad frame***\n");
+                    if(i == 1) break;
+					printf("***bad frame (ran out of function)***\n");
 					return;
 				}
 				uint32_t val = *instr;
-				if((val & cinc_form_mask) == cinc_form_val) {
-					stack_size = (int16_t)(val & cinc_i_mask);
-					stack_size |= 0b11111 << 11;
-					break;
+
+                int cinc = (val & cinc_c11_mask) == cinc_from_val;
+                int cinci = (val & cinc_c11_mask) == cinci_form_val;
+
+                uint8_t from_reg = (uint8_t)((val >> cinc_cb_shift) & cinc_cb_mask);
+
+                int safe_inc = (cinc || cinci) && (from_reg == 11);
+                int unsafe_inc = (cinc || cinci) && (from_reg == 10);
+
+                unsafe = unsafe_inc ? 1 : 0;
+
+				if (safe_inc || unsafe_inc) {
+                    if(cinci) {
+                        stack_size = (int16_t)(val & cinc_i_mask);
+                        if(stack_size & (1 << 10)) {
+                            stack_size |= 0b11111 << 11;
+                        } else stack_size = 0;
+                    } else {
+                        // FIXME: Just assume the previous instruction is the daddiu. Should probably check...
+                        uint32_t prev_val = *(instr-1);
+                        stack_size = (int16_t)(prev_val & daddiu_i_mask);
+                    }
+                    if(stack_size != 0) break;
 				}
+
 				if((val & csc_form_mask) == csc_form_val) {
 					found = 1;
 					offset = (int16_t)((val & csc_i_mask) << 4);
@@ -190,6 +248,7 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 			return;
 		}
 
+        print_frame_info(stack_size, stack_pointer);
 		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
 
 
@@ -197,7 +256,7 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
             return_address = r17;
         } else {
             if(check_cap(ra_ptr)) {
-                printf("***bad frame***\n");
+                printf("***bad frame (ra bad)***\n");
                 return;
             }
 
@@ -207,8 +266,22 @@ static inline void backtrace(char* stack_pointer, capability return_address, cap
 		// Offset by 2 instructions for the cjal + nop
 		return_address = (capability)((uint32_t*)return_address-2);
 		stack_pointer = stack_pointer - stack_size;
+
+        if(unsafe) {
+            char** prev_stack_ptr = (char**)(stack_pointer - (3 * sizeof(capability)));
+            if(check_cap(prev_stack_ptr)) {
+                printf("*** bad frame (unsafe stack chain broken)***\n");
+                return;
+            }
+            stack_pointer = *prev_stack_ptr;
+            print_change_stack(stack_pointer);
+        }
+
+        print_end();
+
 	} while(cheri_getoffset(stack_pointer) != cheri_getlen(stack_pointer));
-	print_frame(i++, return_address, stack_pointer);
+	print_frame(i++, return_address);
+    print_end();
 }
 
 static inline void dump_tlb() {
