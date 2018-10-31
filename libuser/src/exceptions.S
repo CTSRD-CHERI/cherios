@@ -35,8 +35,14 @@
 #include "asm.S"
 #include "dylink.h"
 #include "cheriplt.h"
+#include "exceptions.h"
 
-.set RED_ZONE, 256
+#ifdef USE_EXCEPTION_STACK
+    .set RED_ZONE, 0
+#else
+    .set RED_ZONE, 256
+#endif
+
 
 # Need to save all args regs and tmps. Look in exceptions.h for structure.
 # If the user wants to change these values he can.
@@ -54,6 +60,7 @@
 .set AT_index, 0
 .set c18_index, 14
 .set c17_index, 13
+.set c11_index, 16
 
 .set CAP_START, (24 * REG_SIZE)
 
@@ -79,7 +86,7 @@
 .endm
 
 .macro save_other_cap reg, index, b
-    .if \index != c18_index && \index != c17_index
+    .if \index != c18_index && \index != c17_index && \index != c11_index
         save_cap \reg, \index, \b
     .endif
 .endm
@@ -94,7 +101,12 @@
     .endif
 .endm
 
-.set SAVE_SIZE, ((14 * CAP_SIZE) + (CAP_START))
+.set SAVE_SIZE, ((16 * CAP_SIZE) + (CAP_START))
+
+#ifdef USE_EXCEPTION_STACK
+    .set SAVE_SIZE, (SAVE_SIZE + CAP_SIZE)
+#endif
+
 .set STACK_INC, RED_ZONE + SAVE_SIZE
 
 
@@ -106,6 +118,23 @@
 .ent user_exception_trampoline_vector
 
 user_exception_trampoline_vector:
+
+## Create a new stack
+
+#ifdef USE_EXCEPTION_STACK
+clcbi       $c1, CTLP_OFFSET_CGP($idc)
+clcbi       $c1, %captab20(exception_stack)($c1)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+cscbi       $c11, -CAP_SIZE($c1)
+cmove       $c11, $c1
+#endif
 
 cincoffset  $c11, $c11, -(STACK_INC)
 
@@ -157,9 +186,9 @@ load_cap    $c17, c17_index, 0
 load_reg    $v1, V1_index, 0
 load_reg    $at, AT_index, 0
 clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)
-cincoffset $c11, $c11, (STACK_INC)
+cld         $v0, $zero, ((V0_index * REG_SIZE))($c11)
 b           replay_return
-cld         $v0, $zero, (-STACK_INC + (V0_index * REG_SIZE))($c11)
+cincoffset  $c11, $c11, (STACK_INC)
 
 user_c_exception_common_entry:
 
@@ -210,13 +239,17 @@ normal_return:
 # So we can use the macros
 
 # LLVM is really stupid, we can't use idc for non thread local things - have to use c1
-
+#ifdef USE_EXCEPTION_STACK
+clcbi       $c11, (-CAP_SIZE)($c11)
+#endif
 clcbi       $c1, %captab20(exception_return)($c1)
 clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
 ccall_slotless $c1, $idc, 2
 
 replay_return:
-
+#ifdef USE_EXCEPTION_STACK
+clcbi       $c11, (-CAP_SIZE)($c11)
+#endif
 clcbi       $c1, %captab20(exception_replay)($c1)
 clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
 ccall_slotless  $c1, $idc, 2

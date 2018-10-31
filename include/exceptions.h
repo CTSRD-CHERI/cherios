@@ -33,6 +33,11 @@
 #include "cheric.h"
 #include "dylink.h"
 
+#define USE_EXCEPTION_STACK
+#define EXCEPTION_STACK_SIZE 0x1000
+
+#ifndef __ASSEMBLY__
+
 typedef struct {
     register_t	mf_at, mf_v0, mf_v1;
     register_t	mf_a0, mf_a1, mf_a2, mf_a3, mf_a4, mf_a5, mf_a6, mf_a7;
@@ -44,6 +49,9 @@ typedef struct {
     register_t  padding;
 
     capability c2,c3,c4,c5,c6,c7,c8,c9, c12, c13,c14,c15,c16,c17,c18,c25;
+#ifdef USE_EXCEPTION_STACK
+    capability c11;
+#endif
 } exception_restore_frame;
 
 typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
@@ -63,5 +71,7 @@ void register_vectored_cap_exception(handler_t* handler, register_t excode);
 
 // Raw register. Will override all other usages
 void register_exception_raw(ex_pcc_t* exception_pcc, capability exception_idc);
+
+#endif // __ASSEMBLY__
 
 #endif //CHERIOS_EXCEPTIONS_H

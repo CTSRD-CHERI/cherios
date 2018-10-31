@@ -40,6 +40,9 @@ int trampoline_registered = 0;
 handler_t* handle_vector[MIPS_CP0_EXCODE_NUM];
 handler_t* chandle_vector[CAP_CAUSE_NUM];
 
+#ifdef USE_EXCEPTION_STACK
+capability exception_stack[EXCEPTION_STACK_SIZE/sizeof(capability)];
+#endif
 
 void register_vectored_exception(handler_t* handler, register_t excode) {
     assert(excode < MIPS_CP0_EXCODE_NUM);
