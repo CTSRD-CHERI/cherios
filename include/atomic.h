@@ -48,6 +48,24 @@ __asm__ __volatile__ (                              \
 :)    ;                                             \
 }                                                   \
 
+#define ATOMIC_CAS(pointer, type, old_val, new_val, result) \
+{                                                           \
+register register_t tmp;                                    \
+__asm__ __volatile(                                         \
+SANE_ASM                                                    \
+        "1:"                                                \
+LOADL(type) " %[tmp], %[ptr]            \n"                 \
+"bne    %[tmp], %[old], 2f              \n"                 \
+"li     %[res], 0                       \n"                 \
+STOREC(type) " %[res], %[new], %[ptr]    \n"                 \
+"beqz   %[res], 1b                      \n"                 \
+"nop                                    \n"                 \
+"2:                                     \n"                 \
+: [tmp] "=r" (tmp), [res] "=r" (result)                     \
+: [ptr] "C" (pointer), [old] "r" (old_val), [new] "r"(new_val) \
+:);                                                         \
+}
+
 #define LOAD_LINK(ptr, type, result) __asm__ __volatile(LOADL(type) " %[res], %[pt]" : [res] OUT(type) (result) : [pt] IN(c) (ptr):)
 #define STORE_COND(ptr, type, val, suc) __asm__ __volatile(STOREC(type) " %[sc], %[vl], %[pt]" : \
                     [sc] OUT(64) (suc) : \
