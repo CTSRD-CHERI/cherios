@@ -241,7 +241,8 @@ static act_t* alloc_static_act(aid_t* aid_used) {
 	act_t* act = kernel_acts + id;
 	if(aid_used) *aid_used = id;
 
-    act = cheri_setbounds(act, sizeof(act_t));
+	// Needs to be exact in order to work with sync tokens which now hide seq numbers in offsets
+    act = cheri_setbounds_exact(act, sizeof(act_t));
 	return act;
 }
 
@@ -329,8 +330,14 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	msg_queue_init(act, queue);
 
 	/* set expected sequence to not expecting */
+
+    act->initial_indir.act = act;
+    act->initial_indir.sync_add = 0;
+
 	act->sync_state.sync_token = 0;
 	act->sync_state.sync_condition = 0;
+    act->sync_state.current_sync_indir = cheri_setbounds_exact(&act->initial_indir, sizeof(sync_indirection));
+    act->sync_state.alloc_block = NULL;
 
 	KERNEL_TRACE("register", "image base of %s is %lx", act->name, act->image_base);
 	KERNEL_TRACE("act", "%s OK! ", __func__);

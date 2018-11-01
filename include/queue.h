@@ -44,7 +44,11 @@
 #define MSGS_START_OFFSET (2*CAP_SIZE)
 
 // FIXME: adjust padding and this value for 128
-#define MSG_LEN_SHIFT	8
+#ifdef  _CHERI256_
+	#define MSG_LEN_SHIFT	8
+#else
+	#define MSG_LEN_SHIFT	7
+#endif
 
 #ifndef __ASSEMBLY__
 
@@ -65,7 +69,7 @@ typedef struct
 	capability c6;
 
 	capability c1;  /* sync token */
-	capability c2;	/* message sender cap */
+//	capability c2;	/* message sender cap */ We now only have a sync token that also identifies the sender
 
 	register_t a0; /* GP arguments */
 	register_t a1;
@@ -75,9 +79,9 @@ typedef struct
 	register_t v0;  /* method nb */
 
 #ifdef _CHERI256_
-	char pad[20];	/* Makes the size 256 bytes in 256. Steal these bytes if you want larger messages. */
+	char pad[40];	/* Makes the size 256 bytes in 256. Steal these bytes if you want larger messages. */
 #else
-	char pad[120]; /* for 128 it would make a lot of sense to have one fewer int args to make this fit in 128 */
+	char pad[8]; /* for 128 it would make a lot of sense to have one fewer int args to make this fit in 128 */
 #endif
 }  msg_t;
 

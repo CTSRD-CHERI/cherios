@@ -62,6 +62,7 @@
  * TODO case we might want to restore that context straight away */ \
     ITEM(set_exception_handler, void, (context_t, context, register_t ,cpu_id), __VA_ARGS__) \
 /* Returns a proper capability made from a reservation. state open -> taken. Fails if not open */\
+/* This secretly also returns by value in c3/c4. This is guaranteed, but there is no way to declare that in C*/\
     ITEM(rescap_take, void, (res_t, res, cap_pair*, out), __VA_ARGS__)\
 /* Returns the length/base of a reservation (not including any metadata) */\
     ITEM(rescap_nfo, res_nfo_t, (res_t, res), __VA_ARGS__)\

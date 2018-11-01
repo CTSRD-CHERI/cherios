@@ -45,7 +45,7 @@
                                         const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
                                         act_kt dest, register_t selector, register_t v0), __VA_ARGS__,                          \
                                          ".global message_send_c \n message_send_c: \n")                                         \
-        ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, capability sync_token), __VA_ARGS__)          \
+        ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller), __VA_ARGS__)          \
 /* In mips clock ticks*/\
         ITEM(sleep, void, (register_t timeout), __VA_ARGS__)                                                                           \
         ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
@@ -70,7 +70,8 @@
         ITEM(syscall_now, register_t, (void), __VA_ARGS__)\
         ITEM(syscall_vmem_notify, void, (act_kt waiter, int suggest_switch), __VA_ARGS__)\
         ITEM(syscall_change_priority, void, (act_control_kt ctrl, enum sched_prio priority), __VA_ARGS__)\
-        ITEM(syscall_dump_tlb, void, (void), __VA_ARGS__)
+        ITEM(syscall_dump_tlb, void, (void), __VA_ARGS__)\
+        ITEM(syscall_provide_sync, size_t, (res_t res), __VA_ARGS__)
 
 // Found by trial and error
 #ifdef HARDWARE_qemu

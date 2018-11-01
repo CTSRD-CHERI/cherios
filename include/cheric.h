@@ -241,12 +241,10 @@ typedef unsigned int stype;
 #define	cheri_setbounds(x, y)	__builtin_cheri_bounds_set(		\
 				    __DECONST(capability, (x)), (y))
 // TODO find instrinsic
-// FIXME: Currently this does not set bounds exact =(. The reason being the compiler needs to allocate large globals
-// FIXME: on better boundries. It currently does not do this.
 #define	cheri_setbounds_exact(x, y)	                        \
 ({                                                          \
 capability __exact;                                         \
-__asm__ ("csetbounds %[out], %[in], %[len]"                 \
+__asm__ ("csetboundsexact %[out], %[in], %[len]"                 \
     : [out]"=C"(__exact)                                    \
     :[in]"C"(x),[len]"r"(y):);                              \
     __exact; \

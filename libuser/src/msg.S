@@ -116,12 +116,11 @@ pop:
     clc     $c5, $t1,  (MSGS_START_OFFSET + 2 * CAP_SIZE)(queue)
     clc     $c6, $t1,  (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
     clc     $c1, $t1,  (MSGS_START_OFFSET + 4 * CAP_SIZE)(queue)
-    clc     $c2, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
-    cld     $a0, $t1,  (MSGS_START_OFFSET + 6 * CAP_SIZE)(queue)
-    cld     $a1, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 8)(queue)
-    cld     $a2, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 16)(queue)
-    cld     $a3, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 24)(queue)
-    cld     $v0, $t1,  (MSGS_START_OFFSET + (6 * CAP_SIZE) + 32)(queue)
+    cld     $a0, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
+    cld     $a1, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 8)(queue)
+    cld     $a2, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 16)(queue)
+    cld     $a3, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 24)(queue)
+    cld     $v0, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 32)(queue)
 
 
     addi    start_g, start_g, 1                             # increment start
@@ -147,8 +146,6 @@ call:
 
 	#Save sync_token
 	csc		$c1, $zero, 0(sync_state_cap)
-    #Save caller
-    csc     $c2, $zero, CAP_SIZE(sync_state_cap)
 
 	sll		$v0, $v0, CAP_SIZE_BITS
 	clc		$c12, $v0, 0($c12)
@@ -168,9 +165,7 @@ overflow:
 end:
 
 	#Restore sync_token
-	clc		$c5, $zero, 0(sync_state_cap)
-	#Restore caller activation reference
-	clc     $c4, $zero, CAP_SIZE(sync_state_cap)
+	clc		$c4, $zero, 0(sync_state_cap)
 
 #FIXME this instruction cannot jump backwards due to a QEMU bug
 	cbts    $c4, make_return

@@ -66,10 +66,6 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 
 	uint64_t last_tsx = *tsx_ptr;
 
-    // I inlined this temporarily
-	//capability c2 = sync_token == NULL ? NULL : (capability)act_create_sealed_sync_ref(src);
-    capability c2 = sync_token == NULL ? NULL : cheri_seal(src, sync_ref_sealer);
-
 	while(1) {
 		restart:
 		LOAD_LINK(tsx_ptr, 64, msg_tsx);
@@ -105,7 +101,6 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 				GUARD_STORE(&slot->c6, c6, c, tmp_c);
 
 				GUARD_STORE(&slot->c1, sync_token, c, tmp_c);
-				GUARD_STORE(&slot->c2, c2, c, tmp_c);
 
 				register_t tmp_r;
 
@@ -178,37 +173,92 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 	//todo: zero queue?
 }
 
+sync_indirection* alloc_new_indir(act_t* ccaller) {
+    kernel_assert(ccaller->sync_state.alloc_block != NULL);
+    kernel_assert(ccaller->sync_state.allocs_taken != ccaller->sync_state.allocs_max);
+
+    res_t to_take = rescap_getsub(ccaller->sync_state.alloc_block, ccaller->sync_state.allocs_taken++);
+
+    cap_pair pair;
+
+    rescap_take(to_take, &pair);
+
+    sync_indirection* si = cheri_setbounds_exact(pair.data, SI_SIZE);
+
+    si->act = ccaller;
+    si->sync_add = ccaller->sync_state.sync_token;
+
+    return si;
+}
+
 /* Creates a token for synchronous CCalls. This ensures the answer is unique. */
 static capability get_and_set_sealed_sync_token(act_t* ccaller) {
-	volatile static sync_t unique = 0;
-
-	sync_t our_copy;
-
-	ATOMIC_ADD(&unique, 64, 1, our_copy);
 
 	if(ccaller->sync_state.sync_condition != 0) {
 		KERNEL_ERROR("Caller %s made a sync call but seemed to be waiting for a return already\n", ccaller->name);
 	}
 	kernel_assert(ccaller->sync_state.sync_condition == 0);
-	ccaller->sync_state.sync_token = our_copy;
+
+	sync_t sn = ccaller->sync_state.sync_token;
+    sync_indirection* si = ccaller->sync_state.current_sync_indir;
+
+
+    if(sn - si->sync_add == MAX_SEQ_NS) {
+        si = alloc_new_indir(ccaller);
+    }
+
 	ccaller->sync_state.sync_condition = 1;
 
-    // I really want something that is tagged but can have any offset - this only works on 256 now
-	capability sync_token = MAKE_SEALABLE_INT(our_copy);
+
+    sn -=si->sync_add;
+    // TODO: Generate a new sequence indirection from the free chain
+    kernel_assert(sn < MAX_SEQ_NS);
+
+    // This stores the seq number in the offset. This is fine on 256, but might be limiting depending on precision
+	capability sync_token = cheri_setoffset(si, sn + MIN_OFFSET);
+
 	return cheri_seal(sync_token, sync_token_sealer);
 }
 
-static sync_t unseal_sync_token(capability token) {
-	token = cheri_unseal(token, sync_token_sealer);
-	return cheri_getoffset(token);
-}
+static act_t* token_expected(capability token) {
+    /* Must no longer expect this sequence token */
 
-static int token_expected(act_t* ccaller, capability token) {
-	sync_t got = unseal_sync_token(token);
-	if(ccaller->sync_state.sync_token != got) {
+    token = cheri_unseal(token, sync_token_sealer);
+
+    sync_t got = cheri_getoffset(token) - MIN_OFFSET;
+
+    sync_indirection* si= cheri_setoffset(token, 0);
+
+    act_t* ccaller = si->act;
+    got += si->sync_add;
+
+    if(ccaller->sync_state.sync_token != got) {
 		printf("got %lx. wanted %lx. (%p)\n", got, ccaller->sync_state.sync_token, &(ccaller->sync_state.sync_token));
 	}
-	return ccaller->sync_state.sync_token == got;
+
+    // We might get a multithreaded return attack, so we have to atomically update the sync token
+
+    int result;
+
+    ATOMIC_CAS(&ccaller->sync_state.sync_token, 64, got, got+1, result);
+
+    return result ? ccaller : NULL;
+}
+
+size_t kernel_syscall_provide_sync(res_t res) {
+    res = rescap_split(res, 0); // Destroy the users handle so we can make a res field without interference
+    res_nfo_t nfo = rescap_nfo(res);
+    if(nfo.length < SI_SIZE) return 0;
+
+    act_t* source_activation = (act_t*) CALLER;
+
+    res = rescap_splitsub(res, SI_BITS);
+
+    source_activation->sync_state.alloc_block = res;
+    source_activation->sync_state.allocs_taken = 0;
+    source_activation->sync_state.allocs_max = nfo.length / SI_SIZE;
+
+    return source_activation->sync_state.allocs_max;
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
@@ -264,24 +314,25 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 	return;
 }
 
-int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token) {
+int kernel_message_reply(capability c3, register_t v0, register_t v1, capability sync_token) {
 
-	//FIXME can get races if returned_from copies the return token to another thread
-	act_t * returned_from = (act_t*) CALLER;
-	act_t * returned_to =  act_unseal_sync_ref(caller);
+    act_t * returned_from = (act_t*) CALLER;
 
-    kernel_assert(returned_to != NULL);
+    if(sync_token == NULL) {
+        KERNEL_TRACE(__func__, "%s did not provide a sync token", returned_from->name);
+        kernel_freeze();
+    }
+
+    // This will handle all races in multiple calls to return
+    act_t * returned_to = token_expected(sync_token);
+
+    if(!returned_to) {
+        KERNEL_ERROR("wrong sequence token from creturn");
+        kernel_freeze();
+    }
+
     kernel_assert(returned_to->sync_state.sync_ret != NULL);
 
-	if(sync_token == NULL) {
-		KERNEL_TRACE(__func__, "%s did not provide a sync token", returned_from->name);
-		kernel_freeze();
-	}
-
-	if(!token_expected(returned_to, sync_token)) {
-		KERNEL_ERROR("wrong sequence token from creturn");
-		kernel_freeze();
-	}
 
 	KERNEL_TRACE(__func__, "%s correctly makes a sync return to %s", returned_from->name, returned_to->name);
 
@@ -291,9 +342,6 @@ int kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* cal
 	returned_to->sync_state.sync_ret->c3 = c3;
 	returned_to->sync_state.sync_ret->v0 = v0;
 	returned_to->sync_state.sync_ret->v1 = v1;
-
-	/* Must no longer expect this sequence token */
-	returned_to->sync_state.sync_token = 0;
 
 	/* Make the caller runnable again */
     sched_receive_event(returned_to, sched_sync_block);

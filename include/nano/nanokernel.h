@@ -82,8 +82,8 @@ static inline void try_take_res(res_t res, size_t required, cap_pair* out) {
     if(res != NULL && cheri_gettype(res) == RES_TYPE) {
         rescap_take(res, out);
         if(out->data != NULL && (cheri_getlen((out->data)) >= required)) {
-            out->data = cheri_setbounds(out->data, required);
-            out->code = cheri_setbounds(out->code, required);
+            out->data = cheri_setbounds_exact(out->data, required);
+            out->code = cheri_setbounds_exact(out->code, required);
         }
     }
 }

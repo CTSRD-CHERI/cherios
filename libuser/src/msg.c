@@ -65,3 +65,12 @@ msg_t* get_message(void) {
     }
     return &act_self_queue->msg[act_self_queue->header.start & (act_self_queue->header.len-1)];
 }
+
+void msg_delay_return(sync_state_t* delay_store) {
+    delay_store->sync_caller = sync_state.sync_caller;
+    sync_state.sync_caller = NULL;
+}
+
+int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store) {
+    return message_reply(c3, v0, v1, delay_store.sync_caller);
+}

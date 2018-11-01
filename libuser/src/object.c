@@ -97,7 +97,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     act_self_notify_ref = syscall_act_ctrl_get_notify_ref(self_ctrl);
 	act_self_queue = queue;
 
-    sync_state = (sync_state_t){.sync_caller = NULL, .sync_token = NULL};
+    sync_state = (sync_state_t){.sync_caller = NULL};
 
     // Tag exceptions can happen when we first use an unsafe stack. We will handle these to get a stack.
     // We can also get a length violation if we need a new one.

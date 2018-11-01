@@ -45,6 +45,7 @@ void kernel_syscall_dump_tlb(void) {
 	kernel_dump_tlb();
 }
 
+DECLARE_WITH_CD(size_t, kernel_syscall_provide_sync(res_t res));
 
 DECLARE_WITH_CD(void, kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority));
 void kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority) {

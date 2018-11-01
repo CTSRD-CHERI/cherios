@@ -47,11 +47,8 @@ typedef struct req_s {
     uint8_t used;
     register_t seq_response;
 	register_t seq_port;
-	sync_token_t sync_token;
-    union caller_u {
-        act_kt async_caller;
-        act_reply_kt sync_caller;
-    } caller;
+	sync_state_t sync_caller;
+    act_kt async_caller;
 } req_t;
 
 typedef enum {

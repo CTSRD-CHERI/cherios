@@ -141,7 +141,7 @@ void worker_start(register_t arg, capability carg) {
         if(mode == 0) result = mem_release(base, length, times, mop);
         else result = mem_claim(base, length, times, mop);
 
-        if(msg->c1 != NULL) message_reply(NULL, result, 0, msg->c2, msg->c1);
+        if(msg->c1 != NULL) message_reply(NULL, result, 0, msg->c1);
 
         next_msg();
     }

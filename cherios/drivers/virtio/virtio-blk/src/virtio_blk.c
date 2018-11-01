@@ -388,12 +388,12 @@ size_t vblk_size(session_t* session) {
 }
 
 static void vblk_send_result(req_t* req, int result) {
-    if(req->sync_token) {
-        message_reply(NULL, (register_t)result, 0, req->caller.sync_caller, req->sync_token);
-    } else if(req->caller.sync_caller) {
+    if(req->sync_caller.sync_caller) {
+        msg_resume_return(NULL, (register_t)result, 0, req->sync_caller);
+    } else if(req->async_caller) {
         // TODO set seq response
         message_send((register_t)result,req->seq_response,0,0,NULL,NULL,NULL,NULL,
-                     req->caller.sync_caller, SEND, req->seq_port);
+                     req->async_caller, SEND, req->seq_port);
     }
 }
 
@@ -444,12 +444,6 @@ void vblk_interrupt(void* sealed_session, register_t a0, register_t irq) {
 	syscall_interrupt_enable((int)irq, act_self_ctrl);
 }
 
-static int vblk_delay_return(session_t* session, size_t i) {
-	sync_state.sync_token = NULL;
-	sync_state.sync_caller = NULL;
-	return 0;
-}
-
 int vblk_rw(session_t* session, void * buf, size_t sector,
              act_kt async_caller, register_t asyc_no, register_t async_port,
              __virtio32 type) {
@@ -476,15 +470,15 @@ int vblk_rw(session_t* session, void * buf, size_t sector,
     struct virtio_blk_outhdr* outhdr = &session->outhdrs[i];
 
     reqs[i].used = 1;
+
+    reqs[i].async_caller = async_caller;
+
     if(async_caller) {
-        reqs[i].sync_token = NULL;
-        reqs[i].caller.async_caller = async_caller;
+        reqs[i].sync_caller.sync_caller = NULL;
         reqs[i].seq_response = asyc_no;
         reqs[i].seq_port = async_port;
-
     } else {
-        reqs[i].sync_token = sync_state.sync_token;
-        reqs[i].caller.sync_caller = sync_state.sync_caller;
+        msg_delay_return(&reqs[i].sync_caller);
     }
     outhdr->type = type;
     outhdr->sector = sector;
@@ -518,8 +512,7 @@ int vblk_rw(session_t* session, void * buf, size_t sector,
 
     add_desc(session, (le16)DESC_PER_REQ*i);
 
-    //return vblk_rw_ret(i);
-    return vblk_delay_return(session, i);
+    return 0;
 }
 
 int vblk_read(session_t* session, void * buf, size_t sector,

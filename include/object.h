@@ -63,12 +63,10 @@ void	ctor_null(void);
 void	dtor_null(void);
 
 typedef struct sync_state_t {
-    sync_token_t sync_token;
     act_reply_kt sync_caller;
 } sync_state_t;
 
-_Static_assert(offsetof(sync_state_t, sync_token) == 0, "used by assembly");
-_Static_assert(offsetof(sync_state_t, sync_caller) == sizeof(capability), "used by assembly");
+_Static_assert(offsetof(sync_state_t, sync_caller) == 0, "used by assembly");
 
 extern __thread sync_state_t sync_state;
 
@@ -81,5 +79,7 @@ msg_t* get_message(void);
 void pop_msg(msg_t * msg);
 int msg_queue_empty(void);
 extern void msg_entry(int return_if_empty);
+void msg_delay_return(sync_state_t* delay_store);
+int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store);
 
 #endif

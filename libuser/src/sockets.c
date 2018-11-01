@@ -694,26 +694,26 @@ int socket_internal_listen(register_t port,
     }
 
     if(msg.a0 != port) {
-        message_reply((capability)E_CONNECT_FAIL_WRONG_PORT,0,0,msg.c2, msg.c1);
+        message_reply((capability)E_CONNECT_FAIL_WRONG_PORT,0,0,msg.c1);
         return (E_CONNECT_FAIL_WRONG_PORT);
     }
 
     if(msg.a1 != con_type) {
         // Send failure
-        message_reply((capability)E_CONNECT_FAIL_WRONG_TYPE,0,0,msg.c2, msg.c1);
+        message_reply((capability)E_CONNECT_FAIL_WRONG_TYPE,0,0,msg.c1);
         return (E_CONNECT_FAIL_WRONG_TYPE);
     }
 
     if(fulfiller) {
         if(msg.c3 == NULL) {
-            message_reply((capability)E_CONNECT_FAIL,0,0,msg.c2, msg.c1);
+            message_reply((capability)E_CONNECT_FAIL,0,0,msg.c1);
             return (E_CONNECT_FAIL);
         }
         fulfiller->requester = (uni_dir_socket_requester*) msg.c3;
     }
 
     // ACK receipt
-    message_reply((capability)ro_req,0,0,msg.c2, msg.c1);
+    message_reply((capability)ro_req,0,0, msg.c1);
 
     if(requester) requester->connected = 1;
     if(fulfiller) fulfiller->connected = 1;

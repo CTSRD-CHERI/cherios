@@ -62,6 +62,26 @@ typedef	uint64_t sync_t;
 #define F_INC	  (1 << 16)
 #define HD_INC	  (1 << 32)
 
+// FIXME: I made these numbers up. We should align act so they can be sufficiently large
+#define MIN_OFFSET 0
+#define MAX_OFFSET 0x10000
+#define MAX_SEQ_NS (MAX_OFFSET - MIN_OFFSET)
+
+
+// We can only store a small constant in a pointer, so we point to one of these to add an extra constant
+// This requires an allocation, but only one every MAX_SEQ_NS. It is up to the user to provide reservations for new
+// Reservations
+
+typedef struct {
+    struct act_t* act;
+    sync_t sync_add;
+} sync_indirection;
+
+#define SI_SIZE (2 * CAP_SIZE)
+#define SI_BITS (1 + CAP_SIZE_BITS)
+
+_Static_assert(SI_SIZE >= sizeof(sync_indirection), "We need to declare a size that is larger than this struct");
+
 typedef struct act_t
 {
 	/* Warning: The offset of this needs to be zero */
@@ -102,12 +122,18 @@ typedef struct act_t
 
 	context_t context;	/* Space to put saved context for restore */
 
-	/* CCall related */
+	/* Message pass related */
 	struct sync_state {
-		ret_t* sync_ret;
-		sync_t sync_token;		/* Helper for the synchronous CCall mecanism */
-		volatile int sync_condition;
+		ret_t* sync_ret;                /* A pointer a struct to write the return message */
+		volatile sync_t sync_token;		/* The sequence number we expect next */
+		volatile int sync_condition;    /* A synchronisation flag for whether or not we expect a return */
+        sync_indirection* current_sync_indir; /* The current indirection we are using to generate tokens */
+        res_t alloc_block;              /* The user provides this to create more sync_indrections */
+        size_t allocs_taken;
+        size_t allocs_max;
 	} sync_state;
+
+    sync_indirection initial_indir; // Enough for MAX_SEQ_NS, then we need a new one from the user
 
 	/* Semaphore related */
 	struct act_t * semaphore_next_waiter;

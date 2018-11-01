@@ -87,6 +87,4 @@ typedef capability act_kt;
 typedef capability act_control_kt;
 typedef capability act_reply_kt;
 typedef capability act_notify_kt;
-
-typedef capability sync_token_t;
 #endif
