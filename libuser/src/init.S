@@ -185,9 +185,6 @@ start_common:
 	get_tls_sym_val	$t0, msg_enable, d, $c17
 	bne		$t0, $zero, msg_entry
 	li      $a0, 0
-	get_tls_sym_val $c2, act_self_ctrl, c, $c17
-	cmove   $c3, $c2
 
-	get_sym_val_array $c1, kernel_if, c, $c17, $zero, syscall_act_terminate_offset
-	# We don't bother setting up a return as this will terminate us
-	ccall_slotless   $c1, $c2, 2
+	# Call object_destroy
+	call_func object_destroy

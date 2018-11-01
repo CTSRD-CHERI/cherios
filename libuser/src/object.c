@@ -45,6 +45,7 @@
 #include "exceptions.h"
 #include "exception_cause.h"
 #include "temporal.h"
+#include "unistd.h"
 
 capability int_cap;
 
@@ -143,6 +144,16 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     stdout = NULL;
 #endif
 
+}
+
+// Called when main exits
+__attribute__((noreturn))
+void object_destroy() {
+    #ifndef USE_SYSCALL_PUTS
+        flush(stdout);
+        flush(stderr);
+    #endif
+    syscall_act_terminate(act_self_ctrl);
 }
 
 void ctor_null(void) {
