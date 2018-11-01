@@ -128,3 +128,37 @@ NET_SOCK netsock_accept(enum SOCKET_FLAGS flags) {
 
     return sock;
 }
+
+struct hostent_names {
+    struct hostent he;
+    char* aliases[1];        // Always set to null, no aliases
+    char* addr_list[2];      // A single address
+    u32_t addr;
+};
+
+struct hostent *gethostbyname(const char *name) {
+    act_kt net = net_try_get_ref();
+
+    if(net == NULL) return  NULL;
+
+    // Gets a single ip_addr_t by value and then constructs the stupid unix structure....
+    u32_t addr = message_send(0,0,0,0,name,NULL,NULL,NULL,net,SYNC_CALL,3);
+
+    if(addr == (u32_t)-1) return NULL;
+
+    struct hostent_names* he = (struct hostent_names*)malloc(sizeof(struct hostent_names));
+
+    he->he.h_name = name;
+
+    he->he.h_aliases = (char**)&he->aliases;
+    he->aliases[0] = NULL;
+
+    he->he.h_addr_list = (char**)&he->addr_list;
+    he->he.h_addrtype = AF_INET;
+    he->he.h_length = 4; // Do we want the address as an int or string?
+    he->addr_list[0] = (char*)&he->addr;
+    he->addr = addr;
+    he->addr_list[1] = NULL;
+
+    return &he->he;
+}

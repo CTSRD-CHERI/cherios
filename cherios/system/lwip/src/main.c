@@ -38,7 +38,7 @@
 #include "syscalls.h"
 #include "namespace.h"
 #include "net.h"
-
+#include "lwip/dns.h"
 #include "lwip_driver.h"
 
 enum session_close_state {
@@ -556,6 +556,29 @@ static void user_tcp_close(tcp_session* tcp) {
     return;
 }
 
+static void dns_lookup_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
+    sync_state_t ss;
+    ss.sync_caller = callback_arg;
+    msg_resume_return(NULL, ipaddr->addr, 0, ss);
+}
+
+static void user_gethostbyname(const char* name) {
+
+    ip_addr_t ip;
+    sync_state_t ss;
+
+    msg_delay_return(&ss);
+
+    err_t er = dns_gethostbyname(name, &ip, &dns_lookup_callback, (void*)ss.sync_caller);
+
+    if(er == ERR_OK) {
+        msg_resume_return(NULL, ip.addr, 0, ss);
+
+    } else if(er != ERR_INPROGRESS) {
+        msg_resume_return(NULL, (u32_t)-1, 0, ss);
+    }
+}
+
 int main(register_t arg, capability carg) {
     // Init session
     printf("LWIP Hello World!\n");
@@ -685,7 +708,7 @@ int main(register_t arg, capability carg) {
     }
 }
 
-void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets};
+void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets, user_gethostbyname};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, lwip_driver_handle_interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);

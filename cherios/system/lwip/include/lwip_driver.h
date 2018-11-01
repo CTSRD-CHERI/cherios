@@ -45,6 +45,7 @@
 #include "lwip/timeouts.h"
 #include "lwip/dhcp.h"
 #include "cp0.h"
+#include "hostconfig.h"
 
 #ifdef HARDWARE_qemu
 
@@ -62,33 +63,13 @@
 // This driver IF is a stepping stone to get lwip working. It will eventually be extracted into a stand-alone driver
 // and they will communicate via the socket API.
 
-#define CHERIOS_NET_MASK    "255.255.255.0"
-#define CHERIOS_GATEWAY     "128.232.18.1"
-
 // #define LOCAL
 
 #ifdef HARDWARE_qemu
-
     #define QUEUE_SIZE 0x10
-    #define CHERIOS_IP          "128.232.18.56"
-    #define CHERIOS_MAC         {0x00,0x16,0x3E,0xE8,0x12,0x38}
-    #define CHERIOS_HOST        "cherios"
-
     typedef virtio_mmio_map lwip_driver_mmio_t;
 #else
-
-    #define CHERIOS_MAC         {0xba,0xdb,0xab,0xe5,0xca,0xfe}
-
-#ifdef LOCAL
-    #define CHERIOS_IP          "10.0.0.245"
-    #define CHERIOS_HOST        "cherios-fpga-local"
-#else
-    #define CHERIOS_IP          "128.232.18.245"
-    #define CHERIOS_HOST        "cherios-fpga"
-#endif
-
     typedef mac_control lwip_driver_mmio_t;
-
 #endif
 
 typedef struct net_session {

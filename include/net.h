@@ -34,6 +34,7 @@
 #include "lwip/ip_addr.h"
 #include "lwip/err.h"
 #include "lwip/inet.h"
+#include "lwip/sockets.h" // We don't use any of the socket functions. But the types are useful for compat
 
 struct tcp_bind {
     ip_addr_t addr;
@@ -73,7 +74,7 @@ NET_SOCK netsock_accept(enum SOCKET_FLAGS flags);
 
 
 struct hostent {
-    char  *h_name;            /* official name of host */
+    const char  *h_name;       /* official name of host */
     char **h_aliases;         /* alias list */
     int    h_addrtype;        /* host address type */
     int    h_length;          /* length of address */

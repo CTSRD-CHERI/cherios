@@ -80,5 +80,6 @@ typedef int32_t s32_t;
 //#define mem_clib_malloc malloc_debug
 //#define mem_clib_calloc calloc_debug
 
+#define LWIP_RAND rand
 
 #endif //CHERIOS_CC_H

@@ -41,7 +41,7 @@
 
 #include "lwip/opt.h"
 
-#if LWIP_SOCKET /* don't build if not configured for use in lwipopts.h */
+#if LWIP_SOCKET_TYPES /* don't build if not configured for use in lwipopts.h */
 
 #include "lwip/ip_addr.h"
 #include "lwip/netif.h"
@@ -220,6 +220,7 @@ struct ifreq {
 #define SO_NO_CHECK     0x100a /* don't create UDP checksum */
 #define SO_BINDTODEVICE 0x100b /* bind to device */
 
+
 /*
  * Structure used for manipulating linger option.
  */
@@ -256,6 +257,7 @@ struct linger {
 #define IPPROTO_UDPLITE 136
 #define IPPROTO_RAW     255
 
+#ifdef LWIP_SOCKET
 /* Flags we can use with send and recv. */
 #define MSG_PEEK       0x01    /* Peeks at an incoming message */
 #define MSG_WAITALL    0x02    /* Unimplemented: Requests that the function block until the full amount of data requested can be returned */
@@ -263,7 +265,7 @@ struct linger {
 #define MSG_DONTWAIT   0x08    /* Nonblocking i/o for this operation only */
 #define MSG_MORE       0x10    /* Sender will send more */
 #define MSG_NOSIGNAL   0x20    /* Uninmplemented: Requests not to send the SIGPIPE signal if an attempt to send is made on a stream-oriented socket that is no longer connected. */
-
+#endif
 
 /*
  * Options for level IPPROTO_IP
@@ -282,6 +284,8 @@ struct linger {
 #define TCP_KEEPINTVL  0x04    /* set pcb->keep_intvl - Use seconds for get/setsockopt */
 #define TCP_KEEPCNT    0x05    /* set pcb->keep_cnt   - Use number of probes sent for get/setsockopt */
 #endif /* LWIP_TCP */
+
+#ifdef LWIP_SOCKET
 
 #if LWIP_IPV6
 /*
@@ -679,10 +683,12 @@ int lwip_inet_pton(int af, const char *src, void *dst);
 
 #endif /* LWIP_COMPAT_SOCKETS */
 
+#endif /* LWIP_SOCKET */
+
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* LWIP_SOCKET */
+#endif /* LWIP_SOCKET_TYPES */
 
 #endif /* LWIP_HDR_SOCKETS_H */

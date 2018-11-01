@@ -30,6 +30,7 @@
 #ifndef CHERIOS_LWIPOPTS_H
 #define CHERIOS_LWIPOPTS_H
 
+#include "hostconfig.h"
 
 #define NO_SYS                      1
 #define SYS_LIGHTWEIGHT_PROT        0
@@ -75,7 +76,14 @@
 #define LWIP_NETIF_LINK_CALLBACK    1
 #define LWIP_NETIF_HWADDRHINT       1
 #define LWIP_NETCONN                0
+
+// We don't want any of the functions, but we do want the types
+#define LWIP_SOCKET_TYPES           1
 #define LWIP_SOCKET                 0
+#define LWIP_POSIX_SOCKETS_IO_NAMES 0
+
+#define LWIP_DNS                    1
+#define DNS_SERVER_ADDRESS(X) ip4addr_aton(CHERIOS_DNS, X)
 
 #define LWIP_SUPPORT_CUSTOM_PBUF    1
 
