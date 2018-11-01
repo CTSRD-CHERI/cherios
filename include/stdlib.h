@@ -87,6 +87,8 @@ void	exit(int status) __dead2;
 char *  itoa ( int value, char * str, int base );
 int     atoi(const char* str);
 
+int     rand(void);
+
 //char *getenv(const char *name)
 
 #define getenv(name) ""

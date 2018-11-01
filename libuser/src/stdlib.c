@@ -31,6 +31,11 @@
 #include "stdio.h"
 #include "stdlib.h"
 
+int rand(void) {
+	// WOW such secure.
+	return (int)syscall_now();
+}
+
 void abort(void) {
 	panic("abort");
 }
