@@ -48,7 +48,7 @@ void kernel_timer_init(uint8_t cpu_id) {
 	 */
 	KERNEL_TRACE("timer", "starting timer");
 	uint8_t val;
-	ATOMIC_ADD(&init_sanity[cpu_id], 8, 1, val);
+	ATOMIC_ADD(&init_sanity[cpu_id], 8, 16i, 1, val);
 
 	kernel_assert(val == 0);
 

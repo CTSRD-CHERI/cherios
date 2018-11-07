@@ -98,6 +98,40 @@ static precision_rounded_length round_cheri_length(size_t length) {
 #define OUT_c   "C"
 #define OUT_256 "C"
 
+#define OUT_8i   "i"
+#define OUT_16i  "i"
+#define OUT_32i  "i"
+#define OUT_64i  "i"
+
+#define ADD_8_16i	"daddiu"
+#define ADD_16_16i	"daddiu"
+#define ADD_32_16i	"daddiu"
+#define ADD_64_16i	"daddiu"
+#define ADD_c_16i	"cincoffset"
+
+#define ADD_8_64	"daddu"
+#define ADD_16_64	"daddu"
+#define ADD_32_64	"daddu"
+#define ADD_64_64	"daddu"
+#define ADD_c_64	"cincoffset"
+
+#define CTYPE_8 uint8_t
+#define CTYPE_16	uint16_t
+#define CTYPE_32	uint32_t
+#define CTYPE_64 uint64_t
+#define CTYPE_c	capability
+
+#define BNE_8(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_16(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_32(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_c(a,b,l,t) "cexeq " t ", " a ", " b "; beqz " t ", " l
+
+#define BNE(type, a, b, label,tmp) BNE_ ## type(a,b,label,tmp)
+
+#define ADD(type, val_type) ADD_ ## type ## _ ## val_type
+
 #define LOADL(type)  "cll" SUF_ ## type
 #define LOAD(type) "cl" SUF_ ## type
 #define STOREC(type) "csc" SUF_ ## type
@@ -105,6 +139,7 @@ static precision_rounded_length round_cheri_length(size_t length) {
 #define OUT(type) "=" OUT_ ## type
 #define IN(type) OUT_ ## type
 #define INOUT(type) "+" OUT_ ## type
+#define CTYPE(type) CTYPE_ ## type
 /*
  * Canonical C-language representation of a capability.
  */

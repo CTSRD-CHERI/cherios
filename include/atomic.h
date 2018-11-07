@@ -32,39 +32,48 @@
 
 #include "cheric.h"
 
-#define ATOMIC_ADD(pointer, type, val, result)      \
+#define ATOMIC_ADD(pointer, type, val_type, val, result)      \
 {                                                   \
 register register_t tmp;                            \
+register CTYPE(type) added;                         \
 __asm__ __volatile__ (                              \
     SANE_ASM                                        \
     "1:"                                            \
-    LOADL(type) "    %[out], %[ptr]          \n"     \
-    "daddiu         %[tmp], %[out], %[v]    \n"     \
-    STOREC(type) "   %[tmp], %[tmp], %[ptr]  \n"     \
+    LOADL(type) "    %[out], %[ptr]          \n"    \
+    ADD(type, val_type)" %[add], %[out], %[v]      \n"    \
+    STOREC(type) "   %[tmp], %[add], %[ptr]  \n"    \
     "beqz           %[tmp], 1b              \n"     \
     "nop                                    \n"     \
-: [tmp] "=r" (tmp), [out] "=r" (result)             \
-: [ptr] "C" (pointer), [v] "i" (val)                \
+: [tmp] "=r" (tmp), [out] OUT(type) (result), [add] OUT(type) (added) \
+: [ptr] "C" (pointer), [v] IN(val_type) (val)       \
 :)    ;                                             \
 }                                                   \
 
+
+#define ATOMIC_ADD_RV(pointer, type, val_type, val) \
+    ({CTYPE(type) aa_tmp; ATOMIC_ADD(pointer, type, val_type, val, aa_tmp); aa_tmp;})
+
+
 #define ATOMIC_CAS(pointer, type, old_val, new_val, result) \
 {                                                           \
-register register_t tmp;                                    \
+register CTYPE(type) tmp;                                   \
 __asm__ __volatile(                                         \
 SANE_ASM                                                    \
         "1:"                                                \
 LOADL(type) " %[tmp], %[ptr]            \n"                 \
-"bne    %[tmp], %[old], 2f              \n"                 \
+BNE(type, "%[tmp]", "%[old]", "2f","%[res]") "\n"           \
 "li     %[res], 0                       \n"                 \
-STOREC(type) " %[res], %[new], %[ptr]    \n"                 \
+STOREC(type) " %[res], %[new], %[ptr]    \n"                \
 "beqz   %[res], 1b                      \n"                 \
 "nop                                    \n"                 \
 "2:                                     \n"                 \
-: [tmp] "=r" (tmp), [res] "=r" (result)                     \
-: [ptr] "C" (pointer), [old] "r" (old_val), [new] "r"(new_val) \
+: [tmp] OUT(type) (tmp), [res] "=r" (result)                     \
+: [ptr] "C" (pointer), [old] IN(type) (old_val), [new] IN(type) (new_val) \
 :);                                                         \
 }
+
+#define ATOMIC_CAS_RV(pointer, type, old_val, new_val) \
+    ({register_t aa_tmp; ATOMIC_CAS(pointer, type, old_val, new_val, aa_tmp); aa_tmp;})
 
 #define LOAD_LINK(ptr, type, result) __asm__ __volatile(LOADL(type) " %[res], %[pt]" : [res] OUT(type) (result) : [pt] IN(c) (ptr):)
 #define STORE_COND(ptr, type, val, suc) __asm__ __volatile(STOREC(type) " %[sc], %[vl], %[pt]" : \

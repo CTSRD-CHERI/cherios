@@ -236,7 +236,7 @@ static act_t* alloc_static_act(aid_t* aid_used) {
 	}
 
 	aid_t id;
-	ATOMIC_ADD(&kernel_next_act, 32, 1, id)
+	ATOMIC_ADD(&kernel_next_act, 32, 16i, 1, id)
 
 	act_t* act = kernel_acts + id;
 	if(aid_used) *aid_used = id;
