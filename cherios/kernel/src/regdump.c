@@ -132,7 +132,7 @@ static inline void print_frame_info(int16_t size, char* stack) {
 
 static inline void print_change_stack(char* stack) {
     uint32_t on_stack = cheri_getlen(stack) - cheri_getoffset(stack);
-    printf("\n Swap to new stack with size %4x\n", on_stack);
+    printf("\n Swap to new stack with size %4x", on_stack);
 }
 
 static inline void print_end(void) {
@@ -149,9 +149,14 @@ int check_cap(capability cap) {
 
 // TODO handle frames that are larger than the immediate field (need to decode a
 
-void backtrace(char* stack_pointer, capability return_address, capability r17) {
+void backtrace(char* stack_pointer, capability return_address, capability idc, capability r17, capability c18) {
 	int i = 0;
 
+	capability all_power = obtain_super_powers();
+
+
+#define UNSEAL(X) cheri_unseal(X,cheri_setoffset(all_power,cheri_gettype(X)))
+#define NONSEALED(X) (cheri_getsealed(X) ? UNSEAL(X) : X)
 
 	// Function prolog:
 	// cincoffset $c11, $c11, -size // allocates space
@@ -173,6 +178,7 @@ void backtrace(char* stack_pointer, capability return_address, capability r17) {
 
 	// csc     cs,rt,im(cb)				// |111110|cs   |cb   |rt   |im(11)
 	// csc     c17, $zero, offset(c11)  // |111110|10001|01011|00000|im(11)
+	// csc	   c18, $zero, offset(c11)	// |111110|10010|01011|00000|im(11)
 
 	uint32_t cinc_c11_mask    = 0xFFFF0000;
 	uint32_t csc_form_mask    = 0xFFFFF800;
@@ -181,6 +187,7 @@ void backtrace(char* stack_pointer, capability return_address, capability r17) {
     uint32_t cinc_from_val    = 0x480b << 16U; // An inc offset to c11 // FIXME: Grabbed from dissassembler, not docs
 
 	uint32_t csc_form_val	  = 0b111110100010101100000U << 11U;
+	uint32_t csc_form_val18	  = 0b111110100100101100000U << 11U;
 
 	uint32_t cinc_i_mask 	  = (1 << 11) - 1;
     uint32_t cinc_cb_shift    = 11;
@@ -204,7 +211,12 @@ void backtrace(char* stack_pointer, capability return_address, capability r17) {
 		//scan backwards for cincoffset
 		int16_t stack_size = 0;
 		int16_t offset = 0;
+		int16_t offsetc18 = 0;
 		int found = 0;
+		int foundc18 = 0;
+
+		capability last_idc = idc;
+
 		if(((size_t)return_address & 0xffffffff80000000) != 0xffffffff80000000) {
 			for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
 				if(check_cap(instr)) {
@@ -242,6 +254,11 @@ void backtrace(char* stack_pointer, capability return_address, capability r17) {
 					found = 1;
 					offset = (int16_t)((val & csc_i_mask) << 4);
 				}
+
+				if((val & csc_form_mask) == csc_form_val18) {
+					foundc18 = 1;
+					offsetc18 = (int16_t)((val & csc_i_mask) << 4);
+				}
 			}
 		} else if(i != 1) {
 			printf("***address in nano kernel***\n");
@@ -250,7 +267,7 @@ void backtrace(char* stack_pointer, capability return_address, capability r17) {
 
         print_frame_info(stack_size, stack_pointer);
 		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
-
+		capability * rd_ptr = ((capability *)((stack_pointer + offsetc18)));
 
 		if((i == 1) && (found == 0)) {
             return_address = r17;
@@ -262,6 +279,16 @@ void backtrace(char* stack_pointer, capability return_address, capability r17) {
 
             return_address = *ra_ptr;
         }
+
+		if(i == 1 && (foundc18 == 0)) {
+			idc = c18;
+		} else if (foundc18){
+			if (check_cap(rd_ptr)) {
+				printf("***bad frame (rd bad***\n)");
+				return;
+			}
+			idc = *rd_ptr;
+		}
 
 		// Offset by 2 instructions for the cjal + nop
 		return_address = (capability)((uint32_t*)return_address-2);
@@ -276,6 +303,19 @@ void backtrace(char* stack_pointer, capability return_address, capability r17) {
             stack_pointer = *prev_stack_ptr;
             print_change_stack(stack_pointer);
         }
+
+		if(last_idc != idc) {
+			// we are backtracking across a boundry
+			idc = NONSEALED(idc);
+			return_address = NONSEALED(return_address);
+			capability * sp_ptr = (capability *)(((char*)idc) + CTLP_OFFSET_CSP);
+			if(check_cap(sp_ptr)) {
+				printf("***bad frame (idc switch bad)***");
+				return;
+			}
+			stack_pointer = (char*)*sp_ptr;
+			print_change_stack(stack_pointer);
+		}
 
         print_end();
 
@@ -415,7 +455,7 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	printf("\nAttempting backtrace:\n\n");
 	char * stack_pointer = (char*)frame->cf_c11;
 	capability return_address = frame->cf_pcc;
-	backtrace(stack_pointer, return_address, frame->cf_c17);
+	backtrace(stack_pointer, return_address, frame->cf_idc, frame->cf_c17, frame->cf_c18);
 }
 
 #endif

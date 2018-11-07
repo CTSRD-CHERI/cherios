@@ -158,7 +158,7 @@ capability act_seal_identifier(capability identifier);
 // Only possible while debugging
 void kernel_dump_tlb(void);
 void	regdump(int reg_num, act_t* act);
-void backtrace(char* stack_pointer, capability return_address, capability r17);
+void backtrace(char* stack_pointer, capability return_address, capability idc, capability r17, capability c18);
 
 void setup_syscall_interface(kernel_if_t* kernel_if);
 

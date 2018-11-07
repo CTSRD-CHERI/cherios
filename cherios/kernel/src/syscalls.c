@@ -132,12 +132,18 @@ void kernel_syscall_puts(char *msg) {
 
 DECLARE_WITH_CD(void, kernel_syscall_panic_proxy(act_t* act) __dead2);
 void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
+	// Turn of interrupts makes the panic print not get screwed up
+	cp0_status_ie_disable();
+
     if(act != NULL) {
         if(cheri_gettype(act) == act_ref_type)
             act = act_unseal_ref(act);
         kernel_printf("Panic proxies to %s\n", act->name);
-    }
-	regdump(-1, act);
+		regdump(-1, act);
+    } else {
+		kernel_dump_tlb();
+		backtrace(cheri_getreg(11),cheri_getpcc(),cheri_getidc(),cheri_getreg(17),cheri_getreg(18));
+	}
 	kernel_freeze();
 }
 
