@@ -99,7 +99,7 @@ FILE_t open(const char* name, int mode, enum SOCKET_FLAGS flags) {
 
     if(!dest) return NULL;
 
-    struct requester_32* r32_read = NULL, *r32_write = NULL;r
+    struct requester_32* r32_read = NULL, *r32_write = NULL;
 
     enum socket_connect_type  con_type = CONNECT_NONE;
 
