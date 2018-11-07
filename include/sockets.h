@@ -61,12 +61,18 @@
 #define SOCK_INF                    (uint64_t)(0xFFFFFFFFFFFFFFFULL)
 
 enum SOCKET_FLAGS {
-    MSG_NONE = 0,
-    MSG_DONT_WAIT = 1,
-    MSG_NO_CAPS = 2,
-    MSG_NO_COPY = 4,
-    MSG_PEEK = 8,
-    MSG_EMULATE_SINGLE_PTR = 16,
+    MSG_NONE                = 0x0,
+    MSG_DONT_WAIT           = 0x1,
+    MSG_NO_CAPS             = 0x2,
+    MSG_NO_COPY             = 0x4,
+    MSG_PEEK                = 0x8,
+    MSG_EMULATE_SINGLE_PTR  = 0x10,
+    SOCKF_GIVE_SOCK_N       = 0x20,
+// Close will assume it has to free the drb, write request, read request, and socket itself unless you specify these
+    SOCKF_DRB_INLINE        = 0x40,
+    SOCKF_WR_INLINE         = 0x80,
+    SOCKF_RR_INLINE         = 0x100,
+    SOCKF_SOCK_INLINE       = 0x200,
 };
 
 // If we are not using syscall puts then stdout uses this code
@@ -105,6 +111,8 @@ typedef enum {
     REQUEST_SEEK = (2 << 16) + 2,
     REQUEST_SIZE = (2 << 16) + 3,
     REQUEST_CLOSE = (2 << 16) + 4, // Like flush, but we plan to close after
+    REQUEST_TRUNCATE = (2 << 16) + 5,
+    REQUEST_OUT_USER_START = (2 << 16) + (1 << 8) // To use in defining inhereting enums. Don't use as an OOB value
 } request_type_e;
 
 /* A socket is formed of a single requester and fulfiller. Between them they manage a ring buffer. The requester
@@ -149,6 +157,14 @@ enum poll_events {
     POLL_HUP = 8,
     POLL_NVAL = 16,
 };
+
+#define POLLIN                     POLL_IN
+#define POLLOUT                    POLL_OUT
+#define POLLHUP                    POLL_HUP
+#define POLLERR                    POLL_ER
+#define POLLNVAL                   POLL_NVAL
+
+//#define EPOLLET
 
 // Uni-directional socket.
 typedef struct uni_dir_socket_requester_fulfiller_component  {
@@ -218,10 +234,14 @@ typedef union {
     uni_dir_socket_fulfiller pull_writer;
 } socket_writer_t;
 
+typedef ssize_t close_fun(struct unix_like_socket* sock);
+
 // Bi directional unix like socket
 typedef struct unix_like_socket {
     enum SOCKET_FLAGS flags;
     enum socket_connect_type con_type;
+    uint8_t sockn;
+    close_fun* custom_close;
     data_ring_buffer write_copy_buffer; // If we push write and are worried about delays we need a buffer
     // data_ring_buffer read_copy_buffer; // Do we copy for pull reading? Otherwise how do we know when consume has happened?
     // If we emulate a single pointer these are used to track how far behind we are with read/write
@@ -392,11 +412,11 @@ static inline void catch_up_read(unix_like_socket* file) {
 ssize_t socket_flush_drb(unix_like_socket* socket);
 
 typedef struct poll_sock {
-    unix_like_socket* sock;
+    unix_like_socket* fd;
     enum poll_events events;
     enum poll_events revents;
 } poll_sock_t;
 
-int socket_poll(poll_sock_t* socks, size_t nsocks, enum poll_events* msg_queue_poll);
+int socket_poll(poll_sock_t* socks, size_t nsocks, int timeout, enum poll_events* msg_queue_poll);
 
 #endif //CHERIOS_SOCKETS_H

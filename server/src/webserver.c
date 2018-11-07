@@ -136,7 +136,7 @@ int handle_get_post(struct session* s, struct initial* ini) {
 
     if(ini->method == POST && file_size == 0) ER_R("POST should include a file size\n");
 
-    FILE_t f = open(ini->file, 1, 1, MSG_NONE);
+    FILE_t f = open(ini->file, FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
     if(f == NULL) {
         send_response_initial(s, 404, NOT_FOUND "\n", sizeof(NOT_FOUND));
@@ -244,7 +244,7 @@ void handle_loop(void) {
             finish_headers(&s);
         }
 
-        res = netsock_close(netsock);
+        res = close(netsock);
 
         assert_int_ex(res, ==, 0);
 

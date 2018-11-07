@@ -300,9 +300,9 @@ void connector_start(register_t arg, capability carg) {
     assert_int_ex(res, ==, 0);
 
     poll_sock_t socks[2];
-    socks[0].sock = sock;
+    socks[0].fd = sock;
     socks[0].events = POLL_IN;
-    socks[1].sock = sock3;
+    socks[1].fd = sock3;
     socks[1].events = POLL_IN;
 
     for(int i = 0; i != 7; i++) {
@@ -310,7 +310,7 @@ void connector_start(register_t arg, capability carg) {
 
         if(use_sock == 2) {
             enum poll_events events;
-            int poll_r = socket_poll(NULL, 0, &events);
+            int poll_r = socket_poll(NULL, 0, -1, &events);
             assert_int_ex(poll_r, ==, 1);
             assert_int_ex(events, ==, POLL_IN);
             next_msg();
@@ -319,13 +319,13 @@ void connector_start(register_t arg, capability carg) {
 
         unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
 
-        int poll_r = socket_poll(socks, 2, 0);
+        int poll_r = socket_poll(socks, 2, -1, 0);
 
         assert_int_ex(poll_r, ==, 1);
         assert_int_ex(socks[use_sock].revents, ==, POLL_IN);
         assert_int_ex(socks[1-use_sock].revents, ==, POLL_NONE);
 
-        rec = socket_recv(socks[use_sock].sock, buf, size1, MSG_NONE);
+        rec = socket_recv(socks[use_sock].fd, buf, size1, MSG_NONE);
         assert_int_ex(rec, ==, size1);
 
         // Test a basic send

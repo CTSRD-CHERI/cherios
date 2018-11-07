@@ -37,7 +37,7 @@
 int fs_open_custom(struct fs_file *file, const char *name) {
     file->data = NULL;
     file->index = 0;
-    file->pextension = open(name, 1, 1, MSG_NONE); // Mine
+    file->pextension = open(name, FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE); // Mine
     if(file->pextension == NULL)
         return 0;
     file->len = (int)filesize(file->pextension);

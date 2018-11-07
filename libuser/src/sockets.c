@@ -845,9 +845,41 @@ ssize_t socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller, int
                                       &access->requester_waiting);
 }
 
+// Not thread safe, bit of a hack to help nginx...
+
+#define MAX_SOCKNS 64
+
+uint8_t free_ns[MAX_SOCKNS];
+uint8_t free_n;
+
+static uint8_t alloc_sockn(void) {
+    static int init = 0;
+    if(!init) {
+        init = 1;
+        for(uint8_t i = 0; i != MAX_SOCKNS;) {
+            free_ns[i] = ++i;
+        }
+    }
+
+    uint8_t res = free_n;
+
+    assert(res != MAX_SOCKNS);
+
+    free_n = free_ns[free_n];
+
+    return res;
+}
+
+static void free_sockn(uint8_t n) {
+    free_ns[n] = free_n;
+    free_n = n;
+}
+
 ssize_t socket_close(unix_like_socket* sock) {
     int dont_wait = sock->flags & MSG_DONT_WAIT;
     ssize_t ret;
+
+    if(sock->flags & SOCKF_GIVE_SOCK_N) free_sockn(sock->sockn);
 
     if(sock->con_type & CONNECT_PULL_READ) {
         ret = socket_internal_close_requester(sock->read.pull_reader, 1, dont_wait);
@@ -884,6 +916,8 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
     sock->con_type = con_type;
 
     sock->flags = flags;
+
+    if(flags & SOCKF_GIVE_SOCK_N) sock->sockn = alloc_sockn();
 
     if(data_buffer) {
         return init_data_buffer(&sock->write_copy_buffer, data_buffer, data_buffer_size);
@@ -1288,7 +1322,7 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg
             poll_sock_t* sock_poll = socks+i;
             enum poll_events asked_events = (events_forced | sock_poll->events);
 
-            enum poll_events revents = be_waiting_for_event(sock_poll->sock, asked_events, sleep);
+            enum poll_events revents = be_waiting_for_event(sock_poll->fd, asked_events, sleep);
 
             if(asked_events & revents) {
 
@@ -1303,7 +1337,7 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg
         }
 
         if(sleep) {
-            syscall_cond_wait(msg_queue_poll != 0, 0);
+            syscall_cond_wait(msg_queue_poll != 0, sleep < 0 ? 0 : (register_t)sleep);
         }
 
     } while(sleep);
@@ -1311,7 +1345,7 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg
     return any_event;
 }
 
-int socket_poll(poll_sock_t* socks, size_t nsocks, enum poll_events* msg_queue_poll) {
+int socket_poll(poll_sock_t* socks, size_t nsocks, int timeout, enum poll_events* msg_queue_poll) {
     int ret;
 
     if(nsocks < 0) return 0;
@@ -1319,7 +1353,8 @@ int socket_poll(poll_sock_t* socks, size_t nsocks, enum poll_events* msg_queue_p
     if(nsocks == 0 && !msg_queue_poll) return 0;
 
     if(!(ret = sockets_scan(socks, nsocks, msg_queue_poll, 0))) {
-        ret = sockets_scan(socks, nsocks, msg_queue_poll, 1);
+        if(timeout == 0) return 0;
+        ret = sockets_scan(socks, nsocks, msg_queue_poll, timeout);
     }
 
     return ret;

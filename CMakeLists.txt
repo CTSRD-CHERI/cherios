@@ -153,6 +153,7 @@ include_directories(elf/include)
 include_directories(sha256/include)
 include_directories(cherios/system/dylink/include)
 include_directories(cherios/system/lwip/include)
+include_directories(cherios/system/fatfs/include)
 include_directories(libcrt/include)
 include_directories(lwip/src/include)
 

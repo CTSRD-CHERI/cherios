@@ -65,7 +65,7 @@ int main(register_t arg, capability carg) {
 
     printf("Fs test start..\n");
 
-    FILE_t file = open("foobar", 1, 1, MSG_NONE);
+    FILE_t file = open("foobar", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
     assert(file != NULL);
 
@@ -98,7 +98,7 @@ int main(register_t arg, capability carg) {
 
     char chars[] = {'0','1','2'};
 
-    file = open("bigtest", 1, 1, MSG_NONE);
+    file = open("bigtest", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
     assert(file != NULL);
 
@@ -117,7 +117,7 @@ int main(register_t arg, capability carg) {
         dest[i] = 0;
     }
 
-    FILE_t file2 = open("Target", 1, 1, MSG_NONE);
+    FILE_t file2 = open("Target", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
     result = lseek(file, 0, SEEK_SET);
     assert_int_ex(result, ==, 0);

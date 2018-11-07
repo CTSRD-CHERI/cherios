@@ -40,6 +40,7 @@
 #include "net.h"
 #include "lwip/dns.h"
 #include "lwip_driver.h"
+#include "thread.h"
 
 enum session_close_state {
     SCS_NONE = 0,
@@ -500,7 +501,9 @@ static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
     return er;
 }
 
-static err_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
+sealing_cap sealer;
+
+static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
                             act_kt callback, capability callback_arg, register_t callback_port) {
     tcp_listen_session* listen_session = (tcp_listen_session*)(malloc(sizeof(tcp_listen_session)));
 
@@ -517,7 +520,21 @@ static err_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
     tcp_arg(listen_session->tcp_pcb, listen_session);
     tcp_accept(listen_session->tcp_pcb, tcp_accept_callback);
 
-    return er;
+    if(er != ERR_OK) return (uintptr_t)er;
+
+    return cheri_seal(listen_session, sealer);
+}
+
+static void stop_listening(capability sealed) {
+    tcp_listen_session* listen_session = cheri_unseal(sealed, sealer);
+
+    err_t er = tcp_close(listen_session->tcp_pcb);
+
+    assert(er == ERR_OK);
+
+    free(listen_session);
+
+    return;
 }
 
 static void user_tcp_close(tcp_session* tcp) {
@@ -606,6 +623,9 @@ int main(register_t arg, capability carg) {
 
     // Advertise self for tcp/socket layer
     namespace_register(namespace_num_tcp, act_self_ref);
+
+    // Get a type to seal with
+    sealer = get_type_owned_by_process();
 
     printf("LWIP Should now be responsive\n");
 
@@ -708,7 +728,7 @@ int main(register_t arg, capability carg) {
     }
 }
 
-void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets, user_gethostbyname};
+void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets, user_gethostbyname, stop_listening};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, lwip_driver_handle_interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);

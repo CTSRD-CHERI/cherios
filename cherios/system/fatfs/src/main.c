@@ -81,43 +81,50 @@ act_notify_kt main_notify;
 ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     struct sessions_t* fil = (struct sessions_t*)arg;
     request_type_e req = request->type;
+    uint64_t* modify;
+    ssize_t * size_ptr;
+    switch(req) {
+        case REQUEST_SEEK:
+            modify = fil->current == 0 ? &fil->read_fptr : &fil->write_fptr;
 
-    if(req == REQUEST_SEEK) {
+            int64_t seek_offset = request->request.seek_desc.v.offset;
+            int whence = request->request.seek_desc.v.whence;
 
-        uint64_t* modify = fil->current == 0 ? &fil->read_fptr : &fil->write_fptr;
+            FSIZE_t target_offset;
 
-        int64_t seek_offset = request->request.seek_desc.v.offset;
-        int whence = request->request.seek_desc.v.whence;
+            switch (whence) {
+                case SEEK_CUR:
+                    target_offset = seek_offset + *modify;
+                    break;
+                case SEEK_SET:
+                    if(seek_offset < 0) return E_OOB;
+                    target_offset = (uint64_t)seek_offset;
+                    break;
+                case SEEK_END:
+                default:
+                    return E_OOB;
+            }
 
-        FSIZE_t target_offset;
+            *modify = target_offset;
 
-        switch (whence) {
-            case SEEK_CUR:
-                target_offset = seek_offset + *modify;
-                break;
-            case SEEK_SET:
-                if(seek_offset < 0) return E_OOB;
-                target_offset = (uint64_t)seek_offset;
-                break;
-            case SEEK_END:
-            default:
-                return E_OOB;
-        }
+            return length;
+        case REQUEST_SIZE:
+            size_ptr = (size_t*)request->request.oob;
+            *size_ptr = f_size(&fil->fil);
 
-        *modify = target_offset;
-
-        return length;
-    } else if(req == REQUEST_FLUSH) {
-        assert(0 && "TODO");
-    } else if(req == REQUEST_SIZE) {
-
-        ssize_t * size_ptr = (size_t*)request->request.oob;
-        *size_ptr = f_size(&fil->fil);
-
-        return length;
+            return length;
+        case REQUEST_TRUNCATE:
+            f_truncate(&fil->fil);
+            return length;
+        case REQUEST_CLOSE:
+            return length; // TODO is is meant to cause a flush and close
+        case REQUEST_FLUSH:
+            assert(0 && "TODO");
+        default:
+            assert(0 && "UNKNOWN OOB");
+            return E_OOB;
     }
 
-    return E_OOB;
 }
 
 void handle(enum poll_events events, struct sessions_t* session) {
@@ -231,9 +238,12 @@ void spawn_workers(void) {
 }
 
 
-int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester* write_requester, const char* file_name) {
+int open_file(int mode, uni_dir_socket_requester* read_requester, uni_dir_socket_requester* write_requester, const char* file_name) {
 
-    if(!read_requester && !write_requester) return -1;
+    int read = mode & FA_READ;
+    int write = mode & FA_WRITE;
+
+    if(!read && !write) return -1;
 
     if(first_free == MAX_HANDLES) {
         return -1;
@@ -246,19 +256,18 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
 
     FIL * fp = &session->fil;
 
-    BYTE mode = FA_OPEN_ALWAYS;
-
     enum socket_connect_type con_type = CONNECT_NONE;
     enum poll_events events = POLL_NONE;
 
-    if(write_requester) {
+    if(write) {
+        assert(write_requester);
         con_type |= CONNECT_PUSH_READ;
-        mode |= FA_WRITE;
         socket_internal_fulfiller_init(&session->sock.read.push_reader, SOCK_TYPE_PUSH);
         socket_internal_fulfiller_connect(&session->sock.read.push_reader, write_requester);
         events |= POLL_OUT;
     }
-    if(read_requester) {
+    if(read) {
+        assert(read_requester);
         con_type |= CONNECT_PULL_WRITE;
         mode |= FA_READ;
         socket_internal_fulfiller_init(&session->sock.write.pull_writer, SOCK_TYPE_PULL);
@@ -267,14 +276,14 @@ int new_file(uni_dir_socket_requester* read_requester, uni_dir_socket_requester*
     }
 
     poll_socks[n_files].events = events;
-    poll_socks[n_files].sock = &session->sock;
+    poll_socks[n_files].fd = &session->sock;
     session_ndx[n_files] = first_free;
     session->ndx = n_files;
     session->read_fptr = session->write_fptr = 0;
     spinlock_init(&session->session_lock);
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
         FRESULT fres;
-        if((fres = f_open(fp, file_name, mode)) == 0) {
+        if((fres = f_open(fp, file_name, (BYTE)mode)) == 0) {
             session->in_use = 1;
             n_files++;
             first_free = next;
@@ -319,7 +328,34 @@ int make_dir(const char* name) {
     return f_mkdir(name);
 }
 
-void (*msg_methods[]) = {new_file, make_dir};
+capability dir_sealer;
+
+static capability open_dir(const char* name) {
+    DIR* dp = (DIR*)malloc(sizeof(DIR));
+
+    FRESULT res = f_opendir(dp, name);
+
+    if(res != FR_OK) {
+        free(dp);
+        return NULL;
+    }
+
+    return cheri_seal(dp, dir_sealer);
+}
+
+static FRESULT read_dir(capability sealed_dir, FILINFO* fno) {
+    DIR* dp = cheri_unseal(sealed_dir, dir_sealer);
+    return f_readdir(dp, fno);
+}
+
+static FRESULT close_dir(capability sealed_dir) {
+    DIR* dp = cheri_unseal(sealed_dir, dir_sealer);
+    FRESULT res = f_closedir(dp);
+    free(dp);
+    return res;
+}
+
+void (*msg_methods[]) = {open_file, make_dir, f_rename, f_unlink, f_stat, open_dir, read_dir, close_dir};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
@@ -335,7 +371,7 @@ void request_loop(void) {
 
     while(1) {
         size_t poll_to = n_files;
-        socket_poll(poll_socks, poll_to, &msg_event);
+        socket_poll(poll_socks, poll_to, -1, &msg_event);
 
         if(msg_event) {
             msg_entry(1);
@@ -398,6 +434,10 @@ int main(capability fs_cap) {
     spawn_workers();
 
     namespace_register(namespace_num_fs, act_self_ref);
+
+    dir_sealer = get_type_owned_by_process();
+
+    assert(dir_sealer != NULL);
 
     printf("Fatfs: Going into daemon mode\n");
 

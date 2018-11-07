@@ -123,6 +123,8 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 
     int res;
 
+    int flags = MSG_NO_CAPS | SOCKF_WR_INLINE | SOCKF_DRB_INLINE | SOCKF_WR_INLINE | SOCKF_SOCK_INLINE;
+
 #define MAKE_STD_SOCK(S,IPC_NO)                                                                                 \
         S.sock.write.push_writer = &S.reqs.r;                                                                   \
         socket_internal_requester_init(S.sock.write.push_writer, 32, SOCK_TYPE_PUSH, &S.sock.write_copy_buffer);                   \
@@ -131,7 +133,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
                                uart, SYNC_CALL, IPC_NO);                                                        \
         assert(res == 0);                                                                                       \
         socket_internal_requester_connect(S.sock.write.push_writer);                                            \
-        socket_init(&S.sock, MSG_NO_CAPS, S.buf, STD_BUF_SIZE, CONNECT_PUSH_WRITE);
+        socket_init(&S.sock, flags, S.buf, STD_BUF_SIZE, CONNECT_PUSH_WRITE);
 
     MAKE_STD_SOCK(std_out_sock, 2);
     MAKE_STD_SOCK(std_err_sock, 3);

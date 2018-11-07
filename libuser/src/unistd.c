@@ -29,6 +29,7 @@
  */
 
 
+#include <sockets.h>
 #include "unistd.h"
 #include "stdlib.h"
 #include "namespace.h"
@@ -61,22 +62,48 @@ int mkdir(const char* name) {
 
 }
 
+
+int rename(const char* old, const char* new) {
+    act_kt dest = try_get_fs();
+
+    if(!dest) return -1;
+    return (int)message_send(0,0,0,0,old,new,NULL,NULL,dest, SYNC_CALL, 2);
+}
+
+int unlink(const char* name) {
+    act_kt dest = try_get_fs();
+
+    if(!dest) return -1;
+    return (int)message_send(0,0,0,0,name,NULL,NULL,NULL,dest, SYNC_CALL, 3);
+}
+
+ssize_t truncate(FILE_t file) {
+    socket_flush_drb(file);
+    assert(file->con_type & CONNECT_PUSH_WRITE);
+    return socket_internal_request_oob(file->write.push_writer, REQUEST_TRUNCATE, NULL, 0, 0);
+}
+
 struct socket_with_file_drb {
     unix_like_socket sock;
     char drb_data[DEFAULT_DRB_SIZE];
 };
 
-FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
+FILE_t open(const char* name, int mode, enum SOCKET_FLAGS flags) {
+
+    int read = mode & FA_READ;
+    int write = mode & FA_WRITE;
+
     if(!read && !write) return NULL;
 
     act_kt dest = try_get_fs();
 
     if(!dest) return NULL;
 
-    struct requester_32* r32_read = NULL, *r32_write = NULL;
+    struct requester_32* r32_read = NULL, *r32_write = NULL;r
 
     enum socket_connect_type  con_type = CONNECT_NONE;
 
+    flags |= SOCKF_DRB_INLINE;
     struct socket_with_file_drb* sock_and_drb = (struct socket_with_file_drb*)(malloc(sizeof(struct socket_with_file_drb)));
     unix_like_socket* sock = &sock_and_drb->sock;
 
@@ -93,7 +120,7 @@ FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
 
     ssize_t result;
 
-    if((result = message_send(0,0,0,0,r32_read, r32_write, name, NULL, dest, SYNC_CALL, 0))) goto er1;
+    if((result = message_send(mode,0,0,0,r32_read, r32_write, name, NULL, dest, SYNC_CALL, 0))) goto er1;
     if(r32_read) socket_internal_requester_connect(&r32_read->r);
     if(r32_write) socket_internal_requester_connect(&r32_write->r);
 
@@ -123,13 +150,28 @@ FILE_t open(const char* name, int read, int write, enum SOCKET_FLAGS flags) {
 }
 
 ssize_t close(FILE_t file) {
-    flush(file);
-    ssize_t result = socket_close(file);
-    if(result == 0) {
-        if(file->con_type | CONNECT_PULL_READ) free(file->read.pull_reader);
-        if(file->con_type | CONNECT_PUSH_WRITE) free(file->write.push_writer);
-        free(file);
+    if(file->custom_close) return file->custom_close(file);
+
+    socket_flush_drb(file);
+
+    if(file->con_type & CONNECT_PUSH_WRITE &&
+            socket_internal_requester_space_wait(file->write.push_writer, 1, 0, 0) == 0) {
+        socket_internal_request_oob(file->write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
     }
+
+    flush(file);
+
+    ssize_t result = socket_close(file);
+
+    if(result == E_SOCKET_CLOSED) result = 0;
+
+    if(result == 0) {
+        if(!(file->flags & SOCKF_RR_INLINE) && (file->con_type & CONNECT_PULL_READ)) free(file->read.pull_reader);
+        if(!(file->flags & SOCKF_WR_INLINE) && (file->con_type & CONNECT_PUSH_WRITE)) free(file->write.push_writer);
+        if(!(file->flags & SOCKF_DRB_INLINE) && (file->write_copy_buffer.buffer)) free(file->write_copy_buffer.buffer);
+        if(!(file->flags & SOCKF_SOCK_INLINE)) free(file);
+    }
+
     return result;
 }
 
@@ -191,3 +233,42 @@ ssize_t filesize(FILE_t file) {
     if(res < 0) return res;
     return fsize;
 }
+
+int stat(const char* path, FILINFO* fno) {
+    act_kt dest = try_get_fs();
+
+    if(dest == NULL) return -1;
+
+    FRESULT res = (FRESULT)message_send(0,0,0,0,path,fno,NULL,NULL,dest,SYNC_CALL,4);
+
+    if(res != FR_OK) return -1;
+
+    return 0;
+}
+
+typedef capability dir_token_t;
+
+dir_token_t opendir(const char* name) {
+    act_kt dest = try_get_fs();
+
+    if(dest == NULL) return NULL;
+
+    return message_send_c(0,0,0,0,name,NULL,NULL,NULL,dest,SYNC_CALL,5);
+}
+
+FRESULT readdir(dir_token_t dir, FILINFO* fno) {
+    act_kt dest = try_get_fs();
+
+    if(dest == NULL) return NULL;
+
+    return (FRESULT)message_send(0,0,0,0,dir,fno,NULL,NULL,dest,SYNC_CALL,6);
+}
+
+FRESULT closedir(dir_token_t dir) {
+    act_kt dest = try_get_fs();
+
+    if(dest == NULL) return NULL;
+
+    return (FRESULT)message_send(0,0,0,0,dir,NULL,NULL,NULL,dest,SYNC_CALL,7);
+}
+

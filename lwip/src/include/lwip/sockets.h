@@ -257,7 +257,7 @@ struct linger {
 #define IPPROTO_UDPLITE 136
 #define IPPROTO_RAW     255
 
-#ifdef LWIP_SOCKET
+#if LWIP_SOCKET
 /* Flags we can use with send and recv. */
 #define MSG_PEEK       0x01    /* Peeks at an incoming message */
 #define MSG_WAITALL    0x02    /* Unimplemented: Requests that the function block until the full amount of data requested can be returned */
@@ -284,8 +284,6 @@ struct linger {
 #define TCP_KEEPINTVL  0x04    /* set pcb->keep_intvl - Use seconds for get/setsockopt */
 #define TCP_KEEPCNT    0x05    /* set pcb->keep_cnt   - Use number of probes sent for get/setsockopt */
 #endif /* LWIP_TCP */
-
-#ifdef LWIP_SOCKET
 
 #if LWIP_IPV6
 /*
@@ -434,6 +432,7 @@ typedef struct ipv6_mreq {
 #define SIOCATMARK  _IOR('s',  7, unsigned long)  /* at oob mark? */
 #endif
 
+#if LWIP_SOCKET
 /* commands for fnctl */
 #ifndef F_GETFL
 #define F_GETFL 3
@@ -515,6 +514,7 @@ struct pollfd
   short revents;
 };
 #endif
+#endif // LWIP_SOCKET
 
 /** LWIP_TIMEVAL_PRIVATE: if you want to use the struct timeval provided
  * by your system, set this to 0 and include <sys/time.h> in cc.h */
@@ -528,6 +528,8 @@ struct timeval {
   long    tv_usec;        /* and microseconds */
 };
 #endif /* LWIP_TIMEVAL_PRIVATE */
+
+#if LWIP_SOCKET
 
 #define lwip_socket_init() /* Compatibility define, no init needed. */
 void lwip_socket_thread_init(void); /* LWIP_NETCONN_SEM_PER_THREAD==1: initialize thread-local semaphore */

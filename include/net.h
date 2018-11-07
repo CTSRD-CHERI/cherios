@@ -30,6 +30,9 @@
 #ifndef CHERIOS_NET_H
 #define CHERIOS_NET_H
 
+#define LWIP_SOCKET_TYPES           1
+#define LWIP_SOCKET                 0
+
 #include "sockets.h"
 #include "lwip/ip_addr.h"
 #include "lwip/err.h"
@@ -40,38 +43,50 @@ struct tcp_bind {
     ip_addr_t addr;
     uint16_t port;
 };
-struct tcp_con_args {
-    struct tcp_bind binding;
-    err_t result;
-};
+
+typedef capability listening_token;
+
+DEC_ERROR_T(listening_token);
 
 struct net_sock {
     unix_like_socket sock;
+    struct net_sock* next_to_accept; // Inline linked list to allow out of order accepts
     capability callback_arg;
     struct requester_32 write_req;
-    uint8_t drb_inline;
-    data_ring_buffer drb;
 };
+
+// Without inline drb or inline reqs as this might just be a listen socket
+typedef struct unix_net_sock {
+    unix_like_socket sock;
+    struct net_sock* next_to_accept; // Inline linked list to allow out of order accepts
+    capability callback_arg;
+    listening_token token;
+    struct tcp_bind bind;
+} unix_net_sock;
 
 #define NET_SOCK_DRB_SIZE 0x4000
 
 typedef struct net_sock* NET_SOCK;
 
-enum TCP_OOBS {
-    REQUEST_TCP_CONNECT = (2 << 16) | (0x10),
-    REQUEST_TCP_LISTEN  = (2 << 16) | (0x11),
-};
-
-
 act_kt net_try_get_ref(void);
 
-int netsock_close(NET_SOCK sock);
-int netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
+listening_token_or_er_t netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
                        capability callback_arg);
+void netsock_stop_listen(listening_token token);
+
 int netsock_connect_tcp(struct tcp_bind* bind, struct tcp_bind* server,
                         capability callback_arg);
-NET_SOCK netsock_accept(enum SOCKET_FLAGS flags);
 
+// Accepts anything. Find out what using the callback_arg
+NET_SOCK netsock_accept(enum SOCKET_FLAGS flags);
+// Same again but does not alloc and uses in (if in is null this is the same as netsock_accept)
+NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in);
+
+// Accepts but filters for correct unix socket and puts others on wait lists
+static NET_SOCK accept_until_correct(unix_net_sock* expect);
+
+// Puts one incoming connecting on wait list
+static void accept_one(void);
 
 struct hostent {
     const char  *h_name;       /* official name of host */
@@ -82,6 +97,24 @@ struct hostent {
 };
 
 struct hostent *gethostbyname(const char *name);
+
+/******************************/
+/* A more unix like interface */
+/******************************/
+
+unix_net_sock* socket(int domain, int type, int protocol);
+
+int bind(unix_net_sock* sockfd, const struct sockaddr *addr,
+         socklen_t addrlen);
+
+int listen(unix_net_sock* sockfd, int backlog);
+
+int connect(unix_net_sock* socket, const struct sockaddr *address,
+            socklen_t address_len);
+
+NET_SOCK accept(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen);
+
+NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
 
 
 #endif //CHERIOS_NET_H
