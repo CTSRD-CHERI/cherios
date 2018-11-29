@@ -34,6 +34,11 @@
 #include "cp0.h"
 #include "atomic.h"
 
+// It _seems_ that even on QEMU the timers from cp0 stay in sync
+// However, QEMU misses timer interrupts and so will have to wrap to take another, making these high res timers get
+// out of sync. We could have only one core update the high res time, but then it might miss and time would stop
+// for ~ 40s.
+
 uint64_t high_resolution_timers[SMP_CORES];
 
 static uint32_t kernel_last_timer[SMP_CORES];
@@ -67,19 +72,26 @@ uint64_t get_high_res_time(uint8_t cpu_id) {
 		// to guard cp0_count_get inside a LL/SC otherwise we might double count the wrap around
 		LOAD_LINK(old_ptr, 64, old_high_res);
 		uint32_t low_res = (uint32_t)cp0_count_get();
-		uint32_t old_low_res = (uint32_t)(old_high_res & 0xFFFFFFFF);
-		uint64_t top = old_high_res ^ (uint64_t)(old_low_res);
-		if(low_res < old_low_res) top += 0x100000000;
-		new_high_res = top | low_res;
 		STORE_COND(old_ptr, 64, old_high_res, success);
+        if(success) {
+            new_high_res = ((old_high_res >> 32) << 32) | (low_res);
+            if(new_high_res < old_high_res) {
+                if(old_high_res - new_high_res < 0x80000000ULL) {
+                    kernel_printf(KRED"Timer has gone backwards by %lx ticks!\n"KRST, old_high_res - new_high_res);
+                    new_high_res = old_high_res;
+                } else {
+                    new_high_res += 0x100000000ULL;
+                }
+            }
+        }
+
 	} while(!success);
 
 	return new_high_res;
 }
 
-static void kernel_timer_check_sleepers(void) {
+static void kernel_timer_check_sleepers(uint64_t now) {
 
-	register_t now = cp0_count_get();
 	for(size_t i = 0; i < MAX_WAITERS; i++) {
 		act_t* act = sleeps[i];
 
@@ -93,7 +105,7 @@ static void kernel_timer_check_sleepers(void) {
 }
 
 void kernel_timer_subscribe(act_t* act, register_t timeout) {
-	act->timeout_start = cp0_count_get();
+	act->timeout_start = get_high_res_time(cp0_get_cpuid()); // WARN: goes badly if we change cpu
 	act->timeout_length = timeout;
 
 	// Concurrent access
@@ -132,9 +144,11 @@ void kernel_timer(uint8_t cpu_id)
 	uint64_t old = high_resolution_timers[cpu_id];
 	uint64_t new = get_high_res_time(cpu_id);
 	kernel_assert(new > old);
+    // FIXME QEMU is broken, it misses enough timer interrupts that this gets hit
+    //kernel_assert(new - old <= (3 * TIMER_INTERVAL));
 	high_resolution_timers[cpu_id] = new;
 
-	kernel_timer_check_sleepers();
+	kernel_timer_check_sleepers(new);
 
 	/*
 	 * Forced context switch of user process.
@@ -147,6 +161,12 @@ void kernel_timer(uint8_t cpu_id)
 	 */
 	/* count register is 32 bits */
 	uint32_t next_timer = kernel_last_timer[cpu_id] + TIMER_INTERVAL;
+
+// QEMU has timer jumps that can occur before compare set
+#ifdef  HARDWARE_qemu
+restart:;
+#endif
+
     uint32_t cur = cp0_count_get();
     int32_t diff;
 
@@ -155,6 +175,12 @@ void kernel_timer(uint8_t cpu_id)
 		next_timer = next_timer + TIMER_INTERVAL;
 	}
 	cp0_compare_set(next_timer);		/* Clears pending interrupt. */
+
+#ifdef  HARDWARE_qemu
+    uint32_t sanity = (uint32_t)cp0_count_get();
+    diff = next_timer - sanity;
+    if(diff < 0) goto restart;
+#endif
 
 	kernel_last_timer[cpu_id] = next_timer;
 }

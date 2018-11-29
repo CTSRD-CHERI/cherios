@@ -75,7 +75,8 @@
 
 // Found by trial and error
 #ifdef HARDWARE_qemu
-        #define CLOCK_TO_MS(X) (uint32_t)(X >> 14)
+        #define CLOCK_TO_US(X)  ((uint64_t)((X) >> 4))
+        #define CLOCK_TO_MS(X) (uint64_t)(X >> 14)
         #define MS_TO_CLOCK(X) (((uint64_t)X) << 14)
 #else
         #define CLOCK_TO_MS(X) (uint32_t)(X >> 16)
