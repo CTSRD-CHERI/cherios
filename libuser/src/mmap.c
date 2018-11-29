@@ -196,6 +196,7 @@ void get_physical_capability(size_t base, size_t length, int IO, int cached, mop
 }
 
 size_t mem_paddr_for_vaddr(size_t vaddr) {
+    assert(0 && "Depracated");
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
 	return (size_t)message_send(vaddr, 0, 0, 0, NULL, NULL, NULL, NULL, memmgt, SYNC_CALL, 4);
@@ -213,10 +214,4 @@ void mdump(void) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
 	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 3);
-}
-
-size_t mvirtual_to_physical(size_t vaddr) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-    return message_send(vaddr,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 4);
 }
