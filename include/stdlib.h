@@ -89,8 +89,11 @@ int     atoi(const char* str);
 
 int     rand(void);
 
+void  qsort(void	*base, size_t nmemb, size_t size,
+int (*compar)(const void *, const void	*));
+
 //char *getenv(const char *name)
 
-#define getenv(name) ""
+#define getenv(name) NULL
 
 #endif /* !__STDLIB_H__ */

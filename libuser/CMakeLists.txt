@@ -13,6 +13,7 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/strchr.c
     ${CMAKE_SOURCE_DIR}/libcrt/strstr.c
     ${CMAKE_SOURCE_DIR}/libcrt/strbprk.c
+    ${CMAKE_SOURCE_DIR}/libcrt/qsort.c
 )
 
 set(LIBUSER_ASM_SRCS
