@@ -67,6 +67,24 @@ void buf_putc(char chr) {
 	}
 }
 
+#else
+
+int
+syscall_printf(const char *fmt, ...)
+{
+    char buf[0x100];
+    va_list ap;
+    int retval;
+
+    va_start(ap, fmt);
+    retval = (kvprintf(fmt, NULL, buf, 10, ap));
+    va_end(ap);
+
+    syscall_puts(buf);
+
+    return (retval);
+}
+
 #endif
 
 // This is the version we would like to use - it writes the character directly to the drb of a socket

@@ -47,6 +47,11 @@ int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va
 int	vsprintf(char *buf, const char *cfmt, va_list ap);
 int	vsnprintf(char *str, size_t size, const char *format, va_list ap);
 int	printf(const char *fmt, ...) __printflike(1, 2);
+#ifdef USE_SYSCALL_PUTS
+#define syscall_printf(...) printf(__VA_ARGS__)
+#else
+int	syscall_printf(const char *fmt, ...) __printflike(1, 2);
+#endif
 int	vprintf(const char *fmt, va_list ap);
 int	fprintf(FILE * f, const char *fmt, ...) __printflike(2, 3);
 int sprintf ( char * str, const char * format, ... );
