@@ -320,8 +320,8 @@ typedef intptr_t er_t;
 
 #define ERROR_T(T) T ## _or_er_t
 #define DEC_ERROR_T(T) typedef union ERROR_T(T) {T val; er_t er;} ERROR_T(T)
-#define MAKE_ER(T, code) (ERROR_T(T)){.er = code}
-#define MAKE_VALID(T, valid) (ERROR_T(T)){.val = valid}
+#define MAKE_ER(T, code) (ERROR_T(T)){.er = (er_t)code}
+#define MAKE_VALID(T, valid) (ERROR_T(T)){.val = (valid)}
 #define IS_VALID(error_or_valid) cheri_gettag(error_or_valid.val)
 #define ER_T_FROM_CAP(T, v) MAKE_VALID(T, v)
 
