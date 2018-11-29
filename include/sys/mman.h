@@ -109,7 +109,7 @@ mop_t       init_mop(capability mop_sealing_cap);
 /* Gets a physical capability. Can never be returned */
 void        get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop, cap_pair* result);
 
-/* Gets the paddr for vaddr */
+/* Gets the paddr for vaddr. DEPRACATED use the nano kernel function its faster*/
 size_t      mem_paddr_for_vaddr(size_t vaddr);
 
 void commit_vmem(act_kt activation, size_t addr);
@@ -118,8 +118,6 @@ void	mmap_set_act(act_kt ref);
 void    mmap_set_mop(mop_t mop);
 
 void mdump(void);
-
-size_t mvirtual_to_physical(size_t vaddr);
 
 enum mmap_prot
 {
@@ -168,14 +166,15 @@ static inline int for_each_phy(capability arg, phy_handle_flags flags, phy_handl
     int num = 0;
     // This breaks the virtual range into (maybe many) physically contiguous block
     size_t start_v = (size_t)addr;
-    size_t start_p = mem_paddr_for_vaddr(start_v);
+
+    size_t start_p = translate_address(start_v, 0);
 
     size_t conti_len = UNTRANSLATED_PAGE_SIZE - (start_v & (UNTRANSLATED_PAGE_SIZE-1));
     size_t conti_v = start_v + conti_len;
     // The length that is definately contiguous
     while (conti_len < length) {
         // check where conti_v is
-        size_t check_p = mem_paddr_for_vaddr(conti_v);
+        size_t check_p = translate_address(conti_v, 0);
         if(check_p == start_p+conti_len) {
             // Last page was physically contiguous to the last
             conti_len += UNTRANSLATED_PAGE_SIZE;

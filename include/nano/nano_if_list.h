@@ -164,8 +164,9 @@
     ITEM(interrupts_soft_set, void, (uint8_t, cpu, register_t, n, int, enable), __VA_ARGS__)\
 /* Get a 64 bit value of IPs of interrupts. [0-INTERRUPTS_N_SW) are SOFTWARE. [INTERRUPTS_N_SW, INTERRUPTS_N) are HARDWARE*/\
 /* The last HW bit is the timer */\
-    ITEM(interrupts_get, uint64_t, (uint8_t, cpu), __VA_ARGS__)
-
+    ITEM(interrupts_get, uint64_t, (uint8_t, cpu), __VA_ARGS__)\
+/* Perform an address translation (sadly not hardware accelerated). Will touch the address if need be unless dont_commit */\
+    ITEM(translate_address, uint64_t, (uint64_t, virt_addr, int, dont_commit), __VA_ARGS__)
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
 
 #define RAW_TO_NORMAL(name, ret, raw_sig, X, ...) X(name, ret, MAKE_SIG(raw_sig), __VA_ARGS__)

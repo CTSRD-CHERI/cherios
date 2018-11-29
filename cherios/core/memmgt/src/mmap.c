@@ -1173,6 +1173,8 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
             if(search_page_n == MAX_VIRTUAL_PAGES)
 #endif
             {
+                printf("Request from %s", mop->debug_id);
+                printf(KRED"Failed to find a VMEM allocation base %lx. length %lx. flags %x\n"KRST, base, length, flags);
                 panic("Search failed\n");
                 return MAKE_ER(res_t, MEM_REQUEST_NONE_FOUND); // No pages matched
             }
@@ -1191,7 +1193,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
                                                         (flags & COMMIT_DMA) ? npages : 0x10, flags);
             if (phy_base) *phy_base = contig_base;
         } else if(phy_base) {
-            *phy_base = virtual_to_physical(page_n << UNTRANSLATED_BITS) + RES_META_SIZE;
+            *phy_base = translate_address(page_n << UNTRANSLATED_BITS, 1) + RES_META_SIZE;
         }
     }
 

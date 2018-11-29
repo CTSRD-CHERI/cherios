@@ -69,8 +69,8 @@ int virtio_device_queue_add(virtio_mmio_map* map, u32 queue_n, struct virtq* que
 #define P_FOR(X) 								\
         TOUCH(queue-> X); 						\
 		size_t X ## _sz = X ## _size(queue);	\
-		uint64_t X ## _phy = mem_paddr_for_vaddr((size_t)queue-> X); 							\
-		uint64_t X ## _phy_end = mem_paddr_for_vaddr(((size_t)queue-> X) + X ## _sz -1); 		\
+		uint64_t X ## _phy = translate_address((size_t)queue-> X, 0); 							\
+		uint64_t X ## _phy_end = translate_address(((size_t)queue-> X) + X ## _sz -1, 0); 		\
 		if(X ## _phy + X ## _sz - 1 != X ## _phy_end) return DRIVER_QUEUE_CROSSES_PAGE_BOUNDRY;	\
 		map->queue_ ## X ## _low = PADDR_LO(X ## _phy);												\
 		map->queue_ ## X ## _high = PADDR_HI(X ## _phy);
@@ -198,6 +198,7 @@ struct virtq_arg {
 
 int virtio_phy_handle_func(capability arg, phy_handle_flags flags, size_t phy_addr, size_t length) {
     struct virtq_arg* virtq_args = (struct virtq_arg*)arg;
+    assert_int_ex(phy_addr, >=, 0x1000);
     int res = virtio_q_chain_add(virtq_args->queue, virtq_args->free_head, virtq_args->tail, phy_addr, (le16)length, virtq_args->flags);
     if(res != 0) return res; // Failed to add a link
 }

@@ -120,7 +120,7 @@ int lwip_driver_init(net_session* session) {
 
     session->net_hdrs = (struct virtio_net_hdr*)GET_A_PAGE;
     assert_int_ex(MEM_REQUEST_MIN_REQUEST, >, sizeof(struct virtio_net_hdr) * ((QUEUE_SIZE * 2)));
-    session->net_hdrs_paddr = mem_paddr_for_vaddr((size_t)session->net_hdrs);
+    session->net_hdrs_paddr = translate_address((size_t)session->net_hdrs, 0);
 
     u32 features = (1 << VIRTIO_NET_F_MRG_RXBUF);
     int result = virtio_device_init(session->mmio, net, 1, VIRTIO_QEMU_VENDOR, features);
@@ -195,7 +195,9 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 
     le16 head = virtio_q_alloc(sendq, &session->free_head_send);
 
-    assert(head != QUEUE_SIZE);
+    if(head == QUEUE_SIZE) {
+        return ERR_MEM;
+    }
 
     le16 tail = head;
 

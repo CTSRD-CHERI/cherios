@@ -427,6 +427,8 @@ void vmem_visit_range(size_t page_start, size_t pages, vmem_visit_func* func, ca
 }
 
 size_t virtual_to_physical(size_t vaddr) {
+    assert(0 && "Depracated");
+
     size_t low_bits = vaddr & (UNTRANSLATED_PAGE_SIZE-1);
     ptable_t tbl = get_l2_for_addr(vaddr);
     if(tbl == NULL) return 0;

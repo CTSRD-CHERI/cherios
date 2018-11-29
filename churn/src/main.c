@@ -87,7 +87,7 @@ int main(register_t arg, capability carg) {
     printf("Churn test done\n");
 
 
-    printf("Array at: %lx\n", mvirtual_to_physical((size_t)naughty));
+    printf("Array at: %lx\n", translate_address((size_t)naughty, 0));
 
     for(size_t i = 0; i < N; i++) {
         CHERI_PRINT_CAP(naughty[i]);

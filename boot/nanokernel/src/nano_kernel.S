@@ -124,6 +124,8 @@ local_reg_var since_shotdown
 local_reg_var in_switch
 local_reg_var supressed
 local_reg_var unested_cause
+local_reg_var unested_ccause
+
 #ifdef SMP_ENABLED
 local_array_end context_array, CAP_SIZE_BITS,  SMP_CORES
 #endif
@@ -3072,6 +3074,50 @@ interrupts_get:
     CRETURN
 #endif
 
+
+#uint64_t translate_address(uint64_t virt_addr, int dont_commit)
+
+translate_address_no_entry:
+    or          $t0, $v0, $a1
+    bnez        $t0, translate_address_return
+    nop
+# otherwise perform a read in order to fault
+    clb         $t0, $a0, 0($kdc)                                    # FIXME: stupidly unsafe
+
+.global:
+translate_address:
+
+    EXTRACT_AND_SCALE_L0 $a0, $t0, PAGE_TABLE_ENT_BITS
+    daddiu      $v0, $t0, top_virt_page                              # v0 = phy poiter to L0
+
+    cld         $v0, $v0, 0($idc)                                    # v0 = phy pointer to L1
+    slti        $t0, $v0, -1
+    beqz        $t0, translate_address_no_entry
+
+
+    EXTRACT_AND_SCALE_L1 $a0, $t0, PAGE_TABLE_ENT_BITS
+    daddu       $v0, $v0, $t0
+
+    cld         $v0, $v0, 0($kdc)                                   # v0 = phy pointer to L2
+    slti        $t0, $v0, -1
+    beqz        $t0, translate_address_no_entry
+
+
+    EXTRACT_AND_SCALE_L2 $a0, $t0, PAGE_TABLE_ENT_BITS
+    daddu       $v0, $v0, $t0
+
+    cld         $v0, $v0, 0($kdc)                                   # v0 = pfn entry
+    slti        $t0, $v0, 1
+    bnez        $t0, translate_address_no_entry
+
+    andi        $t0, $a0, (UNTRANSLATED_PAGE_SIZE-1)                # low_bits
+    dsrl        $v0, $v0, PFN_SHIFT                                 # phy pagen
+    dsll        $v0, $v0, PHY_PAGE_SIZE_BITS
+    daddu       $v0, $v0, $t0                                       # phy addr
+
+translate_address_return:
+    CRETURN
+
 ############################################################ (safe)
 # void exception_subscribe(void)
 .global exception_subscribe
@@ -3186,6 +3232,7 @@ exception_user_handle: # TODO our idc needs an appropriate entry for this
     # kr1c is the per physical cpu state (can't clobber)
     # kr2c is our context
     # k0 is cause
+    # k1 is ccause MUST USE THIS OR RELOAD FROM unested_ccause($kr1c)
     # ccause already stored
 
     # Can't write to any user registers while in exception as a TLB abort will kill us.
@@ -3204,7 +3251,7 @@ exception_user_handle: # TODO our idc needs an appropriate entry for this
 
     # Store causes for when the user requests them.
     csd         $k0, $zero, (CONTEXT_OFFSET_CAUSE)($kr2c)
-    cgetcause   $k0
+    cld         $k0, $zero, unested_ccause($kr1c)
     csd         $k0, $zero, (CONTEXT_OFFSET_CCAUSE)($kr2c)
 
     # Set User Exception Level - this is not re-entrant
@@ -3270,7 +3317,8 @@ tlb_table_missing: # (safe) (k1 will contain bad entry. 0 = needs mapping. -1 = 
     csetoffset  $epcc, $epcc, $k0       # TODO FPGA BUG
 
     cld         $k0, $zero, unested_cause($kr1c)      # If we took an exception trying this last time - report FIRST exception
-    bnez        $k0, context_switch_exception_entry
+    cld         $k1, $zero, unested_ccause($kr1c)
+    bnez        $k0, context_switch_exception_entry_custom_ccause
     csd         $zero, $zero, unested_cause($kr1c)
     dmfc0       $k0, MIPS_CP0_REG_CAUSE
     csd         $k0, $zero, unested_cause($kr1c)     # store our current cause. If this causes an exception don't try again
@@ -3336,7 +3384,7 @@ kernel_exception_trampoline:
 # We assume that critical code never throws exceptions and only async interrupts happen.
 # TODO: switch happens in an exception level, but other bits of the nano kernel may need thinking about
 # TODO if an exception happens in something like context switch we should die more nicely
-
+# WARN: QEMU currently fs up epcc/epc sometimes. Not my bad.
         # Temporary hack coz hardware is wrong
         dmfc0       $k0, $14            # TODO FPGA BUG
         cgetepcc    $epcc
@@ -3368,6 +3416,8 @@ soft_ex:
         cld         $k0, $zero, unested_cause($kr1c)      # If we took an exception trying this last time - report FIRST exception
         bnez        $k0, 2f
         csd         $zero, $zero, unested_cause($kr1c)
+        cgetcause   $k0
+        csd         $k0, $zero, unested_ccause($kr1c)
         dmfc0       $k0, MIPS_CP0_REG_CAUSE
         csd         $k0, $zero, unested_cause($kr1c)     # store our current cause. If this causes an exception don't try again
         li          $k0, 0x3400d00d
@@ -3378,11 +3428,12 @@ soft_ex:
 2:
         # We can also pass to the user
         clc     $kr2c, $zero, current_context($kr1c)
-        cbtu    $idc, context_switch_exception_entry # No IDC = no user interrupts
+        cbtu    $idc, context_switch_exception_entry_custom_ccause # No IDC = no user interrupts
+        cld     $k1, $zero, unested_ccause($kr1c)
         cld     $k1, $zero, (CONTEXT_OFFSET_EX_STATE)($kr2c)
         daddiu  $k1, $k1, -EX_STATE_UH
-        bnez    $k1, context_switch_exception_entry # Must have user bit set, and not already be in an exception
-        nop
+        bnez    $k1, context_switch_exception_entry_custom_ccause # Must have user bit set, and not already be in an exception
+        cld     $k1, $zero, unested_ccause($kr1c)
 		b exception_user_handle # All of the above pass - user can take his own exception
 		nop
 

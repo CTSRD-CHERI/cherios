@@ -145,8 +145,8 @@ void * new_session(void * mmio_cap) {
     queue->avail = (struct virtq_avail*)GET_A_PAGE;
     queue->used = (struct virtq_used*)GET_A_PAGE;
 
-    session->outhdrs_phy = mem_paddr_for_vaddr((size_t)session->outhdrs);
-    session->inhdrs_phy = mem_paddr_for_vaddr((size_t)session->inhdrs);
+    session->outhdrs_phy = translate_address((size_t)session->outhdrs, 0);
+    session->inhdrs_phy = translate_address((size_t)session->inhdrs, 0);
 
     session->init = 0;
     capability sealed = seal_session(session);
@@ -298,11 +298,11 @@ int new_socket(session_t* session, uni_dir_socket_requester* requester, enum soc
     sock->mid_flag_type = (sock_type == SOCK_TYPE_PUSH) ?  VIRTQ_DESC_F_NEXT : (VIRTQ_DESC_F_NEXT |  VIRTQ_DESC_F_WRITE);
     sock->in_sector_prog = 0;
     sock->req_head = sock->req_tail = QUEUE_SIZE;
-    sock->out_paddr = mem_paddr_for_vaddr((size_t)&sock->out);
+    sock->out_paddr = translate_address((size_t)&sock->out, 0);
     size_t diff = sizeof(struct virtio_blk_outhdr) - 1;
     // Check we don't cross a page boundry. This is just really unlucky.
-    assert(mem_paddr_for_vaddr((size_t)&sock->out + diff) - diff == sock->out_paddr);
-    sock->in_paddr = mem_paddr_for_vaddr((size_t)&sock->in);
+    assert(translate_address((size_t)&sock->out + diff, 0) - diff == sock->out_paddr);
+    sock->in_paddr = translate_address((size_t)&sock->in, 0);
 
     n_socks++;
 
@@ -484,9 +484,12 @@ int vblk_rw(session_t* session, void * buf, size_t sector,
     outhdr->sector = sector;
     le16 flag_type = type == VIRTIO_BLK_T_IN ? ( VIRTQ_DESC_F_WRITE | VIRTQ_DESC_F_NEXT) : VIRTQ_DESC_F_NEXT;
 
-    size_t paddr_start = mem_paddr_for_vaddr((size_t)buf);
-    size_t paddr_end = mem_paddr_for_vaddr((size_t)buf + (SECTOR_SIZE - 1));
+    size_t paddr_start = translate_address((size_t)buf, 0);
+    size_t paddr_end = translate_address((size_t)buf + (SECTOR_SIZE - 1), 0);
     int one_piece = (paddr_end - paddr_start) == (SECTOR_SIZE - 1);
+
+    assert_int_ex(paddr_start, !=, (size_t)-1);
+    assert_int_ex(paddr_end, !=, (size_t)-1);
 
     /* The IN/OUT headers are already set up in init. We only need to add in the address of the users buffer */
 
