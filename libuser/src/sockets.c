@@ -36,6 +36,8 @@
 #include "stdio.h"
 #include "assert.h"
 
+#define printf(...) syscall_printf(__VA_ARGS__)
+
 static int is_empty(uni_dir_socket_requester* requester) {
     return (requester->fulfiller_component.fulfill_ptr == requester->requeste_ptr);
 }
@@ -856,8 +858,8 @@ static uint8_t alloc_sockn(void) {
     static int init = 0;
     if(!init) {
         init = 1;
-        for(uint8_t i = 0; i != MAX_SOCKNS;) {
-            free_ns[i] = ++i;
+        for(uint8_t i = 0; i != MAX_SOCKNS;i++) {
+            free_ns[i] = i+1;
         }
     }
 
@@ -925,7 +927,7 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
 
         // If no data buffer is provided we may very well wait and cannot perform a copy
         if((con_type & (CONNECT_PUSH_WRITE | CONNECT_PULL_READ)) && (flags & MSG_DONT_WAIT)) return E_SOCKET_WRONG_TYPE;
-        if((con_type & CONNECT_PUSH_WRITE) && !(flags & MSG_NO_COPY)) return E_COPY_NEEDED;
+        //if((con_type & CONNECT_PUSH_WRITE) && !(flags & MSG_NO_COPY)) return E_COPY_NEEDED;
 
         sock->write_copy_buffer.buffer = NULL;
         return 0;
@@ -964,6 +966,7 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
         if((sock->flags | flags) & MSG_NO_COPY) {
             if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 
+            if(SOCK_TRACING && (sock->flags & MSG_TRACE)) printf("Socket sending request and waiting for all to finish\n");
             ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length), length);
             if(ret >= 0) ret = length;
 
@@ -974,6 +977,8 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
             register_t perms = CHERI_PERM_LOAD;
             if(!((flags | sock->flags) & MSG_NO_CAPS)) perms |= CHERI_PERM_LOAD_CAP;
 
+            if(SOCK_TRACING && (sock->flags & MSG_TRACE)) printf("Socket sending a request\n");
+
             ret = socket_internal_request_ind_db(requester, buf, length, &sock->write_copy_buffer, dont_wait, perms);
         }
 
@@ -981,8 +986,9 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
         uni_dir_socket_fulfiller* fulfiller = &sock->write.pull_writer;
         ful_func * ff = &copy_in;
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
+        enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
         ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
-                                                      F_CHECK | progress | dont_wait,
+                                                      F_CHECK | progress | dont_wait | trace,
                                                       ff, (capability)buf, 0, NULL);
     }
 
@@ -1006,8 +1012,9 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         // TODO numbers on further reads. However, if the user provided a different buffer on the second call this would
         // TODO break horribly.
         if((sock->flags | flags) & MSG_NO_COPY) {
-            if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
-
+#if (!FORCE_WAIT_SOCKET_RECV)
+            //if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
+#endif
             ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length), length);
             if(ret >= 0) ret = length;
         } else {
@@ -1018,8 +1025,9 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         uni_dir_socket_fulfiller* fulfiller = &sock->read.push_reader;
         ful_func * ff = ((sock->flags | flags) & MSG_NO_CAPS) ? &copy_out_no_caps : copy_out;
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
+        enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
         ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
-                                                      F_CHECK | progress | dont_wait,
+                                                      F_CHECK | progress | dont_wait | trace,
                                                       ff, (capability)buf, 0, NULL);
     }
 
@@ -1171,9 +1179,28 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
     return ret;
 }
 
+void catch_up_write(unix_like_socket* file) {
+    if(file->write_behind) {
+        if(SOCK_TRACING && (file->flags & MSG_TRACE)) printf("Socket catching up write ptr by %lx\n", file->write_behind);
+        socket_internal_requester_lseek(file->write.push_writer,
+                                        file->write_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
+        file->write_behind = 0;
+    }
+}
+
+void catch_up_read(unix_like_socket* file) {
+    if(file->read_behind) {
+        if(SOCK_TRACING && (file->flags & MSG_TRACE)) printf("Socket catching up read ptr by %lx\n", file->read_behind);
+        socket_internal_requester_lseek(file->read.pull_reader,
+                                        file->read_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
+        file->read_behind = 0;
+    }
+}
+
 ssize_t socket_flush_drb(unix_like_socket* socket) {
     uint32_t len = socket->write_copy_buffer.partial_length;
     if(socket->write_copy_buffer.buffer && len != 0) {
+        if(SOCK_TRACING && (socket->flags & MSG_TRACE)) printf("Socket flushing drb with %x bytes\n", len);
         if(socket->flags & MSG_EMULATE_SINGLE_PTR) catch_up_write(socket);
         // FIXME respect dont_wait
         // FIXME handle error returns
@@ -1320,9 +1347,16 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg
 
         for(size_t i = 0; i != nsocks; i++) {
             poll_sock_t* sock_poll = socks+i;
+
+            if(sock_poll->fd == NULL) {
+                sock_poll->revents = (enum poll_events)0;
+                continue;
+            }
+
             enum poll_events asked_events = (events_forced | sock_poll->events);
 
-            enum poll_events revents = be_waiting_for_event(sock_poll->fd, asked_events, sleep);
+            custom_poll_f* poll_i = sock_poll->fd->custom_poll ? sock_poll->fd->custom_poll : be_waiting_for_event;
+            enum poll_events revents = poll_i(sock_poll->fd, asked_events, sleep);
 
             if(asked_events & revents) {
 
@@ -1338,6 +1372,8 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg
 
         if(sleep) {
             syscall_cond_wait(msg_queue_poll != 0, sleep < 0 ? 0 : (register_t)sleep);
+            if(sleep > 0) sleep = 0;
+            goto restart;
         }
 
     } while(sleep);
@@ -1358,4 +1394,10 @@ int socket_poll(poll_sock_t* socks, size_t nsocks, int timeout, enum poll_events
     }
 
     return ret;
+}
+
+int assign_socket_n(unix_like_socket* sock) {
+    if(sock->flags & SOCKF_GIVE_SOCK_N) return -1;
+    sock->flags |= SOCKF_GIVE_SOCK_N;
+    sock->sockn = alloc_sockn();
 }

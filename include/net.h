@@ -50,6 +50,7 @@ DEC_ERROR_T(listening_token);
 
 struct net_sock {
     unix_like_socket sock;
+    struct tcp_bind bind;
     struct net_sock* next_to_accept; // Inline linked list to allow out of order accepts
     capability callback_arg;
     struct requester_32 write_req;
@@ -58,13 +59,14 @@ struct net_sock {
 // Without inline drb or inline reqs as this might just be a listen socket
 typedef struct unix_net_sock {
     unix_like_socket sock;
+    struct tcp_bind bind;
     struct net_sock* next_to_accept; // Inline linked list to allow out of order accepts
     capability callback_arg;
     listening_token token;
-    struct tcp_bind bind;
 } unix_net_sock;
 
-#define NET_SOCK_DRB_SIZE 0x4000
+// TODO: Reduce again when I teach NGINX about AIO
+#define NET_SOCK_DRB_SIZE 0x20000
 
 typedef struct net_sock* NET_SOCK;
 
@@ -83,10 +85,10 @@ NET_SOCK netsock_accept(enum SOCKET_FLAGS flags);
 NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in);
 
 // Accepts but filters for correct unix socket and puts others on wait lists
-static NET_SOCK accept_until_correct(unix_net_sock* expect);
+NET_SOCK accept_until_correct(unix_net_sock* expect, int dont_wait);
 
 // Puts one incoming connecting on wait list
-static void accept_one(void);
+void accept_one(int dont_wait);
 
 struct hostent {
     const char  *h_name;       /* official name of host */
@@ -102,6 +104,11 @@ struct hostent *gethostbyname(const char *name);
 /* A more unix like interface */
 /******************************/
 
+typedef  unix_net_sock* unix_net_sock_ptr;
+DEC_ERROR_T(unix_net_sock_ptr);
+
+ERROR_T(unix_net_sock_ptr) socket_or_er(int domain, int type, int protocol);
+
 unix_net_sock* socket(int domain, int type, int protocol);
 
 int bind(unix_net_sock* sockfd, const struct sockaddr *addr,
@@ -116,5 +123,6 @@ NET_SOCK accept(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen
 
 NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
 
+int shutdown(NET_SOCK sockfd, int how);
 
 #endif //CHERIOS_NET_H

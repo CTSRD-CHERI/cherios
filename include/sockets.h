@@ -33,6 +33,9 @@
 #include "object.h"
 #include "string.h"
 
+// Currently dont_wait and recv with a pull socket interact badly. This ignores the don't wait flag.
+#define FORCE_WAIT_SOCKET_RECV 1
+
 #define SOCKET_CONNECT_IPC_NO       (0xbeef)
 
 #define E_AGAIN                     (-1)
@@ -56,7 +59,7 @@
 #define E_ALREADY_CONNECTED         (-15)
 #define E_NOT_CONNECTED             (-16)
 #define E_BAD_FLAGS                 (-18)
-#define E_USER_FULFILL_ERROR        (-20)
+#define E_USER_FULFILL_ERROR        (-19)
 
 #define SOCK_INF                    (uint64_t)(0xFFFFFFFFFFFFFFFULL)
 
@@ -68,22 +71,16 @@ enum SOCKET_FLAGS {
     MSG_PEEK                = 0x8,
     MSG_EMULATE_SINGLE_PTR  = 0x10,
     SOCKF_GIVE_SOCK_N       = 0x20,
+    MSG_TRACE               = 0x40,
 // Close will assume it has to free the drb, write request, read request, and socket itself unless you specify these
-    SOCKF_DRB_INLINE        = 0x40,
-    SOCKF_WR_INLINE         = 0x80,
-    SOCKF_RR_INLINE         = 0x100,
-    SOCKF_SOCK_INLINE       = 0x200,
+    SOCKF_DRB_INLINE        = 0x80,
+    SOCKF_WR_INLINE         = 0x100,
+    SOCKF_RR_INLINE         = 0x200,
+    SOCKF_SOCK_INLINE       = 0x400,
 };
 
-// If we are not using syscall puts then stdout uses this code
-// Trying to printf would therefore cause an unbounded recursion
-// We could solve these with a second printf that uses snprintf/syscall_puts (like assert)
-// But for now just remove printing
-#ifdef USE_SYSCALL_PUTS
-    #define SOCK_TRACING        1
-#else
-    #define SOCK_TRACING        0
-#endif
+// Global enable/disable for socket tracing. Always uses syscall_printf for safety.
+#define SOCK_TRACING        1
 
 enum FULFILL_FLAGS {
     F_NONE                  = 0x0,
@@ -93,7 +90,7 @@ enum FULFILL_FLAGS {
     F_PROGRESS              = 0x8, // Same bit but opposite meaning to MSG_PEEK
     F_START_FROM_LAST_MARK  = 0x10,
     F_SET_MARK              = 0x20,
-    F_TRACE                 = 0x40,
+    F_TRACE                 = 0x40, // Same as MSG_TRACE
 };
 
 #define SOCK_TYPE_PUSH 0
@@ -235,6 +232,7 @@ typedef union {
 } socket_writer_t;
 
 typedef ssize_t close_fun(struct unix_like_socket* sock);
+typedef enum poll_events custom_poll_f(struct unix_like_socket* sock, enum poll_events asked_events, int set_waiting);
 
 // Bi directional unix like socket
 typedef struct unix_like_socket {
@@ -242,6 +240,7 @@ typedef struct unix_like_socket {
     enum socket_connect_type con_type;
     uint8_t sockn;
     close_fun* custom_close;
+    custom_poll_f* custom_poll;
     data_ring_buffer write_copy_buffer; // If we push write and are worried about delays we need a buffer
     // data_ring_buffer read_copy_buffer; // Do we copy for pull reading? Otherwise how do we know when consume has happened?
     // If we emulate a single pointer these are used to track how far behind we are with read/write
@@ -393,22 +392,8 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
 ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count);
 
-static inline void catch_up_write(unix_like_socket* file) {
-    if(file->write_behind) {
-        socket_internal_requester_lseek(file->write.push_writer,
-                                        file->write_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
-        file->write_behind = 0;
-    }
-}
-
-static inline void catch_up_read(unix_like_socket* file) {
-    if(file->read_behind) {
-        socket_internal_requester_lseek(file->read.pull_reader,
-                                        file->read_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
-        file->read_behind = 0;
-    }
-}
-
+void catch_up_write(unix_like_socket* file);
+void catch_up_read(unix_like_socket* file);
 ssize_t socket_flush_drb(unix_like_socket* socket);
 
 typedef struct poll_sock {
@@ -419,4 +404,5 @@ typedef struct poll_sock {
 
 int socket_poll(poll_sock_t* socks, size_t nsocks, int timeout, enum poll_events* msg_queue_poll);
 
+int assign_socket_n(unix_like_socket* sock);
 #endif //CHERIOS_SOCKETS_H

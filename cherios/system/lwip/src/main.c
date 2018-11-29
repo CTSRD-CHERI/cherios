@@ -29,6 +29,8 @@
  */
 
 
+#include <sockets.h>
+#include "unistd.h"
 #include "cheric.h"
 #include "sockets.h"
 #include "stdlib.h"
@@ -44,11 +46,14 @@
 
 enum session_close_state {
     SCS_NONE = 0,
-    SCS_FULFILL_CLOSED = 1,         // We closed our fulfiller
-    SCS_PCB_LAYER_CLOSED = 2,       // We closed the LWIP tcp layer
-    SCS_USER_REQUEST_CLOSED = 4,    // User closed their request channel
-    SCS_USER_FULFILL_CLOSED = 8,   // User closed their fulfill channel
-    SCS_USER_CLOSING = 16           // User sent a close request
+    SCS_FULFILL_CLOSED =        0x1,  // We closed our fulfiller
+    SCS_REQUEST_CLOSED =        0x2,  // We closed our requester
+    SCS_USER_REQUEST_CLOSED =   0x4,  // User closed their request channel
+    SCS_USER_FULFILL_CLOSED =   0x8,  // User closed their fulfill channel
+    SCS_USER_CLOSING_REQUESTER =0x10, // User sent a close request (but have not yet closed their requester)
+    SCS_REMOTE_CLOSE =          0x20, // remote end closed. might still have data to hand up to application
+    SCS_PCB_LAYER_CLOSED =      0x40, // We closed the LWIP tcp layer
+    SCS_NEED_FINAL_CLOSE =      0x80,
 };
 
 typedef struct tcp_session {
@@ -81,6 +86,10 @@ typedef struct tcp_listen_session {
     capability callback_arg;
     register_t callback_port;
 }tcp_listen_session;
+
+static void user_tcp_close_send(tcp_session* tcp);
+static void user_tcp_close_recv(tcp_session* tcp);
+static void user_tcp_close(tcp_session* tcp);
 
 tcp_session* tcp_head = NULL;
 
@@ -202,6 +211,11 @@ int init_net(net_session* session, struct netif* nif) {
     return 0;
 }
 
+static void finish_closing_user_requester(tcp_session* tcp) {
+    if(tcp->tcp_pcb->snd_buf == TCP_SND_BUF) {
+        user_tcp_close_send(tcp);
+    }
+}
 // Application (ack) -> TCP
 err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
                              u16_t len) {
@@ -217,6 +231,10 @@ err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
                                            NULL, NULL, 0, &ful_oob_func_skip_oob);
     assert_int_ex(res, ==, len);
 
+    if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
+        finish_closing_user_requester(tcp);
+    }
+
     return ERR_OK;
 }
 
@@ -231,11 +249,8 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
     tcp_session* tcp = (tcp_session*)arg;
 
     if(p == NULL) { // The other end has closed. So they are no longer receiving. Thus we close our fulfiller.
-        if(!(tcp->close_state & SCS_FULFILL_CLOSED)) {
-            ssize_t res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
-            tcp->close_state |= SCS_FULFILL_CLOSED;
-            assert_int_ex(-res, == , 0);
-        }
+        user_tcp_close_send(tcp);
+        tcp->close_state |= SCS_REMOTE_CLOSE;
         return ERR_OK;
     }
 
@@ -327,12 +342,13 @@ ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length
 
     // Make a pbuf to send, linked to a byte range
 
-    assert(length < UINT16_MAX);
-    err_t er = tcp_write(tcp->tcp_pcb, buf, (uint16_t)length, 0);
+    uint16_t to_send = (length > (uint64_t)tcp->tcp_pcb->snd_buf) ? tcp->tcp_pcb->snd_buf : (uint16_t)length;
+
+    err_t er = tcp_write(tcp->tcp_pcb, buf, (uint16_t)to_send, 0);
 
     assert_int_ex(er, ==, ERR_OK);
 
-    return length;
+    return to_send;
 }
 
 static ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
@@ -340,7 +356,7 @@ static ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t off
 
     switch(request->type) {
         case REQUEST_CLOSE:
-            tcp->close_state |= SCS_USER_CLOSING;
+            tcp->close_state |= SCS_USER_CLOSING_REQUESTER;
             break;
         case REQUEST_FLUSH:
             tcp_output(tcp->tcp_pcb);
@@ -356,6 +372,8 @@ static ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t off
 // Application -> TCP
 void handle_fulfill(tcp_session* tcp) {
 
+    assert(!(tcp->close_state & (SCS_FULFILL_CLOSED | SCS_USER_CLOSING_REQUESTER)));
+
     // We expect only data
     ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, SOCK_INF,
                                                                       F_CHECK | F_START_FROM_LAST_MARK | F_SET_MARK | F_DONT_WAIT,
@@ -363,15 +381,11 @@ void handle_fulfill(tcp_session* tcp) {
 
     err_t flush = tcp_output(tcp->tcp_pcb);
 
-    assert_int_ex(flush, == , ERR_OK);
-
-    if(tcp->close_state & SCS_USER_CLOSING) {
-        // Get up to date on acking RCV path o/w a RST is sent instead of a FIN
-        tcp_application_ack(tcp);
-        err_t er = tcp_close(tcp->tcp_pcb);
-        tcp->close_state |= SCS_PCB_LAYER_CLOSED;
-        assert_int_ex(er, ==, ERR_OK);
+    if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
+        finish_closing_user_requester(tcp);
     }
+
+    assert_int_ex(flush, == , ERR_OK);
 }
 
 static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
@@ -397,7 +411,7 @@ static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
 
 static void send_connect_callback(tcp_session* tcp, err_t err) {
     capability sealed_tcp = (capability)tcp;
-    message_send((register_t)err, 0, 0, 0, tcp->callback_arg,
+    message_send((register_t)err, tcp->tcp_pcb->local_port, tcp->tcp_pcb->local_ip.addr, 0, tcp->callback_arg,
                  sealed_tcp, (capability)socket_internal_make_read_only(&tcp->tcp_output_pusher.r), NULL,
                  tcp->callback, SEND, tcp->callback_port);
     socket_internal_requester_connect(&tcp->tcp_output_pusher.r);
@@ -409,12 +423,8 @@ static void tcp_er(void *arg, err_t err) {
     // This session may have already been freed
     if(tcp != NULL) {
         // We don't free here. Instead we mark the pcb as already closed, and handle on the next main loop
-
-        tcp->close_state |= SCS_FULFILL_CLOSED | SCS_PCB_LAYER_CLOSED;
-
-        ssize_t res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 0);
-
-        assert_int_ex(-res, ==, 0);
+        user_tcp_close_recv(tcp);
+        user_tcp_close_send(tcp);
     }
 
 }
@@ -482,7 +492,7 @@ static int user_tcp_connect_sockets(capability sealed_session,
     int res = socket_internal_fulfiller_connect(&tcp->tcp_input_pushee, tcp_input_pusher);
     if(res < 0) return res;
     if(tcp->close_state & SCS_FULFILL_CLOSED) {
-        // We got the connect AFTER we tried to close! Just close it now.
+        // We got the connect AFTER we tried to close! We have to close again to signal the pusher that we closed.
         socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
     }
 }
@@ -514,7 +524,7 @@ static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
     listen_session->tcp_pcb = tcp_new();
     err_t er = tcp_bind(listen_session->tcp_pcb, &bind->addr, bind->port);
 
-    assert_int_ex(er, ==, ERR_OK);
+    assert_int_ex(-er, ==, -ERR_OK);
 
     listen_session->tcp_pcb = tcp_listen_with_backlog(listen_session->tcp_pcb, backlog);
     tcp_arg(listen_session->tcp_pcb, listen_session);
@@ -537,37 +547,50 @@ static void stop_listening(capability sealed) {
     return;
 }
 
-static void user_tcp_close(tcp_session* tcp) {
-    // First close user layer
+static void user_tcp_close_send(tcp_session* tcp) {
 
-    ssize_t res = socket_internal_close_requester(&tcp->tcp_output_pusher.r, 0, 1);
-
-    assert_int_ex(res, ==, 0);
+    ssize_t res;
 
     if(!(tcp->close_state & SCS_FULFILL_CLOSED)) {
         // We will have done this earlier otherwise
         res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
         tcp->close_state |= SCS_FULFILL_CLOSED;
         assert_int_ex(res, ==, 0);
+        if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) tcp_shutdown(tcp->tcp_pcb,0,1);
     }
+
+    if(tcp->close_state & SCS_REQUEST_CLOSED) {
+        tcp->close_state |= SCS_NEED_FINAL_CLOSE;
+    }
+}
+
+static void user_tcp_close_recv(tcp_session* tcp) {
+
+    ssize_t res;
 
     // Then free any pcbs / ack the entire window in case anything has not been consumed
+    tcp_application_ack_all(tcp);
 
-    if(!(tcp->close_state & SCS_USER_REQUEST_CLOSED)) {
-        tcp_application_ack_all(tcp);
+    if(!(tcp->close_state & SCS_REQUEST_CLOSED)) {
+        res = socket_internal_close_requester(&tcp->tcp_output_pusher.r, 0, 1);
+        tcp->close_state |= SCS_REQUEST_CLOSED;
+        assert_int_ex(res, ==, 0);
+        if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) tcp_shutdown(tcp->tcp_pcb,1,0);
     }
 
-    // Then close tcp layer
-    if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) {
-        tcp->close_state |= SCS_PCB_LAYER_CLOSED;
-        err_t er = tcp_close(tcp->tcp_pcb);
-
-        assert_int_ex(er, ==, ERR_OK);
+    if(tcp->close_state & SCS_FULFILL_CLOSED) {
+        tcp->close_state |= SCS_NEED_FINAL_CLOSE;
     }
+}
 
-    tcp_arg(tcp->tcp_pcb, NULL); // We may still get events, to do this to ignore them
-    // Then free session
+static void user_tcp_close(tcp_session* tcp) {
 
+    // Make sure both directions have been closed
+
+    user_tcp_close_recv(tcp);
+    user_tcp_close_send(tcp);
+
+    // Free our session
     free_tcp_session(tcp);
 
     return;
@@ -680,38 +703,49 @@ int main(register_t arg, capability carg) {
         restart_poll:
         // respond to sockets
         FOR_EACH_TCP(tcp_session) {
+            // The user stops reading
             if(!(tcp_session->close_state & SCS_USER_FULFILL_CLOSED) &&
                     tcp_session->tcp_output_pusher.r.fulfiller_component.fulfiller_closed) {
                 tcp_session->close_state |= SCS_USER_FULFILL_CLOSED;
-                // TODO close half the duplex. Currently we just close the entire thing.
+                user_tcp_close_recv(tcp_session);
             }
 
-            // TODO we need a notify for this wait_all_finish
-            // FIXME in the case the pcb is closed we might want the session around if it was closed with fin rather than rst
-            if(tcp_session->close_state & (SCS_USER_FULFILL_CLOSED | SCS_PCB_LAYER_CLOSED) ||
-                    ((tcp_session->close_state & SCS_FULFILL_CLOSED) &&
-                            (socket_internal_requester_wait_all_finish(&tcp_session->tcp_output_pusher.r, 1) == 0))) {
-                // Either the user stopped reading
+            // Remote has closed and we have finished having
+            if((tcp_session->close_state & (SCS_REMOTE_CLOSE)) &&
+                    !(tcp_session->close_state & (SCS_USER_FULFILL_CLOSED | SCS_REQUEST_CLOSED)) &&
+                        (socket_internal_requester_wait_all_finish(&tcp_session->tcp_output_pusher.r, 1) == 0)) {
+                user_tcp_close_recv(tcp_session);
+            }
+
+            if(tcp_session->close_state & SCS_NEED_FINAL_CLOSE) {
                 user_tcp_close(tcp_session);
                 // Don't trust the for each after modifying the set
                 goto restart_poll;
             }
 
-            if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
+            if(!(tcp_session->close_state & (SCS_REQUEST_CLOSED))) {
                 tcp_application_ack(tcp_session);
-                enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1);
-                if(revents && sock_sleep) {
-                    sock_sleep = 0;
-                    goto restart_poll;
-                }
-                if(revents & POLL_IN) {
-                    sock_event = 1;
-                    handle_fulfill(tcp_session);
-                } else if(revents & (POLL_ER | POLL_HUP)) {
-                    tcp_session->close_state |= SCS_USER_REQUEST_CLOSED;
-                    user_tcp_close(tcp_session);
-                    // Don't trust the for each after modifying the set
-                    goto restart_poll;
+            }
+
+            if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
+                if(tcp_session->tcp_pcb->snd_buf) { // dont even bother if the send window is already full
+                    enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1);
+                    if(revents && sock_sleep) {
+                        sock_sleep = 0;
+                        goto restart_poll;
+                    }
+                    if(revents & POLL_IN) {
+                        sock_event = 1;
+                        handle_fulfill(tcp_session);
+                    } else if(revents & (POLL_ER | POLL_HUP)) {
+                        // The user shouldn't close their requester unless there has been an error, so close everything
+                        printf("Poll err %d %d:%d\n", revents,
+                               tcp_session->tcp_pcb->remote_port, tcp_session->tcp_pcb->local_port);
+                        tcp_session->close_state |= SCS_USER_REQUEST_CLOSED;
+                        user_tcp_close(tcp_session);
+                        // Don't trust the for each after modifying the set
+                        goto restart_poll;
+                    }
                 }
             }
 

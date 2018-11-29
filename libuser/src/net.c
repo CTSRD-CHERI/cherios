@@ -51,7 +51,8 @@ listening_token_or_er_t netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlo
                        capability callback_arg) {
     act_kt act = net_try_get_ref();
     assert(act != NULL);
-    return (listening_token_or_er_t)message_send_c(backlog, TCP_CALLBACK_PORT, 0, 0, bind, act_self_ref, callback_arg, NULL, act, SEND, 1);
+    capability res = message_send_c(backlog, TCP_CALLBACK_PORT, 0, 0, bind, act_self_ref, callback_arg, NULL, act, SYNC_CALL, 1);
+    return MAKE_VALID(listening_token, res);
 }
 
 void netsock_stop_listen(listening_token token) {
@@ -84,6 +85,10 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
 
     capability callback = msg->c3;
     capability session_token = msg->c4;
+
+    uint16_t port = msg->a1;
+    uint32_t addr = msg->a2;
+
     uni_dir_socket_requester* requester = (uni_dir_socket_requester*)msg->c5;
     int err = (int)msg->a0;
 
@@ -121,7 +126,8 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
     }
 
 
-
+    sock->bind.addr.addr = addr;
+    sock->bind.port = port;
     sock->callback_arg = callback;
 
     // Send message to net_act
@@ -182,8 +188,15 @@ static void sockaddr_to_bind(const struct sockaddr *addr, struct tcp_bind* bind)
     bind->addr.addr = sock_in->sin_addr.s_addr;
 }
 
-// Creates a socket large enough for either a listening state thing, or a unix like socket but with no inline stuf
-unix_net_sock* socket(int domain, int type, int protocol) {
+static void bind_to_sockaddr(struct sockaddr *addr, const struct tcp_bind* bind) {
+    addr->sa_family = AF_INET;
+    struct sockaddr_in* sock_in = (struct sockaddr_in*)addr;
+    sock_in->sin_port = bind->port;
+    sock_in->sin_addr.s_addr = bind->addr.addr;
+}
+
+// Creates a socket large enough for either a listening state thing, or a unix like socket but with no inline stuff
+ERROR_T(unix_net_sock_ptr) socket_or_er(int domain, int type, int protocol) {
     assert_int_ex(protocol, ==, 0);
     assert_int_ex(domain, ==, AF_INET);
     assert_int_ex(type, ==, SOCK_STREAM);
@@ -193,11 +206,19 @@ unix_net_sock* socket(int domain, int type, int protocol) {
 
     // Init fulfill and socket. Others come in connect
     ssize_t ret = socket_internal_fulfiller_init(&uns->sock.read.push_reader, SOCK_TYPE_PUSH);
-    assert(ret == 0);
-    ret = socket_init(&uns->sock, MSG_NONE, NULL, 0, CONNECT_PUSH_READ | CONNECT_PUSH_WRITE);
-    assert(ret == 0);
 
-    return (unix_like_socket*)uns;
+    if(ret < 0) return MAKE_ER(unix_net_sock_ptr,ret);
+
+    ret = socket_init(&uns->sock, MSG_NONE, NULL, 0, CONNECT_PUSH_READ);
+
+    if(ret < 0) return MAKE_ER(unix_net_sock_ptr,ret);
+
+    return MAKE_VALID(unix_net_sock_ptr,uns);
+}
+
+unix_net_sock* socket(int domain, int type, int protocol) {
+    ERROR_T(unix_net_sock_ptr) res = socket_or_er(domain, type, protocol);
+    return (IS_VALID(res)) ? res.val : NULL;
 }
 
 int bind(unix_net_sock* sockfd, const struct sockaddr *addr,
@@ -211,16 +232,44 @@ static int close_listen(unix_net_sock* sock) {
     free(sock);
 }
 
-int listen(unix_net_sock* sockfd, int backlog) {
-    listening_token_or_er_t res = netsock_listen_tcp(&sockfd->bind, backlog, sockfd);
-    if(!IS_VALID(res)) return res.er;
+void empty_accept_queue(void) {
+    while(1) {
+        NET_SOCK ns = netsock_accept(MSG_DONT_WAIT);
 
+        if(ns != NULL) {
+            unix_net_sock* listener = (unix_net_sock*)ns->callback_arg;
+
+            ns->next_to_accept = listener->next_to_accept;
+
+            listener->next_to_accept = ns;
+        } else break;
+    }
+}
+
+static enum poll_events poll_listen(unix_like_socket* sock, enum poll_events asked_events, int set_waiting) {
+    unix_net_sock* sockfd = (unix_net_sock*)sock;
+
+    if(asked_events & POLL_IN) {
+        if(sockfd->next_to_accept == NULL) {
+            empty_accept_queue();
+        }
+        if(sockfd->next_to_accept) return POLL_IN;
+    }
+    return POLL_NONE;
+}
+
+int listen(unix_net_sock* sockfd, int backlog) {
+    if(sockfd->token != NULL) return -1; // We don't support changing the backlog via calling listen twice
+    listening_token_or_er_t res = netsock_listen_tcp(&sockfd->bind, backlog, sockfd);
+    assert(res.val != NULL);
+    if(!IS_VALID(res)) return res.er;
     sockfd->sock.custom_close = &close_listen;
+    sockfd->sock.custom_poll = &poll_listen;
     sockfd->token =  res.val;
     return 0;
 }
 
-static NET_SOCK accept_until_correct(unix_net_sock* expect) {
+NET_SOCK accept_until_correct(unix_net_sock* expect, int dont_wait) {
     NET_SOCK out_order = expect->next_to_accept;
     if(out_order) {
         expect->next_to_accept = out_order->next_to_accept;
@@ -229,13 +278,15 @@ static NET_SOCK accept_until_correct(unix_net_sock* expect) {
     }
 
     while(1) {
-        NET_SOCK ns = netsock_accept(MSG_DONT_WAIT);
+        NET_SOCK ns = netsock_accept(dont_wait ? MSG_DONT_WAIT : MSG_NONE);
+
+        if(dont_wait && ns == NULL) return NULL;
 
         assert(ns != NULL);
 
         if(ns->callback_arg == expect) return ns;
 
-        unix_net_sock* listener = ns->callback_arg;
+        unix_net_sock* listener = (unix_net_sock*)ns->callback_arg;
 
         ns->next_to_accept = listener->next_to_accept;
 
@@ -245,12 +296,12 @@ static NET_SOCK accept_until_correct(unix_net_sock* expect) {
 
 }
 
-static void accept_one(void) {
-    NET_SOCK ns = netsock_accept(MSG_DONT_WAIT);
+void accept_one(int dont_wait) {
+    NET_SOCK ns = netsock_accept(dont_wait ? MSG_DONT_WAIT : MSG_NONE);
 
     assert(ns != NULL);
 
-    unix_net_sock* listener = ns->callback_arg;
+    unix_net_sock* listener = (unix_net_sock*)ns->callback_arg;
     ns->next_to_accept = listener->next_to_accept;
     listener->next_to_accept = ns;
 }
@@ -280,7 +331,7 @@ int connect(unix_net_sock* socket, const struct sockaddr *address,
         capability callback = msg->c3;
 
         if(callback != socket) {
-            accept_one();
+            accept_one(MSG_NONE);
         } else found = 1;
 
     } while(!found);
@@ -298,7 +349,7 @@ int connect(unix_net_sock* socket, const struct sockaddr *address,
     init_data_buffer(&socket->sock.write_copy_buffer, buf, NET_SOCK_DRB_SIZE);
     socket_internal_requester_init(requester,32,SOCK_TYPE_PUSH,&socket->sock.write_copy_buffer);
     socket->sock.write.push_writer = nsr;
-
+    socket->sock.con_type |= CONNECT_PUSH_WRITE;
     // now make the netsock
     NET_SOCK ns = netsock_accept_in(flags, (NET_SOCK)socket);
 
@@ -313,14 +364,20 @@ NET_SOCK accept(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen
 
 NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
 
-    NET_SOCK ns = accept_until_correct(sockfd);
+    NET_SOCK ns = accept_until_correct(sockfd, (sockfd->sock.flags | flags) & MSG_DONT_WAIT);
 
     flags |= sockfd->sock.flags;
 
     if((flags ^ ns->sock.flags) & SOCKF_GIVE_SOCK_N) {
-        // TODO
-        ns->sock.flags |= SOCKF_GIVE_SOCK_N;
+        assign_socket_n(&ns->sock);
     }
 
+    if(addr) bind_to_sockaddr(addr, &ns->bind);
+
     return ns;
+}
+
+int shutdown(NET_SOCK sockfd, int how) {
+    // TODO
+    assert(0);
 }

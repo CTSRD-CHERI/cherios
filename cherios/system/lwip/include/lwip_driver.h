@@ -66,7 +66,7 @@
 // #define LOCAL
 
 #ifdef HARDWARE_qemu
-    #define QUEUE_SIZE 0x10
+    #define QUEUE_SIZE 0x100
     typedef virtio_mmio_map lwip_driver_mmio_t;
 #else
     typedef mac_control lwip_driver_mmio_t;

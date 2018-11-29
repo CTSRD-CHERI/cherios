@@ -29,6 +29,7 @@
  */
 
 #include "lwip/apps/fs.h"
+#include "unistd.h"
 
 // TODO move this out of the stack
 

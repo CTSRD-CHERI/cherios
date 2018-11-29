@@ -28,6 +28,8 @@
  * SUCH DAMAGE.
  */
 
+#include <sockets.h>
+#include <ff.h>
 #include "spinlock.h"
 #include "ff.h"
 #include "misc.h"
@@ -101,6 +103,8 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
                     target_offset = (uint64_t)seek_offset;
                     break;
                 case SEEK_END:
+                    target_offset = (seek_offset + fil->fil.fptr);
+                    break;
                 default:
                     return E_OOB;
             }
@@ -182,10 +186,13 @@ void handle(enum poll_events events, struct sessions_t* session) {
         } while(fresult == 0 && btp > 0 && bytes_handled != 0);
     }
 
+    enum poll_events wait_for = POLL_NONE;
+    if(session->sock.con_type & CONNECT_PUSH_READ) wait_for |= POLL_IN;
+    if(session->sock.con_type & CONNECT_PULL_WRITE) wait_for |= POLL_OUT;
 
     // The index might be moved so we must acquire the lock
     spinlock_acquire(&session->session_lock);
-    poll_socks[session->ndx].events = POLL_IN | POLL_OUT;
+    poll_socks[session->ndx].events = wait_for;
     spinlock_release(&session->session_lock);
 }
 
@@ -243,10 +250,10 @@ int open_file(int mode, uni_dir_socket_requester* read_requester, uni_dir_socket
     int read = mode & FA_READ;
     int write = mode & FA_WRITE;
 
-    if(!read && !write) return -1;
+    if(!read && !write) return FR_INVALID_PARAMETER;
 
     if(first_free == MAX_HANDLES) {
-        return -1;
+        return FR_TOO_MANY_OPEN_FILES;
     }
 
     size_t next = sessions[first_free].ndx;
@@ -264,7 +271,7 @@ int open_file(int mode, uni_dir_socket_requester* read_requester, uni_dir_socket
         con_type |= CONNECT_PUSH_READ;
         socket_internal_fulfiller_init(&session->sock.read.push_reader, SOCK_TYPE_PUSH);
         socket_internal_fulfiller_connect(&session->sock.read.push_reader, write_requester);
-        events |= POLL_OUT;
+        events |= POLL_IN;
     }
     if(read) {
         assert(read_requester);
@@ -272,7 +279,7 @@ int open_file(int mode, uni_dir_socket_requester* read_requester, uni_dir_socket
         mode |= FA_READ;
         socket_internal_fulfiller_init(&session->sock.write.pull_writer, SOCK_TYPE_PULL);
         socket_internal_fulfiller_connect(&session->sock.write.pull_writer, read_requester);
-        events |= POLL_IN;
+        events |= POLL_OUT;
     }
 
     poll_socks[n_files].events = events;
@@ -281,17 +288,18 @@ int open_file(int mode, uni_dir_socket_requester* read_requester, uni_dir_socket
     session->ndx = n_files;
     session->read_fptr = session->write_fptr = 0;
     spinlock_init(&session->session_lock);
+
+    FRESULT fres = FR_INVALID_PARAMETER;
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
-        FRESULT fres;
         if((fres = f_open(fp, file_name, (BYTE)mode)) == 0) {
             session->in_use = 1;
             n_files++;
             first_free = next;
             return 0;
-        } // else printf("Error opening file %d\n", fres);
+        }
     }
     session->ndx = next; // If we did not allocate restore free chain
-    return -1;
+    return fres;
 }
 
 void close_file(size_t sndx, struct sessions_t* session) {
@@ -392,7 +400,7 @@ void request_loop(void) {
                     close_file(sndx, session);
                     break; // closing may move things around. re-poll
                 }
-                if(poll_sock->revents & POLL_ER) {
+                if(poll_sock->revents & (POLL_ER | POLL_NVAL)) {
                     assert(0 && "TODO");
                 }
             }

@@ -55,6 +55,9 @@
 #define B_T2 0
 #define B_T3 0
 
+char* nginx_args[] = {"nginx",NULL};
+#define NGINX_ARGS_L 1
+
 #ifdef HARDWARE_qemu
     #include "malta_virtio_mmio.h"
 
@@ -154,12 +157,12 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user, "unsafe_test.elf", 0, 1)
     B_PENTRY(m_user,    "dedup_test.elf", 0, 1)
     B_PENTRY(m_user,    "socket_test.elf", 0 ,1)
-    B_PENTRY(m_user, "fs_test.elf", 0, 1)
-    B_DENTRY(m_user, "server.elf", 0, 1)
-    B_PENTRY(m_user, "client.elf", 0, 1)
+//    B_PENTRY(m_user, "fs_test.elf", 0, 1)
+//    B_DENTRY(m_user, "server.elf", 0, 1)
+//    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
-
+    B_PENTRY(m_nginx, "nginx.elf",NGINX_ARGS_L,1)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
@@ -232,6 +235,8 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             procman_arg.nano_if = info->nano_if;
             procman_arg.sealer = info->top_sealing_cap;
             return &procman_arg;
+        case m_nginx:
+            return nginx_args;
         case m_namespace:
         case m_core:
         case m_user:

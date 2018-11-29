@@ -400,7 +400,7 @@ add_subdirectory(fs_test)
 add_subdirectory(server)
 add_subdirectory(client)
 
-#add_subdirectory(nginx)
+add_subdirectory(nginx)
 
 #add_subdirectory(prga)
 #add_subdirectory(sockets)

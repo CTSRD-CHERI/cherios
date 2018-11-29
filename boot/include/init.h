@@ -53,6 +53,7 @@ typedef enum module_type {
 	m_virtblk,
 	m_virtnet,
 	m_secure,
+	m_nginx,
 	m_fence
 } module_t;
 

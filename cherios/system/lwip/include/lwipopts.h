@@ -69,7 +69,7 @@
 #define LWIP_RAW                    1
 #define TCP_WND                     (4 * TCP_MSS)
 #define TCP_MSS                     1460
-#define TCP_SND_BUF                 (8 * TCP_MSS)
+#define TCP_SND_BUF                 (32 * TCP_MSS)
 #define LWIP_SINGLE_NETIF           1
 #define TCP_LISTEN_BACKLOG          1
 #define LWIP_NETIF_STATUS_CALLBACK  1

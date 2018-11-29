@@ -54,7 +54,7 @@ void alloc_drb(FILE_t file) {
     file->write.push_writer->drb_fulfill_ptr = &file->write_copy_buffer.fulfill_ptr;
 }
 
-int mkdir(const char* name) {
+FRESULT mkdir(const char* name) {
     act_kt dest = try_get_fs();
 
     if(!dest) return -1;
@@ -63,14 +63,14 @@ int mkdir(const char* name) {
 }
 
 
-int rename(const char* old, const char* new) {
+FRESULT rename(const char* old, const char* new) {
     act_kt dest = try_get_fs();
 
     if(!dest) return -1;
     return (int)message_send(0,0,0,0,old,new,NULL,NULL,dest, SYNC_CALL, 2);
 }
 
-int unlink(const char* name) {
+FRESULT unlink(const char* name) {
     act_kt dest = try_get_fs();
 
     if(!dest) return -1;
@@ -88,16 +88,16 @@ struct socket_with_file_drb {
     char drb_data[DEFAULT_DRB_SIZE];
 };
 
-FILE_t open(const char* name, int mode, enum SOCKET_FLAGS flags) {
+ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
 
     int read = mode & FA_READ;
     int write = mode & FA_WRITE;
 
-    if(!read && !write) return NULL;
+    if(!read && !write) return MAKE_ER(FILE_t,FR_INVALID_PARAMETER);
 
     act_kt dest = try_get_fs();
 
-    if(!dest) return NULL;
+    if(!dest) return MAKE_ER(FILE_t,FR_NOT_READY);
 
     struct requester_32* r32_read = NULL, *r32_write = NULL;
 
@@ -139,14 +139,14 @@ FILE_t open(const char* name, int mode, enum SOCKET_FLAGS flags) {
     sock->write.push_writer = &r32_write->r;
     sock->read.pull_reader = &r32_read->r;
     sock->read_behind = sock->read_behind = 0;
-    return sock;
+    return MAKE_VALID(FILE_t,sock);
 
     er2:
     free(sock);
     er1:
     free(r32_read);
     free(r32_write);
-    return NULL;
+    return MAKE_ER(FILE_t,result);
 }
 
 ssize_t close(FILE_t file) {
@@ -234,16 +234,14 @@ ssize_t filesize(FILE_t file) {
     return fsize;
 }
 
-int stat(const char* path, FILINFO* fno) {
+FRESULT stat(const char* path, FILINFO* fno) {
     act_kt dest = try_get_fs();
 
-    if(dest == NULL) return -1;
+    if(dest == NULL) return FR_NO_FILESYSTEM;
 
     FRESULT res = (FRESULT)message_send(0,0,0,0,path,fno,NULL,NULL,dest,SYNC_CALL,4);
 
-    if(res != FR_OK) return -1;
-
-    return 0;
+    return res;
 }
 
 typedef capability dir_token_t;

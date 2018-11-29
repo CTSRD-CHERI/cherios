@@ -32,7 +32,8 @@
 
 #include "mips.h"
 #include "cheric.h"
-#include "unistd.h"
+#define LWIP_NO_UNISTD_H 1
+//#include "unistd.h"
 #include "stdint.h"
 #include "stdio.h"
 #include "stdlib.h"

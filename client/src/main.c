@@ -35,6 +35,7 @@
 #include "sockets.h"
 #include "assert.h"
 #include "stdio.h"
+#include "unistd.h"
 
 #define REQ1    "POST somefile.txt HTTP/1.0\n" \
                 "Content-Length: 14\n" \
