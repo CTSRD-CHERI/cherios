@@ -77,6 +77,8 @@ enum SOCKET_FLAGS {
     SOCKF_WR_INLINE         = 0x100,
     SOCKF_RR_INLINE         = 0x200,
     SOCKF_SOCK_INLINE       = 0x400,
+// Changes how poll behaves
+    SOCKF_POLL_READ_MEANS_EMPTY = 0x800,
 };
 
 // Global enable/disable for socket tracing. Always uses syscall_printf for safety.
@@ -375,7 +377,7 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
 int socket_internal_fulfiller_reset_check(uni_dir_socket_fulfiller* fulfiller);
 ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 
-enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting);
+enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting, uint16_t space);
 enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting, int from_check);
 
 int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size);

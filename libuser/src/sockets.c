@@ -1272,7 +1272,7 @@ enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfille
     return ret;
 }
 
-enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting) {
+enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting, uint16_t space) {
     // Wait until there is something to request
 
     enum poll_events ret = POLL_NONE;
@@ -1282,7 +1282,7 @@ enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requeste
     if(io) {
         if(!set_waiting) socket_internal_request_cancel_wait(requester);
 
-        int wait_res = socket_internal_requester_space_wait(requester, 1, !set_waiting, 1);
+        int wait_res = socket_internal_requester_space_wait(requester,space, !set_waiting, 1);
 
         if(wait_res == 0) ret |= io;
         else if(wait_res == E_AGAIN) return ret;
@@ -1304,7 +1304,7 @@ static enum poll_events be_waiting_for_event(unix_like_socket* sock, enum poll_e
 
     if(sock->con_type & CONNECT_PUSH_WRITE) {
         uni_dir_socket_requester* push_write = sock->write.push_writer;
-        ret |= socket_internal_request_poll(push_write, write, set_waiting);
+        ret |= socket_internal_request_poll(push_write, write, set_waiting, 1);
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
         uni_dir_socket_fulfiller* pull_write = &sock->write.pull_writer;
         ret |= socket_internal_fulfill_poll(pull_write, write, set_waiting, 0);
@@ -1315,7 +1315,8 @@ static enum poll_events be_waiting_for_event(unix_like_socket* sock, enum poll_e
         ret |= socket_internal_fulfill_poll(push_read, read, set_waiting, 0);
     } else if(sock->con_type & CONNECT_PULL_READ) {
         uni_dir_socket_requester* pull_read = sock->read.pull_reader;
-        ret |= socket_internal_request_poll(pull_read, read, set_waiting);
+        ret |= socket_internal_request_poll(pull_read, read, set_waiting,
+                                            sock->flags & SOCKF_POLL_READ_MEANS_EMPTY ? pull_read->buffer_size : (uint16_t)1);
     } else if(read) return POLL_NVAL;
 
     return ret;
