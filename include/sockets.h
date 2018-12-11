@@ -278,6 +278,14 @@ DEC_ERROR_T(requester_ptr_t);
         sleep_var = 0;                                                                              \
     }
 
+#define POLL_ITEM_R(event, sleep_var, event_var, item, events, space)                               \
+    enum poll_events event = socket_internal_request_poll(item, events, sleep_var, space);          \
+    if(event) {                                                                                     \
+        event_var = 1;                                                                              \
+        sleep_var = 0;                                                                              \
+    }
+
+
 #define POLL_LOOP_END(sleep_var, event_var, messages, timeout)      \
     if(!event_var) {                                                \
         if(sleep_var) syscall_cond_wait(messages, timeout);         \

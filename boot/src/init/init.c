@@ -87,6 +87,8 @@ char* nginx_args[] = {"nginx",NULL};
 	 B_ENTRY(_type, _name, _arg, 0, _cond)
 #define B_FENCE \
 	{m_fence, 1, NULL, 0, 0, 0, NULL},
+#define B_WAIT_FOR(X) \
+    {m_fence, 1, NULL, X, 0, 0, NULL},
 
 init_elem_t init_list[] = {
   /*
@@ -134,11 +136,12 @@ init_elem_t init_list[] = {
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
     B_DENTRY(m_user,    "dedup.elf", 0 ,1)
     B_DENTRY(m_tman, "type_manager.elf",0,1)
-    B_FENCE
-
+    B_WAIT_FOR(namespace_num_tman)
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	1)
+    B_DENTRY(m_user, "block_cache.elf", 0, 1)
+    B_WAIT_FOR(namespace_num_blockcache)
     B_PENTRY(m_virtnet, "lwip.elf", 0, 1)
 	B_FENCE
 	B_DENTRY(m_fs,	FS_ELF	,		0,	1)
@@ -393,7 +396,13 @@ static void load_modules(init_info_t * init_info) {
 			continue;
 
 		if(be->type == m_fence) {
-			nssleep(1);
+            if(be->arg) {
+                while(namespace_get_ref((int)be->arg) == NULL) {
+                    nssleep(3);
+                }
+            } else {
+                nssleep(1);
+            }
 			continue;
 		}
 
@@ -412,18 +421,6 @@ static void load_modules(init_info_t * init_info) {
         be->ctrl = thread_start_process(thread_create_process(be->name, addr, be->type == m_secure), &desc);
 
 		printf("Module ready: %s\n", be->name);
-
-        // Wait for these to be registered - better than making everyone spin waiting for them
-        if(be->type == m_tman) {
-            while(namespace_get_ref(namespace_num_tman) == NULL) {
-                nssleep(3);
-            }
-        }
-        if(be->type == m_virtblk) {
-            while(namespace_get_ref(namespace_num_virtio) == NULL) {
-                nssleep(3);
-            }
-        }
 	}
 }
 

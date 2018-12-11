@@ -43,7 +43,7 @@ capability virt_session;
 
 static inline void virtio_check_refs(void) {
 	if(vblk_ref == NULL) {
-		vblk_ref = namespace_get_ref(namespace_num_virtio);
+		vblk_ref = namespace_get_ref(namespace_num_blockcache);
 	}
 	assert(vblk_ref != NULL);
 }
@@ -101,4 +101,4 @@ static inline size_t virtio_blk_size(void) {
 }
 
 
-#endif _VIRTIO_BLK_H
+#endif // _VIRTIO_BLK_H
