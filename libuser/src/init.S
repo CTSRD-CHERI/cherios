@@ -144,7 +144,7 @@ start_common:
     clc         $c3, $s1, 0($c19)               # dest = tls_seg
     cmove       $c4, $c22                       # src = proto_tls
     cgetlen     $a0, $c4                        # length = length(proto_tls)
-    call_func   memcpy_c
+    call_func   memcpy
 
     # Now we process relocations that target our TLS (must happen after the proto copy)
 

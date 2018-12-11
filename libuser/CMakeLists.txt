@@ -1,5 +1,4 @@
 set(LIBCRT_SRCS
-    ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
     ${CMAKE_SOURCE_DIR}/libcrt/memcpy.S
     ${CMAKE_SOURCE_DIR}/libcrt/memset.c
     ${CMAKE_SOURCE_DIR}/libcrt/strlen.c
