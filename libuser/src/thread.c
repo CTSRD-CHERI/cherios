@@ -229,7 +229,7 @@ capability get_type_owned_by_process(void) {
     own_top = get_own_top();
     if(own_top == NULL)return NULL;
     ERROR_T(tres_t) res = type_get_new(own_top);
-    // if(!IS_VALID(res)) return NULL;
+    if(!IS_VALID(res)) return NULL;
     return tres_take(res.val);
 }
 
