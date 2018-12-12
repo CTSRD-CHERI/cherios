@@ -79,6 +79,7 @@ typedef char TCHAR;
 /* File system object structure (FATFS) */
 
 typedef struct {
+    BYTE	win[_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
 	BYTE	fs_type;		/* File system type (0:N/A) */
 	BYTE	drv;			/* Physical drive number */
 	BYTE	n_fats;			/* Number of FATs (1 or 2) */
@@ -115,7 +116,6 @@ typedef struct {
 	DWORD	dirbase;		/* Root directory base sector/cluster */
 	DWORD	database;		/* Data base sector */
 	DWORD	winsect;		/* Current sector appearing in the win[] */
-	BYTE	win[_MAX_SS];	/* Disk access window for Directory, FAT (and file data at tiny cfg) */
 } FATFS;
 
 
