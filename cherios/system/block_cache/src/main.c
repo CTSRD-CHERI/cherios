@@ -347,7 +347,8 @@ static ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64
 
 
 static void handle_sock_session(session_sock* ss) {
-    ssize_t res = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF, F_CHECK | F_DONT_WAIT | F_PROGRESS, &ff, (capability)ss, 0, &oobff);
+    ssize_t res = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF, F_CHECK | F_DONT_WAIT | F_PROGRESS,
+                                                         &ff, (capability)ss, 0, &oobff, NULL);
     assert_int_ex(res, >=, 0);
 
 }

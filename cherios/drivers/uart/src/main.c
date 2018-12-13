@@ -101,7 +101,7 @@ static ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
 static int handle_f(f_list_item* item, enum poll_events event, int is_er) {
 	if(event & POLL_OUT) {
 		socket_internal_fulfill_progress_bytes(&item->f, SOCK_INF, F_DONT_WAIT | F_CHECK | F_PROGRESS,
-											   &ff, NULL, 0, &ful_oob_func_skip_oob);
+											   &ff, NULL, 0, &ful_oob_func_skip_oob, NULL);
 	} else if(event & POLL_HUP) {
 		socket_internal_close_fulfiller(&item->f, 0, 0);
 		f_list* list = is_er ? &f_list_err : &f_list_out;

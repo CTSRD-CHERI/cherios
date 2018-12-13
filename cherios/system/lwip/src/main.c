@@ -228,7 +228,7 @@ err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
     // Progress len bytes
     ssize_t res = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, len,
                                             F_PROGRESS | F_DONT_WAIT,
-                                           NULL, NULL, 0, &ful_oob_func_skip_oob);
+                                           NULL, NULL, 0, &ful_oob_func_skip_oob, NULL);
     assert_int_ex(res, ==, len);
 
     if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
@@ -377,7 +377,7 @@ void handle_fulfill(tcp_session* tcp) {
     // We expect only data
     ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, SOCK_INF,
                                                                       F_CHECK | F_START_FROM_LAST_MARK | F_SET_MARK | F_DONT_WAIT,
-                                                                      &tcp_ful_func, tcp, 0, &tcp_ful_oob_func);
+                                                                      &tcp_ful_func, tcp, 0, &tcp_ful_oob_func, NULL);
 
     err_t flush = tcp_output(tcp->tcp_pcb);
 

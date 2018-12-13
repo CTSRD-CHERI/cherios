@@ -281,6 +281,29 @@ ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_d
                                           &requester->fulfiller_component.fulfiller_waiting);
 }
 
+// Requests length bytes be fulfilled by a puller, and then pushed into a push request
+// A drb is provided, but either party may substitute their own (TODO: Only the writer currently can do this)
+ssize_t socket_internal_request_join(uni_dir_socket_requester* pull, uni_dir_socket_requester* push, data_ring_buffer* drb, uint64_t length, uint32_t drb_off) {
+
+    if(pull->socket_type != SOCK_TYPE_PULL || push->socket_type != SOCK_TYPE_PUSH) return E_SOCKET_WRONG_TYPE;
+
+    uint16_t request_ptr = pull->requeste_ptr;
+    uint16_t mask = pull->buffer_size-1;
+
+    request_t* req = &pull->request_ring_buffer[request_ptr & mask];
+
+    req->type = REQUEST_JOIN;
+    req->length = length;
+    req->request.push_to = push;
+
+    push->drb_for_join = drb;
+
+    pull->requested_bytes +=length;
+    return socket_internal_set_and_notify(&pull->requeste_ptr,
+                                          request_ptr+1,
+                                          &pull->fulfiller_component.fulfiller_waiting);
+}
+
 ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t align, uint64_t size, int dont_wait,
                                         char** c1, char**c2, size_t* part1_out, uni_dir_socket_requester* requester) {
     ssize_t res = 0;
@@ -460,7 +483,8 @@ void dump_socket(unix_like_socket* sock) {
 // When peeking it is allowed to start from the last mark (but not when fulfilling)
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                enum FULFILL_FLAGS flags,
-                                               ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit) {
+                                               ful_func* visit, capability arg, uint64_t offset,
+                                               ful_oob_func* oob_visit, ful_sub* sub_visit) {
 
     uni_dir_socket_requester* requester = fulfiller->requester;
 
@@ -555,7 +579,100 @@ ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfill
             proxy = req->request.proxy_for;
             ret = socket_internal_fulfill_progress_bytes(proxy, bytes_to_process,
                                                          flags | F_IN_PROXY,
-                                                         visit, arg, offset, oob_visit);
+                                                         visit, arg, offset, oob_visit, sub_visit);
+        } else if(req->type == REQUEST_JOIN) {
+
+            uni_dir_socket_requester* push_to = req->request.push_to;
+            ssize_t sub_ret;
+
+            if(sub_visit) {
+                ret = 0;
+                if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with sub visit\n");
+                // User can sub their own buffers. Keep getting them and pushing as requests
+                char* user_buf;
+
+                while(ret != bytes_to_process) {
+
+                    sub_ret = socket_internal_requester_space_wait(push_to, 1, flags & F_DONT_WAIT, 0);
+
+                    if(sub_ret < 0) break;
+
+                    sub_ret = sub_visit(arg, offset + ret, bytes_to_process - ret, &user_buf);
+
+                    if(sub_ret < 0) break;
+
+                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join makes request\n");
+                    socket_internal_request_ind(push_to, user_buf, (uint64_t)sub_ret, 0);
+
+                    ret +=sub_ret;
+                }
+
+            } else if(visit) {
+                ret = 0;
+
+                if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with normal visit\n");
+
+                // User can only put data in buffers. Use the drb instead.
+                data_ring_buffer* drb = push_to->drb_for_join;
+
+                // Unless we hijack this pointer this needs to be true
+                assert((size_t)&drb->fulfill_ptr == (size_t)push_to->drb_fulfill_ptr);
+
+                sub_ret = E_NO_DATA_BUFFER;
+
+                if(drb) {
+                    ret = 0;
+                    size_t chunk_size = drb->buffer_size / 2;
+
+                    while(ret != bytes_to_process) {
+                        uint64_t req_size = (chunk_size > (bytes_to_process-ret)) ? (bytes_to_process-ret) : chunk_size;
+
+                        char* cap1;
+                        char* cap2;
+                        size_t part1;
+
+                        sub_ret = socket_internal_drb_space_alloc(drb, drb->requeste_ptr, req_size,
+                                                                  flags & F_DONT_WAIT, &cap1, &cap2, &part1, push_to);
+
+                        if(sub_ret < 0) break;
+
+                        uint64_t align_off = (uint64_t)sub_ret;
+                        uint64_t size1 = part1;
+                        uint64_t size2 = req_size - part1;
+
+                        size_t visit_gave = 0;
+
+                        sub_ret = visit(arg, cap1, offset + ret, size1);
+
+                        if(sub_ret > 0) {
+                            socket_internal_request_ind(push_to, cap1, (size_t)sub_ret, (size_t)sub_ret+align_off);
+                            visit_gave = (size_t)sub_ret;
+                        }
+
+                        if(sub_ret == size1 && cap2) {
+                            sub_ret = visit(arg, cap2, offset + size1 + ret, size2);
+
+                            if(sub_ret > 0) {
+                                socket_internal_request_ind(push_to, cap2, (size_t)sub_ret, sub_ret);
+                                visit_gave += sub_ret;
+                            }
+                        }
+
+                        ret += visit_gave;
+
+                        if(visit_gave != req_size) {
+                            // We allocated more than the visit managed to give, so undo
+                            size_t over_alloc = visit_gave == 0 ? (size_t)req_size : (size_t)(req_size + align_off - visit_gave);
+                            drb->requeste_ptr -=over_alloc;
+                            break;
+                        }
+
+                    }
+                }
+            }
+
+            if(ret == 0) ret = sub_ret;
+
         } else {
             if(visit) {
                 if (req->type == REQUEST_IM) {
@@ -989,7 +1106,7 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
         enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
         ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       F_CHECK | progress | dont_wait | trace,
-                                                      ff, (capability)buf, 0, NULL);
+                                                      ff, (capability)buf, 0, NULL, NULL);
     }
 
     if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->read_behind+=ret;
@@ -1028,7 +1145,7 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
         ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
                                                       F_CHECK | progress | dont_wait | trace,
-                                                      ff, (capability)buf, 0, NULL);
+                                                      ff, (capability)buf, 0, NULL, NULL);
     }
 
     if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->write_behind+=ret;
@@ -1053,60 +1170,8 @@ struct fwf_args {
 
 static ssize_t socket_internal_fulfill_with_fulfill(capability arg, char* buf, uint64_t offset, uint64_t length) {
     struct fwf_args* args = (struct fwf_args*)arg;
-    socket_internal_fulfill_progress_bytes(args->writer, length, F_CHECK | F_PROGRESS | args->dont_wait, &copy_in, (capability)buf, 0, NULL);
-}
-
-static ssize_t socket_internal_request_join(uni_dir_socket_requester* pull_req, uni_dir_socket_requester* push_req,
-                                            uint64_t align, data_ring_buffer* drb,
-                                            size_t count, int dont_wait) {
-    if(!drb->buffer) return E_NO_DATA_BUFFER;
-    if(dont_wait) return E_UNSUPPORTED;
-
-    assert(push_req->drb_fulfill_ptr != NULL);
-
-    ssize_t res;
-
-    // Chunks of this size on in the steady size (one being written, one being read)
-    size_t chunk_size = drb->buffer_size / 2;
-    size_t bytes_to_send = count;
-
-    while(bytes_to_send) {
-        uint64_t req_size = (chunk_size > bytes_to_send) ? bytes_to_send : chunk_size;
-
-        char* cap1;
-        char* cap2;
-        size_t part1;
-        res = socket_internal_drb_space_alloc(drb, align, req_size, dont_wait, &cap1, &cap2, &part1, push_req);
-
-        if(res < 0) return res;
-
-        uint64_t align_off = res;
-        uint64_t size1 = part1;
-        uint64_t size2 = req_size - part1;
-
-        socket_internal_request_ind(pull_req, cap1, size1, 0);
-
-        if(cap2) {
-            socket_internal_request_ind(pull_req, cap2, size2, 0);
-        }
-
-        res = socket_internal_requester_wait_all_finish(pull_req, dont_wait);
-
-        if(res < 0) return res;
-
-        // Make 2 requests
-
-        res = socket_internal_requester_space_wait(push_req, cap2 ? 2 : 1, dont_wait, 0);
-
-        if(res < 0) return res;
-
-        socket_internal_request_ind(push_req, cap1, size1, size1+align_off);
-        if(cap2) socket_internal_request_ind(pull_req, cap2, size2, size2);
-
-        bytes_to_send -=req_size;
-    }
-
-    return count;
+    // TODO: We can probably avoid a copy for join requests here
+    socket_internal_fulfill_progress_bytes(args->writer, length, F_CHECK | F_PROGRESS | args->dont_wait, &copy_in, (capability)buf, 0, NULL, NULL);
 }
 
 ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count) {
@@ -1140,15 +1205,24 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
         uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
         uni_dir_socket_fulfiller* pull_write = &sockout->write.pull_writer;
 
-        ret = socket_internal_request_proxy(pull_read, pull_write, count, 0);
-        if(ret >= 0) ret = count;
+        ret = socket_internal_requester_space_wait(pull_read, 1, dont_wait, 0);
+
+        if(ret >= 0) {
+            ret = socket_internal_request_proxy(pull_read, pull_write, count, 0);
+            if(ret >= 0) ret = count;
+        }
 
     } else if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PUSH) {
         // Create custom buffer and generate a request (or few) for each
         uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
         uni_dir_socket_requester* push_write = sockout->write.push_writer;
 
-        ret = socket_internal_request_join(pull_read, push_write, 0, &sockout->write_copy_buffer, count, dont_wait);
+        ret = socket_internal_requester_space_wait(pull_read, 1, dont_wait, 0);
+
+        if(ret >= 0) {
+            ret = socket_internal_request_join(pull_read, push_write, &sockout->write_copy_buffer, count, 0);
+            if(ret >= 0) ret = count;
+        }
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PULL) {
         // fullfill one read with a function that fulfills write
@@ -1160,15 +1234,19 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
         args.dont_wait = dont_wait;
 
         ret = socket_internal_fulfill_progress_bytes(push_read, count, F_CHECK | F_PROGRESS | dont_wait,
-                                                      &socket_internal_fulfill_with_fulfill, (capability)&args, 0, NULL);
+                                                      &socket_internal_fulfill_with_fulfill, (capability)&args, 0, NULL, NULL);
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PUSH) {
         // Proxy
         uni_dir_socket_fulfiller* push_read = &sockin->read.push_reader;
         uni_dir_socket_requester* push_write = sockout->write.push_writer;
 
-        socket_internal_request_proxy(push_write, push_read, count, 0);
-        if(ret >= 0) ret = count;
+        ret = socket_internal_requester_space_wait(push_write, 1, dont_wait, 0);
+
+        if(ret >= 0) {
+            socket_internal_request_proxy(push_write, push_read, count, 0);
+            if(ret >= 0) ret = count;
+        }
     }
 
     if(ret > 0) {

@@ -101,8 +101,9 @@ enum FULFILL_FLAGS {
 typedef enum {
     REQUEST_IM = 0,
     REQUEST_IND = 1,
-    REQUEST_PROXY = 2,
-    REQUEST_BARRIER_TARGET = 3,
+    REQUEST_PROXY = 2, // Request that points at a fulfiller
+    REQUEST_JOIN = 3, // Request that points at another requester
+    REQUEST_BARRIER_TARGET = 4,
     REQUEST_BARRIER = (1 << 16),
     // Anything with 2 << 16 set are OOB and handled by the user. But some of these are pretty common so included here.
     REQUEST_OUT_BAND = (2 << 16),
@@ -143,6 +144,7 @@ typedef struct request {
         struct request* barrier_target;
         seek_desc seek_desc;
         intptr_t oob;
+        struct uni_dir_socket_requester* push_to;
     } request;
 } request_t;
 
@@ -184,6 +186,9 @@ typedef struct uni_dir_socket_requester {
     volatile uint64_t requested_bytes;
     volatile uint64_t* drb_fulfill_ptr;      // a pointer to a fulfilment pointer for a data buffer
     uni_dir_socket_requester_fulfiller_component* access;
+    struct data_ring_buffer* drb_for_join;
+    // TODO: If we are in a join, point back to the other half so we can block properly.
+    // TODO: Currently concurrent access is just undefined
     request_t request_ring_buffer[]; // Variable sized, is buffer_size.
 } uni_dir_socket_requester;
 
@@ -354,6 +359,8 @@ void socket_internal_dump_requests(uni_dir_socket_requester* requester);
 // an offset that is offset plus all previous lengths. arg is a user argument that is passed through
 typedef ssize_t ful_func(capability arg, char* buf, uint64_t offset, uint64_t length);
 typedef ssize_t ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+// If you could provide your own buffers as well, strictly optional, but can be used to further avoid copies
+typedef ssize_t ful_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf);
 
 static ssize_t ful_oob_func_skip_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     return length;
@@ -381,7 +388,8 @@ static ssize_t copy_out_no_caps(capability user_buf, char* req_buf, uint64_t off
 
 ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
                                                enum FULFILL_FLAGS flags,
-                                               ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit);
+                                               ful_func* visit, capability arg, uint64_t offset,
+                                               ful_oob_func* oob_visit, ful_sub* sub_visit);
 int socket_internal_fulfiller_reset_check(uni_dir_socket_fulfiller* fulfiller);
 ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 

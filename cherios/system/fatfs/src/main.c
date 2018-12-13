@@ -151,7 +151,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             session->current = 1;
             res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
                                                                  F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                                 &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
+                                                                 &ful_func_cancel_non_oob, (capability)session, 0, full_oob, NULL);
             if(res == E_SOCKET_CLOSED) break;
             assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->write_fptr) {
@@ -174,7 +174,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             session->current = 0;
             res = socket_internal_fulfill_progress_bytes(write_fulfill, SOCK_INF,
                                                          F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                         &ful_func_cancel_non_oob, (capability)session, 0, full_oob);
+                                                         &ful_func_cancel_non_oob, (capability)session, 0, full_oob, NULL);
             if(res == E_SOCKET_CLOSED) break;
             assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->read_fptr) {

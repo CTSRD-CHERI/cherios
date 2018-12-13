@@ -3499,7 +3499,7 @@ FRESULT f_read (
 #else
 		/* Pick partial sector */
         sret = socket_internal_fulfill_progress_bytes(fulfill, rcnt, F_PROGRESS,
-													  &copy_in, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL);
+													  &copy_in, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL);
 		if(sret >=0 ) rcnt = (UINT)sret;
 #endif
 	}
@@ -3631,7 +3631,7 @@ FRESULT f_write (
 #else
 		/* Pick partial sector */
 		sret = socket_internal_fulfill_progress_bytes(fulfill, wcnt, F_PROGRESS,
-													  &copy_out, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL);
+													  &copy_out, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL);
 		if(sret >=0 ) wcnt = (UINT)sret;
 		fp->flag |= _FA_DIRTY;
 #endif

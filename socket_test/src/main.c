@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <sockets.h>
 #include "cheric.h"
 #include "sockets.h"
 #include "thread.h"
@@ -140,6 +141,11 @@ void con2_start(register_t arg, capability carg) {
 
     assert_int_ex(res, ==, 0);
 
+    // This is for proxy
+    big_test_recv(sock);
+
+    // This is for join
+    big_test_recv(sock);
     big_test_recv(sock);
 
     // Now close this socket
@@ -178,6 +184,67 @@ void con2_start(register_t arg, capability carg) {
     // Now try with a requester
 
     assert_int_ex(res, ==, 0);
+
+    return;
+}
+
+ssize_t con3_full(capability arg, char* buf, uint64_t offset, uint64_t length) {
+    assert(0);
+}
+
+ssize_t con3_full2(capability arg, char* buf, uint64_t offset, uint64_t length) {
+    char* data = (char*)arg;
+    memcpy(buf, data+offset,length);
+    return length;
+}
+
+ssize_t con3_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
+    // Gives the buffer out in small parts to test that multiple calls works
+    char* data = (char*)arg;
+    assert_int_ex(length+offset, ==, 3*BIG_TEST_SIZE);
+
+    char* from = data + offset;
+
+    size_t blob = (3*BIG_TEST_SIZE) / 64;
+    size_t len = length > blob ? blob : length;
+
+    *out_buf = from;
+
+    return len;
+}
+
+void con3_start(register_t arg, capability carg) {
+    uni_dir_socket_fulfiller ff;
+
+    int res;
+
+    res = socket_internal_fulfiller_init(&ff, SOCK_TYPE_PULL);
+    assert_int_ex(res, ==, 0);
+
+    int result = socket_internal_connect(carg, PORT + 5, NULL, &ff);
+    assert_int_ex(result, ==, 0);
+
+    // Do a BIG_TEST send with our own buffers
+    char data[BIG_TEST_SIZE * 3];
+
+    for(size_t i = 0; i != BIG_TEST_SIZE; i++) {
+        data[(3 * i) + 0] = (char)(i & 0xFF);
+        data[(3 * i) + 1] = (char)((i >> 8) & 0xFF);
+        data[(3 * i) + 2] = (char)((i >> 16) & 0xFF);
+    }
+
+    // Send but offer buffers, error if normal fulfill is used
+    ssize_t sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
+                                           con3_full, data, 0, NULL, con3_sub);
+
+    assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
+
+    // Send normally
+
+    sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
+                                                          con3_full2, data, 0, NULL, NULL);
+
+    assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
     return;
 }
@@ -246,6 +313,40 @@ void connector_start(register_t arg, capability carg) {
 
     sent = socket_sendfile(sock2, sock, 3 * BIG_TEST_SIZE);
     assert_int_ex(sent, ==, 3 * BIG_TEST_SIZE);
+
+    // Test join. Send to the same file but from our own pull requester
+
+    thread t2 = thread_new("socket_part4", 0, act_self_ref, &con3_start);
+
+    struct stack_request on_stack2;
+    unix_like_socket socket4;
+    unix_like_socket* sock4 = &socket4;
+    sock4->read.pull_reader = &on_stack2.r;
+
+    res = socket_internal_requester_init(sock4->read.pull_reader, INDIR_SIZE, SOCK_TYPE_PULL, NULL);
+    assert_int_ex(res, ==, 0);
+
+    res = socket_init(sock4, MSG_NO_COPY, NULL, 0, CONNECT_PULL_READ);
+    assert_int_ex(res, ==, 0);
+
+    res = socket_internal_listen(PORT+5, sock4->read.pull_reader, NULL);
+    assert_int_ex(res, == , 0);
+
+    // Send twice, without drb
+    sent = socket_sendfile(sock2, sock4, 3 * BIG_TEST_SIZE);
+    assert_int_ex(sent, ==, 3 * BIG_TEST_SIZE);
+
+    // Now attach a drb
+    char drb_buf[BIG_TEST_SIZE/8];
+    init_data_buffer(&sock2->write_copy_buffer,drb_buf,BIG_TEST_SIZE/8);
+    sock2->write.push_writer->drb_fulfill_ptr = &sock2->write_copy_buffer.fulfill_ptr;
+
+    // And sendfile agagain
+    sent = socket_sendfile(sock2, sock4, 3 * BIG_TEST_SIZE);
+    assert_int_ex(sent, ==, 3 * BIG_TEST_SIZE);
+
+    rec = socket_close(sock4);
+    assert_int_ex(rec, ==, 0);
 
     rec = socket_close(sock2);
     assert_int_ex(rec, ==, 0);

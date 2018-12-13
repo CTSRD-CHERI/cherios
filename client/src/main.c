@@ -80,7 +80,7 @@ int main(register_t arg, capability carg) {
 
     assert_int_ex(res, ==, sizeof(REQ1));
 
-    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL);
+    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL, NULL);
 
     close(netsock);
 
@@ -99,7 +99,7 @@ int main(register_t arg, capability carg) {
 
     assert_int_ex(res, ==, sizeof(REQ2)-1);
 
-    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL);
+    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL, NULL);
 
     assert_int_ex(res, > , 0);
 }

@@ -327,7 +327,8 @@ void vblk_interrupt(void* sealed_session, register_t a0, register_t irq) {
 
 void handle_socket(session_sock* ss) {
     ssize_t bytes = socket_internal_requester_bytes_requested(ss->ff.requester);
-    ssize_t res = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF, F_CHECK | F_PROGRESS | F_DONT_WAIT, &ful_ff, ss, 0, &full_oob);
+    ssize_t res = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF, F_CHECK | F_PROGRESS | F_DONT_WAIT,
+                                                         &ful_ff, ss, 0, &full_oob, NULL);
     if(bytes != 0 && res == E_AGAIN) return; // Allow just OOBS
     assert_int_ex(-res, <=, 0);
     assert_int_ex(res & (SECTOR_SIZE-1), ==, 0);
