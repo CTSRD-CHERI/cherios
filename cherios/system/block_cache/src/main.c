@@ -311,6 +311,35 @@ static ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
 
     return copied;
 }
+
+static ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
+    session_sock* ss = (session_sock*)arg;
+
+    size_t addr = ss->addr;
+
+    size_t map_index = (addr) >> BLOCK_BITS;
+    size_t map_offset = (addr) & (BLOCK_SIZE-1);
+
+    if((!ss->session->block_cache[map_index] && new_block(ss->session,map_index))
+       || !ss->session->block_cache[map_index]->is_complete) {
+        ss->blocked = ss->session->block_cache[map_index];
+        return 0;
+    }
+
+    char* block_buf = ss->session->block_cache[map_index]->data + map_offset;
+
+    size_t biggest_copy = BLOCK_SIZE - map_offset;
+    size_t to_copy = length > biggest_copy ? biggest_copy : length;
+
+    // TODO at this point we have to somehow track when the resulting request is fulfilled. Then we know we can release the buffer
+
+    *out_buf = cheri_setbounds_exact(block_buf, to_copy);
+
+    ss->addr = addr + to_copy;
+
+    return to_copy;
+}
+
 static ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
@@ -348,7 +377,9 @@ static ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64
 
 static void handle_sock_session(session_sock* ss) {
     ssize_t res = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF, F_CHECK | F_DONT_WAIT | F_PROGRESS,
-                                                         &ff, (capability)ss, 0, &oobff, NULL);
+                                                         &ff, (capability)ss, 0, &oobff, ff_sub);
+    if(res == E_AGAIN) return;
+
     assert_int_ex(res, >=, 0);
 
 }

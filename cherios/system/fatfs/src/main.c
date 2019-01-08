@@ -73,10 +73,8 @@ struct {
 } workers[N_WORKERS];
 
 
-__thread struct requester_32 sr_read;
-__thread struct requester_32 sr_write;
-__thread size_t r_socket_sector;
-__thread size_t w_socket_sector;
+__thread fs_proxy sr_read;
+__thread fs_proxy sr_write;
 
 act_notify_kt main_notify;
 
@@ -200,17 +198,16 @@ void worker_loop(register_t r, capability c) {
 
     ssize_t ret;
 
-    ret = socket_internal_requester_init(&sr_read.r, 32, SOCK_TYPE_PULL, NULL);
+    ret = socket_internal_requester_init(&sr_read.req.r, 32, SOCK_TYPE_PULL, NULL);
     assert_int_ex(ret, ==, 0);
-    ret = socket_internal_requester_init(&sr_write.r, 32, SOCK_TYPE_PUSH, NULL);
+    ret = socket_internal_requester_init(&sr_write.req.r, 32, SOCK_TYPE_PUSH, NULL);
     assert_int_ex(ret, ==, 0);
-    ret = virtio_new_socket(&sr_read.r, CONNECT_PULL_READ);
+    ret = virtio_new_socket(&sr_read.req.r, CONNECT_PULL_READ);
     assert_int_ex(ret, ==, 0);
-    ret = virtio_new_socket(&sr_write.r, CONNECT_PUSH_WRITE);
+    ret = virtio_new_socket(&sr_write.req.r, CONNECT_PUSH_WRITE);
     assert_int_ex(ret, ==, 0);
 
-    w_socket_sector = 0;
-    r_socket_sector = 0;
+    sr_read.socket_sector = sr_write.socket_sector = sr_read.length = sr_write.length = 0;
 
     while(1) {
         msg_t *msg = get_message();

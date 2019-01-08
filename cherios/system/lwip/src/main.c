@@ -344,6 +344,7 @@ ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length
 
     uint16_t to_send = (length > (uint64_t)tcp->tcp_pcb->snd_buf) ? tcp->tcp_pcb->snd_buf : (uint16_t)length;
 
+    // TODO TCP_WRITE_FLAG_MORE may be useful here if we know that there is more coming
     err_t er = tcp_write(tcp->tcp_pcb, buf, (uint16_t)to_send, 0);
 
     assert_int_ex(er, ==, ERR_OK);
@@ -729,7 +730,7 @@ int main(register_t arg, capability carg) {
 
             if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
                 if(tcp_session->tcp_pcb->snd_buf) { // dont even bother if the send window is already full
-                    enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1);
+                    enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1, 0);
                     if(revents && sock_sleep) {
                         sock_sleep = 0;
                         goto restart_poll;

@@ -22,6 +22,12 @@
 #include "sockets.h"
 #include "spinlock.h"
 
+typedef struct fs_proxy {
+	size_t socket_sector;
+	size_t length;
+	struct requester_32 req;
+} fs_proxy;
+
 #ifdef __cplusplus
 extern "C" {
 #endif

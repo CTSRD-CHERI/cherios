@@ -159,6 +159,7 @@ ssize_t close(FILE_t file) {
         socket_internal_request_oob(file->write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
     }
 
+    // TODO this flush may block and lead to performance degradation. Should setup async close
     flush(file);
 
     ssize_t result = socket_close(file);
@@ -217,6 +218,7 @@ ssize_t flush(FILE_t file) {
     if(file->con_type & CONNECT_PULL_READ) {
         socket_internal_requester_wait_all_finish(file->read.pull_reader, 0);
     }
+    return 0;
     // TODO send a flush on the socket.
 }
 

@@ -329,7 +329,7 @@ void handle_loop(void) {
 
         for(size_t i = 0; i < n_socks;i++) {
             if(socks[i].req_head == QUEUE_SIZE) {
-                enum poll_events event = socket_internal_fulfill_poll(&socks[i].ff, POLL_IN, set_waiting, 0);
+                enum poll_events event = socket_internal_fulfill_poll(&socks[i].ff, POLL_IN, set_waiting, 0, 0);
                 if(event) {
                     if(event & (POLL_HUP | POLL_ER | POLL_NVAL)) assert(0 && "Socket error in block device");
                     translate_sock(socks+i);

@@ -59,7 +59,9 @@
 #define E_ALREADY_CONNECTED         (-15)
 #define E_NOT_CONNECTED             (-16)
 #define E_BAD_FLAGS                 (-18)
-#define E_USER_FULFILL_ERROR        (-19)
+#define E_IN_JOIN                   (-19)
+
+#define E_USER_FULFILL_ERROR        (-20)
 
 #define SOCK_INF                    (uint64_t)(0xFFFFFFFFFFFFFFFULL)
 
@@ -181,6 +183,7 @@ typedef struct uni_dir_socket_requester {
     volatile uint8_t requester_closed;
     uint8_t socket_type;
     uint8_t connected;
+    // uint8_t joined; // Currently being driven by someone else. Can't put in requests. TODO
     uint16_t buffer_size;           // Power of 2
     volatile uint16_t requeste_ptr;
     volatile uint64_t requested_bytes;
@@ -277,7 +280,7 @@ DEC_ERROR_T(requester_ptr_t);
 
 
 #define POLL_ITEM_F(event, sleep_var, event_var, item, events, from_check)                          \
-    enum poll_events event = socket_internal_fulfill_poll(item, events, sleep_var, from_check);     \
+    enum poll_events event = socket_internal_fulfill_poll(item, events, sleep_var, from_check, 0);  \
     if(event) {                                                                                     \
         event_var = 1;                                                                              \
         sleep_var = 0;                                                                              \
@@ -340,6 +343,10 @@ ssize_t socket_internal_request_im(uni_dir_socket_requester* requester, uint8_t 
 ssize_t socket_internal_request_ind(uni_dir_socket_requester* requester, char* buf, uint64_t length, uint32_t drb_off);
 // Requests length bytes to be proxied as fulfillment to fulfiller
 ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_dir_socket_fulfiller* fulfiller, uint64_t, uint32_t drb_off);
+ssize_t socket_internal_request_join(uni_dir_socket_requester* pull, uni_dir_socket_requester* push, data_ring_buffer* drb, uint64_t length, uint32_t drb_off);
+ssize_t socket_internal_request_proxy_join(uni_dir_socket_requester* pull, uni_dir_socket_requester* proxy_req,
+                                           data_ring_buffer* drb, uint64_t length, uint32_t drb_off_pull,
+                                           uni_dir_socket_requester* push, uni_dir_socket_fulfiller* proxy_full, uint32_t drb_off_push);
 // Requests length bytes as an ind request, but uses a data buffer instead of the provided buf.
 // Will call space_wait itself.
 // For a write this does what you expect, copying the source buffer
@@ -394,7 +401,7 @@ int socket_internal_fulfiller_reset_check(uni_dir_socket_fulfiller* fulfiller);
 ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep);
 
 enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting, uint16_t space);
-enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting, int from_check);
+enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting, int from_check, int in_proxy);
 
 int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size);
 

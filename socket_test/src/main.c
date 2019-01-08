@@ -147,6 +147,7 @@ void con2_start(register_t arg, capability carg) {
     // This is for join
     big_test_recv(sock);
     big_test_recv(sock);
+    big_test_recv(sock);
 
     // Now close this socket
 
@@ -213,6 +214,18 @@ ssize_t con3_sub(capability arg, uint64_t offset, uint64_t length, char** out_bu
     return len;
 }
 
+typedef struct proxy_pair {
+    uni_dir_socket_fulfiller ff;
+    struct requester_32 req;
+} proxy_pair;
+
+void init_pair(proxy_pair* pp) {
+    socket_internal_requester_init(&pp->req.r, 32, SOCK_TYPE_PUSH, NULL);
+    socket_internal_fulfiller_init(&pp->ff, SOCK_TYPE_PUSH);
+    socket_internal_fulfiller_connect(&pp->ff, socket_internal_make_read_only(&pp->req.r));
+    socket_internal_requester_connect(&pp->req.r);
+}
+
 void con3_start(register_t arg, capability carg) {
     uni_dir_socket_fulfiller ff;
 
@@ -243,6 +256,12 @@ void con3_start(register_t arg, capability carg) {
 
     sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
                                                           con3_full2, data, 0, NULL, NULL);
+
+    assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
+
+    // Send, offer a buffer, via a proxy
+    sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
+                                                          con3_full, data, 0, NULL, con3_sub);
 
     assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
@@ -345,11 +364,29 @@ void connector_start(register_t arg, capability carg) {
     sent = socket_sendfile(sock2, sock4, 3 * BIG_TEST_SIZE);
     assert_int_ex(sent, ==, 3 * BIG_TEST_SIZE);
 
+    socket_internal_requester_wait_all_finish(sock4->read.pull_reader, 0);
+
+    // and again, but this time use join_proxy
+    proxy_pair pp;
+    init_pair(&pp);
+
+    socket_internal_requester_space_wait(sock4->read.pull_reader, 1, 0, 0);
+    socket_internal_requester_space_wait(sock2->write.push_writer, 1, 0, 0);
+
+    rec = socket_internal_request_proxy_join(sock4->read.pull_reader, &pp.req.r,
+                                       NULL, 3 * BIG_TEST_SIZE, 0,
+                                       sock2->write.push_writer, &pp.ff, 0);
+
+    assert_int_ex(rec, ==, 0);
+
     rec = socket_close(sock4);
     assert_int_ex(rec, ==, 0);
 
     rec = socket_close(sock2);
     assert_int_ex(rec, ==, 0);
+
+    assert(pp.req.r.requeste_ptr != 0);
+    assert_int_ex(pp.req.r.requeste_ptr, ==, pp.req.r.fulfiller_component.fulfill_ptr);
 
     // Test a fulfill -> fulfill send file
 

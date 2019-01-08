@@ -111,7 +111,7 @@
 // HTTP stuffs
 
 #define LWIP_HTTPD_DYNAMIC_HEADERS  1
-#define HTTPD_SERVER_PORT           80
+#define HTTPD_SERVER_PORT           8088
 
 #define HTTPD_FSDATA_FILE               "bug_fsdata.c"
 #define LWIP_HTTPD_CUSTOM_FILES         1

@@ -3369,33 +3369,46 @@ FRESULT f_open (
 	LEAVE_FF(dj.obj.fs, res);
 }
 
-extern __thread size_t r_socket_sector;
-extern __thread size_t w_socket_sector;
-extern __thread struct requester_32 sr_read;
-extern __thread struct requester_32 sr_write;
+extern __thread fs_proxy sr_read;
+extern __thread fs_proxy sr_write;
 
-static ssize_t proxy_amount(uni_dir_socket_requester* requester, size_t* ss, uni_dir_socket_fulfiller* fulfill, DWORD sect, uint64_t length) {
+static ssize_t flush_proxy(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill) {
+	uni_dir_socket_requester* requester = &proxy->req.r;
+	size_t* ss = &proxy->socket_sector;
+	size_t length = proxy->length;
+	ssize_t res;
+
+	if(length != 0) {
+
+		// 2: Wait for enough request space
+		res = socket_internal_requester_space_wait(requester, 1, 0, 0);
+		assert_int_ex(-res, ==, 0);
+
+		// 3: Send proxy request
+		res = socket_internal_request_proxy(requester, fulfill, length, 0);
+		assert_int_ex(-res, ==, 0);
+
+		(*ss) += length / SS(NULL);
+		proxy->length = 0;
+	}
+}
+
+static ssize_t proxy_amount(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill, DWORD sect, uint64_t length) {
 	// TODO fulfill using a proxy to the block devices sectors [sect,sect+count)
 	ssize_t res;
 
     assert((length & (SS(NULL)-1)) == 0);
 
 	// 1: Emit seek if not at the correct sector
-	if(*ss != sect) {
-		res = socket_internal_requester_lseek(requester, sect, SEEK_SET, 0);
+
+	if((proxy->socket_sector) + (proxy->length/SS(NULL)) != sect) {
+		flush_proxy(proxy, fulfill);
+		res = socket_internal_requester_lseek(&proxy->req.r, sect, SEEK_SET, 0);
 		assert_int_ex(-res, ==, 0);
-		*ss = sect;
+		proxy->socket_sector = sect;
 	}
 
-    // 2: Wait for enough request space
-	res = socket_internal_requester_space_wait(requester, 1, 0, 0);
-	assert_int_ex(-res, ==, 0);
-
-    // 3: Send proxy request
-	res = socket_internal_request_proxy(requester, fulfill, length, 0);
-	assert_int_ex(-res, ==, 0);
-
-    (*ss) += length / SS(NULL);
+	proxy->length += length;
 
 	return 0;
 }
@@ -3454,7 +3467,7 @@ FRESULT f_read (
 				if (csect + cc > fs->csize) {	/* Clip at cluster boundary */
 					cc = fs->csize - csect;
 				}
-				if (proxy_amount(&sr_read.r,&r_socket_sector, fulfill, sect, cc * SS(fs)) < 0) {
+				if (proxy_amount(&sr_read, fulfill, sect, cc * SS(fs)) < 0) {
 					ABORT(fs, FR_DISK_ERR);
 				}
 #if !_FS_READONLY && _FS_MINIMIZE <= 2			/* Replace one of the read sectors with cached data if it contains a dirty sector */
@@ -3498,12 +3511,14 @@ FRESULT f_read (
 		mem_cpy(rbuff, &fs->win[fp->fptr % SS(fs)], rcnt);	/* Pick partial sector */
 #else
 		/* Pick partial sector */
+        flush_proxy(&sr_read, fulfill);
         sret = socket_internal_fulfill_progress_bytes(fulfill, rcnt, F_PROGRESS,
 													  &copy_in, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL);
 		if(sret >=0 ) rcnt = (UINT)sret;
 #endif
 	}
 
+	flush_proxy(&sr_read, fulfill);
 	LEAVE_FF(fs, FR_OK);
 }
 
@@ -3585,7 +3600,7 @@ FRESULT f_write (
 				if (csect + cc > fs->csize) {	/* Clip at cluster boundary */
 					cc = fs->csize - csect;
 				}
-				if (proxy_amount(&sr_write.r,&w_socket_sector, fulfill, sect, cc * SS(fs)) < 0) {
+				if (proxy_amount(&sr_write, fulfill, sect, cc * SS(fs)) < 0) {
 					ABORT(fs, FR_DISK_ERR);
 				}
 #if _FS_MINIMIZE <= 2
@@ -3630,6 +3645,7 @@ FRESULT f_write (
 		fs->wflag = 1;
 #else
 		/* Pick partial sector */
+        flush_proxy(&sr_write, fulfill);
 		sret = socket_internal_fulfill_progress_bytes(fulfill, wcnt, F_PROGRESS,
 													  &copy_out, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL);
 		if(sret >=0 ) wcnt = (UINT)sret;
@@ -3638,6 +3654,8 @@ FRESULT f_write (
 	}
 
 	fp->flag |= _FA_MODIFIED;						/* Set file change flag */
+
+	flush_proxy(&sr_write, fulfill);
 
 	LEAVE_FF(fs, FR_OK);
 }
