@@ -544,7 +544,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
         for (p = last_unsent->p; p->next != NULL; p = p->next);
         if (((p->type_internal & (PBUF_TYPE_FLAG_STRUCT_DATA_CONTIGUOUS | PBUF_TYPE_FLAG_DATA_VOLATILE)) == 0) &&
             (const u8_t *)p->payload + p->len == (const u8_t *)arg
-                && (cheri_getlen(p->payload) >= p->len + len)) {
+                && (cheri_getlen(p->payload) >= p->len + seglen + cheri_getoffset(p->payload))) {
           LWIP_ASSERT("tcp_write: ROM pbufs cannot be oversized", pos == 0);
           extendlen = seglen;
         } else {
