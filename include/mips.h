@@ -93,7 +93,7 @@ typedef unsigned long	vaddr_t;		/* Virtual address */
 typedef long		ssize_t;
 typedef	unsigned long	size_t;
 
-typedef unsigned long		off_t;
+typedef long		off_t;
 
 /*
  * Useful integer type names that we can't pick up from the compile-time
