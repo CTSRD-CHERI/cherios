@@ -158,137 +158,18 @@ local_align align_require
 END_LOCALS
 
 .text
-.section .init
 
 .set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal | Perm_Unseal))
 .set DEF_SEALING_PERMS, (Perm_Seal | Perm_Unseal)
 
 nano_kernel_start:
 
-# We have no stack, and this sub routine may need to be callable from a couple of places. Set appropriately.
+# The following is a list of offsets (2 bytes each is sufficient) from the nano kernel start to
+if_offset_table:
+#define DIFF_MACRO(item, ...) .hword(item - get_pcc_label);
+NANO_KERNEL_IF_LIST(DIFF_MACRO)
 
-.set zero_page_tmp_1,   $t8
-.set zero_page_ctmp_1,  $cnull
-.set zero_page_arg,     $t0
-
-.set UNROLL_FACTOR,     8
-
-# Zeros page. I unrolled this a few times on point of principle. This is in no way optimal.
-
-nano_zero_page:
-    daddiu      zero_page_tmp_1, zero_page_arg, (PHY_PAGE_SIZE) - (UNROLL_FACTOR * CAP_SIZE)
-
-1:
-    csc         zero_page_ctmp_1, zero_page_tmp_1, 0($kdc)
-    csc         zero_page_ctmp_1, zero_page_tmp_1, (1*CAP_SIZE)($kdc)
-    csc         zero_page_ctmp_1, zero_page_tmp_1, (2*CAP_SIZE)($kdc)
-    csc         zero_page_ctmp_1, zero_page_tmp_1, (3*CAP_SIZE)($kdc)
-    csc         zero_page_ctmp_1, zero_page_tmp_1, (4*CAP_SIZE)($kdc)
-    csc         zero_page_ctmp_1, zero_page_tmp_1, (5*CAP_SIZE)($kdc)
-    csc         zero_page_ctmp_1, zero_page_tmp_1, (6*CAP_SIZE)($kdc)
-    csc         zero_page_ctmp_1, zero_page_tmp_1, (7*CAP_SIZE)($kdc)
-    bne         zero_page_tmp_1,  zero_page_arg, 1b
-    daddiu      zero_page_tmp_1, zero_page_tmp_1, -(UNROLL_FACTOR * CAP_SIZE)
-
-    jr          $ra
-    nop
-
-#ifdef SMP_ENABLED
-
-# t0 will contain our id
-nano_smp_trap:
-# idc for global state
-    cmove       $idc, $kr1c
-
-# kr1c for thread local
-    dli         $t1, context_array_size
-    multu       $t0, $t1
-    mflo        $t2
-    cincoffset  $kr1c, $kr1c, $t2
-    dli         $t1, context_array_size
-    csetbounds  $kr1c, $kr1c, $t1
-
-# wait for signal
-nano_smp_spin:
-    clc         $c3, $zero, current_context($kr1c)
-    YIELD
-    cbtu        $c3, nano_smp_spin
-    nop
-
-    dmfc0       $t0, $12
-    dli         $t1, ~(MIPS_CP0_STATUS_BEV)
-    and         $t0, $t0, $t1
-    dmtc0       $t0, $12
-
-    clc         $c3, $zero, exception_context($kr1c)        # load exception context
-# setting k0 to -1 to make fake exception
-    b           switch_restore_final
-    dli         $k0, -1
-#endif
-
-
-# Notes on calling rescap_take: provide c4 as null to avoid write. Will return in c3 and c4. Will use c5 #
-# Subroutine will clober c3,c4,c5,c14,c15,t*,a7. c3_in=res.c3_out=code.c4_out=data #
-
-.macro SUBROUTINE_TAKE
-    cmove       $c14, $c17                          # save return code
-    cmove       $c15, $c18                          # save return data
-
-    dla         $t0, rescap_take
-    cgetpccsetoffset $c12, $t0
-    cjalr       $c12, $c17                          # call rescap_take
-    cnull       $c4                                 # null c4 for call to rescap_take
-
-    cmove       $c17, $c14                          # restore return code
-    cmove       $c18, $c15                          # restore return data
-.endm
-
-.macro SET_EXL tmp
-    #di <-- FIXME we really need this insutrction here for atomicity...
-    mfc0    \tmp, MIPS_CP0_REG_STATUS
-    ori     \tmp, 3                                      # set SR(EXL) and SR(IE)
-    mtc0    \tmp, MIPS_CP0_REG_STATUS
-.endm
-
-.macro QEMU_BUG_FIX tmp
-    cgetoffset \tmp, $epcc
-    dmtc0      \tmp, MIPS_CP0_REG_EPC
-.endm
-
-#ifdef SMP_ENABLED
-############################################################### (safe)
-# int smp_context_start(context_t start_as, register_t cpu_id)
-.global smp_context_start
-smp_context_start:
-###############################################################
-
-    dli         $v0, -1
-    sltiu       $t1, $a0, SMP_CORES
-    beqz        $t1, smp_context_start_er
-
-    dli         $t0, CONTEXT_TYPE
-    csetoffset  $c4, $kdc, $t0
-    cunseal     $c3, $c3, $c4
-
-    dli         $t0, context_array_size
-    multu       $t0, $a0
-    mflo        $t0
-    daddiu      $t0, current_context
-
-    cincoffset  $c4, $idc, $t0               # current_context for smp core with cpu_id of $a0
-
-smp_signal_loop:
-    cllc        $c5, $c4
-    cbts        $c5, smp_context_start_er
-    nop
-    cscc        $t0, $c3, $c4
-    beqz        $t0, smp_signal_loop
-    dli         $v0, 1
-
-smp_context_start_er:
-    cclearlo    EN3(c3, c4, c5)
-    CRETURN
-#endif
+.align 4
 
 ################################################################# (TODO unsafe)
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
@@ -502,14 +383,24 @@ nano_kernel_init:
     daddiu      $k1, CAP_SIZE
 .endm
 
-    dli         $k1, create_context_cap
-    # Store a sealed capability for each nanokernel function in a table
-    NANO_KERNEL_IF_LIST(INIT_TABLE_MACRO)
+get_pcc_label:
+    cgetpcc     $c13
+    li         $k1, create_context_cap
+    cincoffset   $c1, $kr1c, $k1
+    dla         $t1, if_offset_table
+    daddiu      $t2, $t1, (2 * N_NANO_CALLS)
+
+init_table_loop:
+    clh         $t0, $t1, 0($kdc)
+    cincoffset  $c14, $c13, $t0
+    cseal       $c14, $c14, $kr2c
+    csc         $c14, $k1, 0($kr1c)
+    daddiu      $t1, 2
+    bne         $t1, $t2, init_table_loop
+    daddiu      $k1, CAP_SIZE
 
     # Pass a read-only capability to the cap table
-    dli          $k0, create_context_cap
-    dli          $k1, cap_table_end - create_context_cap
-    cincoffset   $c1, $kr1c, $k0
+    li          $k1, (CAP_SIZE * N_NANO_CALLS)
     csetboundsexact $c1, $c1, $k1
     dli          $k0, (Perm_Load | Perm_Load_Capability)
     candperm     $c1, $c1, $k0
@@ -565,6 +456,132 @@ nano_kernel_init:
 ##########################################################################
 
 .text
+
+
+# We have no stack, and this sub routine may need to be callable from a couple of places. Set appropriately.
+
+.set zero_page_tmp_1,   $t8
+.set zero_page_ctmp_1,  $cnull
+.set zero_page_arg,     $t0
+
+.set UNROLL_FACTOR,     8
+
+# Zeros page. I unrolled this a few times on point of principle. This is in no way optimal.
+
+nano_zero_page:
+    daddiu      zero_page_tmp_1, zero_page_arg, (PHY_PAGE_SIZE) - (UNROLL_FACTOR * CAP_SIZE)
+
+1:
+    csc         zero_page_ctmp_1, zero_page_tmp_1, 0($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (1*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (2*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (3*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (4*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (5*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (6*CAP_SIZE)($kdc)
+    csc         zero_page_ctmp_1, zero_page_tmp_1, (7*CAP_SIZE)($kdc)
+    bne         zero_page_tmp_1,  zero_page_arg, 1b
+    daddiu      zero_page_tmp_1, zero_page_tmp_1, -(UNROLL_FACTOR * CAP_SIZE)
+
+    jr          $ra
+    nop
+
+#ifdef SMP_ENABLED
+
+# t0 will contain our id
+nano_smp_trap:
+# idc for global state
+    cmove       $idc, $kr1c
+
+# kr1c for thread local
+    dli         $t1, context_array_size
+    multu       $t0, $t1
+    mflo        $t2
+    cincoffset  $kr1c, $kr1c, $t2
+    dli         $t1, context_array_size
+    csetbounds  $kr1c, $kr1c, $t1
+
+# wait for signal
+nano_smp_spin:
+    clc         $c3, $zero, current_context($kr1c)
+    YIELD
+    cbtu        $c3, nano_smp_spin
+    nop
+
+    dmfc0       $t0, $12
+    dli         $t1, ~(MIPS_CP0_STATUS_BEV)
+    and         $t0, $t0, $t1
+    dmtc0       $t0, $12
+
+    clc         $c3, $zero, exception_context($kr1c)        # load exception context
+# setting k0 to -1 to make fake exception
+    b           switch_restore_final
+    dli         $k0, -1
+#endif
+
+
+# Notes on calling rescap_take: provide c4 as null to avoid write. Will return in c3 and c4. Will use c5 #
+# Subroutine will clober c3,c4,c5,c14,c15,t*,a7. c3_in=res.c3_out=code.c4_out=data #
+
+.macro SUBROUTINE_TAKE
+    cmove       $c14, $c17                          # save return code
+    cmove       $c15, $c18                          # save return data
+
+    dla         $t0, rescap_take
+    cgetpccsetoffset $c12, $t0
+    cjalr       $c12, $c17                          # call rescap_take
+    cnull       $c4                                 # null c4 for call to rescap_take
+
+    cmove       $c17, $c14                          # restore return code
+    cmove       $c18, $c15                          # restore return data
+.endm
+
+.macro SET_EXL tmp
+    #di <-- FIXME we really need this insutrction here for atomicity...
+    mfc0    \tmp, MIPS_CP0_REG_STATUS
+    ori     \tmp, 3                                      # set SR(EXL) and SR(IE)
+    mtc0    \tmp, MIPS_CP0_REG_STATUS
+.endm
+
+.macro QEMU_BUG_FIX tmp
+    cgetoffset \tmp, $epcc
+    dmtc0      \tmp, MIPS_CP0_REG_EPC
+.endm
+
+#ifdef SMP_ENABLED
+############################################################### (safe)
+# int smp_context_start(context_t start_as, register_t cpu_id)
+.global smp_context_start
+smp_context_start:
+###############################################################
+
+    dli         $v0, -1
+    sltiu       $t1, $a0, SMP_CORES
+    beqz        $t1, smp_context_start_er
+
+    dli         $t0, CONTEXT_TYPE
+    csetoffset  $c4, $kdc, $t0
+    cunseal     $c3, $c3, $c4
+
+    dli         $t0, context_array_size
+    multu       $t0, $a0
+    mflo        $t0
+    daddiu      $t0, current_context
+
+    cincoffset  $c4, $idc, $t0               # current_context for smp core with cpu_id of $a0
+
+smp_signal_loop:
+    cllc        $c5, $c4
+    cbts        $c5, smp_context_start_er
+    nop
+    cscc        $t0, $c3, $c4
+    beqz        $t0, smp_signal_loop
+    dli         $v0, 1
+
+smp_context_start_er:
+    cclearlo    EN3(c3, c4, c5)
+    CRETURN
+#endif
 
 # A list of masks for which hardware register fields can be accessed
 .set register_mask_table_size, 0
