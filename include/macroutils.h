@@ -41,7 +41,8 @@
 #define MAKE_ARG_LIST(X) MAL_HELP(MAL_start, EVAL5 X)
 #define MAKE_ARG_LIST_APPEND(X) MAL_HELP(MAL_start_c, EVAL5 X)
 
-
+#define LIST_TOTAL_CB(item, ...) 1 +
+#define LIST_LENGTH(L) (L(LIST_TOTAL_CB) 0)
 
 #define MAKE_CTR(NAME) struct _CTR_TYPE_ ## NAME ## _start {char ofsize[__COUNTER__+1];};
 #define CTR(NAME)       (__COUNTER__  - sizeof(struct _CTR_TYPE_ ## NAME ## _start))
