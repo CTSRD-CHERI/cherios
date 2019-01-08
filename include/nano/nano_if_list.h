@@ -172,4 +172,6 @@
 #define RAW_TO_NORMAL(name, ret, raw_sig, X, ...) X(name, ret, MAKE_SIG(raw_sig), __VA_ARGS__)
 
 #define NANO_KERNEL_IF_LIST(ITEM, ...) NANO_KERNEL_IF_RAW_LIST(RAW_TO_NORMAL, ITEM, __VA_ARGS__)
+
+#define N_NANO_CALLS (LIST_LENGTH(NANO_KERNEL_IF_RAW_LIST))
 #endif //CHERIOS_NANO_IF_LIST_H
