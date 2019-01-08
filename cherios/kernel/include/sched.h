@@ -49,7 +49,8 @@ void	sched_create(uint8_t pool_id, act_t * act, enum sched_prio priority);
 void	sched_delete(act_t * act);
 void    sched_change_prio(act_t* act, enum sched_prio new_prio);
 
-void    sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout, int in_exception_handler);
+// returns how long we slept. 0 means we didn't block
+register_t sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout, int in_exception_handler);
 void	sched_block(act_t *act, sched_status_e status);
 void    sched_receive_event(act_t* act, sched_status_e events);
 

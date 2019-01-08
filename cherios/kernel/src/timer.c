@@ -97,16 +97,26 @@ static void kernel_timer_check_sleepers(uint64_t now) {
 
 		if(act != NULL) {
 			register_t waited = now - act->timeout_start;
+#ifdef HARDWARE_QEMU
+            if((int64_t)waited < 0) continue; // Time going backwards can trigger this
+#endif
 			if(waited > act->timeout_length) {
+                //if(act->name[0] == 'n') kernel_printf("%s has apparently waited %lx\n", act->name, waited);
 				sched_receive_event(act, sched_wait_timeout);
 			}
 		}
 	}
 }
 
+void kernel_timer_start_count(act_t* act) {
+	act->timeout_start = get_high_res_time(cp0_get_cpuid()); // WARN: goes badly if we change cpu?
+}
+
 void kernel_timer_subscribe(act_t* act, register_t timeout) {
-	act->timeout_start = get_high_res_time(cp0_get_cpuid()); // WARN: goes badly if we change cpu
+	kernel_timer_start_count(act);
 	act->timeout_length = timeout;
+
+    //if(act->name[0] == 'n') kernel_printf("%s Setting timeout for %lx\n", act->name, timeout);
 
 	// Concurrent access
 	register_t success = 0;

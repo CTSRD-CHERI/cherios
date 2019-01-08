@@ -64,7 +64,8 @@
         ITEM(syscall_register_act_event_registrar, void, (act_kt act), __VA_ARGS__)                                          \
         ITEM(syscall_get_name, const char*, (act_kt), __VA_ARGS__)\
         ITEM(syscall_act_ctrl_get_notify_ref, act_notify_kt, (act_control_kt ctrl), __VA_ARGS__)\
-        ITEM(syscall_cond_wait, void, (int notify_on_message, register_t timeout), __VA_ARGS__)\
+/* Duration of sleep is returned */\
+        ITEM(syscall_cond_wait, register_t, (int notify_on_message, register_t timeout), __VA_ARGS__)\
         ITEM(syscall_cond_notify, void, (act_kt waiter), __VA_ARGS__)\
         ITEM(syscall_cond_cancel, void, (void), __VA_ARGS__)\
         ITEM(syscall_now, register_t, (void), __VA_ARGS__)\

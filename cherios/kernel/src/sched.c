@@ -267,7 +267,7 @@ void sched_receive_event(act_t* act, sched_status_e events) {
 }
 /* This will block until ANY of the events specified by events occurs */
 
-void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout, int in_exception_handler) {
+register_t sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events, register_t timeout, int in_exception_handler) {
 
     if(act == NULL) act = sched_get_current_act();
 	if(timeout > 0) {
@@ -288,13 +288,19 @@ void sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e events
 
     if(!got_event) {
 		if(timeout > 0) kernel_timer_subscribe(act, timeout);
+		else kernel_timer_start_count(act);
         sched_block(act, events);
 		act->priority |= PRIO_IO;
     }
 
     CRITICAL_LOCKED_END(&act->sched_access_lock);
 
-    if(!got_event) sched_reschedule(next_hint, in_exception_handler);
+    if(!got_event) {
+		sched_reschedule(next_hint, in_exception_handler);
+		return (get_high_res_time(cp0_get_cpuid()) - act->timeout_start);
+	}
+
+	return 0;
 }
 
 void sched_block(act_t *act, sched_status_e status) {

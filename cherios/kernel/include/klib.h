@@ -106,6 +106,7 @@ int kernel_interrupt_enable(int number, act_control_t *ctrl);
 
 void	kernel_timer_init(uint8_t cpu_id);
 void	kernel_timer(uint8_t cpu_id);
+void 	kernel_timer_start_count(act_t* act);
 void 	kernel_timer_subscribe(act_t* act, register_t timeout);
 void 	kernel_timer_unsubcsribe(act_t* act);
 uint64_t get_high_res_time(uint8_t cpu_id);

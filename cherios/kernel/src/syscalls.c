@@ -202,11 +202,11 @@ act_notify_kt kernel_syscall_act_ctrl_get_notify_ref(act_control_kt ctrl) {
 	return act_seal_for_call(act_unseal_callable((act_t*)ctrl, ctrl_ref_sealer), notify_ref_sealer);
 }
 
-DECLARE_WITH_CD(void, kernel_syscall_cond_wait(int notify_on_message, register_t timeout));
-void kernel_syscall_cond_wait(int notify_on_message, register_t timeout) {
+DECLARE_WITH_CD(register_t, kernel_syscall_cond_wait(int notify_on_message, register_t timeout));
+register_t kernel_syscall_cond_wait(int notify_on_message, register_t timeout) {
     sched_status_e events = sched_wait_notify;
     if(notify_on_message) events |= sched_waiting;
-    sched_block_until_event(NULL, NULL, events, timeout, 0);
+    return sched_block_until_event(NULL, NULL, events, timeout, 0);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_cond_cancel(void));
