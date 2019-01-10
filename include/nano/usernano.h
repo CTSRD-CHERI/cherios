@@ -32,6 +32,8 @@
 #define CHERIOS_USERNANO_H
 
 #include "nanokernel.h"
+#include "cheric.h"
+#include "macroutils.h"
 
 #define GET_NANO_SYSCALL(c1,c2,n)                   \
 capability c1, c2;                                  \
@@ -48,14 +50,26 @@ __asm__ (                                           \
 /* Assuming you trust your memory (i.e. are secure loaded) you can call this to populate your nano kernel if and
  * then use the normal interface rather than having to use syscall repeatedly */
 
-MAKE_CTR(NANO_INIT_CTR)
+static inline void init_nano_if_sys(common_t* mode) {
+    nano_kernel_if_t interface;
+    size_t limit = N_NANO_CALLS;
+    capability data;
+    __asm__(
+            SANE_ASM
+            "li $a0, 0                      \n"
+            "li $a1, 0                      \n"
+            "li $t0, 0                      \n"
+            "1:syscall                      \n"
+            "csc  $c1, $t0, 0(%[ifc])       \n"
+            "daddiu $a1, $a1, 1             \n"
+            "bne $a1, %[total], 1b          \n"
+            "daddiu $t0, $t0, " CAP_SIZE_S "\n"
+            "cmove  %[d], $c2               \n"
+    : [d]"=C"(data)
+    : [ifc]"C"(&interface),[total]"r"(limit)
+    : "a0", "a1", "t0", "$c1", "$c2"
+    );
 
-#define INIT_OBJ_SYSCALL(name, ret, sig, auth, ...) {GET_NANO_SYSCALL(c1,c2,CTR(NANO_INIT_CTR)) \
-    struct pltstub256* ob = STUB_STRUCT(name, auth); ob->c1 = c1; ob->mode = mode; data = c2;}
-
-static inline void init_nano_if_sys(common_t* mode, capability plt_auth) {
-    capability data; // we always get the same data cap from syscall, we can use any of them
-    NANO_KERNEL_IF_RAW_LIST(INIT_OBJ_SYSCALL,plt_auth)
-    __asm__ ("cscbi %[d], %%captab20(nano_kernel_if_t_data_obj)($c25)\n"::[d]"C"(data):);
+    init_nano_kernel_if_t(&interface, data);
 }
 #endif //CHERIOS_USERNANO_H

@@ -41,20 +41,6 @@
 
 // A helpful init method is also provided. It will populate the default objects from the struct, with a default data
 
-// The stubs are now as they will eventually be in the linker
-
-#if _MIPS_SZCAP == 256
-        #define PLT_STUB PLT_STUB256
-        #define PLT_STUB_CSD PLT_STUB256_CSD
-        #define PLT_STUB_DATA_OFF 32
-#elif _MIPS_SZCAP == 128
-    #define PLT_STUB PLT_STUB128
-    #define PLT_STUB_CSD PLT_STUB128_CSD
-    #define PLT_STUB_DATA_OFF 16
-#else
-    #error Unknown capability size
-#endif
-
 #ifndef __ASSEMBLY__
 
 #include "cheric.h"
@@ -62,102 +48,75 @@
 #include "utils.h"
 
 // FIXME: alias needs size too
-#define PLT_STUB256(name, obj, tls, tls_reg, alias)  \
-__asm__ (                       \
-    SANE_ASM                    \
-    ".text\n"                   \
-    ".p2align 5\n"              \
-    ".global " #name "\n"       \
-    ".ent " #name "\n"          \
-    "" #name ":\n"              \
-    alias                       \
-    "clc         $c1, $zero, (1*32)($c12)  \n"        \
-    "clc         $c12, $zero, (2*32)($c12)\n"         \
-    "cjr         $c12                                 \n"   \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
-    ".space (1 * 16) \n"        \
-    ".global " #name "_data\n"  \
-    "" #name "_data:\n"         \
-    ".space (2 * 32) \n"        \
-    ".size " #name "_data, 64\n"\
-    ".end " #name "\n"          \
-);
 
-// This is an inlined mode for single domain, can use this if we know statically our trust relationship
-#define PLT_STUB256_CSD(name, obj, tls, tls_reg, alias) \
+#define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
-    ".p2align 5\n"              \
+    ".p2align 2\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
     alias                       \
-    "clc         $c1, $zero, (1*32)($c12)  \n"        \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
+    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     "ccall       $c1, $c2, 2 \n"\
     "nop\n"                     \
-    ".space (1 * 16) \n"        \
-    ".global " #name "_data\n"  \
-    "" #name "_data:\n"         \
-    ".space (2 * 32) \n"        \
-    ".size " #name "_data, 64\n"\
     ".end " #name "\n"          \
 );
 
-#define PLT_STUB128(name, obj, tls, tls_reg, alias) \
+#define PLT_STUB_CGP_ONLY_COMPLETE_TRUST(name, obj, tls, tls_reg, alias) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
-    ".p2align 4\n"              \
+    ".p2align 2\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
     alias                       \
-    "clc         $c1, $zero, (1*16)($c12)  \n"        \
-    "clc         $c12, $zero, (2*16)($c12)\n"         \
-    "cjr         $c12                                 \n"   \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
-    ".global " #name "_data\n"  \
-    "" #name "_data:\n"         \
-    ".space (2 * 16) \n"        \
-    ".size " #name "_data, 32\n"\
+    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
+    "clcbi       $c12,%capcall20(plt_common_complete_trusting)($c25)\n"             \
+    "cjr         $c12                                 \n"                           \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     ".end " #name "\n"          \
 );
 
-#define PLT_STUB128_CSD(name, obj, tls, tls_reg, alias) \
+#define PLT_STUB_CGP_ONLY_TRUST(name, obj, tls, tls_reg, alias) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
-    ".p2align 4\n"              \
+    ".p2align 2\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
     alias                       \
-    "clc         $c1, $zero, (1*16)($c12)  \n"        \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"     \
-    "ccall       $c1, $c2, 2 \n"\
-    "nop\n"                     \
-    ".global " #name "_data\n"  \
-    "" #name "_data:\n"         \
-    ".space (2 * 16) \n"        \
-    ".size " #name "_data, 32\n"\
+    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
+    "clcbi       $c12,%capcall20(plt_common_trusting)($c25)\n"             \
+    "cjr         $c12                                 \n"                           \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
+    ".end " #name "\n"          \
+);
+
+#define PLT_STUB_CGP_ONLY_UNTRUST(name, obj, tls, tls_reg, alias) \
+__asm__ (                       \
+    SANE_ASM                    \
+    ".text\n"                   \
+    ".p2align 2\n"              \
+    ".global " #name "\n"       \
+    ".ent " #name "\n"          \
+    "" #name ":\n"              \
+    alias                       \
+    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
+    "clcbi       $c12,%capcall20(plt_common_untrusting)($c25)\n"                    \
+    "cjr         $c12                                 \n"                           \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     ".end " #name "\n"          \
 );
 
 typedef void common_t(void);
 
-struct pltstub256 {
-    capability c1;
-    common_t* mode;
-};
-
-
-
     #define PLT_GOT_ENTRY(name, ...) capability name;
 
-    #define STUB_STRUCT(name, auth) ((struct pltstub256*)(rederive_perms((((char*)&name) + PLT_STUB_DATA_OFF), auth)))
-    #define STUB_STRUCT_RO(name) ((struct pltstub256*)((((char*)&name) + PLT_STUB_DATA_OFF)))
     #define PLT_UNIQUE_OBJECT(name) name ## _data_obj
 
     #define DECLARE_STUB(name, ret, sig, ...) extern ret name sig; extern struct pltstub256 name ## _data;
@@ -168,17 +127,19 @@ struct pltstub256 {
     #define DECLARE_DEFAULT(type, per_thr) extern per_thr capability PLT_UNIQUE_OBJECT(type);
     #define ALLOCATE_DEFAULT(type, per_thr) per_thr capability PLT_UNIQUE_OBJECT(type);
 
-    #define INIT_OBJ(name, ret, sig, mode, auth, ...)             \
-        {struct pltstub256* ob = STUB_STRUCT(name, auth);         \
-        ob->c1 = plt_if -> name;                            \
-        ob->mode = mode;}
+    #define INIT_OBJ(name, ret, sig, ...)             \
+        __asm__ ("cscbi %[d], %%capcall20(" #name "_dummy)($c25)\n"::[d]"C"(plt_if -> name):);
 
     #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
-    static inline void init_ ## type (type* plt_if, capability data, common_t* mode, capability auth) {      \
+    void init_ ## type (type* plt_if, capability data);      \
+    void init_ ## type ##_new_thread(type* plt_if, capability data);
+
+    #define DEFINE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
+    void init_ ## type (type* plt_if, capability data) {      \
         __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
-        LIST(INIT_OBJ, mode, auth)                                                                \
+        LIST(INIT_OBJ)                                                                \
     }\
-    static inline void init_ ## type ##_new_thread(type* plt_if, capability data, common_t* mode, capability auth) {      \
+    void init_ ## type ##_new_thread(type* plt_if, capability data) {      \
             __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
     }
 
@@ -191,15 +152,29 @@ struct pltstub256 {
     LIST(DECLARE_STUB,)                     \
     DECLARE_PLT_INIT(type, LIST, tls_reg, tls)
 
+    #define DUMMY_HELP(name,...) ".global " #name  "_dummy; " #name  "_dummy:;"
+
+    // TODO could achieve lazy link by putting a suitable stub here. Otherwise these must be replaced before use
+    #define MAKE_DUMMYS(LIST)       \
+        __asm__(    SANE_ASM        \
+                    ".text\n"       \
+                    LIST(DUMMY_HELP)\
+                                    \
+    );
+
     #define PLT(type, LIST) PLT_common(type, LIST,, "$c25",)
     #define PLT_thr(type, LIST) PLT_common(type, LIST,__thread,"$c26", "_tls")
 
-    #define PLT_ALLOCATE_common(type, LIST, thread_loc, tls, tls_reg, ST) ALLOCATE_DEFAULT(type, thread_loc) LIST(DEFINE_STUB, type, ST, tls, tls_reg)
+    #define PLT_ALLOCATE_common(type, LIST, thread_loc, tls, tls_reg, ST) \
+        ALLOCATE_DEFAULT(type, thread_loc)      \
+        DEFINE_PLT_INIT(type, LIST, tls_reg, tls)   \
+        MAKE_DUMMYS(LIST)                       \
+        LIST(DEFINE_STUB, type, ST, tls, tls_reg)
 
 
-    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CSD)
-    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB)
-    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB)
+    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_CSD)
+    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_COMPLETE_TRUST)
+    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB_CGP_ONLY_COMPLETE_TRUST)
 
     // These are the mode stubs
     extern void plt_common_single_domain(void);
@@ -209,7 +184,7 @@ struct pltstub256 {
 
     // This is the fully untrusting entry stub
     extern void entry_stub(void);
-#define MAKE_
+
 
 #else // __ASSEMBLY__
 

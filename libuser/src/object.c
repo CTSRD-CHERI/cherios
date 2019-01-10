@@ -58,9 +58,6 @@ kernel_if_t kernel_if;
 int    was_secure_loaded;
 found_id_t* own_found_id;
 
-ALLOCATE_PLT_SYSCALLS
-ALLOCATE_PLT_NANO
-
 extern void memset_c(void);
 
 #ifndef USE_SYSCALL_PUTS
@@ -86,10 +83,10 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 	if(kernel_if_c != NULL) {
         // I feel like as we use these methods on every syscall we should remove the indirection
         memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
-        init_nano_if_sys(&plt_common_single_domain, plt_auth); // <- this allows us to use non sys versions by calling syscall in advance for each function
-        init_kernel_if_t(&kernel_if, self_ctrl, &plt_common_complete_trusting, plt_auth);
+        init_nano_if_sys(&plt_common_single_domain); // <- this allows us to use non sys versions by calling syscall in advance for each function
+        init_kernel_if_t(&kernel_if, self_ctrl);
     } else {
-        init_kernel_if_t_new_thread(&kernel_if, self_ctrl, &plt_common_complete_trusting, plt_auth);
+        init_kernel_if_t_new_thread(&kernel_if, self_ctrl);
     }
 
     int_cap = get_integer_space_cap();

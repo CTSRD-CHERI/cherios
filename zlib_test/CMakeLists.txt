@@ -8,4 +8,3 @@ set(SRCS
 )
 
 add_cherios_executable(zlib_test ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${SRCS})
-target_link_libraries(zlib_test CheriOS::LibUser)

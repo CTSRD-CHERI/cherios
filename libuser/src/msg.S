@@ -72,6 +72,11 @@
 .type sync_state, "tls_object"
 .type act_self_ctrl, "tls_object"
 
+.weak msg_methods
+.weak ctrl_methods
+.weak msg_methods_nb
+.weak ctrl_methods_nb
+
 .global msg_entry
 msg_entry:
 

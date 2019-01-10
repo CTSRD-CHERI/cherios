@@ -39,6 +39,7 @@
 #define _CHERI256_
 	#define U_PERM_BITS 4
     #define CAP_SIZE 0x20
+	#define CAP_SIZE_S "0x20"
     #define CAP_SIZE_BITS 5
 	#define SMALL_PRECISION 64
 	#define LARGE_PRECISION 64
@@ -48,6 +49,7 @@
 #define _CHERI128_
 	#define U_PERM_BITS 4
     #define CAP_SIZE 0x10
+	#define CAP_SIZE_S "0x10"
     #define CAP_SIZE_BITS 4
 	#define SMALL_PRECISION 15
 	#define LARGE_PRECISION	12

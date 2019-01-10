@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <cp0.h>
 #include "assert.h"
 #include "stdlib.h"
 #include "zlib.h"
@@ -254,15 +255,6 @@ void zerr(int ret)
     }
 }
 
-register_t cp0_count_get(void)
-{
-	register_t count;
-
-	__asm__ __volatile__ ("dmfc0 %0, $9" : "=r" (count));
-	return (count & 0xFFFFFFFF);
-}
-
-
 void selftest(size_t chunk) {
 	assert(chunk <= MAX_CHUNK);
 	CHUNK = chunk;
@@ -293,7 +285,7 @@ void selftest(size_t chunk) {
 		dispout(stdout);
 	}
 	__asm("li $0, 0x1337");
-	printf("zlib selftest %04lx done in %lx (%lx %lx)\n",
+	printf("zlib selftest %04lx done in %lx (%lx %x)\n",
 	       chunk, cp0_count_get()-count, count, cp0_count_get());
 }
 

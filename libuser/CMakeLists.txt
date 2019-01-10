@@ -23,40 +23,40 @@ set(LIBUSER_ASM_SRCS
 )
 
 set(LIBUSER_SRCS
+    src/statcounters.c
     src/assert.c
+    src/printf.c
+    src/object.c
+    src/virtioblk.c
+    ${LWIP_DIR}/src/core/ipv4/ip4_addr.c
     src/ctype.c
-    src/capmalloc/capmalloc_bump.c
     src/errno.c
     src/libuser.c
     src/mmap.c
     src/msg.c
-    src/msg_default.c
-    src/namespace.c
-    src/object.c
     src/panic.c
-    src/printf.c
     src/ssleep.c
-    src/statcounters.c
     src/stdio.c
     src/stdlib.c
-    src/virtioblk.c
     src/thread.c
     src/act_events.c
     src/type_man.c
-    src/exceptions.c
+    src/net.c
     src/dedup.c
     src/temporal.c
-    src/sockets.c
     src/unistd.c
-    src/net.c
-    ${LWIP_DIR}/src/core/ipv4/ip4_addr.c
+    src/namespace.c
+    src/exceptions.c
+    src/capmalloc/capmalloc_bump.c
+    src/sockets.c
+    src/plt_allocations.c
 )
 
-add_library(user_early STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
+add_library(user_early STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
 add_library(CheriOS::LibUserEarly ALIAS user_early)
 set_target_properties(user_early PROPERTIES COMPILE_FLAGS -DUSE_SYSCALL_PUTS)
 
-add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_SRCS} ${LIBUSER_ASM_SRCS})
+add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
 add_library(CheriOS::LibUser ALIAS user)
 
 add_library(libcrt STATIC ${LIBCRT_SRCS})

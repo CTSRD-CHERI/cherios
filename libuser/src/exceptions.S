@@ -148,8 +148,7 @@ save_reg    $at, AT_index, 0
 cmove       $c18, $idc
 clcbi       $c1, CTLP_OFFSET_CGP($idc)
 clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)
-clcbi       $c1, %captab20(exception_getcause)($c1)
-clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
+clcbi       $c1, %capcall20(exception_getcause_dummy)($c1)
 
 # Call get cause
 # Gets v0 (cause) and v1(ccause). clobers c1. Restores idc. 18 now available as tmp.
@@ -242,16 +241,14 @@ normal_return:
 #ifdef USE_EXCEPTION_STACK
 clcbi       $c11, (-CAP_SIZE)($c11)
 #endif
-clcbi       $c1, %captab20(exception_return)($c1)
-clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
+clcbi       $c1, %capcall20(exception_return_dummy)($c1)
 ccall_slotless $c1, $idc, 2
 
 replay_return:
 #ifdef USE_EXCEPTION_STACK
 clcbi       $c11, (-CAP_SIZE)($c11)
 #endif
-clcbi       $c1, %captab20(exception_replay)($c1)
-clcbi       $c1, (PLT_STUB_DATA_OFF)($c1) # Get the code capability directly from the plt stub
+clcbi       $c1, %capcall20(exception_replay_dummy)($c1)
 ccall_slotless  $c1, $idc, 2
 
 .end user_exception_trampoline_vector

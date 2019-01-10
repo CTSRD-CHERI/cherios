@@ -109,10 +109,13 @@ _Static_assert(offsetof(CTL_t, cds) == CTLP_OFFSET_CDS,  "CGP offsets need to ma
 _Static_assert(offsetof(CTL_t, cdl) == CTLP_OFFSET_CDL,  "CGP offsets need to match assembly assumptions");
 _Static_assert(offsetof(CTL_t, cgp) == CTLP_OFFSET_CGP,  "CGP offsets need to match assembly assumptions");
 
-static inline CTL_t* get_ctl(void) {
-    CTL_t* ret;
-    __asm__ ("cmove %[ret], $idc" : [ret]"=C"(ret) ::);
-    return ret;
+#define get_ctl() ((CTL_t*)({                           \
+CTL_t* __ret;                                             \
+__asm__ ("cmove %[ret], $idc" : [ret]"=C"(__ret) ::);     \
+__ret;}))
+
+static inline size_t ctl_get_num_table_entries(CTL_t* ctl) {
+    return (cheri_getlen(ctl) / sizeof(capability)) - 9;
 }
 
 static __inline__ capability get_cgp(void) {

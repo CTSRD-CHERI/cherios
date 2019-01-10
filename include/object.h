@@ -52,10 +52,11 @@ extern act_kt memmgt_ref;
 act_kt try_init_memmgt_ref(void);
 
 //TODO these should be provided by the linker/runtime
-extern void (*msg_methods[]);
-extern size_t msg_methods_nb;
-extern void (*ctrl_methods[]);
-extern size_t ctrl_methods_nb;
+
+extern void __attribute__((weak)) (*msg_methods[]);
+extern size_t __attribute__((weak)) msg_methods_nb;
+extern void __attribute__((weak)) (*ctrl_methods[]);
+extern size_t __attribute__((weak)) ctrl_methods_nb;
 
 void	object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c, capability plt_auth);
 
