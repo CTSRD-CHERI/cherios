@@ -306,7 +306,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	kernel_assert(ACT_NAME_MAX_LEN > 0);
 	int name_len = 0;
 	if(VCAP(name, 1, VCAP_R)) {
-		name_len = imin(cheri_getlen(name), ACT_NAME_MAX_LEN-1);
+		name_len = imin(cheri_getlen(name)-cheri_getoffset(name), ACT_NAME_MAX_LEN-1);
 	}
 	for(int i = 0; i < name_len; i++) {
 		char c = name[i];
