@@ -230,6 +230,8 @@ extern "C" {
 
         hash_test();
 
+        // TODO here is a good place to add all of libuser to the dedup tables
+
         namespace_register(namespace_num_dedup_service, act_self_ref);
 
         msg_enable = 1;
@@ -240,7 +242,7 @@ extern "C" {
     ERROR_T(entry_t) __deduplicate(uint64_t* data, size_t length) {
         if((length & 0x7) != 0) return MAKE_ER(entry_t, DEDUP_ERROR_LENGTH_NOT_EVEN);
 
-        if(cheri_getcursor(data) & 0x7 != 0) return MAKE_ER(entry_t, DEDUP_ERROR_BAD_ALIGNMENT);
+        if((cheri_getcursor(data) & 0x7) != 0) return MAKE_ER(entry_t, DEDUP_ERROR_BAD_ALIGNMENT);
 
         entry_t  res = create(data, length);
 
@@ -249,7 +251,7 @@ extern "C" {
 
     ERROR_T(entry_t) __deduplicate_dont_create(uint64_t* data, size_t length) {
         if((length & 0x7) != 0) return MAKE_ER(entry_t, DEDUP_ERROR_LENGTH_NOT_EVEN);
-        if(cheri_getcursor(data) & 0x7 != 0) return MAKE_ER(entry_t, DEDUP_ERROR_BAD_ALIGNMENT);
+        if((cheri_getcursor(data) & 0x7) != 0) return MAKE_ER(entry_t, DEDUP_ERROR_BAD_ALIGNMENT);
         return MAKE_VALID(entry_t, dont_create(data, length));
     }
 
