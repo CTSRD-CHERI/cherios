@@ -135,6 +135,7 @@ init_elem_t init_list[] = {
     B_DENTRY(m_uart,	"uart.elf",		0,	1)      // Needed for stdout so bring up asap
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
     B_DENTRY(m_user,    "dedup.elf", 0 ,1)
+    B_WAIT_FOR(namespace_num_dedup_service)
     B_DENTRY(m_tman, "type_manager.elf",0,1)
     B_WAIT_FOR(namespace_num_tman)
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
