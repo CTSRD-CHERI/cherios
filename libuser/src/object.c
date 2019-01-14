@@ -46,6 +46,7 @@
 #include "exception_cause.h"
 #include "temporal.h"
 #include "unistd.h"
+#include "sys/deduplicate.h"
 
 capability int_cap;
 
@@ -143,6 +144,11 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     stdout = NULL;
 #endif
 
+    /*
+    if(get_dedup() != NULL) {
+        deduplicate_all_functions(0);
+    } else printf("Dedup service not up\n");
+    */
 }
 
 // Called when main exits

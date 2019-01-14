@@ -83,7 +83,10 @@ capability deduplicate_cap(capability cap, int allow_create) {
                               (deduplicate_dont_create((uint64_t*)resolve, length));
 
     if(!IS_VALID(result)) {
-        printf("Deduplication error: %d", (int)result.er);
+        printf("Deduplication error: %d\n", (int)result.er);
+        CHERI_PRINT_CAP(resolve);
+        sleep(0x1000);
+        assert(0);
         return cap;
     }
 
@@ -104,7 +107,7 @@ capability deduplicate_cap(capability cap, int allow_create) {
 
 
 
-void deduplicate_all_functions(int allow_create) {
+void deduplicate_all_withperms(int allow_create, register_t perms) {
     func_t ** cap_table_globals = (func_t **)get_cgp();
     size_t n_ents = cheri_getlen(cap_table_globals)/sizeof(func_t*);
 
@@ -116,12 +119,16 @@ void deduplicate_all_functions(int allow_create) {
         func_t * to_dedup = cap_table_globals[i];
         processed ++;
 
-        // Assume executable caps are all functions
+        register_t  has_perms = cheri_getperm(to_dedup);
 
-        if((cheri_getperm(to_dedup) & CHERI_PERM_EXECUTE) == 0) {
-            of_which_func++;
+        // Don't deduplicate if this is writable or if this doesn't have the permissions we want
+        if((has_perms & perms) != perms ||
+                (has_perms & (CHERI_PERM_STORE | CHERI_PERM_STORE_CAP)) ||
+                cheri_getsealed(to_dedup)) {
             continue;
         }
+
+        of_which_func++;
 
         func_t* res = (func_t*)deduplicate_cap((capability )to_dedup, allow_create);
 
@@ -131,5 +138,9 @@ void deduplicate_all_functions(int allow_create) {
         }
     }
 
-    printf("Ran deduplicatin on all. Processed %ld, Funcs %ld, Replaced %ld\n", processed, of_which_func, of_which_replaced);
+    printf("Ran deduplication on all. Processed %ld, Found %ld, Replaced %ld\n", processed, of_which_func, of_which_replaced);
+}
+
+void deduplicate_all_functions(int allow_create) {
+    deduplicate_all_withperms(allow_create, CHERI_PERM_EXECUTE);
 }
