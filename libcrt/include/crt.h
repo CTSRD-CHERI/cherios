@@ -71,13 +71,25 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
         capability loc_cap = segment_table[loc_seg_ndx] + reloc->capability_location;
         capability ob_cap = segment_table[ob_seg_ndx] + reloc->object;
 
-        if ((reloc->size != 0))
+        size_t size = reloc->size;
+        size_t offset = reloc->offset;
+
+        if ((size != 0))
         {
             //ob_cap = cheri_setbounds_exact(ob_cap, reloc->size);
-            ob_cap = cheri_setbounds(ob_cap, reloc->size); // Non exact until the linker generates good globals
+            // FIXME Dedup needs alignment to 8 bytes
+            // FIXME Dirty hack to align data in the execute section. This should be done by the compiler / linker.
+            if((cheri_getperm(ob_cap) & CHERI_PERM_EXECUTE)) {
+                size_t mis_align = (size_t)ob_cap & 0x7;
+                size += mis_align;
+                ob_cap= (capability)(((char*)ob_cap) - mis_align);
+                offset +=mis_align;
+                size = (size + 7) & ~7;
+            }
+            ob_cap = cheri_setbounds(ob_cap, size); // Non exact until the linker generates good globals
         }
 
-        ob_cap = cheri_incoffset(ob_cap, reloc->offset);
+        ob_cap = cheri_incoffset(ob_cap, offset);
 
         // TODO we should pay attention to the permission bits. But for now we ignore them.
 
