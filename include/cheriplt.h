@@ -53,7 +53,7 @@
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
-    ".p2align 2\n"              \
+    ".p2align 3\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
@@ -69,7 +69,7 @@ __asm__ (                       \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
-    ".p2align 2\n"              \
+    ".p2align 3\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
@@ -85,7 +85,7 @@ __asm__ (                       \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
-    ".p2align 2\n"              \
+    ".p2align 3\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
@@ -101,7 +101,7 @@ __asm__ (                       \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
-    ".p2align 2\n"              \
+    ".p2align 3\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
