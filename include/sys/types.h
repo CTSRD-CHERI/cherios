@@ -81,6 +81,19 @@ typedef struct cap_pair {
     capability data;
 } cap_pair;
 
+typedef struct act_info_s {
+    char* name;
+    uint64_t had_time;
+    uint64_t switches;
+    uint64_t sent_n;
+    uint64_t received_n;
+    status_e status;
+    sched_status_e sched_status;
+    uint8_t cpu;
+
+    uint64_t had_time_epoch;
+} act_info_t;
+
 #define ACT_REQUIRED_SPACE ((8 * 1024) - (RES_META_SIZE * 2))
 
 typedef capability act_kt;

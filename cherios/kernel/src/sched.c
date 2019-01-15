@@ -71,6 +71,9 @@ typedef struct sched_pool {
 	size_t 		in_queues;
 	spinlock_t 	queue_lock;
     uint8_t     pool_id;
+#if (K_DEBUG)
+    uint32_t    last_time;
+#endif
 } sched_pool;
 
 sched_pool sched_pools[SMP_CORES];
@@ -91,6 +94,9 @@ void sched_init(sched_idle_init_t* sched_idle_init) {
 		pool->idle_act = NULL;
         pool->pool_id = i;
 
+#if (K_DEBUG)
+        pool->last_time = (uint32_t)cp0_count_get();
+#endif
         capability qsz_cap = & pool->in_queues;
         qsz_cap = cheri_setbounds(qsz_cap, sizeof(size_t));
         qsz_cap = cheri_andperm(qsz_cap, CHERI_PERM_LOAD);
@@ -431,11 +437,24 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 		sched_nothing_to_run();
 	} else {
 
+#if (K_DEBUG)
+        uint32_t last_time = pool->last_time;
+        uint32_t now = (uint32_t)cp0_count_get();
+        if(kernel_curr_act) {
+            kernel_curr_act->had_time += now - last_time;
+            kernel_curr_act->had_time_epoch += now - last_time;
+        }
+        pool->last_time = now;
+#endif
+
 		if(hint != kernel_curr_act) {
 
 			act_t* from = kernel_curr_act;
 			act_t* to = hint;
 
+#if (K_DEBUG)
+			to->switches++;
+#endif
 			sched_deschedule(from);
 			sched_schedule(pool_id, to);
 

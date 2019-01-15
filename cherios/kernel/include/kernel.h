@@ -34,6 +34,8 @@
 //#define __TRACE__
 //#define __LITE__
 
+#define K_DEBUG 1
+
 #define MAX_STATIC_ACTIVATIONS 8 // kernel + init + namespace + proc + memgt + memmgt worker *2. Then we need reservations.
 
 #ifdef HARDWARE_qemu

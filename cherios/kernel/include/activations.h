@@ -44,6 +44,7 @@
 #include "queue.h"
 #include "mutex.h"
 #include "dylink.h"
+#include "kernel.h"
 
 typedef u32 aid_t;
 
@@ -102,7 +103,13 @@ typedef struct act_t
 
 	/* Debug related */
 	size_t image_base;
-
+#if (K_DEBUG)
+    uint64_t sent_n;
+    uint64_t recv_n;
+    uint64_t switches;
+    uint64_t had_time;
+    uint64_t had_time_epoch;
+#endif
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace

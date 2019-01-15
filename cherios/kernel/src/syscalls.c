@@ -40,6 +40,43 @@
 
 #define DECLARE_WITH_CD(A, B) A B; A __cross_domain_## B; A __cross_domain_trusted_## B
 
+DECLARE_WITH_CD(void, kernel_syscall_info_epoch(void));
+void kernel_syscall_info_epoch(void) {
+    // a bit racey but its only for debug
+    FOR_EACH_ACT(act) {
+            act->had_time_epoch = 0;
+    }}
+}
+
+DECLARE_WITH_CD(act_control_kt, kernel_syscall_actlist_first(void));
+act_control_kt kernel_syscall_actlist_first(void) {
+	return (act_control_kt)act_create_sealed_ctrl_ref(act_list_start);
+}
+
+DECLARE_WITH_CD(act_control_kt, kernel_syscall_actlist_next(act_control_kt act));
+act_control_kt kernel_syscall_actlist_next(act_control_kt act) {
+	act_control_t* ctrl = act_unseal_ctrl_ref(act);
+    act_t* next = ctrl->list_next;
+	return next ? (act_control_kt)act_create_sealed_ctrl_ref(next) : NULL;
+}
+
+DECLARE_WITH_CD(void, kernel_syscall_act_info(act_control_kt act, act_info_t* info));
+void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
+	act_control_t* ctrl = act_unseal_ctrl_ref(act);
+	info->name = ctrl->name;
+	info->sched_status = ctrl->sched_status;
+	info->status = ctrl->status;
+    info->cpu = ctrl->pool_id;
+
+#if (K_DEBUG)
+	info->sent_n = ctrl->sent_n;
+	info->received_n = ctrl->recv_n;
+	info->switches = ctrl->switches;
+	info->had_time = ctrl->had_time;
+    info->had_time_epoch = ctrl->had_time_epoch;
+#endif
+}
+
 DECLARE_WITH_CD(void, kernel_syscall_dump_tlb(void));
 void kernel_syscall_dump_tlb(void) {
 	kernel_dump_tlb();

@@ -54,6 +54,11 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token) {
 
+#if (K_DEBUG)
+	src->sent_n++;
+	ATOMIC_ADD_RV(&dest->recv_n, 64, 16i, 1);
+#endif
+
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
 
