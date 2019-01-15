@@ -97,7 +97,7 @@ static void kernel_timer_check_sleepers(uint64_t now) {
 
 		if(act != NULL) {
 			register_t waited = now - act->timeout_start;
-#ifdef HARDWARE_QEMU
+#ifdef HARDWARE_qemu
             if((int64_t)waited < 0) continue; // Time going backwards can trigger this
 #endif
 			if(waited > act->timeout_length) {
