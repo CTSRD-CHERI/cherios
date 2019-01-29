@@ -4,7 +4,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(UART_SRCS
     ${INIT_ASM}
     src/main.c
-    src/printf.c
     src/uart.c
 )
 

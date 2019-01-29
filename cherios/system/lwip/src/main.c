@@ -43,6 +43,8 @@
 #include "lwip/dns.h"
 #include "lwip_driver.h"
 #include "thread.h"
+#include "deduplicate.h"
+
 
 enum session_close_state {
     SCS_NONE = 0,

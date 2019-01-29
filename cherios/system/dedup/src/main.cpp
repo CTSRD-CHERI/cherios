@@ -40,6 +40,7 @@ extern "C" {
     #include "namespace.h"
     #include "deduplicate.h"
     #include "string.h"
+    #include "thread.h"
 }
 
 
@@ -53,11 +54,12 @@ public:
         mapT val;
     };
 
-    map_entry* find_or_insert(sha256_hash hash, mapT &out_lost) {
+    map_entry* find_or_insert(sha256_hash hash, mapT& out_lost) {
         size_t h1 = hash1(hash);
         size_t h2 = hash2(hash);
 
         size_t knocks = 0;
+        out_lost = nullptr;
 
         if(chash(table[h1].hash, hash)) return &table[h1];
         if(chash(table[h2].hash, hash)) return &table[h2];
@@ -65,6 +67,9 @@ public:
         if(table[h1].val == empty) {
             table[h1].hash = hash;
             return &table[h1];
+        } else if(table[h2].val == empty) {
+            table[h2].hash = hash;
+            return &table[h2];
         } else {
             size_t cuckoos = 0;
             size_t index = h2;
@@ -89,13 +94,13 @@ public:
                     index = otherh;
 
                     cuckoos++;
-                    if(cuckoos == max_cuckoos) {
-                        out_lost = value;
-                    }
                 }
 
+            }  while(kickedV != empty && cuckoos != max_cuckoos && index != h2);
 
-            }  while(kickedV != empty && cuckoos != max_cuckoos);
+            if(kickedV != empty) {
+                out_lost = kickedV;
+            }
 
             return &table[h2];
         }
@@ -141,7 +146,7 @@ private:
 
 };
 
-cuckoomap<0x100,0x10,entry_t, nullptr> map;
+cuckoomap<0x1000,0x10,entry_t, nullptr> map;
 
 void hash_test(void) {
     // Check hashing is working...
@@ -190,7 +195,7 @@ entry_t create(uint64_t* data, size_t length) {
 
     if(lost != nullptr) {
         // TODO: Got pushed out of the cache, fix this.
-        assert(lost != nullptr && "Table overflow");
+        assert(lost == nullptr && "Table overflow");
     }
 
     if(result->val != nullptr) return result->val;
@@ -225,14 +230,16 @@ entry_t dont_create(uint64_t* data, size_t length) {
 
 extern "C" {
 
+    int be_public(void) {
+        printf("Dedup going public\n");
+        namespace_register(namespace_num_dedup_service, act_self_ref);
+        return 0;
+    }
+
     int main(register_t arg, capability carg) {
         printf("Deduplicate Hello World!\n");
 
         hash_test();
-
-        // TODO here is a good place to add all of libuser to the dedup tables
-
-        namespace_register(namespace_num_dedup_service, act_self_ref);
 
         msg_enable = 1;
 
@@ -259,7 +266,7 @@ extern "C" {
         return find(hash);
     }
 
-    void (*msg_methods[]) = {(void*)&__deduplicate, (void*)&__deduplicate_find, (void*)&__deduplicate_dont_create};
+    void (*msg_methods[]) = {(void*)&__deduplicate, (void*)&__deduplicate_find, (void*)&__deduplicate_dont_create, (void*)be_public};
     size_t msg_methods_nb = countof(msg_methods);
     void (*ctrl_methods[]) = {NULL};
     size_t ctrl_methods_nb = countof(ctrl_methods);

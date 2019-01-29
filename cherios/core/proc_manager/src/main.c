@@ -114,7 +114,7 @@ static mop_t make_mop_for_process(process_t* proc) {
 }
 
 static act_control_kt create_activation_for_image(image* im, const char* name, register_t arg, capability carg, capability pcc,
-                                                  char* stack_args, size_t stack_args_size, process_t * process, uint8_t cpu_hint) {
+                                                  char* stack_args, size_t stack_args_size, process_t * process, uint8_t cpu_hint, startup_flags_e flags) {
     reg_frame_t frame;
     memset(&frame, 0, sizeof(reg_frame_t));
 
@@ -141,6 +141,8 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 		// frame.cf_c3 = process->im.secure_entry;
 	}
 
+	frame.mf_s2 = flags;
+
 	act_control_kt ctrl = syscall_act_register(&frame, name, queue, cap_malloc(ACT_REQUIRED_SPACE), cpu_hint);
 
 	act_kt act = syscall_act_ctrl_get_ref(ctrl);
@@ -155,7 +157,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 }
 
 act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
-							 char* stack_args, size_t stack_args_size, uint8_t cpu_hint) {
+							 char* stack_args, size_t stack_args_size, uint8_t cpu_hint, startup_flags_e flags) {
 
 	if(process->state != proc_started) return NULL;
 
@@ -166,7 +168,7 @@ act_control_kt create_thread(process_t * process, const char* name, register_t a
 	create_image(&env, &process->im, &process->im, storage_thread);
 
 	act_control_kt ctrl = create_activation_for_image(&process->im, name, arg, carg, pcc,
-													  stack_args, stack_args_size, process, cpu_hint);
+													  stack_args, stack_args_size, process, cpu_hint, flags);
 
 	process->threads[process->n_threads++] = ctrl;
 	return ctrl;
@@ -200,7 +202,8 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 	return seal_proc_for_user(proc);
 }
 
-act_control_kt start_process(process_t* proc, register_t arg, capability carg, char* stack_args, size_t stack_args_size, uint8_t cpu_hint) {
+act_control_kt start_process(process_t* proc, register_t arg, capability carg, char* stack_args, size_t stack_args_size,
+							 uint8_t cpu_hint, startup_flags_e flags) {
 	assert(proc->n_threads == 0);
 	assert(proc->state == proc_created);
 
@@ -209,7 +212,7 @@ act_control_kt start_process(process_t* proc, register_t arg, capability carg, c
 	void * pcc = make_global_pcc(&proc->im);
 
 	act_control_kt ctrl = create_activation_for_image(&proc->im, proc->name, arg, carg, pcc,
-													  stack_args, stack_args_size, proc, cpu_hint);
+													  stack_args, stack_args_size, proc, cpu_hint, flags);
 
 	proc->threads[proc->n_threads++] = ctrl;
 	return ctrl;
@@ -217,13 +220,13 @@ act_control_kt start_process(process_t* proc, register_t arg, capability carg, c
 
 act_control_kt user_start_process(process_t* proc, startup_desc_t* desc) {
     proc = unseal_proc(proc);
-    return start_process(proc, desc->arg, desc->carg, desc->stack_args, desc->stack_args_size, desc->cpu_hint);
+    return start_process(proc, desc->arg, desc->carg, desc->stack_args, desc->stack_args_size, desc->cpu_hint, desc->flags);
 }
 
 act_control_kt user_create_thread(process_t* proc, const char* name, startup_desc_t* desc) {
     proc = unseal_proc(proc);
-    act_control_kt* ctrl = create_thread(proc, name, desc->arg, desc->carg,
-                                         desc->pcc, desc->stack_args, desc->stack_args_size, desc->cpu_hint);
+    act_control_kt ctrl = create_thread(proc, name, desc->arg, desc->carg,
+                                         desc->pcc, desc->stack_args, desc->stack_args_size, desc->cpu_hint, desc->flags);
     return ctrl;
 }
 

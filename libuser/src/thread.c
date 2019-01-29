@@ -107,7 +107,7 @@ __asm__ (
     "cmove      $c6, $c20   \n"     // queue
     "cmove      $c7, $c21   \n"     // self ctrl
     "clc        $c8, $zero, " HELP(START_OFF) "($c11)\n"
-
+    "move       $a2, $s2    \n"    // startup flags
     // Call c land now globals are set up
     "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
     "cjr     $c12\n"
@@ -121,6 +121,7 @@ __asm__ (
     SANE_ASM
         ".text\n"
         ".global secure_thread_start\n"
+        ".ent secure_thread_start\n"
         "secure_thread_start:\n"
 // Undo permutation that happened in the foundation enter trampoline
         "cmove       $c4, $idc\n"
@@ -133,19 +134,24 @@ __asm__ (
         "cgetpccsetoffset $c12, $t0\n"
         "cjr    $c12\n"
         "nop\n"
+        ".end secure_thread_start\n"
 );
 
 void c_thread_start(register_t arg, capability carg, // Things from the user
                     capability* segment_table, capability tls_segment_prototype, register_t tls_segment_offset,
-                    queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start) {
+                    queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start, startup_flags_e flags) {
     // We have to do this before we can get any thread locals
     memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, cheri_getlen(tls_segment_prototype));
 
     struct capreloc* r_start = &__start___cap_relocs;
-    struct capreloc* r_stop = cheri_incoffset(r_start, (size_t)&__stop___cap_relocs - (size_t)&__start___cap_relocs);
+
+    // Deduplication makes different symbols not comparable like this. Weirdly stop had different bounds to start.
+    //struct capreloc* r_stop = cheri_incoffset(r_start, (size_t)&__stop___cap_relocs - (size_t)&__start___cap_relocs);
+    // FIXME: Allows works with precise bounds (which we hopefully have) =/
+    struct capreloc* r_stop = cheri_setoffset(r_start, cheri_getlen(r_start));
     crt_init_new_locals(segment_table, r_start, r_stop);
 
-    object_init(self_ctrl, queue, NULL, NULL);
+    object_init(self_ctrl, queue, NULL, NULL, flags);
 
     start(arg, carg);
 

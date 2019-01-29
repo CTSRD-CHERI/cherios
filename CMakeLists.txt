@@ -329,6 +329,13 @@ function(add_cherios_namespace _target)
   target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
+function(make_usage _target)
+    add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${_target}_usage.S
+                        DEPENDS "${CMAKE_SOURCE_DIR}/generate_captable_usage.py" ${_target}
+                        COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-nm" "$<TARGET_FILE:${_target}>" | python "${CMAKE_SOURCE_DIR}/generate_captable_usage.py" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}_usage.S"
+    )
+endfunction()
+
 function(add_cherios_module _target)
   cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
   if(NOT add_exe_LINKER_SCRIPT)

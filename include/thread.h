@@ -35,6 +35,11 @@
 #include "queue.h"
 #include "tman.h"
 
+typedef enum startup_flags_e {
+    STARTUP_NONE        = 0,
+    STARTUP_NO_DEDUP    = 1,
+} startup_flags_e;
+
 typedef void pcc_type(void);
 typedef struct startup_desc_t {
     capability carg;
@@ -42,6 +47,7 @@ typedef struct startup_desc_t {
     char* stack_args;
     register_t arg;
     size_t stack_args_size;
+    startup_flags_e flags;
     uint8_t cpu_hint;
 } startup_desc_t;
 

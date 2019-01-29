@@ -45,9 +45,10 @@ void libuser_init(act_control_kt self_ctrl,
 				  queue_t * queue,
 				  capability proc,
 				  mop_t mop,
-                  capability plt_auth) {
+                  capability plt_auth,
+				  startup_flags_e flags) {
 	proc_handle = proc;
 	mmap_set_mop(mop);
 	namespace_init(ns_ref);
-	object_init(self_ctrl, queue, kernel_if_c, plt_auth);
+	object_init(self_ctrl, queue, kernel_if_c, plt_auth, flags);
 }

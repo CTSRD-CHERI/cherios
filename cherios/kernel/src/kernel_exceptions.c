@@ -102,6 +102,10 @@ static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 		regdump(-1, kernel_curr_act);
 		kernel_freeze();
 	}
+    if(kernel_curr_act->is_idle) {
+        regdump(-1, kernel_curr_act);
+    }
+
     kernel_assert(!kernel_curr_act->is_idle);
     // Order is important here. We need to send the message first to unblock memgt.
     // This can however result in the commit coming in before the block. sched handles this for us.

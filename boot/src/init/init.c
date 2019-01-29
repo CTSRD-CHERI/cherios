@@ -134,7 +134,8 @@ init_elem_t init_list[] = {
 // NOTE: IDLE processes are loaded here
     B_DENTRY(m_uart,	"uart.elf",		0,	1)      // Needed for stdout so bring up asap
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
-    B_DENTRY(m_user,    "dedup.elf", 0 ,1)
+    B_DENTRY(m_dedup,    "dedup.elf", 0 ,1)
+    B_DENTRY(m_dedup_init, "dedup_init.elf", 0, 1)
     B_WAIT_FOR(namespace_num_dedup_service)
     B_DENTRY(m_tman, "type_manager.elf",0,1)
     B_WAIT_FOR(namespace_num_tman)
@@ -148,7 +149,8 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_fs,	FS_ELF	,		0,	1)
 	B_FENCE
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
-	B_FENCE
+	B_WAIT_FOR(namespace_num_fs)
+    B_WAIT_FOR(namespace_num_tcp)
     B_DENTRY(m_user,    "nginx.elf", 0, 0)
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
@@ -211,6 +213,7 @@ extern char __nano_size;
 
 static memmgt_init_t memmgt_init;
 static procman_init_t procman_arg;
+static act_kt dedup_act;
 
 Elf_Env env;
 
@@ -242,6 +245,8 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             return &procman_arg;
         case m_nginx:
             return nginx_args;
+        case m_dedup_init:
+            return dedup_act;
         case m_namespace:
         case m_core:
         case m_user:
@@ -322,6 +327,8 @@ static void load_modules(init_info_t * init_info) {
     desc.stack_args = NULL;
     desc.stack_args_size = 0;
     desc.cpu_hint = 0;
+    desc.flags = STARTUP_NO_DEDUP;
+
     /* This version allows the process to spawn new threads */
     memgtbe->ctrl = thread_start_process(thread_create_process(memgtbe->name, memmgt_file, 0), &desc);
 
@@ -385,6 +392,7 @@ static void load_modules(init_info_t * init_info) {
         desc.carg = init_info->idle_init.queue_fill_pre[idle_id];
         desc.stack_args = NULL;
         desc.stack_args_size = 0;
+        desc.flags = STARTUP_NO_DEDUP;
         act_control_kt ctrl = thread_start_process(thread_create_process(idle_name,idle_addr,0), &desc);
     }
 
@@ -416,12 +424,16 @@ static void load_modules(init_info_t * init_info) {
         desc.stack_args = NULL;
         desc.stack_args_size = 0;
         desc.cpu_hint = SMP_CORES-1;
+        desc.flags = STARTUP_NONE;
 
         if(be->type == m_virtblk || be->type == m_virtnet) desc.cpu_hint = 0; // Some things really like to scheduled on core0 for interrupts
 
         /* This version allows the process to spawn new threads */
         be->ctrl = thread_start_process(thread_create_process(be->name, addr, be->type == m_secure), &desc);
 
+        if(be->type == m_dedup) {
+            dedup_act = syscall_act_ctrl_get_ref(be->ctrl);
+        }
 		printf("Module ready: %s\n", be->name);
 	}
 }

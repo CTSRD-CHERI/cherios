@@ -46,9 +46,20 @@ entry_t             deduplicate_find(sha256_hash hash);
 
 // Tries to deduplicate every function. Bit extreme.
 
-void deduplicate_all_functions(int allow_create);
-capability deduplicate_cap(capability cap, int allow_create);
+typedef struct {
+    size_t processed;
+    size_t tried;
+    size_t of_which_func;
+    size_t of_which_func_replaced;
+    size_t of_which_data;
+    size_t of_which_data_replaced;
+    size_t too_large;
+} dedup_stats;
+
+dedup_stats deduplicate_all_functions(int allow_create);
+capability deduplicate_cap(capability cap, int allow_create, register_t perms);
 act_kt get_dedup(void);
+act_kt set_custom_dedup(act_kt dedup);
 
 #define DEDUPLICATE_CAPCALL(F, allow)                                                           \
 {                                                                                               \

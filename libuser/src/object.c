@@ -76,7 +76,9 @@ std_sock std_err_sock;
 
 #endif
 
-void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c, capability plt_auth) {
+void object_init(act_control_kt self_ctrl, queue_t * queue,
+                 kernel_if_t* kernel_if_c, capability plt_auth, // TODO remove plt_auth, we have fixed plt stubs
+                 startup_flags_e startup_flags) {
 
     act_self_ctrl = self_ctrl;
 
@@ -98,6 +100,19 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
 
     sync_state = (sync_state_t){.sync_caller = NULL};
 
+#if (AUTO_DEDUP_ALL_FUNCTIONS)
+    dedup_stats stats;
+    int did_dedup = 0;
+    if(kernel_if_c != NULL) {
+        if(!(startup_flags & STARTUP_NO_DEDUP) &&
+                namespace_ref &&
+                act_self_ref != namespace_ref &&
+                namespace_get_ref(namespace_num_dedup_service) != NULL) {
+                stats = deduplicate_all_functions(0);
+                did_dedup = 1;
+        }
+    }
+#endif
     // Tag exceptions can happen when we first use an unsafe stack. We will handle these to get a stack.
     // We can also get a length violation if we need a new one.
     register_vectored_cap_exception(&temporal_exception_handle, Tag_Violation);
@@ -109,6 +124,8 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     init_cap_malloc();
 
     thread_init();
+
+    // FIXME: These really should be thread local
 
     // This creates two sockets with the UART driver and sets stdout/stderr to them
 #ifndef USE_SYSCALL_PUTS
@@ -144,11 +161,20 @@ void object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_
     stdout = NULL;
 #endif
 
-    /*
-    if(get_dedup() != NULL) {
-        deduplicate_all_functions(0);
-    } else printf("Dedup service not up\n");
-    */
+#if (AUTO_DEDUP_ALL_FUNCTIONS && AUTO_DEDUP_STATS)
+    if(did_dedup) {
+        const char* name = syscall_get_name(act_self_ref);
+        printf("%s Ran deduplication on all. Processed %ld. %ld RO. Probably funcs %ld of %ld. Other RO %ld of %ld. %ld too large\n",
+               name,
+               stats.processed,
+               stats.tried,
+               stats.of_which_func_replaced,
+               stats.of_which_func,
+               stats.of_which_data_replaced,
+               stats.of_which_data,
+               stats.too_large);
+    }
+#endif
 }
 
 // Called when main exits

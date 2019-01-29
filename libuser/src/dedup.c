@@ -47,6 +47,10 @@ act_kt get_dedup(void) {
     return dedup_service;
 }
 
+act_kt set_custom_dedup(act_kt dedup) {
+    dedup_service = dedup;
+}
+
 ERROR_T(entry_t)    deduplicate(uint64_t* data, size_t length) {
     act_kt serv = get_dedup();
     return MAKE_VALID(entry_t,message_send_c(length, 0, 0, 0, data, NULL, NULL, NULL, serv, SYNC_CALL, 0));
@@ -65,7 +69,7 @@ entry_t             deduplicate_find(sha256_hash hash) {
 
 typedef void func_t(void);
 
-capability deduplicate_cap(capability cap, int allow_create) {
+capability deduplicate_cap(capability cap, int allow_create, register_t perms) {
 
     if(get_dedup() == NULL) {
         return cap;
@@ -73,7 +77,6 @@ capability deduplicate_cap(capability cap, int allow_create) {
 
     size_t offset = cheri_getoffset(cap);
     size_t length = cheri_getlen(cap);
-    register_t perms = cheri_getperm(cap);
     register_t is_func = (perms & CHERI_PERM_EXECUTE);
 
     capability resolve = cheri_setoffset(cap, 0);
@@ -83,6 +86,7 @@ capability deduplicate_cap(capability cap, int allow_create) {
                               (deduplicate_dont_create((uint64_t*)resolve, length));
 
     if(!IS_VALID(result)) {
+        if(result.er == 0) return cap;
         printf("Deduplication error: %d\n", (int)result.er);
         CHERI_PRINT_CAP(resolve);
         sleep(0x1000);
@@ -107,13 +111,20 @@ capability deduplicate_cap(capability cap, int allow_create) {
 
 
 
-void deduplicate_all_withperms(int allow_create, register_t perms) {
+dedup_stats deduplicate_all_withperms(int allow_create, register_t perms) {
     func_t ** cap_table_globals = (func_t **)get_cgp();
     size_t n_ents = cheri_getlen(cap_table_globals)/sizeof(func_t*);
 
     size_t processed = 0;
     size_t of_which_func = 0;
-    size_t of_which_replaced = 0;
+    size_t of_which_func_replaced = 0;
+    size_t of_which_data = 0;
+    size_t of_which_data_replaced = 0;
+    size_t too_large = 0;
+    size_t tried = 0;
+#define ALIGN_COPY_SIZE 0x4000
+
+    uint64_t buffer[ALIGN_COPY_SIZE/sizeof(uint64_t)];
 
     for(size_t i = 0; i != n_ents; i++) {
         func_t * to_dedup = cap_table_globals[i];
@@ -122,25 +133,55 @@ void deduplicate_all_withperms(int allow_create, register_t perms) {
         register_t  has_perms = cheri_getperm(to_dedup);
 
         // Don't deduplicate if this is writable or if this doesn't have the permissions we want
-        if((has_perms & perms) != perms ||
-                (has_perms & (CHERI_PERM_STORE | CHERI_PERM_STORE_CAP)) ||
+        if(!to_dedup || (cheri_getlen(to_dedup) == 0) ||
+                ((has_perms & perms) != perms) ||
+                (has_perms & (CHERI_PERM_STORE | CHERI_PERM_STORE_CAP)) || // Also LOAD_CAP ? deduplicates have no tags
                 cheri_getsealed(to_dedup)) {
             continue;
         }
 
-        of_which_func++;
+        tried++;
 
-        func_t* res = (func_t*)deduplicate_cap((capability )to_dedup, allow_create);
+        int bad_align = (cheri_getoffset(to_dedup) != 0 ||
+                (cheri_getlen(to_dedup) & 0x7) != 0 ||
+                (cheri_getcursor(to_dedup) &0x7) != 0);
+        int isfunc = ((((size_t)to_dedup) & 0x3) == 0 && cheri_getoffset(to_dedup) == 0 && (cheri_getlen(to_dedup) & 0x3) == 0);
+
+        capability orig = to_dedup;
+        // A bit dangerous if we ever have offsets that we actually need
+        // This allows us to deduplicate things with bad alignment
+        // We copy it into a buffer that aligns well and pad the ends with zeros
+        size_t true_size = cheri_getlen(to_dedup) - cheri_getoffset(to_dedup);
+
+        if(bad_align) {
+            if(true_size > ALIGN_COPY_SIZE) {
+                too_large++;
+                continue;
+            }
+            buffer[true_size/8] = 0; // Pad out the last few (up to 8) bytes with zeros
+            memcpy(buffer, to_dedup, true_size); // Fill in the bytes to dedup
+            to_dedup = cheri_setbounds_exact(buffer, (true_size+7) & ~7);
+        }
+
+        if(isfunc) of_which_func++;
+        else of_which_data++;
+
+        func_t* res = (func_t*)deduplicate_cap((capability )to_dedup, allow_create, has_perms);
 
         if(res != to_dedup) {
-            of_which_replaced++;
+            res = cheri_setbounds_exact(res, true_size);
+            if(isfunc) of_which_func_replaced++;
+            else of_which_data_replaced++;
+
             cap_table_globals[i] = res;
         }
     }
 
-    printf("Ran deduplication on all. Processed %ld, Found %ld, Replaced %ld\n", processed, of_which_func, of_which_replaced);
+    return (dedup_stats){.processed = processed, .tried = tried, .of_which_func_replaced = of_which_func_replaced,
+            .of_which_func = of_which_func, .of_which_data_replaced = of_which_data_replaced, .of_which_data = of_which_data,
+            .too_large = too_large};
 }
 
-void deduplicate_all_functions(int allow_create) {
-    deduplicate_all_withperms(allow_create, CHERI_PERM_EXECUTE);
+dedup_stats deduplicate_all_functions(int allow_create) {
+    return deduplicate_all_withperms(allow_create, CHERI_PERM_EXECUTE);
 }

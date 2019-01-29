@@ -1360,7 +1360,7 @@ static void socket_internal_fulfill_cancel_wait(uni_dir_socket_fulfiller* fulfil
     uni_dir_socket_requester_fulfiller_component* access = NULL;
     VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
     if(access == NULL) return;
-    fulfiller->requester->access->fulfiller_waiting = NULL;
+    access->fulfiller_waiting = NULL;
     if(fulfiller->proxy_times != fulfiller->proxy_fin_times) fulfiller->proxyied_in->fulfiller_component.requester_waiting = NULL;
 }
 

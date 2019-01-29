@@ -13,6 +13,9 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/strstr.c
     ${CMAKE_SOURCE_DIR}/libcrt/strbprk.c
     ${CMAKE_SOURCE_DIR}/libcrt/qsort.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strcat.c
+    ${CMAKE_SOURCE_DIR}/libcrt/memchr.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strcpy.c
 )
 
 set(LIBUSER_ASM_SRCS
@@ -23,33 +26,33 @@ set(LIBUSER_ASM_SRCS
 )
 
 set(LIBUSER_SRCS
-    src/statcounters.c
-    src/assert.c
-    src/printf.c
+    src/plt_allocations.c
+    src/libuser.c
     src/object.c
+    src/dedup.c
+    src/stdio.c
+    src/sockets.c
+    src/capmalloc/capmalloc_bump.c
+    src/mmap.c
+    src/exceptions.c
+    src/namespace.c
+    src/temporal.c
+    src/msg.c
+    src/type_man.c
+    src/thread.c
+    src/printf.c
+    src/assert.c
+    src/panic.c
+    src/stdlib.c
+    src/unistd.c
+    src/ctype.c
+    src/ssleep.c
+    src/errno.c
+    src/statcounters.c
+    src/net.c
     src/virtioblk.c
     ${LWIP_DIR}/src/core/ipv4/ip4_addr.c
-    src/ctype.c
-    src/errno.c
-    src/libuser.c
-    src/mmap.c
-    src/msg.c
-    src/panic.c
-    src/ssleep.c
-    src/stdio.c
-    src/stdlib.c
-    src/thread.c
     src/act_events.c
-    src/type_man.c
-    src/net.c
-    src/dedup.c
-    src/temporal.c
-    src/unistd.c
-    src/namespace.c
-    src/exceptions.c
-    src/capmalloc/capmalloc_bump.c
-    src/sockets.c
-    src/plt_allocations.c
 )
 
 add_library(user_early STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})

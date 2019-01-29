@@ -34,6 +34,7 @@
 #include "elf.h"
 #include "mman.h"
 #include "tman.h"
+#include "thread.h"
 
 #define MAX_PROCS 0x20
 
@@ -59,10 +60,10 @@ process_t* seal_proc_for_user(process_t* process);
 process_t* unseal_proc(process_t* process);
 
 act_control_kt create_thread(process_t * process, const char* name, register_t arg, capability carg, capability pcc,
-                             char* stack_args, size_t stack_args_size, uint8_t cpu_hint);
+                             char* stack_args, size_t stack_args_size, uint8_t cpu_hint, startup_flags_e flags);
 
 act_control_kt start_process(process_t* proc,
-                             register_t arg, capability carg, char* stack_args, size_t stack_args_size, uint8_t cpu_hint);
+                             register_t arg, capability carg, char* stack_args, size_t stack_args_size, uint8_t cpu_hint, startup_flags_e flags);
 
 process_t* create_process(const char* name, capability file, int secure_load);
 

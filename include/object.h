@@ -39,6 +39,10 @@
 #include "types.h"
 #include "stddef.h"
 #include "nano/usernano.h"
+#include "thread.h"
+
+#define AUTO_DEDUP_ALL_FUNCTIONS    1
+#define AUTO_DEDUP_STATS            1
 
 extern __thread act_control_kt act_self_ctrl;
 extern __thread act_kt act_self_ref;
@@ -58,7 +62,9 @@ extern size_t __attribute__((weak)) msg_methods_nb;
 extern void __attribute__((weak)) (*ctrl_methods[]);
 extern size_t __attribute__((weak)) ctrl_methods_nb;
 
-void	object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c, capability plt_auth);
+void	object_init(act_control_kt self_ctrl, queue_t * queue,
+                    kernel_if_t* kernel_if_c, capability plt_auth,
+                    startup_flags_e startup_flags);
 
 void	ctor_null(void);
 void	dtor_null(void);

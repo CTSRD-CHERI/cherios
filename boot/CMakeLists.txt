@@ -87,8 +87,6 @@ set_source_files_properties(src/boot/nano_elf.S PROPERTIES
 )
 
 add_cherios_init(init LINKER_SCRIPT init.ld SOURCES
-    ${LIBCRT_SRCS}
-    ${CMAKE_SOURCE_DIR}/libcrt/cp0.c
     ${COMMON_SRCS}
     ${INIT_SRCS}
     ${INIT_ASM_SRCS}

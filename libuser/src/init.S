@@ -72,7 +72,9 @@ start_common:
 # a4    : code_seg_offset                                                                                               #
 # a5    : code_seg_vaddr                                                                                                #
 # a6    : tls_seg_vaddr                                                                                                 #
-                                                                                                                        #
+#                                                                                                                       #
+# s2    : startup_args                                                                                                  #
+#                                                                                                                       #
 # These fields are setup by act_register itself. Although the queue is an argument to the function                      #
 #                                                                                                                       #
 # c20   : queue                                                                                                         #
@@ -167,6 +169,7 @@ start_common:
 	clc $c7, $zero, (CAP_SIZE*4)($c11)          # process ref
     clc $c8, $zero, (CAP_SIZE*1)($c11)          # mop
     clc $c9, $zero, (CAP_SIZE*5)($c11)          # plt_auth
+    move        $a0, $s2
 
     call_func   libuser_init
 

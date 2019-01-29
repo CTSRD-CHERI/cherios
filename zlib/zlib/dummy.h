@@ -43,7 +43,5 @@ int close(int fildes);
 #define O_RDONLY 0
 
 int sprintf ( char * str, const char * format, ... );
-char * strcat ( char * destination, const char * source );
-void * memchr( const void * ptr, int value, size_t num );
 
 #endif

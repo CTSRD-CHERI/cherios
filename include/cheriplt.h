@@ -49,7 +49,7 @@
 
 // FIXME: alias needs size too
 
-#define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias) \
+#define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias, alias2) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
@@ -62,10 +62,11 @@ __asm__ (                       \
     "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     "ccall       $c1, $c2, 2 \n"\
     "nop\n"                     \
+    alias2                      \
     ".end " #name "\n"          \
 );
 
-#define PLT_STUB_CGP_ONLY_COMPLETE_TRUST(name, obj, tls, tls_reg, alias) \
+#define PLT_STUB_CGP_ONLY_COMPLETE_TRUST(name, obj, tls, tls_reg, alias, alias2) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
@@ -78,10 +79,11 @@ __asm__ (                       \
     "clcbi       $c12,%capcall20(plt_common_complete_trusting)($c25)\n"             \
     "cjr         $c12                                 \n"                           \
     "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
+    alias2                      \
     ".end " #name "\n"          \
 );
 
-#define PLT_STUB_CGP_ONLY_TRUST(name, obj, tls, tls_reg, alias) \
+#define PLT_STUB_CGP_ONLY_TRUST(name, obj, tls, tls_reg, alias, alias2) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
@@ -95,9 +97,10 @@ __asm__ (                       \
     "cjr         $c12                                 \n"                           \
     "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     ".end " #name "\n"          \
+    alias2                      \
 );
 
-#define PLT_STUB_CGP_ONLY_UNTRUST(name, obj, tls, tls_reg, alias) \
+#define PLT_STUB_CGP_ONLY_UNTRUST(name, obj, tls, tls_reg, alias, alias2) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
@@ -111,6 +114,7 @@ __asm__ (                       \
     "cjr         $c12                                 \n"                           \
     "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     ".end " #name "\n"          \
+    alias2                      \
 );
 
 typedef void common_t(void);
@@ -122,7 +126,8 @@ typedef void common_t(void);
     #define DECLARE_STUB(name, ret, sig, ...) extern ret name sig; extern struct pltstub256 name ## _data;
 
     #define GET_ALIAS(X, ...) X
-    #define DEFINE_STUB(name, ret, sig, type, ST, tls, tls_reg, ...) ST(name, PLT_UNIQUE_OBJECT(type), tls, tls_reg, GET_ALIAS(__VA_ARGS__,))
+    #define GET_ALIAS2(Y,X,...) X
+    #define DEFINE_STUB(name, ret, sig, type, ST, tls, tls_reg, ...) ST(name, PLT_UNIQUE_OBJECT(type), tls, tls_reg, GET_ALIAS(__VA_ARGS__,), GET_ALIAS2(__VA_ARGS__,))
 
     #define DECLARE_DEFAULT(type, per_thr) extern per_thr capability PLT_UNIQUE_OBJECT(type);
     #define ALLOCATE_DEFAULT(type, per_thr) per_thr capability PLT_UNIQUE_OBJECT(type);
@@ -152,7 +157,7 @@ typedef void common_t(void);
     LIST(DECLARE_STUB,)                     \
     DECLARE_PLT_INIT(type, LIST, tls_reg, tls)
 
-    #define DUMMY_HELP(name,...) ".global " #name  "_dummy; " #name  "_dummy:;"
+    #define DUMMY_HELP(name,...) ".global " #name  "_dummy; .ent " #name  "_dummy;" #name  "_dummy:; .end " #name  "_dummy;"
 
     // TODO could achieve lazy link by putting a suitable stub here. Otherwise these must be replaced before use
     #define MAKE_DUMMYS(LIST)       \

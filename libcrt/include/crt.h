@@ -77,6 +77,7 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
         if ((size != 0))
         {
             //ob_cap = cheri_setbounds_exact(ob_cap, reloc->size);
+            /*
             // FIXME Dedup needs alignment to 8 bytes
             // FIXME Dirty hack to align data in the execute section. This should be done by the compiler / linker.
             if((cheri_getperm(ob_cap) & CHERI_PERM_EXECUTE)) {
@@ -86,6 +87,7 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
                 offset +=mis_align;
                 size = (size + 7) & ~7;
             }
+            */
             ob_cap = cheri_setbounds(ob_cap, size); // Non exact until the linker generates good globals
         }
 
