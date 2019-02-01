@@ -77,7 +77,7 @@ start:
 	cmove       $c7, $c4  # process ref (NULL)
     cmove       $c8, $c4  # MOP         (NULL)
     cgetdefault $c9       # plt_auth
-
+    li          $a0, 0    # flags (NONE)
     call_func   libuser_init
 
 	# Restore arguments
