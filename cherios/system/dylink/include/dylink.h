@@ -118,13 +118,12 @@ static inline size_t ctl_get_num_table_entries(CTL_t* ctl) {
     return (cheri_getlen(ctl) / sizeof(capability)) - 9;
 }
 
-static __inline__ capability get_cgp(void) {
-    capability object;
-    __asm__ (
-    "cmove %[object], $c25 \n"
-    : [object]"=C" (object));
-    return object;
-}
+#define get_cgp() ((capability*)({                           \
+capability* __ret;                                             \
+__asm__ ("cmove %[ret], $c25" : [ret]"=C"(__ret) ::);     \
+__ret;}))
+
+
 #endif // ASSEMBLY
 
 #endif //CHERIOS_DYLINK_H
