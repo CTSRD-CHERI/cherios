@@ -146,7 +146,7 @@ private:
 
 };
 
-cuckoomap<0x1000,0x10,entry_t, nullptr> map;
+cuckoomap<0x2000,0x10,entry_t, nullptr> map;
 
 void hash_test(void) {
     // Check hashing is working...
