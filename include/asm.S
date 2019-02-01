@@ -125,6 +125,10 @@ li  $zero, 0xdead
     get_tls_sym_val \reg, \sym, c, \reg
 .endm
 
+.macro load_func f
+   clcbi    $c12, %capcall20(\f)($c25)
+.endm
+
 .macro call_func f
     clcbi   $c12, %capcall20(\f)($c25)
     cjalr   $c12, $c17
