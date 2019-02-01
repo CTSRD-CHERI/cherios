@@ -172,6 +172,10 @@ void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
 	// Turn of interrupts makes the panic print not get screwed up
 	cp0_status_ie_disable();
 
+	act_t* act_called = sched_get_current_act();
+
+	kernel_printf("Activation %s has called panic\n", act_called->name);
+
     if(act != NULL) {
         if(cheri_gettype(act) == act_ref_type)
             act = act_unseal_ref(act);
