@@ -43,6 +43,7 @@
 
 #define AUTO_DEDUP_ALL_FUNCTIONS    1
 #define AUTO_DEDUP_STATS            1
+#define AUTO_COMPACT                1
 
 extern __thread act_control_kt act_self_ctrl;
 extern __thread act_kt act_self_ref;
@@ -64,7 +65,7 @@ extern size_t __attribute__((weak)) ctrl_methods_nb;
 
 void	object_init(act_control_kt self_ctrl, queue_t * queue,
                     kernel_if_t* kernel_if_c, capability plt_auth,
-                    startup_flags_e startup_flags);
+                    startup_flags_e startup_flags, int first_thread);
 
 void	ctor_null(void);
 void	dtor_null(void);
@@ -76,8 +77,6 @@ typedef struct sync_state_t {
 _Static_assert(offsetof(sync_state_t, sync_caller) == 0, "used by assembly");
 
 extern __thread sync_state_t sync_state;
-
-extern kernel_if_t kernel_if;
 
 extern __thread long msg_enable;
 

@@ -54,6 +54,10 @@ typedef struct {
     size_t of_which_data;
     size_t of_which_data_replaced;
     size_t too_large;
+    size_t of_which_func_bytes;
+    size_t of_which_func_bytes_replaced;
+    size_t of_which_data_bytes;
+    size_t of_which_data_bytes_replaced;
 } dedup_stats;
 
 dedup_stats deduplicate_all_functions(int allow_create);

@@ -29,6 +29,7 @@
  */
 
 #include <sockets.h>
+#include <sys/deduplicate.h>
 #include "mips.h"
 #include "object.h"
 #include "cheric.h"
@@ -55,7 +56,6 @@ __thread act_kt act_self_ref  = NULL;
 __thread act_notify_kt act_self_notify_ref = NULL;
 __thread queue_t * act_self_queue = NULL;
 
-kernel_if_t kernel_if;
 int    was_secure_loaded;
 found_id_t* own_found_id;
 
@@ -78,18 +78,15 @@ std_sock std_err_sock;
 
 void object_init(act_control_kt self_ctrl, queue_t * queue,
                  kernel_if_t* kernel_if_c, capability plt_auth, // TODO remove plt_auth, we have fixed plt stubs
-                 startup_flags_e startup_flags) {
+                 startup_flags_e startup_flags, int first_thread) {
 
     act_self_ctrl = self_ctrl;
 
-    /* This comes in null for threads other than the first - the interface is not thread local */
-	if(kernel_if_c != NULL) {
-        // I feel like as we use these methods on every syscall we should remove the indirection
-        memcpy(&kernel_if, kernel_if_c, sizeof(kernel_if_t));
-        init_nano_if_sys(&plt_common_single_domain); // <- this allows us to use non sys versions by calling syscall in advance for each function
-        init_kernel_if_t(&kernel_if, self_ctrl);
+	if(first_thread) {
+        init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
+        init_kernel_if_t(kernel_if_c, self_ctrl);
     } else {
-        init_kernel_if_t_new_thread(&kernel_if, self_ctrl);
+        init_kernel_if_t_new_thread(kernel_if_c, self_ctrl);
     }
 
     int_cap = get_integer_space_cap();
@@ -103,11 +100,11 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 #if (AUTO_DEDUP_ALL_FUNCTIONS)
     dedup_stats stats;
     int did_dedup = 0;
-    if(kernel_if_c != NULL) {
+    if(first_thread) {
         if(!(startup_flags & STARTUP_NO_DEDUP) &&
                 namespace_ref &&
                 act_self_ref != namespace_ref &&
-                namespace_get_ref(namespace_num_dedup_service) != NULL) {
+                get_dedup() != NULL) {
                 stats = deduplicate_all_functions(0);
                 did_dedup = 1;
         }
@@ -115,15 +112,26 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 #endif
     // Tag exceptions can happen when we first use an unsafe stack. We will handle these to get a stack.
     // We can also get a length violation if we need a new one.
-    register_vectored_cap_exception(&temporal_exception_handle, Tag_Violation);
-    register_vectored_cap_exception(&temporal_exception_handle, Length_Violation);
+
+    if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
+        // FIXME: these functions may be moved by compaction =(
+        // FIXME: compaction needs to be called from the root level
+        // FIXME: probably best to have an init_last and do so afterwards
+        register_vectored_cap_exception(&temporal_exception_handle, Tag_Violation);
+        register_vectored_cap_exception(&temporal_exception_handle, Length_Violation);
+    }
+
 
     own_found_id = foundation_get_id();
     was_secure_loaded = (own_found_id != NULL);
 
-    init_cap_malloc();
+    if(!(startup_flags & STARTUP_NO_MALLOC)) {
+        init_cap_malloc();
+    }
 
-    thread_init();
+    if(!(startup_flags & STARTUP_NO_THREADS)) {
+        thread_init();
+    }
 
     // FIXME: These really should be thread local
 
@@ -164,14 +172,18 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 #if (AUTO_DEDUP_ALL_FUNCTIONS && AUTO_DEDUP_STATS)
     if(did_dedup) {
         const char* name = syscall_get_name(act_self_ref);
-        printf("%s Ran deduplication on all. Processed %ld. %ld RO. Probably funcs %ld of %ld. Other RO %ld of %ld. %ld too large\n",
+        printf("%s Ran deduplication on all. Processed %ld. %ld RO. Probably funcs %ld of %ld (%ld of %ld bytes). Other RO %ld of %ld (%ld of %ld bytes). %ld too large\n",
                name,
                stats.processed,
                stats.tried,
                stats.of_which_func_replaced,
                stats.of_which_func,
+               stats.of_which_func_bytes_replaced,
+               stats.of_which_func_bytes,
                stats.of_which_data_replaced,
                stats.of_which_data,
+               stats.of_which_data_bytes_replaced,
+               stats.of_which_data_bytes,
                stats.too_large);
     }
 #endif
@@ -194,3 +206,7 @@ void ctor_null(void) {
 void dtor_null(void) {
 	return;
 }
+
+
+
+#define DH(a) weak

@@ -392,7 +392,7 @@ static void load_modules(init_info_t * init_info) {
         desc.carg = init_info->idle_init.queue_fill_pre[idle_id];
         desc.stack_args = NULL;
         desc.stack_args_size = 0;
-        desc.flags = STARTUP_NO_DEDUP;
+        desc.flags = STARTUP_BASIC;
         act_control_kt ctrl = thread_start_process(thread_create_process(idle_name,idle_addr,0), &desc);
     }
 

@@ -65,7 +65,7 @@ start_common:
 #                                                                                                                       #
 # c4    : segment table                                                                                                 #
 # c5    : tls_segment_prototype                                                                                         #
-# c6    : code_write_cap (for plt stubs)                                                                                #
+# c6    : code_write_cap (for compaction)                                                                               #
 # s1    : tls_segment_offset                                                                                            #
 # a2    : data_seg_offset                                                                                               #
 # a3    : data_seg_vaddr                                                                                                #
@@ -128,6 +128,7 @@ start_common:
     cincoffset  $c20, $c13, $t1                 #   start_relocs
     cincoffset  $c21, $c13, $t2                 #   stop_relocs
     cmove       $c22, $c5                       #   tls_segment_prototype
+    move        $s3, $a4                        #   code_seg_offset
 
     # crt_init_new_globals(capability* segment_table, struct capreloc* start, struct capreloc* end)
     cmove       $c3, $c19
@@ -168,10 +169,33 @@ start_common:
 	clc $c6, $zero, (CAP_SIZE*2)($c11)          # queue
 	clc $c7, $zero, (CAP_SIZE*4)($c11)          # process ref
     clc $c8, $zero, (CAP_SIZE*1)($c11)          # mop
-    clc $c9, $zero, (CAP_SIZE*5)($c11)          # plt_auth
-    move        $a0, $s2
+    clc $c9, $zero, (CAP_SIZE*5)($c11)          # code_write
+    move        $a0, $s2                        # flags
 
     call_func   libuser_init
+
+
+.set remaining_size, (40 * 4) # Complete guess. The linker refuses to do a symbol subtraction so this is what you get
+    # Correctly bound this function. We will reach here with a global pcc
+    cgetpcc     $c12
+    cincoffset  $c12, $c12, (4 * 4)
+    csetbounds  $c12, $c12, ((remaining_size))
+    cjr         $c12
+    nop
+
+    # Call compact (will not do anything depending on flags. Easier to put condition in C)
+
+    cmove   $c3, $c19                           # segment_table
+    get_sym $c4, __start___cap_relocs           # start
+    cgetlen $t0, $c4
+    csetoffset $c5, $c4, $t0                    # end
+    #get_sym $c5, __stop___cap_relocs
+    clc     $c6, $zero, (CAP_SIZE*5)($c11)      # code_write
+    move    $a0, $s3                            # code_seg_offset
+    move    $a1, $s2                            # flags
+    clcbi   $c7, %capcall20(compact_code)($c25) # target
+
+    call_func compact_code_tramp
 
 	# Restore arguments
 	move		$a0, $s0
@@ -184,10 +208,36 @@ start_common:
 	# Call main().
 	call_func   main
 
-	# main() done. Go to msg_entry if msg_enable, call terminate otherwise
+	# main() done. Go to msg_entry if msg_enable, call object_destroy otherwise
 	get_tls_sym_val	$t0, msg_enable, d, $c17
-	bne		$t0, $zero, msg_entry
-	li      $a0, 0
+	beqz    $t0, make_call
+    load_func object_destroy
 
-	# Call object_destroy
-	call_func object_destroy
+    li      $a0, 0
+    load_func msg_entry
+
+make_call:
+    call_func_reg
+
+.end start_common
+
+# This really HAS to deduplicate, so make sure it touches no globals. It allows compact_code to modify where it returns
+.global compact_code_tramp
+.ent compact_code_tramp
+
+
+# capability compact_code(capability* segment_table, struct capreloc* start, struct capreloc* end,
+#                        char* code_seg_write, size_t code_seg_offset, startup_flags_e flags, capability ret)
+
+# trampoline accepts a target instead of ret, it jumps to the target and makes the ret argument
+# on return it jumps to the value returned by the compact_code function
+
+compact_code_tramp:
+
+cmove $c12, $c7
+cmove $c7, $c17
+call_func_reg
+cjr   $c3
+nop
+
+.end compact_code_tramp

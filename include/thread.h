@@ -36,8 +36,15 @@
 #include "tman.h"
 
 typedef enum startup_flags_e {
-    STARTUP_NONE        = 0,
-    STARTUP_NO_DEDUP    = 1,
+    STARTUP_NONE            = 0x00,
+    STARTUP_NO_DEDUP        = 0x01,
+    STARTUP_NO_COMPACT      = 0x02,
+    STARTUP_NO_EXCEPTIONS   = 0x04,
+    STARTUP_NO_MALLOC       = 0x08,
+    STARTUP_NO_THREADS      = 0x10,
+
+    STARTUP_BASIC           = STARTUP_NO_DEDUP | STARTUP_NO_COMPACT | STARTUP_NO_EXCEPTIONS |
+                                STARTUP_NO_MALLOC | STARTUP_NO_THREADS,
 } startup_flags_e;
 
 typedef void pcc_type(void);

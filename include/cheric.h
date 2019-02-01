@@ -159,6 +159,7 @@ typedef unsigned int stype;
 				    __DECONST(capability, (x)))
 #define	cheri_getbase(x)	__builtin_mips_cheri_get_cap_base(		\
 				    __DECONST(capability, (x)))
+#define cheri_gettop(x) (cheri_getbase(x) + cheri_getlen(x))
 #define	cheri_getoffset(x)	__builtin_mips_cheri_cap_offset_get(		\
 				    __DECONST(capability, (x)))
 #define	cheri_getperm(x)	__builtin_mips_cheri_get_cap_perms(		\

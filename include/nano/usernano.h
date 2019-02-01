@@ -50,7 +50,7 @@ __asm__ (                                           \
 /* Assuming you trust your memory (i.e. are secure loaded) you can call this to populate your nano kernel if and
  * then use the normal interface rather than having to use syscall repeatedly */
 
-static inline void init_nano_if_sys(common_t* mode) {
+static inline void init_nano_if_sys(void) {
     nano_kernel_if_t interface;
     size_t limit = N_NANO_CALLS;
     capability data;

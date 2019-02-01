@@ -107,6 +107,7 @@ __asm__ (
     "cmove      $c6, $c20   \n"     // queue
     "cmove      $c7, $c21   \n"     // self ctrl
     "clc        $c8, $zero, " HELP(START_OFF) "($c11)\n"
+    "cmove      $c9, $c24   \n"     // kernel_if_t
     "move       $a2, $s2    \n"    // startup flags
     // Call c land now globals are set up
     "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
@@ -139,7 +140,8 @@ __asm__ (
 
 void c_thread_start(register_t arg, capability carg, // Things from the user
                     capability* segment_table, capability tls_segment_prototype, register_t tls_segment_offset,
-                    queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start, startup_flags_e flags) {
+                    queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start, startup_flags_e flags,
+                    kernel_if_t* kernel_if_c) {
     // We have to do this before we can get any thread locals
     memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, cheri_getlen(tls_segment_prototype));
 
@@ -151,7 +153,7 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
     struct capreloc* r_stop = cheri_setoffset(r_start, cheri_getlen(r_start));
     crt_init_new_locals(segment_table, r_start, r_stop);
 
-    object_init(self_ctrl, queue, NULL, NULL, flags);
+    object_init(self_ctrl, queue, kernel_if_c, NULL, flags, 0);
 
     start(arg, carg);
 

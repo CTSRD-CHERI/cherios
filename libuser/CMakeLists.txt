@@ -30,6 +30,8 @@ set(LIBUSER_SRCS
     src/libuser.c
     src/object.c
     src/dedup.c
+    src/printf.c
+    src/assert.c
     src/stdio.c
     src/sockets.c
     src/capmalloc/capmalloc_bump.c
@@ -40,8 +42,6 @@ set(LIBUSER_SRCS
     src/msg.c
     src/type_man.c
     src/thread.c
-    src/printf.c
-    src/assert.c
     src/panic.c
     src/stdlib.c
     src/unistd.c
