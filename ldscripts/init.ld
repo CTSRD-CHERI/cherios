@@ -98,8 +98,9 @@ SECTIONS
 		*(.bss)
 	}
 
-	__start_bss = ADDR(.bss);
-	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
 
 	/*
 	 * We DO need to include these in so much as they need program headers (even if file size is zero.

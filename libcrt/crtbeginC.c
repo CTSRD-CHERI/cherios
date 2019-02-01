@@ -35,7 +35,10 @@
 #include "crt.h"
 
 extern void	__start_bss;
-extern void	__stop_bss;
+extern void __bss_size;
+
+#define BSS_START ((size_t)(&__start_bss))
+#define BSS_SIZE ((size_t)(&__bss_size))
 
 typedef unsigned long long mips_function_ptr;
 typedef void (*cheri_function_ptr)(void);
@@ -110,11 +113,10 @@ crt_init_bss(void)
 }
 
 void
-crt_init_boot_bss(void)
+crt_init_boot_bss(capability auth)
 {
-	ssize_t bss_len;
-	bss_len = (size_t)&__stop_bss - (size_t)&__start_bss;
-	bzero(&__start_bss, bss_len);
+	char* bss = cheri_incoffset(auth, BSS_START - (size_t)auth);
+	bzero(bss, BSS_SIZE);
 }
 
 void __attribute__((always_inline)) crt_init_new_globals(capability* segment_table, struct capreloc* start, struct capreloc* end) {

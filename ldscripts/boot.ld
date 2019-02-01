@@ -90,8 +90,9 @@ SECTIONS
 		*(.bss)
 	} : data
 
-	__start_bss = ADDR(.bss);
-	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
 
 	/*
 	 * No need to include anything after the following in the binary --

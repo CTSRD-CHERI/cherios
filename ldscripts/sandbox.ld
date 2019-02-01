@@ -41,6 +41,7 @@ SECTIONS
 	.data ALIGN(CAP_ALIGN): { *(.data) }
 	.bss  ALIGN(CAP_ALIGN): { *(.bss) }
 
-	__start_bss = ADDR(.bss);
-	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
 }

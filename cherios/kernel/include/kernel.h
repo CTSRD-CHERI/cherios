@@ -46,10 +46,4 @@
     #define	TIMER_INTERVAL_MIN	20000000
 #endif
 
-extern void	__start_bss;
-extern void	__stop_bss;
-
-extern char	__start_heap;
-extern char	__stop_heap;
-
 #endif /* !__KERNEL_H__ */

@@ -80,6 +80,7 @@ SECTIONS
 
     __start_bss = ADDR(.bss);
     __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
 
 	.stack ALIGN(PAGE_ALIGN): {
 		__start_exception_stack	= .;

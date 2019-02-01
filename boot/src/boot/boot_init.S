@@ -201,15 +201,8 @@ cherios_init_jump_target:
 
     cmove   $idc, $c3
 
-/*
-    clcbi   $c12, %capcall20(crt_init_boot_bss)($c25)
-    cgetbase    $t0, $c12
-    cgetlen     $t0, $c12
-    cgetoffset  $t0, $c12
-    cgetperm    $t0, $c12
-*/
-
 	# Zero BSS.
+	cgetdefault $c3
 	call_func crt_init_boot_bss
 
 	# Call C constructors.
