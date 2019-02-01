@@ -48,6 +48,7 @@
 #include "utils.h"
 
 // FIXME: alias needs size too
+#define WEAK_DUMMY(name) ".weak " #name "_dummy \n"
 
 #define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias, alias2) \
 __asm__ (                       \
@@ -58,6 +59,7 @@ __asm__ (                       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
     alias                       \
+    WEAK_DUMMY(name)            \
     "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
     "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     "ccall       $c1, $c2, 2 \n"\
@@ -75,6 +77,7 @@ __asm__ (                       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
     alias                       \
+    WEAK_DUMMY(name)            \
     "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
     "clcbi       $c12,%capcall20(plt_common_complete_trusting)($c25)\n"             \
     "cjr         $c12                                 \n"                           \
@@ -92,6 +95,7 @@ __asm__ (                       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
     alias                       \
+    WEAK_DUMMY(name)            \
     "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
     "clcbi       $c12,%capcall20(plt_common_trusting)($c25)\n"             \
     "cjr         $c12                                 \n"                           \
@@ -109,6 +113,7 @@ __asm__ (                       \
     ".ent " #name "\n"          \
     "" #name ":\n"              \
     alias                       \
+    WEAK_DUMMY(name)            \
     "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
     "clcbi       $c12,%capcall20(plt_common_untrusting)($c25)\n"                    \
     "cjr         $c12                                 \n"                           \
@@ -155,17 +160,15 @@ typedef void common_t(void);
     } type;                                 \
     DECLARE_DEFAULT(type, per_thr)          \
     LIST(DECLARE_STUB,)                     \
-    DECLARE_PLT_INIT(type, LIST, tls_reg, tls)
+    DECLARE_PLT_INIT(type, LIST, tls_reg, tls) \
+    DEFINE_DUMMYS(LIST)
 
-    #define DUMMY_HELP(name,...) ".global " #name  "_dummy; .ent " #name  "_dummy;" #name  "_dummy:; .end " #name  "_dummy;"
+    #define DUMMY_HELP(name,...) __attribute__((weak)) extern void name ## _dummy(void);
 
     // TODO could achieve lazy link by putting a suitable stub here. Otherwise these must be replaced before use
-    #define MAKE_DUMMYS(LIST)       \
-        __asm__(    SANE_ASM        \
-                    ".text\n"       \
-                    LIST(DUMMY_HELP)\
-                                    \
-    );
+    #define DEFINE_DUMMYS(LIST) LIST(DUMMY_HELP)
+    #define MAKE_DUMMYS(LIST)
+
 
     #define PLT(type, LIST) PLT_common(type, LIST,, "$c25",)
     #define PLT_thr(type, LIST) PLT_common(type, LIST,__thread,"$c26", "_tls")

@@ -37,6 +37,10 @@
 #include "cheriplt.h"
 #include "exceptions.h"
 
+.weak exception_getcause_dummy
+.weak exception_replay_dummy
+.weak exception_return_dummy
+
 #ifdef USE_EXCEPTION_STACK
     .set RED_ZONE, 0
 #else
