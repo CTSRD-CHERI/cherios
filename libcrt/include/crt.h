@@ -50,6 +50,8 @@ struct capreloc
     uint8_t object_seg_ndx;
 };
 
+#define RELOC_GET_LOC(tbl, rlc) ((capability*)(tbl[(uint8_t)(rlc->location_seg_ndx)] + rlc->capability_location))
+
 extern void __cap_table_start;
 extern void __cap_table_local_start;
 
@@ -89,6 +91,8 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
             }
             */
             ob_cap = cheri_setbounds(ob_cap, size); // Non exact until the linker generates good globals
+        } else {
+            ob_cap = cheri_setoffset(NULL, (size_t)ob_cap); // Being mean. If you don't give a size you don't get anything.
         }
 
         ob_cap = cheri_incoffset(ob_cap, offset);
