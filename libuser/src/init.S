@@ -143,6 +143,12 @@ start_common:
     cgetlen     $t0, $c13
     csetboundsexact  $c26, $c26, $t0                 # bounds for local cap tab are same as prototype
 
+    # Store these for future use
+    get_sym     $c3, crt_code_seg_offset
+    csd         $s3, $zero, 0($c3)
+    get_sym     $c3, crt_segment_table
+    csc         $c19, $zero, 0($c3)
+
     # Now we have processed any relocations that might target the prototype - we can copy from proto
     clc         $c3, $s1, 0($c19)               # dest = tls_seg
     cmove       $c4, $c22                       # src = proto_tls

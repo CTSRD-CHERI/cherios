@@ -2563,6 +2563,45 @@ foundation_create:
     dsll        $t1, $a2, CAP_SIZE_BITS
     daddiu      $t1, $t1, (FOUNDATION_ID_SIZE + CAP_SIZE)
 
+    # Precision is annoying. We add some extra metasize such that when we setbounds we don't accidentally give access
+    # to the meta region. The user should have to deal with providing us with some extra.
+
+    # This is copied from round_cheri_length in cheric.h. Its probably easier to understand in C.
+#if (SMALL_PRECISION != 64)
+    sltiu       $t2, $a0, (SMALL_OBJECT_THRESHOLD)
+    bnez        $t2, no_extra
+
+# calculate mask
+
+    dsrl        $t2, $a0, (LARGE_PRECISION-1)
+
+    daddiu      $t2, $t2, 1
+
+    dsrl        $t3, $t2, 1
+    or          $t2, $t2, $t3
+    dsrl        $t3, $t2, 2
+    or          $t2, $t2, $t3
+    dsrl        $t3, $t2, 4
+    or          $t2, $t2, $t3
+    dsrl        $t3, $t2, 8
+    or          $t2, $t2, $t3
+    dsrl        $t3, $t2, 16
+    or          $t2, $t2, $t3
+    dsrl        $t3, $t2, 32
+    or          $t2, $t2, $t3
+
+#t2 is a mask to round the base of the foundation
+
+    # calculate amount needed to ensure after
+    cgetaddr    $t3, $c3            # start of reservation
+    daddu       $t3, $t3, $t1       # earliest place imagae can be placed
+    neg         $t3, $t3
+    and         $t3, $t3, $t2       # how much to round up image placement
+    daddu       $t1, $t1, $t3       # treat as extra meta size
+
+    no_extra:
+#endif
+
     # check meta+image <= res size
     daddu       $t2, $t1, $a0
     sltu        $t3, $t0, $t2
@@ -2580,7 +2619,7 @@ foundation_create:
 
     cincoffset  $c4, $c14, $t1                       # c4 is the start of the user code/data
     dli         $t0, DEF_DATA_PERMS
-    csetboundsexact  $c4, $c4, $a0                       # c4 is users data
+    csetbounds  $c4, $c4, $a0                       # c4 is users data. FIXME: Can be longer (just gives some zeros) but should not r/w foundation ID
     # store data we will get on entry
     bnez        $a3, 1f
     candperm    $c4, $c4, $t0
@@ -2590,7 +2629,7 @@ foundation_create:
 
     # create first entry point
     cincoffset  $c3, $c3, $t1                       # skip over metadata
-    csetboundsexact  $c3, $c3, $a0                       # correctly bounded code pointer
+    csetbounds  $c3, $c3, $a0                       # correctly bounded code pointer FIXME: Can be longer (just gives some zeros) but should not r/w foundatin ID
     csetoffset  $c3, $c3, $a1                       # correctly offset entry
 
     csc         $c3, $zero, FOUNDATION_META_ENTRY_VECTOR_OFFSET($c14) # store first entry trampoline

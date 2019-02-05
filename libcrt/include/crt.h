@@ -59,7 +59,10 @@ __attribute__((weak))
 extern struct capreloc __start___cap_relocs;
 __attribute__((weak))
 extern struct capreloc __stop___cap_relocs; // Stops making sense after compaction. Use size instead.
+
 extern size_t cap_relocs_size;
+extern capability* crt_segment_table;
+extern size_t crt_code_seg_offset;
 
 // Need inlining as calling functions requires globals
 

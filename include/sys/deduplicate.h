@@ -61,7 +61,8 @@ typedef struct {
 } dedup_stats;
 
 dedup_stats deduplicate_all_functions(int allow_create);
-capability deduplicate_cap(capability cap, int allow_create, register_t perms);
+capability deduplicate_cap_precise(capability cap, int allow_create, register_t perms);
+capability deduplicate_cap(capability cap, int allow_create, register_t perms, register_t length, register_t offset);
 act_kt get_dedup(void);
 act_kt set_custom_dedup(act_kt dedup);
 

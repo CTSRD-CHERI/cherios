@@ -69,19 +69,15 @@ entry_t             deduplicate_find(sha256_hash hash) {
                                    NULL, NULL, NULL, NULL, serv, SYNC_CALL, 1);
 }
 
-typedef void func_t(void);
-
-capability deduplicate_cap(capability cap, int allow_create, register_t perms) {
+capability deduplicate_cap(capability cap, int allow_create, register_t perms, register_t length, register_t offset) {
 
     if(get_dedup() == NULL) {
         return cap;
     }
 
-    size_t offset = cheri_getoffset(cap);
-    size_t length = cheri_getlen(cap);
     register_t is_func = (perms & CHERI_PERM_EXECUTE);
 
-    capability resolve = cheri_setoffset(cap, 0);
+    capability resolve = cheri_incoffset(cap,-offset);
 
     ERROR_T(entry_t) result = (allow_create) ?
                               (deduplicate((uint64_t*)resolve, length)) :
@@ -100,22 +96,26 @@ capability deduplicate_cap(capability cap, int allow_create, register_t perms) {
 
     capability open = foundation_entry_expose(entry);
 
-    assert(cheri_getlen(open) == length);
+    assert(cheri_getlen(open) >= length);
 
     int res = memcmp(resolve, open, length);
 
     assert(res == 0);
 
-    open = cheri_andperm(cheri_setoffset(open, offset), perms);
+    open = cheri_andperm(cheri_incoffset(open, offset), perms);
 
     return open;
 }
 
+capability deduplicate_cap_precise(capability cap, int allow_create, register_t perms) {
+    size_t offset = cheri_getoffset(cap);
+    size_t length = cheri_getlen(cap);
+    return deduplicate_cap(cap, allow_create, perms, length, offset);
+}
 
+// TODO we should do a similar thing as compact and detect when relocations target the same object and re-derive
 
-dedup_stats deduplicate_all_withperms(int allow_create, register_t perms) {
-    func_t ** cap_table_globals = (func_t **)get_cgp();
-    size_t n_ents = cheri_getlen(cap_table_globals)/sizeof(func_t*);
+dedup_stats deduplicate_all_target(int allow_create, size_t ndx, capability* segment_table, struct capreloc* start, struct capreloc* end) {
 
     dedup_stats stats;
     bzero(&stats, sizeof(dedup_stats));
@@ -124,66 +124,66 @@ dedup_stats deduplicate_all_withperms(int allow_create, register_t perms) {
 
     uint64_t buffer[ALIGN_COPY_SIZE/sizeof(uint64_t)];
 
-    for(size_t i = 0; i != n_ents; i++) {
-        func_t * to_dedup = cap_table_globals[i];
+    for(struct capreloc* reloc = start; reloc != end; reloc++) {
+
         stats.processed ++;
+
+        if(reloc->object_seg_ndx != ndx || reloc->size == 0) continue;
+
+        capability* loc = RELOC_GET_LOC(segment_table, reloc);
+        capability to_dedup = *loc;
+
+        if(to_dedup == NULL || cheri_getsealed(to_dedup)) continue;
 
         register_t  has_perms = cheri_getperm(to_dedup);
 
-        // Don't deduplicate if this is writable or if this doesn't have the permissions we want
-        if(!to_dedup || (cheri_getlen(to_dedup) == 0) ||
-                ((has_perms & perms) != perms) ||
-                (has_perms & (CHERI_PERM_STORE | CHERI_PERM_STORE_CAP)) || // Also LOAD_CAP ? deduplicates have no tags
-                cheri_getsealed(to_dedup)) {
-            continue;
-        }
+        assert((has_perms & (CHERI_PERM_STORE | CHERI_PERM_STORE_CAP)) == 0);
 
         stats.tried++;
 
-        int bad_align = (cheri_getoffset(to_dedup) != 0 ||
-                (cheri_getlen(to_dedup) & 0x7) != 0 ||
-                (cheri_getcursor(to_dedup) &0x7) != 0);
-        int isfunc = ((((size_t)to_dedup) & 0x3) == 0 && cheri_getoffset(to_dedup) == 0 && (cheri_getlen(to_dedup) & 0x3) == 0);
+        uint64_t ob_size = reloc->size;
+        uint64_t ob_off = reloc->offset;
+        uint64_t ob_loc = reloc->offset;
+
+        int bad_align = ((ob_size & 0x7) != 0) ||
+                (((cheri_getcursor(to_dedup)-ob_off) &0x7) != 0);
+        int isfunc = ((((size_t)to_dedup) & 0x3) == 0) && (ob_off == 0) && ((ob_size & 0x3) == 0);
 
         capability orig = to_dedup;
-        // A bit dangerous if we ever have offsets that we actually need
-        // This allows us to deduplicate things with bad alignment
-        // We copy it into a buffer that aligns well and pad the ends with zeros
-        size_t true_size = cheri_getlen(to_dedup) - cheri_getoffset(to_dedup);
 
         if(bad_align) {
-            if(true_size > ALIGN_COPY_SIZE) {
+            if(ob_size > ALIGN_COPY_SIZE) {
                 stats.too_large++;
                 continue;
             }
-            buffer[true_size/8] = 0; // Pad out the last few (up to 8) bytes with zeros
-            memcpy(buffer, to_dedup, true_size); // Fill in the bytes to dedup
-            to_dedup = cheri_setbounds_exact(buffer, (true_size+7) & ~7);
+            buffer[ob_size/8] = 0; // Pad out the last few (up to 8) bytes with zeros
+            memcpy(buffer, cheri_incoffset(to_dedup, -ob_off), ob_size); // Fill in the bytes to dedup
+            to_dedup = cheri_incoffset(cheri_setbounds(buffer, (ob_size+7) & ~7), ob_off);
         }
 
         if(isfunc) {
             stats.of_which_func++;
-            stats.of_which_func_bytes += true_size;
+            stats.of_which_func_bytes += ob_size;
         }
         else {
             stats.of_which_data++;
-            stats.of_which_data_bytes += true_size;
+            stats.of_which_data_bytes += ob_size;
         }
 
-        func_t* res = (func_t*)deduplicate_cap((capability )to_dedup, allow_create, has_perms);
+        capability res = deduplicate_cap((capability)to_dedup, allow_create, has_perms, ob_size, ob_off);
 
         if(res != to_dedup) {
-            res = cheri_setbounds_exact(res, true_size);
+            res = cheri_setbounds(res, ob_size);
             if(isfunc) {
                 stats.of_which_func_replaced++;
-                stats.of_which_func_bytes_replaced += true_size;
+                stats.of_which_func_bytes_replaced += ob_size;
             }
             else {
                 stats.of_which_data_replaced++;
-                stats.of_which_data_bytes_replaced += true_size;
+                stats.of_which_data_bytes_replaced += ob_size;
             }
 
-            cap_table_globals[i] = res;
+            *loc = res;
         }
     }
 
@@ -199,16 +199,15 @@ dedup_stats deduplicate_all_withperms(int allow_create, register_t perms) {
 
 capability* seg_tbl_for_cmp;
 
-static int cap_tab_cmp(const void* a, const void* b) {
+static int reloc_cmp(const void* a, const void* b) {
 
     struct capreloc* start = &__start___cap_relocs;
     struct capreloc* ra = &start[*((size_t*)a)];
     struct capreloc* rb = &start[*((size_t*)b)];
 
-    capability va = *RELOC_GET_LOC(seg_tbl_for_cmp, ra);
-    capability vb = *RELOC_GET_LOC(seg_tbl_for_cmp, rb);
+    int diff = (int)ra->object - (int)rb->object; // lower address first
 
-    return (int)(va) - (int)(vb);
+    return diff == 0 ? (int)(rb->size - ra->size) : diff; // larger size first
 }
 
 #define MAP_SIZE 0x1000 // How many relocations we are willing to re-parse
@@ -263,7 +262,7 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
 
         assert(cheri_gettag(found));
 
-        size_t currently_points_to = (size_t)cheri_getbase(found);
+        size_t currently_points_to = (size_t)(found);
 
         if(code_bot <= currently_points_to && currently_points_to < code_top) {
             assert(n_to_move != MAP_SIZE);
@@ -274,7 +273,7 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
 
     // sort (Subroutine is fine as we are not yet moving)
     seg_tbl_for_cmp = segment_table;
-    qsort(need_to_move, n_to_move, sizeof(size_t), cap_tab_cmp);
+    qsort(need_to_move, n_to_move, sizeof(size_t), reloc_cmp);
 
     // now we have an ordered map into the cap table we have to perform compaction
 
@@ -303,7 +302,11 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
 
     uint32_t* to = (uint32_t*)code_seg_write;
 
-    capability last_found = NULL;
+    uint64_t last_loc, last_size;
+
+    // TODO: Currently this compact allows overlap (as this is the same behavior as the linker)
+    // TODO: We coould also have a mode where we pad to stop aliasing
+
     capability last_compact = NULL;
     for(i = 0; i != n_to_move; i++) {
 
@@ -312,26 +315,26 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
         capability* loc = RELOC_GET_LOC(segment_table, reloc);
         capability found = *loc;
 
+        uint64_t ob_loc = reloc->object;
+        uint64_t ob_off = reloc->offset;
+        uint64_t ob_size = reloc->size;
+
         // We might generate the same object at different locations. Only need to compact once.
-        if((last_found == NULL) || cheri_getbase(found) >= cheri_gettop(last_found)) {
+        if((last_compact == NULL) || ob_loc >= (last_loc+last_size)) {
 
-            assert(cheri_getoffset(found) == 0);
-
-            size_t size = cheri_getlen(found);
-
-            int mis_aligned = ((size_t)found | size) & 0x3;
+            size_t mis_aligned = ((size_t)found | ob_size) & 0x3;
 
             if(!mis_aligned) {
                 // We are copying something that was aligned to a word. Keep the target the same alignment.
 
-                size_t adjust_target = (-new_size) & 0x3;
+                size_t adjust_target = (size_t)(-new_size) & 0x3;
 
                 new_size += adjust_target;
                 code_seg_exe+=adjust_target;
                 to = (uint32_t*)(((char*)to) + adjust_target);
 
                 uint32_t* from = (uint32_t*)found;
-                for(size_t w = 0; w != size/4; w++) {
+                for(size_t w = 0; w != ob_size/4; w++) {
                     *(to++) = *(from++);
                 }
 
@@ -339,31 +342,32 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
                 // Copy byte by byte
                 char* src = (char*)found;
                 char* dst = (char*)to;
-                to = (uint32_t*)(dst + size);
+                to = (uint32_t*)(dst + ob_size);
                 while(dst != (char*)to) {
                     *(dst++) = *(src++);
                 }
 
             }
 
-            last_compact = cheri_setbounds_exact(code_seg_exe, size);
-            last_found = found;
-            new_size += size;
-            code_seg_exe +=size;
+            last_compact = cheri_setbounds(code_seg_exe, ob_size);
+            last_size = ob_size;
+            last_loc = ob_loc;
 
-            *loc = last_compact;
+            new_size += ob_size;
+            code_seg_exe +=ob_size;
 
-        } else if (found != last_found ){
-            // what we found belongs to the last object
-            size_t base_off = cheri_getbase(found) - cheri_getbase(last_found);
-            size_t off = cheri_getoffset(found);
-            size_t len = cheri_getlen(found);
+            *loc = cheri_incoffset(last_compact, ob_off);
 
-            capability sub_ob = cheri_incoffset(cheri_setbounds_exact(cheri_incoffset(last_compact, base_off), len), off);
+        } else {
+            // what we found can be derived from the last compact
+
+            assert(last_loc + last_size >= ob_loc + ob_size);
+
+            size_t base_off = ob_loc - last_loc;
+
+            capability sub_ob = cheri_incoffset(cheri_setbounds(cheri_incoffset(last_compact, base_off), ob_size), ob_off);
 
             *loc = sub_ob;
-        } else {
-            *loc = last_compact;
         }
 
     }
@@ -394,5 +398,8 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
 }
 
 dedup_stats deduplicate_all_functions(int allow_create) {
-    return deduplicate_all_withperms(allow_create, CHERI_PERM_EXECUTE);
+    size_t exe_ndx = (crt_code_seg_offset) / sizeof(capability);
+    struct capreloc* start = &__start___cap_relocs;
+    struct capreloc* end = (struct capreloc*)cheri_incoffset(start, cap_relocs_size);
+    return deduplicate_all_target(allow_create, exe_ndx, crt_segment_table, start, end);
 }

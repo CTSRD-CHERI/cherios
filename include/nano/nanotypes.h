@@ -240,6 +240,9 @@ DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 #define FOUNDATION_ID_NENT_OFFSET               48
 #define FOUNDATION_META_DATA_OFFSET             FOUNDATION_ID_SIZE
 #define FOUNDATION_META_ENTRY_VECTOR_OFFSET     (FOUNDATION_ID_SIZE + CAP_SIZE)
+
+
+// FIXME: Foundation meta size should take a length and add in the extra amount required for precision
 #define FOUNDATION_META_SIZE(N)                 (FOUNDATION_ID_SIZE + CAP_SIZE + (N * CAP_SIZE))
 
 #define RES_CERT_META_SIZE                      (3 * CAP_SIZE)

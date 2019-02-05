@@ -74,6 +74,8 @@ extern void __cap_table_start;
 extern void __cap_table_local_start;
 
 size_t cap_relocs_size;
+capability* crt_segment_table;
+size_t crt_code_seg_offset;
 
 /*
  * Symbols provided by rtendC.c, which provide us with the tails for the
