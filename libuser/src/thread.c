@@ -145,12 +145,11 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
     // We have to do this before we can get any thread locals
     memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, cheri_getlen(tls_segment_prototype));
 
-    struct capreloc* r_start = &__start___cap_relocs;
+    // The __stop___cap_relocs will be incorrect as it doesn't have size and so compaction fluffs it up =(
 
-    // Deduplication makes different symbols not comparable like this. Weirdly stop had different bounds to start.
-    //struct capreloc* r_stop = cheri_incoffset(r_start, (size_t)&__stop___cap_relocs - (size_t)&__start___cap_relocs);
-    // FIXME: Allows works with precise bounds (which we hopefully have) =/
-    struct capreloc* r_stop = cheri_setoffset(r_start, cheri_getlen(r_start));
+    struct capreloc* r_start = &__start___cap_relocs;
+    struct capreloc* r_stop = cheri_incoffset(r_start, cap_relocs_size);
+
     crt_init_new_locals(segment_table, r_start, r_stop);
 
     object_init(self_ctrl, queue, kernel_if_c, NULL, flags, 0);

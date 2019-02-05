@@ -58,7 +58,8 @@ extern void __cap_table_local_start;
 __attribute__((weak))
 extern struct capreloc __start___cap_relocs;
 __attribute__((weak))
-extern struct capreloc __stop___cap_relocs;
+extern struct capreloc __stop___cap_relocs; // Stops making sense after compaction. Use size instead.
+extern size_t cap_relocs_size;
 
 // Need inlining as calling functions requires globals
 
@@ -109,6 +110,8 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
         :[i]"i"(CTLP_OFFSET_CGP), [cgp]"C"(&__cap_table_start)
         :
         );
+    } else {
+        cap_relocs_size = (size_t)end - (size_t)start;
     }
 }
 

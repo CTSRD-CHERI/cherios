@@ -187,9 +187,9 @@ start_common:
 
     cmove   $c3, $c19                           # segment_table
     get_sym $c4, __start___cap_relocs           # start
-    cgetlen $t0, $c4
-    csetoffset $c5, $c4, $t0                    # end
-    #get_sym $c5, __stop___cap_relocs
+    get_sym_val $t0, cap_relocs_size, d, $c5
+    cincoffset $c5, $c4, $t0                    # end
+
     clc     $c6, $zero, (CAP_SIZE*5)($c11)      # code_write
     move    $a0, $s3                            # code_seg_offset
     move    $a1, $s2                            # flags

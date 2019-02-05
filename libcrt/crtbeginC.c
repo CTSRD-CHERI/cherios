@@ -73,6 +73,8 @@ static const uint64_t global_pointer_permissions =
 extern void __cap_table_start;
 extern void __cap_table_local_start;
 
+size_t cap_relocs_size;
+
 /*
  * Symbols provided by rtendC.c, which provide us with the tails for the
  * constructor and destructor arrays.
