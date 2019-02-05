@@ -97,9 +97,9 @@
 .bss
 
 
-.set align_require, 14
+.set align_require, 16
 # We would like to bound these exactly. Help with a few bits
-.p2align align_require
+.p2align align_require # FIXME: Aligning at the start wastes a load of space
 
 START_LOCALS CAP_SIZE_BITS
 
@@ -470,7 +470,7 @@ init_table_loop:
 
 nano_zero_page:
     daddiu      zero_page_tmp_1, zero_page_arg, (PHY_PAGE_SIZE) - (UNROLL_FACTOR * CAP_SIZE)
-
+// FIXME: On hardware each of these seem to take 6 cycles. Wrong window? Bandwidth issue?
 1:
     csc         zero_page_ctmp_1, zero_page_tmp_1, 0($kdc)
     csc         zero_page_ctmp_1, zero_page_tmp_1, (1*CAP_SIZE)($kdc)

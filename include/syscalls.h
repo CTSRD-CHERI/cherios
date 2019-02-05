@@ -85,6 +85,7 @@
         #define CLOCK_TO_MS(X) (uint64_t)(X >> 14)
         #define MS_TO_CLOCK(X) (((uint64_t)X) << 14)
 #else
+        #define CLOCK_TO_US(X)  ((uint64_t)((X) >> 6))
         #define CLOCK_TO_MS(X) (uint32_t)(X >> 16)
         #define MS_TO_CLOCK(X) (((uint64_t)X) << 16)
 #endif
