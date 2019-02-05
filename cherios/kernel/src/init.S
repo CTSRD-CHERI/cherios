@@ -74,8 +74,13 @@ start:
 	cjalr		$c12, $c17
 	cmove   $c18, $c11
 
+    cbts    $c3, has_thread_local
 	cmove   $idc, $c3
+# We might not get given any locals as the kernel doesn't use TLS and we discard the tls segment
+# We still require something tagged for TLS however. Just use the stack (with 0 bounds?)
+    csetbounds  $idc, $c11, $zero
 
+has_thread_local:
 	# Zero BSS.
 	call_func crt_init_bss
 
