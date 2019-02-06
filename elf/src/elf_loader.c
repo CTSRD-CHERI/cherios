@@ -219,32 +219,7 @@ cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum
 			load_PT_loads(env, out_elf, prgmp);
 
 			if(IS_SECURE(out_elf)) {
-				// We can't copy tls for a secure loaded section as we can't access it.
-				// We can fix this by a) getting programs to init their own TLS (bad)
-				// b) Having a CAPABILITY TLS register (good)
-				// for now just init a load of TLS sections just in case we want them later
-				if(out_elf->tls_size != 0) {
-					for(size_t tls_num = 0; tls_num != MAX_THREADS; tls_num++) {
-						TLS_copy(out_elf, tls_num);
-					}
-				}
-
-#ifdef CHERIOS_BOOT
-				assert(0);
-#else
-				cap_pair pr;
-
-				res_t res = mem_request(0, out_elf->maxaddr + FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES), NONE, env->handle).val;
-				assert(res != NULL);
-				entry_t e0 = foundation_create(res, out_elf->maxaddr,
-											   out_elf->loaded_process.data, out_elf->entry, MAX_FOUND_ENTRIES, 0);
-				env->printf("Secure foundation size: %lx. TLS base. \n", out_elf->maxaddr);
-				assert(e0 != NULL);
-
-				out_elf->secure_entry = e0;
-				out_elf->foundation_res = res;
-#endif
-
+                assert(0);
 			}
 
         case storage_thread:
@@ -343,7 +318,7 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 					}
 				}
 			case storage_process:
-                res_size_needed = FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES) + contig_size;
+                res_size_needed = FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES, contig_size) + contig_size;
                 res_for_found = mem_request(0, res_size_needed, NONE, env->handle).val;
                 e0 = foundation_create(res_for_found, contig_size, out_im->load_type.secure.contig_wr,
 						out_im->entry, MAX_FOUND_ENTRIES, 0);

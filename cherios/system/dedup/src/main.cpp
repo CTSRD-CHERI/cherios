@@ -200,7 +200,7 @@ entry_t create(uint64_t* data, size_t length) {
 
     if(result->val != nullptr) return result->val;
 
-    res_t res = cap_malloc(FOUNDATION_META_SIZE(1) + length);
+    res_t res = cap_malloc(FOUNDATION_META_SIZE(1, length) + length);
 
     entry_t new_entry = foundation_create(res, length, data, 0, 1, 1);
 

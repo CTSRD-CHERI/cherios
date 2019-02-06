@@ -243,7 +243,7 @@ DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 
 
 // FIXME: Foundation meta size should take a length and add in the extra amount required for precision
-#define FOUNDATION_META_SIZE(N)                 (FOUNDATION_ID_SIZE + CAP_SIZE + (N * CAP_SIZE))
+#define FOUNDATION_META_SIZE(N,L)                 (FOUNDATION_ID_SIZE + CAP_SIZE + (N * CAP_SIZE) + round_cheri_length(L).mask)
 
 #define RES_CERT_META_SIZE                      (3 * CAP_SIZE)
 
