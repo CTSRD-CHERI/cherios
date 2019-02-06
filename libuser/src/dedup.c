@@ -85,7 +85,7 @@ capability deduplicate_cap(capability cap, int allow_create, register_t perms, r
 
     if(!IS_VALID(result)) {
         if(result.er == 0) return cap;
-        printf("Deduplication error: %d\n", (int)result.er);
+        printf("Deduplication error: %d. ac: %d. perms: %lx. len %lx. off %lx\n", (int)result.er, allow_create, perms, length, offset);
         CHERI_PRINT_CAP(resolve);
         sleep(0x1000);
         assert(0);
@@ -98,11 +98,13 @@ capability deduplicate_cap(capability cap, int allow_create, register_t perms, r
 
     assert(cheri_getlen(open) >= length);
 
+    open = cheri_incoffset(open, offset);
+
     int res = memcmp(resolve, open, length);
 
     assert(res == 0);
 
-    open = cheri_andperm(cheri_incoffset(open, offset), perms);
+    open = cheri_andperm(open, perms);
 
     return open;
 }
@@ -151,6 +153,8 @@ dedup_stats deduplicate_all_target(int allow_create, size_t ndx, capability* seg
 
         capability orig = to_dedup;
 
+        uint64_t size_to_dedup = ob_size;
+
         if(bad_align) {
             if(ob_size > ALIGN_COPY_SIZE) {
                 stats.too_large++;
@@ -158,7 +162,8 @@ dedup_stats deduplicate_all_target(int allow_create, size_t ndx, capability* seg
             }
             buffer[ob_size/8] = 0; // Pad out the last few (up to 8) bytes with zeros
             memcpy(buffer, cheri_incoffset(to_dedup, -ob_off), ob_size); // Fill in the bytes to dedup
-            to_dedup = cheri_incoffset(cheri_setbounds(buffer, (ob_size+7) & ~7), ob_off);
+            size_to_dedup = (ob_size+7) & ~7;
+            to_dedup = cheri_incoffset(cheri_setbounds(buffer, size_to_dedup), ob_off);
         }
 
         if(isfunc) {
@@ -170,7 +175,7 @@ dedup_stats deduplicate_all_target(int allow_create, size_t ndx, capability* seg
             stats.of_which_data_bytes += ob_size;
         }
 
-        capability res = deduplicate_cap((capability)to_dedup, allow_create, has_perms, ob_size, ob_off);
+        capability res = deduplicate_cap((capability)to_dedup, allow_create, has_perms, size_to_dedup, ob_off);
 
         if(res != to_dedup) {
             res = cheri_setbounds(res, ob_size);
@@ -333,14 +338,14 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
                 code_seg_exe+=adjust_target;
                 to = (uint32_t*)(((char*)to) + adjust_target);
 
-                uint32_t* from = (uint32_t*)found;
+                uint32_t* from = (uint32_t*)((char*)found - ob_off);
                 for(size_t w = 0; w != ob_size/4; w++) {
                     *(to++) = *(from++);
                 }
 
             } else {
                 // Copy byte by byte
-                char* src = (char*)found;
+                char* src = ((char*)found) - ob_off;
                 char* dst = (char*)to;
                 to = (uint32_t*)(dst + ob_size);
                 while(dst != (char*)to) {
