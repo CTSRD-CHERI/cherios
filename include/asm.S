@@ -364,6 +364,10 @@ ccall       \code, \data, \select
 nop
 .endm
 
+.macro trap
+    teqi        $zero, 0
+.endm
+
 .macro for_each_reg caps_rem, macro index, global, head, save_ls:vararg
     .if \caps_rem == 0
         foreachi \macro, \index, \global, \head, \save_ls
