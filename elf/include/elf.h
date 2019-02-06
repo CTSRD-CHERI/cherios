@@ -31,6 +31,14 @@
 #ifndef __ELF_H
 #define __ELF_H
 
+#define ALLOW_SECURE
+
+#ifdef ALLOW_SECURE
+#define IS_SECURE(im) ((im)->secure_loaded)
+#else
+#define IS_SECURE(im) 0
+#endif
+
 #include "mips.h"
 #include "stdarg.h"
 #include "nano/nanotypes.h"
@@ -151,10 +159,6 @@ typedef struct image {
 	/* Pointer to file for when we need the headers again*/
 	Elf64_Ehdr *hdr;
 
-	capability seg_table[MAX_SEGS];
-
-	capability tls_prototype; // The prototype for tls - actually a part of data
-	capability code_write_cap; // Needed for PLT stubs. I don't like having this, we should move the stub data
 	size_t tls_index;	// 0 if none
 	size_t data_index;
 	size_t code_index;
@@ -162,13 +166,30 @@ typedef struct image {
 	size_t tls_vaddr;
 	size_t code_vaddr;
 	size_t data_vaddr;
+	size_t image_size;
 
-	size_t tls_size;
+	size_t tls_mem_size;
+	size_t tls_fil_size;
 	size_t tls_num;
 
 	size_t entry;
 
-	size_t secure_loaded;
+	int secure_loaded;
+
+	union {
+		struct {
+			char* contig_wr;
+			char* contig_ex;
+			entry_t secure_entry;
+			res_t foundation_res;
+		} secure;
+		struct {
+			capability seg_table[MAX_SEGS];
+			capability tls_prototype; // The prototype for tls - actually a part of data
+			capability code_write_cap; // Needed for PLT stubs. I don't like having this, we should move the stub data
+		} basic;
+	} load_type;
+
 } image;
 
 /* Currently the only supported models */
@@ -179,7 +200,10 @@ enum e_storage_type {
 };
 
 static inline capability make_global_pcc(image* im) {
-	capability pcc = im->seg_table[im->code_index];
+
+    if(im->secure_loaded) return NULL;
+
+	capability pcc = im->load_type.basic.seg_table[im->code_index];
 	pcc = cheri_setoffset(pcc, im->entry - im->code_vaddr);
 	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
 							  | CHERI_PERM_LOAD_CAP | CHERI_PERM_CCALL));
@@ -199,7 +223,7 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
 cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum e_storage_type store_type);
 
 int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type store_type);
-int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf);
+int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_load);
 
 #define MAX_THREADS 4 // We have to overallocate this much.
 #define MAX_FOUND_ENTRIES 4

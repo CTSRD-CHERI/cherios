@@ -247,6 +247,10 @@ DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 
 #define RES_CERT_META_SIZE                      (3 * CAP_SIZE)
 
+#define RES_CERT_OWNER_OFF 0
+#define RES_CERT_CODE_OFF CAP_SIZE
+#define RES_CERT_DATA_OFF (2*CAP_SIZE)
+
 #ifdef HARDWARE_qemu
 // In queue we will use the cause mips directly and propagate all HW bits, and no software bits.
     #define INTERRUPTS_N_HW     5

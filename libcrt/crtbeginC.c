@@ -74,7 +74,7 @@ extern void __cap_table_start;
 extern void __cap_table_local_start;
 
 size_t cap_relocs_size;
-capability* crt_segment_table;
+capability crt_segment_table[MAX_SEGS];
 size_t crt_code_seg_offset;
 
 /*

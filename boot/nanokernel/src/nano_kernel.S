@@ -2674,24 +2674,41 @@ foundation_create:
 
 
 ########################################################################################### (safe)
-# void foundation_enter(entry_t entry)
+# void foundation_enter(c3...c7, entry_t entry, locked_t lock_idc)
 .global foundation_enter
 foundation_enter:
 ###########################################################################################
 
+# Don't use argument registers for tmps so we can use foundation_enter to wrap function calls
     dli         $t3, FOUND_ENTRY_TYPE
-    csetoffset  $c4, $kdc, $t3
-    cunseal     $c3, $c3, $c4
+    csetoffset  $c13, $kdc, $t3
+    cunseal     $c8, $c8, $c13
 
-    clc         $c12, $zero, 0($c3)                     # get entry pcc
-    csetoffset  $c3, $c3, $zero
-    clc         $c4, $zero, current_context($kr1c)       # get current context
-    clc         $idc, $zero, FOUNDATION_ID_SIZE($c3)    # get entry data
+    clc         $c12, $zero, 0($c8)                     # get entry pcc
+    csetoffset  $c8, $c8, $zero
+    clc         $c13, $zero, current_context($kr1c)     # get current context
+    cbtu        $c9, no_idc
+    csc         $c8, $zero, CONTEXT_OFFSET_FOUND($c13)  # set current context to point to id of foundation
 
-    csc         $c3, $zero, CONTEXT_OFFSET_FOUND($c4)     # set current context to point to id of foundation
+unlock_idc:
+
+    dli         $t3, FOUND_LOCKED_TYPE
+    csetoffset  $c13, $kdc, $t3
+    cunseal     $c9, $c9, $c13
+
+    li          $t3, FOUNDATION_ID_SIZE
+    csetboundsexact $c13, $c8, $t3                      # c13 is the found_id to compare
+    clc         $c15, $zero, RES_CERT_OWNER_OFF($c9)    # c15 is the found_if of the locked_idc
+    cexeq       $t3, $c13, $c14
+    beqz        $t3, nano_er
+    clc         $c9, $zero, RES_CERT_DATA_OFF($c9)
+
+no_idc:
+    clc         $c8, $zero, FOUNDATION_ID_SIZE($c8)     # get entry data
+    cclearlo    EN2(c13, c14)
 
     cjr         $c12
-    cclearlo    EN2(c3,c4)
+    cmove       $idc, $c9                               # must only set idc on the way out as it will change exception handler
 
 ########################################################################################### (safe)
 # capability foundation_entry_expose(entry_t entry)
@@ -2706,6 +2723,18 @@ foundation_entry_expose:
     cbts        $c4, nano_er
     clc         $c3, $zero, 0($c3)                      # get pcc
     cclearlo    EN1(c4)
+    CRETURN
+
+########################################################################################### (safe)
+# register_t foundation_entry_vaddr(entry_t entry)
+.global foundation_entry_vaddr
+foundation_entry_vaddr:
+###########################################################################################
+    cincoffset  $c4, $kdc, FOUND_ENTRY_TYPE
+    cunseal     $c3, $c3, $c4                           # unseal foundation
+    clc         $c3, $zero, 0($c3)                      # get the entry
+    cgetaddr    $v0, $c3                                # get its address
+    cclearlo    EN2(c3, c4)
     CRETURN
 
 ########################################################################################### (safe)
@@ -2845,13 +2874,13 @@ rescap_take_locked_cert_shared:
     csetboundsexact   $c4, $c4, $t1
 
     # store cert
-    csc         $c7, $zero, 0($c6)
+    csc         $c7, $zero, RES_CERT_OWNER_OFF($c6)
     # store user code
     candperm    $c5, $c3, $a0
-    csc         $c5, $zero, CAP_SIZE($c6)
+    csc         $c5, $zero, RES_CERT_CODE_OFF($c6)
     # store user data
     candperm    $c5, $c4, $a0
-    csc         $c5, $zero, (2*CAP_SIZE)($c6)
+    csc         $c5, $zero, RES_CERT_DATA_OFF($c6)
 
     # store out code
     csc         $c3, $zero, 0($c13)
@@ -2882,13 +2911,13 @@ rescap_check_cert:
     cunseal     $c5, $c3, $c5
 
     # get user code
-    clc         $c3, $zero, CAP_SIZE($c5)
+    clc         $c3, $zero, RES_CERT_CODE_OFF($c5)
     csc         $c3, $zero, 0($c4)
     # get user data
-    clc         $c3, $zero, (2*CAP_SIZE)($c5)
+    clc         $c3, $zero, RES_CERT_DATA_OFF($c5)
     csc         $c3, $zero, CAP_SIZE($c4)
     # get found id
-    clc         $c3, $zero, 0($c5)
+    clc         $c3, $zero, RES_CERT_OWNER_OFF($c5)
 
     cclearlo    EN2(c4,c5)
     CRETURN
@@ -2917,14 +2946,14 @@ rescap_unlock:
     candperm    $c5, $c5, $t0
 
     # load capability this is locked for
-    clc         $c6, $zero, 0($c3)
+    clc         $c6, $zero, RES_CERT_OWNER_OFF($c3)
     cexeq       $t0, $c6, $c5               # only proper guy can unlock
     beqz        $t0, 1f
     cmove       $c5, $c4
 
     # load return stuffs
-    clc         $c4, $zero, (2*CAP_SIZE)($c3)
-    clc         $c3, $zero, (CAP_SIZE)($c3)
+    clc         $c4, $zero, RES_CERT_DATA_OFF($c3)
+    clc         $c3, $zero, RES_CERT_CODE_OFF($c3)
 
     # store to out
     csc         $c3, $zero, 0($c5)

@@ -115,12 +115,16 @@
     ITEM(foundation_create, entry_t,                                                                            \
     (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries, register_t, is_public),   \
     __VA_ARGS__)\
-/* Enter a foundation created with foundation_create or foundation_new_entry */\
-    ITEM(foundation_enter, void, (entry_t entry), __VA_ARGS__)\
+/* Enter a foundation created with foundation_create or foundation_new_entry. The entry will be jumped to, and optionally a locked idc will be unclocked into idc*/\
+/* c8 will contain the data componant of the foundation. c9 will have a copy of idc. c12 will be correctly set to target as well.
+ * This function acts a whole lot like ccall entry, lock_idc but with foundations instead of sealed objects*/\
+    ITEM(foundation_enter, void, (capability, c3, capability, c4, capability, c5, capability, c6, capability, c7, entry_t, entry, locked_t, lock_idc), __VA_ARGS__)\
 /* Unlock a public foundation */\
     ITEM(foundation_entry_expose, capability, (entry_t, entry), __VA_ARGS__)\
 /* Gets the -canonical- foundation id for an entry */\
     ITEM(foundation_entry_get_id, found_id_t*, (entry_t, entry), __VA_ARGS__)\
+/* Get the vaddr of an entry point. Mostly useful for debugging, this is not a capability */\
+    ITEM(foundation_entry_vaddr, register_t, (entry_t, entry), __VA_ARGS__)\
 /* Exit a foundation */\
     ITEM(foundation_exit, void, (void), __VA_ARGS__)\
 /* Create a new entry from within a foundation */\

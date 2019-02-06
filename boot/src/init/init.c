@@ -167,7 +167,7 @@ init_elem_t init_list[] = {
 //    B_DENTRY(m_user, "server.elf", 0, 1)
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
-    B_PENTRY(m_secure,    "foundation_test.elf", 0, 0)
+    B_PENTRY(m_secure,    "foundation_test.elf", 0, 1)
     B_PENTRY(m_nginx, "nginx.elf",NGINX_ARGS_L,1)
     B_PENTRY(m_user, "top.elf", 0, 1)
 #if 0

@@ -32,46 +32,81 @@
 .set nobopt
 .set noat
 
-    .data
-
-.align  8
-enter_once_lock: .space 8
+#define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+#include "asm.S"
+#include "syscalls.h"
 
 	.text
 	.global start
 	.ent start
 start:
-// This is the secure version of init. c3 will contain the entry_t. c0 will contain c3. idc will contain c0
 
-// First undo this mixup. c0 and c3 will be sensible. idc will contain our entry_t. start_common may want to keep this.
+# This is the secure version of init.
 
-    cmove       $c4, $idc
-    cmove       $idc, $c3
-    cgetdefault $c3
-    csetdefault $c4
+# See init.S for most of the arguments. Some we will have to construct ourself from a few new extra arguments
 
-// Now enforce start once semantics. The entrance lock is set to 1 and never unset.
-// If found set, we just die.
+# The following arguments are no longer provided: c4 (seg table), c5 (tls proto), c6 (code write cap)
+# The following are but shouldn't: c11 (stack), ??c20 (queue)??
 
-    dla         $t0, enter_once_lock
-    cincoffset  $c5, $c4, $t0
+# And the new arguments:
 
-    li          $t1, 1
+# idc/c9 : probably null
+# c8    : or contiguous data
+# a7    : the size of the segments before the tls segment
+# s0    : the size of the tls segment
 
-    clld        $t0, $c5
-retry:
-    bnez        $t0, secure_double_entry
-    cscd        $t0, $t1, $c5
-    beqz        $t0, retry
-    clld        $t0, $c5
+# First build a segment table
+# WARN: We assume the order of segments is code/data and there are no there are no others (aprt from the one TLS)
 
-// TODO we don't trust our stack, so make a new one and copy all stack arguments
+    dla         $t0, crt_segment_table  # This is global so we can do relative to idc
+    cincoffset  $c4, $c8, $t0
+.set MAX_SEGS, 4 # FIXME. Grab from the correct header
+    csetbounds  $c4, $c4, MAX_SEGS * CAP_SIZE
 
-//Finally go to normal start_common
+    cincoffset  $c13, $c8, $a5      # increment to code_vaddr
+    dsubu       $t0, $a3, $a5       # diff between data and code
+    csetbounds  $c6, $c13, $t0      # code_write_cap
+
+    cgetpcc     $c13                # derive the same cap but from pcc
+    cgetaddr    $t1, $c6
+    cgetaddr    $t2, $c13
+    dsubu       $t1, $t1, $t2
+    cincoffset  $c13, $c13, $t1
+    csetbounds  $c13, $c13, $t0
+    csc         $c13, $a4, 0($c4)   # Code segment
+
+    beqz        $s1, no_tls
+    cnull       $c5
+
+    cincoffset  $c13, $c8, $a7      # increment to TLS section we allocated for the first thread
+    csetbounds  $c13, $c13, $s0     # size of tls seg
+    csc         $c13, $s1, 0($c4)   # Data segment
+    cincoffset  $c5, $c8, $a6       # tls_proto
+    csetbounds  $c5, $c5, $s3       # tls_proto is sized by the file size
+
+no_tls:
+
+# Now enforce start once semantics. We use will use setting the data segment as a lock
+
+    cincoffset  $c13, $c8, $a3      # increment to data_vaddr
+    dsubu       $t0, $a7, $a3       # diff between size and data
+    csetbounds  $c13, $c13, $t0
+
+    cincoffset  $c14, $c4, $a2      # seg_table data entry
+
+retry_set:
+    cllc        $c15, $c14
+    cbts        $c15, secure_double_entry
+    cscc        $t0, $c13, $c14     # Data segment
+    beqz        $t0, retry_set
+    nop
+
+# TODO we don't trust our stack, so make a new one and copy all stack arguments
+
+# Now we can go to common code
 	j start_common
     nop
 
 secure_double_entry:
-// FIXME: A better faulting sequence
-    cfromptr    $c3, $c3, $zero
-    cld         $t0, $zero, 0($c3) // Will trigger an exception
+    trap

@@ -72,6 +72,7 @@ start_common:
 # a4    : code_seg_offset                                                                                               #
 # a5    : code_seg_vaddr                                                                                                #
 # a6    : tls_seg_vaddr                                                                                                 #
+# s3    : the size of the tls prototype segment                                                                         #
 #                                                                                                                       #
 # s2    : startup_args                                                                                                  #
 #                                                                                                                       #
@@ -128,7 +129,7 @@ start_common:
     cincoffset  $c20, $c13, $t1                 #   start_relocs
     cincoffset  $c21, $c13, $t2                 #   stop_relocs
     cmove       $c22, $c5                       #   tls_segment_prototype
-    move        $s3, $a4                        #   code_seg_offset
+    move        $s4, $a4                        #   code_seg_offset
 
     # crt_init_new_globals(capability* segment_table, struct capreloc* start, struct capreloc* end)
     cmove       $c3, $c19
@@ -145,14 +146,12 @@ start_common:
 
     # Store these for future use
     get_sym     $c3, crt_code_seg_offset
-    csd         $s3, $zero, 0($c3)
-    get_sym     $c3, crt_segment_table
-    csc         $c19, $zero, 0($c3)
+    csd         $s4, $zero, 0($c3)
 
     # Now we have processed any relocations that might target the prototype - we can copy from proto
     clc         $c3, $s1, 0($c19)               # dest = tls_seg
     cmove       $c4, $c22                       # src = proto_tls
-    cgetlen     $a0, $c4                        # length = length(proto_tls)
+    move        $a0, $s3                        # length = length(proto_tls)
     call_func   memcpy
 
     # Now we process relocations that target our TLS (must happen after the proto copy)
@@ -197,7 +196,7 @@ start_common:
     cincoffset $c5, $c4, $t0                    # end
 
     clc     $c6, $zero, (CAP_SIZE*5)($c11)      # code_write
-    move    $a0, $s3                            # code_seg_offset
+    move    $a0, $s4                            # code_seg_offset
     move    $a1, $s2                            # flags
     clcbi   $c7, %capcall20(compact_code)($c25) # target
 
@@ -207,6 +206,7 @@ start_common:
 	move		$a0, $s0
 	clc		    $c3, $zero, 0($c11)
 
+# FIXME: This is bad! if our stack is not precise we will steal bytes not meant for us
 	# Reclaim our stack frame and any stack passed arguments needed for init
 	cgetlen     $t0, $c11
 	csetoffset  $c11, $c11, $t0

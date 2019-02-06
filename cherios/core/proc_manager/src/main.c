@@ -28,6 +28,7 @@
  * SUCH DAMAGE.
  */
 
+#include <elf.h>
 #include "object.h"
 #include "misc.h"
 #include "proc.h"
@@ -95,8 +96,10 @@ __asm__ (
 	SANE_ASM
 	".text\n"
 	".global secure_entry_trampoline\n"
+	".ent secure_entry_trampoline\n"
 	"secure_entry_trampoline: ccall $c1, $c2, 2\n"
 	"nop\n"
+ 	".end secure_entry_trampoline "
 );
 extern void secure_entry_trampoline(void);
 
@@ -122,7 +125,11 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
     queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size, process->mop);
 
-	frame.mf_t0 = cheri_getbase(im->seg_table[im->code_index]);
+    if(process->im.secure_loaded) {
+    	frame.mf_t0 = foundation_entry_vaddr(process->im.load_type.secure.secure_entry) - process->im.entry;
+    } else {
+		frame.mf_t0 = cheri_getbase(im->load_type.basic.seg_table[im->code_index]);
+    }
 
     if(queue == NULL) {
         cap_pair pair = env.alloc(0x100, &env);
@@ -135,10 +142,8 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 	if(process->im.secure_loaded) {
 		frame.cf_pcc = &secure_entry_trampoline;
 		// we need c3 for the trampoline. C0 would be useless anyway as it points to the unsecure copy
-		// frame.cf_c0 = frame.cf_c3;
-		// frame.cf_c1 = STUB_STRUCT_RO(foundation_enter)->c1;
-		// frame.cf_c2 = PLT_UNIQUE_OBJECT(nano_kernel_if_t);
-		// frame.cf_c3 = process->im.secure_entry;
+  		frame.cf_c1 = &foundation_enter_dummy;
+	 	frame.cf_c2 = &PLT_UNIQUE_OBJECT(nano_kernel_if_t);
 	}
 
 	frame.mf_s2 = flags;
@@ -178,8 +183,6 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 
 	process_t* proc;
 
-	assert(secure_load == 0);
-
 	/* We can save some work by just copying an already loaded image. Later on we will allow some sharing, e.g. of
     * const data / text */
 	image* old_im = find_process(name);
@@ -194,8 +197,9 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 	env.handle = proc->mop;
 
 	if(old_im == NULL) {
-		elf_loader_mem(&env, (Elf64_Ehdr*)file, &proc->im);
+		elf_loader_mem(&env, (Elf64_Ehdr*)file, &proc->im, secure_load);
 	} else {
+	    assert(secure_load == old_im->secure_loaded);
 		create_image(&env, old_im, &proc->im, storage_process);
 	}
 
