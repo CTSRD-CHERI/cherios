@@ -343,7 +343,7 @@ int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_loa
 	}
 
 #ifndef ALLOW_SECURE
-	assert(!secure_load && "Boot / Init cannot secure load")
+	assert(!secure_load && "Boot / Init cannot secure load");
 #endif
 
 	bzero(out_elf, sizeof(image));
