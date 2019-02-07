@@ -38,3 +38,5 @@
 start:
 	j start_common
     nop
+
+    .end start

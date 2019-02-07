@@ -31,13 +31,32 @@
 #ifndef __ELF_H
 #define __ELF_H
 
-#define ALLOW_SECURE
+#ifndef CHERIOS_BOOT
+	#define ALLOW_SECURE
+#endif
 
 #ifdef ALLOW_SECURE
 #define IS_SECURE(im) ((im)->secure_loaded)
 #else
 #define IS_SECURE(im) 0
 #endif
+
+#define EHDR_OFF_e_phnum 56
+#define EHDR_OFF_e_phoff 32
+
+#define PHDR_SIZE 56
+#define PHDR_OFF_p_type 0
+#define PHDR_OFF_p_flags 4
+#define PHDR_OFF_p_offset 8
+#define PHDR_OFF_p_vaddr 16
+#define PHDR_OFF_p_paddr 24
+#define PHDR_OFF_p_filesz 32
+#define PHDR_OFF_p_memsz 40
+#define PHDR_OFF_p_align 48
+
+#define MAX_SEGS 8
+
+#ifndef __ASSEMBLY__
 
 #include "mips.h"
 #include "stdarg.h"
@@ -68,6 +87,11 @@ typedef struct {
 	Elf64_Half	e_shnum;	/*  Number  of  section  header  entries  */
 	Elf64_Half	e_shstrndx;	/*  Section  name  string  table  index  */
 }  Elf64_Ehdr;
+
+#define CHK_EHDR(X) _Static_assert(__CONCAT(EHDR_OFF_, X) == __offsetof(Elf64_Ehdr, X), #X " offset macro is wrong")
+
+CHK_EHDR(e_phnum);
+CHK_EHDR(e_phoff);
 
 enum Elf_Ident {
 	EI_MAG0		= 0, /* 0x7F */
@@ -107,6 +131,18 @@ typedef struct {
 	Elf64_Xword	p_align;	/*  Alignment  of  segment  */
 }  Elf64_Phdr;
 
+_Static_assert(sizeof(Elf64_Phdr) == PHDR_SIZE, "Wrong phdr size");
+#define CHK_PHDR(X) _Static_assert(__CONCAT(PHDR_OFF_, X) == __offsetof(Elf64_Phdr, X), #X " offset macro is wrong")
+CHK_PHDR(p_type);
+CHK_PHDR(p_flags);
+CHK_PHDR(p_offset);
+CHK_PHDR(p_vaddr);
+CHK_PHDR(p_paddr);
+CHK_PHDR(p_filesz);
+CHK_PHDR(p_memsz);
+CHK_PHDR(p_align);
+
+
 /* Calling environment for loader */
 typedef struct Elf_Env {
 	cap_pair (*alloc)(size_t size, struct Elf_Env * handle);
@@ -126,9 +162,6 @@ enum e_section_uniqueness {
 #define section_table_hash(X, T) (((X) >> (T)->hash_shift) % (T)->hash_mod)
 #define SHT_ENTRY(X, T) (((T)->table)[section_table_hash((X),(T))])
 #define SYMBOL_CAP(X, T) (SHT_ENTRY(X, T).section_cap + (X - SHT_ENTRY(X,T).image_offset))
-
-
-#define MAX_SEGS 8
 
 typedef struct image_old {
 	/* Pointer to file for when we need the headers again*/
@@ -225,8 +258,11 @@ cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum
 int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type store_type);
 int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_load);
 
-#define MAX_THREADS 4 // We have to overallocate this much.
-#define MAX_FOUND_ENTRIES 4
+#endif
+
+#define MAX_THREADS 4 // We no longer over allocate TLS by this much, but this number is still used in proc man
+					  // and for secure loading
+#define MAX_FOUND_ENTRIES (MAX_THREADS + 1) // 1 for new threads, the rest for return invocations for each thread
 
 #define PT_NULL 	0
 #define PT_LOAD 	1

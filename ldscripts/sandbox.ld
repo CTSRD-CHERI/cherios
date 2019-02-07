@@ -35,8 +35,11 @@
 
 INCLUDE "common.ld"
 
+ENTRY(start)
 SECTIONS
 {
+    . = SIZEOF_HEADERS;
+
 	.text ALIGN(CAP_ALIGN): { *(.text) }
 	.data ALIGN(CAP_ALIGN): { *(.data) }
 	.bss  ALIGN(CAP_ALIGN): { *(.bss) }

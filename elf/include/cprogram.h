@@ -31,6 +31,13 @@
 #ifndef CHERIOS_CPROGRAM_H
 #define CHERIOS_CPROGRAM_H
 
+#define DEFAULT_STACK_SIZE 0x10000
+#define DEFAULT_STACK_ALIGN_p2 6
+#define DEFAULT_STACK_ALIGN (1 << DEFAULT_STACK_ALIGN_p2)
+
+
+#ifndef __ASSEMBLY__
+
 #include "cheric.h"
 #include "elf.h"
 #include "queue.h"
@@ -40,5 +47,7 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
 
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
                      capability pcc, char* stack_args, size_t stack_args_size, mop_t mop);
+
+#endif
 
 #endif //CHERIOS_CPROGRAM_H

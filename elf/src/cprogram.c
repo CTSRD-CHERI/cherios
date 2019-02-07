@@ -34,6 +34,7 @@
 #include "string.h"
 #include "syscalls.h"
 #include "mman.h"
+#include "assert.h"
 
 act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop, image* im) {
     reg_frame_t frame;
@@ -51,9 +52,10 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
                      capability pcc, char* stack_args, size_t stack_args_size, mop_t mop) {
 
-    size_t stack_size = 0x10000;
-    size_t stack_align = 0x40;
-    size_t queue_size = ((sizeof(queue_default_t) + stack_align - 1) / stack_align) * stack_align;
+    size_t queue_size = align_up_to(sizeof(queue_default_t), DEFAULT_STACK_ALIGN);
+    size_t stack_size = im->secure_loaded ?  queue_size : DEFAULT_STACK_SIZE;
+    size_t stack_align = DEFAULT_STACK_ALIGN;
+
     void * stack = env->alloc(stack_size, env).data;
     if(!stack) {
         return NULL;
@@ -76,6 +78,7 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
 
     /* allows us to pass stack arguments to a new activation */
     if(stack_args_size != 0) {
+        assert(!im->secure_loaded); // Currently no stack args allowed for secure loaded things
         env->memcpy(stack, stack_args, stack_args_size);
     }
 
@@ -111,21 +114,17 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
         frame->cf_c4 = seg_tbl;                             // segment_table
         frame->cf_c5 = im->load_type.basic.tls_prototype ;                  // tls_prototype
         frame->cf_c6 = im->load_type.basic.code_write_cap;
+        frame->mf_s1 = im->tls_index * sizeof(capability);  // tls_segment_offset
+        frame->mf_a2 = im->data_index * sizeof(capability); // data_seg_offset
+        frame->mf_a3 = im->data_vaddr;                      // data_seg_vaddr
+        frame->mf_a4 = im->code_index * sizeof(capability); // code_seg_offset
+        frame->mf_a5 = im->code_vaddr;                      // code_seg_vaddr
+        frame->mf_a6 = im->tls_vaddr;                       // tls_seg_vaddr
+        frame->mf_s3 = im->tls_fil_size;
     } else {
         frame->cf_c8 = im->load_type.secure.secure_entry;
-        frame->mf_a7 = im->image_size;
-        frame->mf_s0 = im->tls_mem_size;
     }
 
-
-
-    frame->mf_s1 = im->tls_index * sizeof(capability);  // tls_segment_offset
-    frame->mf_a2 = im->data_index * sizeof(capability); // data_seg_offset
-    frame->mf_a3 = im->data_vaddr;                      // data_seg_vaddr
-    frame->mf_a4 = im->code_index * sizeof(capability); // code_seg_offset
-    frame->mf_a5 = im->code_vaddr;                      // code_seg_vaddr
-    frame->mf_a6 = im->tls_vaddr;                       // tls_seg_vaddr
-    frame->mf_s3 = im->tls_fil_size;
     frame->mf_t0 = cheri_getbase(pcc);
     return queue;
 }
