@@ -122,14 +122,16 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     }
 
 
-    own_found_id = foundation_get_id();
-    was_secure_loaded = (own_found_id != NULL);
+    if(first_thread) {
+        own_found_id = foundation_get_id();
+        was_secure_loaded = (own_found_id != NULL);
+    }
 
     if(!(startup_flags & STARTUP_NO_MALLOC)) {
         init_cap_malloc();
     }
 
-    if(!(startup_flags & STARTUP_NO_THREADS)) {
+    if(!(startup_flags & STARTUP_NO_THREADS) && first_thread) {
         thread_init();
     }
 

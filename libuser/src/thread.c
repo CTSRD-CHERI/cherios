@@ -42,6 +42,7 @@
 #include "crt.h"
 #include "string.h"
 #include "tman.h"
+#include "cprogram.h"
 
 act_kt proc_man_ref = NULL;
 process_kt proc_handle = NULL;
@@ -53,12 +54,44 @@ struct start_stack_args {
     thread_start_func_t* start;
 };
 
+// This will be symetric locked. It can only be created by the foundation, and only read by the foundation.
+// We try do all the hard bootstrapping in the parent whilst C is a available and then just load in the new thread.
 struct secure_start_t {
+    capability idc;
+
+    // We will use this as an idc while setting up. If we want user exceptions (we currently don't) these fields can be set
+    // WARN: The offsets of these 3 fields are very important. Don't move them.
+    ex_pcc_t* ex_pcc;
+    capability ex_idc;
+    capability ex_c1;
+
+    capability cgp;
+    capability c11;
+    capability c10;
+
     thread_start_func_t * start;
     capability carg;
     register_t arg;
     spinlock_t once;
+    capability segment_table[MAX_SEGS];
+    capability end[];
 };
+
+
+#define IDC_OFF 0
+#define CGP_OFF (4 * CAP_SIZE)
+#define C11_OFF (5 * CAP_SIZE)
+#define C10_OFF (6 * CAP_SIZE)
+
+#define START_OFF_SEC (7 * CAP_SIZE)
+#define CARG_OFF_SEC (8 * CAP_SIZE)
+#define ARG_OFF_SEC (9 * CAP_SIZE)
+
+#define SPIN_OFF ((9 * CAP_SIZE) +  REG_SIZE)
+#define SEG_TBL_OFF (10 * CAP_SIZE)
+
+_Static_assert((offsetof(struct secure_start_t, once)) == SPIN_OFF, "used by assembly below");
+_Static_assert((offsetof(struct secure_start_t, segment_table)) == SEG_TBL_OFF, "used by assembly below");
 
 #define START_OFF 0
 #define CARG_OFF 0
@@ -112,7 +145,7 @@ __asm__ (
     // Call c land now globals are set up
     "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
     "cjr     $c12\n"
-    "cincoffset  $c11, $c11, " HELP(ARGS_SIZE) "\n"
+    "cincoffset  $c11, $c11, " HELP(ARGS_SIZE) "\n" // todo reclaim seg table
     ".end thread_start"
 );
 
@@ -124,26 +157,51 @@ __asm__ (
         ".global secure_thread_start\n"
         ".ent secure_thread_start\n"
         "secure_thread_start:\n"
-// Undo permutation that happened in the foundation enter trampoline
-        "cmove       $c4, $idc\n"
-        "cmove       $idc, $c3\n"
-        "cgetdefault $c3\n"
-        "csetdefault $c4\n"
-        "cmove $c4, $c25\n"
-        "cmove $c5, $c21\n"
-        "dla    $t0, secure_c_thread_start\n"
-        "cgetpccsetoffset $c12, $t0\n"
-        "cjr    $c12\n"
+    // Must have provided an invocation
+        "cbtu       $idc, fail\n"
+        "cincoffset $c14, $idc, " HELP(SPIN_OFF) "\n"
+    // Obtain lock or fail
+        "li         $t0, 1\n"
+        "1: cllb    $t1, $c14\n"
+        "bnez       $t1, fail\n"
+        "cscb       $t1, $t0, $c14\n"
+        "beqz       $t1, 1b\n"
+        "cmove      $c13, $idc\n"
+    // Load stacks(s)
+        "clc        $c11, $zero, (" HELP(C11_OFF) ")($c13)\n"
+        "clc        $c10, $zero, (" HELP(C10_OFF) ")($c13)\n"
+    // Load globals
+        "clc        $c25, $zero, (" HELP(CGP_OFF) ")($c13)\n"
+    // Load idc (at this point we will take exceptions as the caller intended)
+        "clc        $idc, $zero, (" HELP(IDC_OFF) ")($c13)\n"
+    // Now call the same thread_start func
+        "cld        $a0 , $zero, (" HELP(ARG_OFF_SEC) ")($c13)\n" // arg
+        "clc        $c3 , $zero, (" HELP(CARG_OFF_SEC) ")($c13)\n" // carg
+        "clcbi      $c14, %captab20(crt_tls_seg_off)($c25)\n" // tls seg offset
+        "cld        $a1, $zero, 0($c14)\n"
+        "cincoffset $c4 , $c13, (" HELP(SEG_TBL_OFF) ")\n" // seg table
+        "csetbounds $c4, $c4," HELP(CAP_SIZE * MAX_SEGS) "\n" // and bound it
+        "clcbi      $c5, %captab20(crt_tls_proto)($c25)\n" // tls_proto
+        "clc        $c5, $zero, 0($c5)\n"
+        "cmove      $c6, $c20\n" // queue (make a new one straight away?)
+        "cmove      $c7, $c21\n" // self ctrl
+        "clc        $c8 , $zero, (" HELP(START_OFF_SEC) ")($c13)\n" // start
+        "cmove      $c9, $c24   \n"     // kernel_if_t
+        "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
+        "cjr        $c12\n"
+        "move       $a2, $s2    \n"    // startup flags
+        "fail:      teqi $zero, 0\n"
         "nop\n"
         ".end secure_thread_start\n"
 );
 
+// TODO we now have some globals for some of these arguments. Use those instead?
 void c_thread_start(register_t arg, capability carg, // Things from the user
                     capability* segment_table, capability tls_segment_prototype, register_t tls_segment_offset,
                     queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start, startup_flags_e flags,
                     kernel_if_t* kernel_if_c) {
     // We have to do this before we can get any thread locals
-    memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, cheri_getlen(tls_segment_prototype));
+    memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, crt_tls_proto_size);
 
     // The __stop___cap_relocs will be incorrect as it doesn't have size and so compaction fluffs it up =(
 
@@ -161,31 +219,6 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
     } else {
         syscall_act_terminate(self_ctrl);
     }
-}
-
-void secure_c_thread_start(locked_t locked_start, queue_t* queue, act_control_kt self_ctrl) {
-
-    assert(0 && "Secure load no longer works");
-
-    assert(locked_start != NULL && (cheri_gettype(locked_start) == FOUND_LOCKED_TYPE));
-
-    cap_pair pair;
-
-    rescap_unlock(locked_start, &pair);
-
-    assert(pair.data != NULL);
-
-    struct secure_start_t* start = (struct secure_start_t*)pair.data;
-
-    // FIXME: Compiler bug?
-//int taken = spinlock_try_acquire(&start->once, 10);
-
-    int taken = 1;
-
-    // protects against double entry
-    assert(taken);
-
-    // c_thread_start(start->arg, start->carg, queue, self_ctrl, start->start);
 }
 
 act_control_kt get_control_for_thread(thread t) {
@@ -261,22 +294,45 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
         // New threads created by a foundation are started in foundation mode
 
-        res_t res = cap_malloc(sizeof(struct secure_start_t) + RES_CERT_META_SIZE);
+        size_t space_required =  RES_CERT_META_SIZE +           // to lock
+                                sizeof(struct secure_start_t) + // for our fields
+                                 DEFAULT_STACK_SIZE +           // for a stack
+                                crt_tls_seg_size;               // for tls
+
+        res_t res = cap_malloc(space_required);
 
         cap_pair pair;
-        locked_t locked = rescap_take_locked(res, &pair, CHERI_PERM_ALL, own_found_id);
+        cert_t locked = rescap_take_cert(res, &pair, CHERI_PERM_ALL, 1);
+
         struct secure_start_t* start_message = ( struct secure_start_t*)pair.data;
+        char* stack = (char*)start_message->end;
+        char* tls_seg = stack + DEFAULT_STACK_SIZE;
+
+        stack = cheri_incoffset(cheri_setbounds(stack, DEFAULT_STACK_SIZE), DEFAULT_STACK_SIZE);
+        tls_seg = cheri_setbounds(tls_seg, crt_tls_seg_size);
 
         start_message->carg = carg;
         start_message->arg = arg;
         start_message->start = start;
         spinlock_init(&start_message->once);
 
+        start_message->c10 = NULL;
+        start_message->c11 = stack;
+        start_message->cgp = get_cgp();
+
+        size_t locals_len = cheri_getlen(get_idc());
+        size_t locals_off = crt_cap_tab_local_addr;
+
+        start_message->idc = cheri_setbounds(tls_seg+locals_off, locals_len);
+
+        memcpy(start_message->segment_table, crt_segment_table, sizeof(crt_segment_table));
+        start_message->segment_table[crt_tls_seg_off/sizeof(capability)] = tls_seg;
+
         startup.stack_args_size = 0;
         startup.stack_args = NULL;
-        startup.carg = locked;
-        startup.arg = 0;
-        startup.pcc = NULL;
+        startup.carg = locked; // The C arg for a foundation doubles here as what to use as the invocation for the entry
+        startup.arg = 0; // DUMMY, passed through the start_message
+        startup.pcc = NULL; // DUMMY, passed through the start_message
     }
 
     return thread_create_thread(proc_handle, name, &startup);

@@ -49,6 +49,18 @@ static void print_id(found_id_t* id) {
     printf("entry: %lx. size:%lx. nent: %lx\n", id->e0, id->length, id->nentries);
 }
 
+static void secure_thread(register_t arg, capability carg) {
+    locked_t locked = (locked_t)carg;
+
+    cap_pair pair4 = NULL_PAIR;
+
+    rescap_unlock(locked, &pair4);
+
+    assert(pair4.data != NULL);
+
+    printf("Child thread unlocked message: %s\n", (char*)pair4.data);
+}
+
 int main(register_t arg, capability carg) {
 
     /* First try sign something */
@@ -58,7 +70,7 @@ int main(register_t arg, capability carg) {
 
     res_t res1 = cap_malloc(0x500);
     cap_pair pair1;
-    cert_t certificate = rescap_take_cert(res1, &pair1, CHERI_PERM_LOAD);
+    cert_t certificate = rescap_take_cert(res1, &pair1, CHERI_PERM_LOAD, 0);
 
     assert(pair1.data != NULL);
     assert(certificate != NULL);
@@ -110,6 +122,10 @@ int main(register_t arg, capability carg) {
 
     printf("Unlocked message: %s", (char*)pair4.data);
 
+    // Create a new thread
+    /* Now create a new secure thread. Pass it the locked message for funsies */
+    thread t = thread_new("secure_thr", 0, locked, &secure_thread);
+
     /* Now exit the foundation. */
     foundation_exit();
 
@@ -125,7 +141,7 @@ int main(register_t arg, capability carg) {
 
     assert(pair5.data == NULL);
 
-    cap_free(res2);
+    //cap_free(res2);
 
     printf("Foundation test finished!\n");
     return 0;

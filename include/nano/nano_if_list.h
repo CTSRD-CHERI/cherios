@@ -130,7 +130,7 @@
 /* Create a new entry from within a foundation */\
     ITEM(foundation_new_entry, entry_t, (size_t, eid, capability, at), __VA_ARGS__)\
 /* Take and sign a reservation. Signer gets full access. */\
-    ITEM(rescap_take_cert, cert_t, (res_t, res, cap_pair*, out, register_t, user_perms), __VA_ARGS__)\
+    ITEM(rescap_take_cert, cert_t, (res_t, res, cap_pair*, out, register_t, user_perms, register_t, invocation), __VA_ARGS__)\
 /* Get access to certfied capability from signed handle. Only has user_perms. Will return identity of signer*/\
     ITEM(rescap_check_cert, found_id_t*, (cert_t, cert, cap_pair*, out), __VA_ARGS__)\
 /* Take a reservation and lock for intended user (identified by id) */\

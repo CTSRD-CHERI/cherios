@@ -65,6 +65,12 @@ extern struct capreloc __stop___cap_relocs; // Stops making sense after compacti
 extern size_t cap_relocs_size;
 extern capability crt_segment_table[MAX_SEGS];
 extern size_t crt_code_seg_offset;
+extern size_t crt_tls_seg_size;
+
+extern size_t crt_cap_tab_local_addr;
+extern capability crt_tls_proto;
+extern size_t crt_tls_proto_size;
+extern size_t crt_tls_seg_off; // _offset_ (not index)
 
 // Need inlining as calling functions requires globals
 

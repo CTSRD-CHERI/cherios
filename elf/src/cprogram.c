@@ -121,8 +121,10 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
         frame->mf_a5 = im->code_vaddr;                      // code_seg_vaddr
         frame->mf_a6 = im->tls_vaddr;                       // tls_seg_vaddr
         frame->mf_s3 = im->tls_fil_size;
+        frame->mf_s5 = im->tls_mem_size;
     } else {
         frame->cf_c8 = im->load_type.secure.secure_entry;
+        frame->cf_c9 = carg;
     }
 
     frame->mf_t0 = cheri_getbase(pcc);

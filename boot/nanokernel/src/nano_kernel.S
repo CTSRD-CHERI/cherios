@@ -2691,14 +2691,15 @@ foundation_enter:
     csc         $c8, $zero, CONTEXT_OFFSET_FOUND($c13)  # set current context to point to id of foundation
 
 unlock_idc:
-
-    dli         $t3, FOUND_LOCKED_TYPE
+    dli         $t3, FOUND_INV_TYPE
     csetoffset  $c13, $kdc, $t3
     cunseal     $c9, $c9, $c13
 
     li          $t3, FOUNDATION_ID_SIZE
     csetboundsexact $c13, $c8, $t3                      # c13 is the found_id to compare
-    clc         $c15, $zero, RES_CERT_OWNER_OFF($c9)    # c15 is the found_if of the locked_idc
+    dli         $t3, Perm_Load
+    candperm    $c13, $c13, $t3                         # read only
+    clc         $c14, $zero, RES_CERT_OWNER_OFF($c9)    # c14 is the found_if of the locked_idc
     cexeq       $t3, $c13, $c14
     beqz        $t3, nano_er
     clc         $c9, $zero, RES_CERT_DATA_OFF($c9)
@@ -2823,7 +2824,7 @@ id_none:
     CRETURN
 
 ########################################################################################### (safe)
-# cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms)
+# cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms, register_t invocation)
 .global rescap_take_cert
 rescap_take_cert:
 ###########################################################################################
@@ -2839,8 +2840,10 @@ rescap_take_cert:
     dli         $t0, Perm_Load
     candperm    $c5, $c5, $t0
 
+    dli         $t0, FOUND_INV_TYPE
+    dli         $a2, FOUND_CERT_TYPE
     b           rescap_take_locked_cert_shared
-    dli         $a1, FOUND_CERT_TYPE
+    movn        $a2, $t0, $a1
 
 ########################################################################################### (safe)
 # locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms, found_id_t* recipient_id)
@@ -2848,7 +2851,7 @@ rescap_take_cert:
 rescap_take_locked:
 ###########################################################################################
 
-    dli         $a1, FOUND_LOCKED_TYPE
+    dli         $a2, FOUND_LOCKED_TYPE
 
 # rescap_take_locked_cert_shared(res_t res, cap_pair* out, register_t user_perms, found_id_t* id, size_t type_ret)
 rescap_take_locked_cert_shared:
@@ -2889,7 +2892,7 @@ rescap_take_locked_cert_shared:
 
 
     # construct token
-    csetoffset  $c5, $kdc, $a1
+    csetoffset  $c5, $kdc, $a2
     cseal       $c3, $c6, $c5
 
     cclearlo    EN7(c4,c5,c6,c7,c13,c14,c15)

@@ -73,7 +73,7 @@ start_common:
 # a5    : code_seg_vaddr                                                                                                #
 # a6    : tls_seg_vaddr                                                                                                 #
 # s3    : the size of the tls prototype segment                                                                         #
-#                                                                                                                       #
+# s5    : the size of the tls segment                                                                                   #
 # s2    : startup_args                                                                                                  #
 #                                                                                                                       #
 # These fields are setup by act_register itself. Although the queue is an argument to the function                      #
@@ -109,9 +109,9 @@ start_common:
 
 
     dla         $t0, __cap_table_local_start
-    dsubu       $t0, $t0, $a6
+    dsubu       $s6, $t0, $a6
     clc         $c26, $s1, 0($c4)
-    cincoffset  $c26, $c26, $t0                  #   Locals (unbounded)
+    cincoffset  $c26, $c26, $s6                  #   Locals (unbounded)
 
     dla		    $t0, crt_init_new_globals
     dsubu       $t0, $t0, $a5
@@ -147,6 +147,16 @@ start_common:
     # Store these for future use
     get_sym     $c3, crt_code_seg_offset
     csd         $s4, $zero, 0($c3)
+    get_sym     $c3, crt_tls_seg_size
+    csd         $s5, $zero, 0($c3)
+    get_sym     $c3, crt_cap_tab_local_addr
+    csd         $s6, $zero, 0($c3)              # the seg relative addr of the cap table
+    get_sym     $c3, crt_tls_proto
+    csc         $c22, $zero, 0($c3)             # tls proto
+    get_sym     $c3, crt_tls_proto_size
+    csd         $s3, $zero, 0($c3)
+    get_sym     $c3, crt_tls_seg_off
+    csd         $s1, $zero, 0($c3)
 
     # Now we have processed any relocations that might target the prototype - we can copy from proto
     clc         $c3, $s1, 0($c19)               # dest = tls_seg

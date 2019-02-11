@@ -54,6 +54,7 @@ start:
 # c4 (seg table)
 
 # tls_seg_offset (s1)
+# tls seg size (s5(
 # tls_seg_vaddr (a6)
 # c5 (tls proto)
 # size of tls proto (s3)
@@ -149,7 +150,7 @@ is_tls:
     cld         $s3, $zero, PHDR_OFF_p_filesz($c13) # tls proto size
     move        $s1, $t1                            # tls seg offset
     move        $a6, $t8                            # tls seg vaddr
-    move        $t3, $t9                            # _real_ tls memsize. We use this later
+    move        $s5, $t9                            # _real_ tls memsize. We use this later
     csetbounds  $c5, $c14, $s3                      # tls proto
 
 loop_footer: # with checks inlined at all the ends of the loop
@@ -160,7 +161,7 @@ loop_footer: # with checks inlined at all the ends of the loop
     # Build _real_ tls segment and store in table
 
     cincoffset  $c13, $c8, $a7
-    csetbounds  $c13, $c13, $t3
+    csetbounds  $c13, $c13, $s5
     csc         $c13, $s1, 0($c4)
 
     # Create an exe version of code segment cap and swap it with table

@@ -54,7 +54,8 @@
 #define TRES_TYPE          0x0004         // The type of a type reservation
 #define FOUND_ENTRY_TYPE   0x0010         // The type of a foundation entry handle
 #define FOUND_CERT_TYPE    0x0011         // The type of a foundation certificate handle
-#define FOUND_LOCKED_TYPE  0x0010         // The type of a foundation locked message hnadle
+#define FOUND_LOCKED_TYPE  0x0012         // The type of a foundation locked message handle
+#define FOUND_INV_TYPE     0x0013         // The type of a foundation invocation handle
 #define VTABLE_TYPE_L0     0x0020         // The type of the top level page table
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table

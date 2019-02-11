@@ -74,8 +74,16 @@ extern void __cap_table_start;
 extern void __cap_table_local_start;
 
 size_t cap_relocs_size;
+// Of the main thread. We should probably null out the TLS only bit before creating new threads.
+// This is used for dedup in main thread. And also by the secure loader for making new threads.
 capability crt_segment_table[MAX_SEGS];
 size_t crt_code_seg_offset;
+size_t crt_tls_seg_size;
+
+size_t crt_cap_tab_local_addr;
+capability crt_tls_proto;
+size_t crt_tls_proto_size;
+size_t crt_tls_seg_off; // _offset_ (not index)
 
 /*
  * Symbols provided by rtendC.c, which provide us with the tails for the
