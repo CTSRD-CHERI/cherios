@@ -70,10 +70,13 @@ start:
 
 # idc/c9 : probably null
 # c8    : our contiguous data (provided by foundation_enter)
+# c2    : our auth key
 
 # First build a segment table
 # WARN: We assume the order of segments is code/data and there are no there are no others (aprt from the one TLS)
 
+    #
+    cmove       $c9, $c2                            # auth key going in c9
     # Create a stack for the first thread (just stored in our data section)
     dla         $t0, secure_stack
     li          $t1, DEFAULT_STACK_SIZE

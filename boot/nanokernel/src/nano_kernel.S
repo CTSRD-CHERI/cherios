@@ -263,7 +263,7 @@ nano_kernel_init:
     csetboundsexact  $c3, $kr2c, $k0
     cincoffset  $c3, $c3, INC_IM_MAX
     csd         $zero, $zero, CONTEXT_OFFSET_STATE($c3)                      # Set state to 0
-    csc         $cnull, $zero, CONTEXT_OFFSET_FOUND($c3)    # Set foundation ref to NULL
+
     csc         $c3, $zero, current_context($kr1c)       # Create first context and make it the current context
 
 
@@ -1198,7 +1198,7 @@ allocated:
     csetboundsexact  $c4, $c4, $t0                               # will fail if we were out of space
     cincoffset  $c4, $c4, (INC_IM_MAX)
     csd         $zero, $zero, CONTEXT_OFFSET_STATE($c4)          # set state to allocated for new context
-    csc         $cnull, $zero, CONTEXT_OFFSET_FOUND($c4)         # set foundation ref to null
+
     # memcpy a0 bytes from c3 to c4
     dli         $t0, 0
     dli         $a0, CHERI_FRAME_SIZE
@@ -2680,15 +2680,15 @@ foundation_enter:
 ###########################################################################################
 
 # Don't use argument registers for tmps so we can use foundation_enter to wrap function calls
-    dli         $t3, FOUND_ENTRY_TYPE
-    csetoffset  $c13, $kdc, $t3
+    cincoffset  $c13, $kdc, FOUND_ENTRY_TYPE
     cunseal     $c8, $c8, $c13
 
     clc         $c12, $zero, 0($c8)                     # get entry pcc
     csetoffset  $c8, $c8, $zero
     clc         $c13, $zero, current_context($kr1c)     # get current context
+    cincoffset  $c14, $kdc, FOUND_AUTH_TYPE
     cbtu        $c9, no_idc
-    csc         $c8, $zero, CONTEXT_OFFSET_FOUND($c13)  # set current context to point to id of foundation
+    cseal       $c2, $c8, $c14                          # construct the auth_t
 
 unlock_idc:
     dli         $t3, FOUND_INV_TYPE
@@ -2755,29 +2755,14 @@ foundation_entry_get_id:
     CRETURN
 
 ########################################################################################### (safe)
-# void foundation_exit(void)
-.global foundation_exit
-foundation_exit:
-###########################################################################################
-
-    clc         $c3, $zero, current_context($kr1c)       # get current context
-    csc         $cnull, $zero, CONTEXT_OFFSET_FOUND($c3)
-    cclearlo    EN2(c3,c4)
-    CRETURN
-
-
-########################################################################################### (safe)
-# entry_t foundation_new_entry(size_t eid, capability at)
+# entry_t foundation_new_entry(size_t eid, capability at, auth_t auth)
 .global foundation_new_entry
 foundation_new_entry:
 ###########################################################################################
 
-    # Get found struct from current context
-    clc         $c4, $zero, current_context($kr1c)
-    clc         $c4, $zero, CONTEXT_OFFSET_FOUND($c4)
-
-    cbtu        $c4, new_entry_er
-    nop
+    # Unseal auth
+    cincoffset  $c13, $kdc, FOUND_AUTH_TYPE
+    cunseal     $c4, $c4, $c13
 
     # get entry count
     cld         $t0, $zero, FOUNDATION_ID_NENT_OFFSET($c4)
@@ -2794,45 +2779,40 @@ foundation_new_entry:
     csc         $c3, $zero, 0($c4)
 
     # construct token
-    li          $t0, FOUND_ENTRY_TYPE
-    csetoffset  $c3, $kdc, $t0
+    cincoffset  $c3, $kdc, FOUND_ENTRY_TYPE
     cseal       $c3, $c4, $c3
 
 new_entry_er:
-    cclearlo    EN1(c4)
+    cclearlo    EN2(c4, c13)
     CRETURN
 
 ####################################### (safe)
-# found_id_t* foundation_get_id (void)
+# found_id_t* foundation_get_id (auth_t auth)
 .global foundation_get_id
 foundation_get_id:
 #######################################
 
     # Get found struct from current context
-
-    clc         $c3, $zero, current_context($kr1c)
-    clc         $c3, $zero, CONTEXT_OFFSET_FOUND($c3)
-    cbtu        $c3, id_none
-
+    # Unseal auth
+    cincoffset  $c13, $kdc, FOUND_AUTH_TYPE
+    cunseal     $c3, $c3, $c13
     # make cert for current foundation
     dli         $t0, FOUNDATION_ID_SIZE
     csetboundsexact  $c3, $c3, $t0
     dli         $t0, Perm_Load
     candperm    $c3, $c3, $t0
-
-id_none:
+    cclearlo    EN1(c13)
     CRETURN
 
 ########################################################################################### (safe)
-# cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms, register_t invocation)
+# cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms, register_t invocation, auth_t auth)
 .global rescap_take_cert
 rescap_take_cert:
 ###########################################################################################
 
-    # get current foundation
-    clc         $c5, $zero, current_context($kr1c)
-    clc         $c5, $zero, CONTEXT_OFFSET_FOUND($c5)
-    cbtu        $c5, take_cert_er
+    # Unseal auth
+    cincoffset  $c13, $kdc, FOUND_AUTH_TYPE
+    cunseal     $c5, $c5, $c13
 
     # make cert for current foundation
     dli         $t0, FOUNDATION_ID_SIZE
@@ -2909,8 +2889,7 @@ rescap_check_cert:
 ###########################################################################################
 
     # unlock
-    dli         $t0, FOUND_CERT_TYPE
-    csetoffset  $c5, $kdc, $t0
+    cincoffset  $c5, $kdc, FOUND_CERT_TYPE
     cunseal     $c5, $c3, $c5
 
     # get user code
@@ -2927,20 +2906,18 @@ rescap_check_cert:
 
 
 ########################################################################################### (safe)
-# void rescap_unlock(locked_t locked, cap_pair* out)
+# void rescap_unlock(locked_t locked, cap_pair* out, auth_t auth)
 .global rescap_unlock
 rescap_unlock:
 ###########################################################################################
 
     # unlock
-    dli         $t0, FOUND_LOCKED_TYPE
-    csetoffset  $c5, $kdc, $t0
-    cunseal     $c3, $c3, $c5
+    cincoffset  $c6, $kdc, FOUND_LOCKED_TYPE
+    cunseal     $c3, $c3, $c6
 
     # get current foundation
-    clc         $c5, $zero, current_context($kr1c)
-    clc         $c5, $zero, CONTEXT_OFFSET_FOUND($c5)
-    cbtu        $c5, 1f
+    cincoffset  $c6, $kdc, FOUND_AUTH_TYPE
+    cunseal     $c5, $c5, $c6
 
     # convert to same form as used for cert earlier
     dli         $t0, FOUNDATION_ID_SIZE

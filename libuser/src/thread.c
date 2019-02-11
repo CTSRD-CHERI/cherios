@@ -302,7 +302,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         res_t res = cap_malloc(space_required);
 
         cap_pair pair;
-        cert_t locked = rescap_take_cert(res, &pair, CHERI_PERM_ALL, 1);
+        cert_t locked = rescap_take_cert(res, &pair, CHERI_PERM_ALL, 1, own_auth);
 
         struct secure_start_t* start_message = ( struct secure_start_t*)pair.data;
         char* stack = (char*)start_message->end;
@@ -345,7 +345,7 @@ thread thread_new(const char* name, register_t arg, capability carg, thread_star
 void thread_init(void) {
     if(was_secure_loaded) {
         // New threads in secure load mode should go through secure_thread_start
-        entry_t e = foundation_new_entry(0, &secure_thread_start);
+        entry_t e = foundation_new_entry(0, &secure_thread_start, own_auth);
         assert(e != NULL);
     }
 }

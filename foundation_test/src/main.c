@@ -54,7 +54,7 @@ static void secure_thread(register_t arg, capability carg) {
 
     cap_pair pair4 = NULL_PAIR;
 
-    rescap_unlock(locked, &pair4);
+    rescap_unlock(locked, &pair4, own_auth);
 
     assert(pair4.data != NULL);
 
@@ -70,7 +70,7 @@ int main(register_t arg, capability carg) {
 
     res_t res1 = cap_malloc(0x500);
     cap_pair pair1;
-    cert_t certificate = rescap_take_cert(res1, &pair1, CHERI_PERM_LOAD, 0);
+    cert_t certificate = rescap_take_cert(res1, &pair1, CHERI_PERM_LOAD, 0, own_auth);
 
     assert(pair1.data != NULL);
     assert(certificate != NULL);
@@ -111,7 +111,7 @@ int main(register_t arg, capability carg) {
 
     cap_pair pair4 = NULL_PAIR;
 
-    rescap_unlock(locked, &pair4);
+    rescap_unlock(locked, &pair4, own_auth);
 
     CHERI_PRINT_CAP(pair3.code);
     CHERI_PRINT_CAP(pair3.data);
@@ -122,27 +122,10 @@ int main(register_t arg, capability carg) {
 
     printf("Unlocked message: %s", (char*)pair4.data);
 
-    // Create a new thread
     /* Now create a new secure thread. Pass it the locked message for funsies */
     thread t = thread_new("secure_thr", 0, locked, &secure_thread);
 
-    /* Now exit the foundation. */
-    foundation_exit();
-
-
-    /* Now FAIL to unlock the message */
-
-    cap_pair pair5 = NULL_PAIR;
-
-    rescap_unlock(locked, &pair5);
-
-    CHERI_PRINT_CAP(pair5.code);
-    CHERI_PRINT_CAP(pair5.data);
-
-    assert(pair5.data == NULL);
-
-    //cap_free(res2);
-
     printf("Foundation test finished!\n");
+
     return 0;
 }

@@ -76,6 +76,7 @@ start_common:
 # s5    : the size of the tls segment                                                                                   #
 # s2    : startup_args                                                                                                  #
 #                                                                                                                       #
+# c9    : auth (null if unsecure, otherwise our auth cap                                                                #
 # These fields are setup by act_register itself. Although the queue is an argument to the function                      #
 #                                                                                                                       #
 # c20   : queue                                                                                                         #
@@ -86,7 +87,7 @@ start_common:
 
 	# Save arguments
 
-	cincoffset  $c11, $c11, -(6*CAP_SIZE)
+	cincoffset  $c11, $c11, -(7*CAP_SIZE)
 	move		$s0, $a0
     csc         $c3, $zero, 0($c11)
     csc         $c19, $zero, (CAP_SIZE*1)($c11)
@@ -94,6 +95,8 @@ start_common:
     csc         $c21, $zero, (CAP_SIZE*3)($c11)
     csc         $c22, $zero, (CAP_SIZE*4)($c11)
     csc         $c6,  $zero, (CAP_SIZE*5)($c11)
+    csc         $c9,  $zero, (CAP_SIZE*6)($c11)
+
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
@@ -157,6 +160,9 @@ start_common:
     csd         $s3, $zero, 0($c3)
     get_sym     $c3, crt_tls_seg_off
     csd         $s1, $zero, 0($c3)
+    clc         $c4,  $zero, (CAP_SIZE*6)($c11)
+    get_sym     $c3, own_auth
+    csc         $c4, $zero, 0($c3)              # should prolly pass to object init rather than just setting here. But what the hell.
 
     # Now we have processed any relocations that might target the prototype - we can copy from proto
     clc         $c3, $s1, 0($c19)               # dest = tls_seg

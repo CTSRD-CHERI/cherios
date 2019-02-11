@@ -51,7 +51,8 @@ extern __thread act_notify_kt act_self_notify_ref;
 extern __thread queue_t * act_self_queue;
 
 extern int    was_secure_loaded;
-extern found_id_t* own_found_id;
+extern auth_t own_auth; // like a private key for a foundation
+extern found_id_t* own_found_id; // like a public key
 extern act_kt memmgt_ref;
 
 act_kt try_init_memmgt_ref(void);

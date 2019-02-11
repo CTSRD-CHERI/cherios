@@ -57,6 +57,7 @@ __thread act_notify_kt act_self_notify_ref = NULL;
 __thread queue_t * act_self_queue = NULL;
 
 int    was_secure_loaded;
+auth_t own_auth;
 found_id_t* own_found_id;
 
 extern void memset_c(void);
@@ -123,8 +124,8 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 
 
     if(first_thread) {
-        own_found_id = foundation_get_id();
-        was_secure_loaded = (own_found_id != NULL);
+        was_secure_loaded = (own_auth != NULL);
+        if(was_secure_loaded) own_found_id = foundation_get_id(own_auth);
     }
 
     if(!(startup_flags & STARTUP_NO_MALLOC)) {

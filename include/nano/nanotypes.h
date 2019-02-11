@@ -52,10 +52,11 @@
 #define NANO_KERNEL_TYPE   0x0002         // The type of sealed local data
 #define RES_TYPE           0x0003         // The type of a reservation handle
 #define TRES_TYPE          0x0004         // The type of a type reservation
-#define FOUND_ENTRY_TYPE   0x0010         // The type of a foundation entry handle
-#define FOUND_CERT_TYPE    0x0011         // The type of a foundation certificate handle
-#define FOUND_LOCKED_TYPE  0x0012         // The type of a foundation locked message handle
-#define FOUND_INV_TYPE     0x0013         // The type of a foundation invocation handle
+#define FOUND_AUTH_TYPE    0x0010         // The type of an auth handle (like a private key)
+#define FOUND_ENTRY_TYPE   0x0011         // The type of a foundation entry handle
+#define FOUND_CERT_TYPE    0x0012         // The type of a foundation certificate handle (signed by an auth)
+#define FOUND_LOCKED_TYPE  0x0013         // The type of a foundation locked message handle (only unlocked by an auth)
+#define FOUND_INV_TYPE     0x0014         // The type of a foundation invocation handle (signed and only unlockable by auth)
 #define VTABLE_TYPE_L0     0x0020         // The type of the top level page table
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
@@ -97,7 +98,7 @@
 //   user_cause
 //   user_ccause
 //   padded to a cap
-//   found_id_t* foundation
+//   capability __unused__
 //   exception_pcc       // PCC that was the exception pcc
 //   exception_idc       // IDC that was the exception idc
 //   exception_saved_idc // IDC to do swapping with
@@ -116,7 +117,7 @@
 
 #define CONTEXT_OFFSET_CAUSE            (CHERI_FRAME_SIZE + (2 * REG_SIZE) - INC_IM_MAX)
 #define CONTEXT_OFFSET_CCAUSE           (CHERI_FRAME_SIZE + (3 * REG_SIZE) - INC_IM_MAX)
-#define CONTEXT_OFFSET_FOUND            (CHERI_FRAME_SIZE + (2 * CAP_SIZE) - INC_IM_MAX)
+
 #define CONTEXT_OFFSET_EX_PCC           (CHERI_FRAME_SIZE + (3 * CAP_SIZE) - INC_IM_MAX)
 #define CONTEXT_OFFSET_EX_IDC           (CHERI_FRAME_SIZE + (4 * CAP_SIZE) - INC_IM_MAX)
 #define CONTEXT_OFFSET_EX_SAVED_IDC     (CHERI_FRAME_SIZE + (5 * CAP_SIZE) - INC_IM_MAX)
@@ -299,8 +300,9 @@ typedef capability ptable_t;                // Type of a page table handle
 typedef capability entry_t;                 // Type of a foundation entry handle
 typedef capability cert_t;                  // A certificate for capability
 typedef capability locked_t;                // A locked capability
+typedef capability auth_t;                  // A authorisation to sign and unlock. Granted by found_enter.
 
-/* Identifying information for a foundation */
+/* Identifying information for a foundation. ALSO the public of a pair. Private half is an auth_t */
 typedef struct found_id_t {
     char sha256[256/8];
     size_t length;
