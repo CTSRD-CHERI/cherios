@@ -145,6 +145,7 @@ enum mmap_return
 };
 
 cap_pair mmap_based_alloc(size_t s, Elf_Env* env);
+res_t mmap_based_capmalloc(size_t s, Elf_Env* env);
 void mmap_based_free(capability c, Elf_Env* env);
 
 /* Old mmap for anything that needs it */

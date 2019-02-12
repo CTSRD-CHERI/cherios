@@ -113,6 +113,17 @@ int munmap(void *addr, size_t length) {
     mem_release((size_t)addr, length, 1, own_mop);
 }
 
+res_t mmap_based_capmalloc(size_t s, Elf_Env* env) {
+	precision_rounded_length pr = round_cheri_length(s);
+	ERROR_T(res_t) result = mem_request(0, pr.length + pr.mask, NONE, env->handle);
+
+	if(!IS_VALID(result)) return NULL;
+
+	res_t res = reservation_precision_align(result.val, pr.length, pr.mask);
+
+	return res;
+}
+
 cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
     assert(env != NULL);
     assert(env->handle != NULL);

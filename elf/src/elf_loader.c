@@ -319,7 +319,8 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 				}
 			case storage_process:
                 res_size_needed = FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES, contig_size) + contig_size;
-                res_for_found = mem_request(0, res_size_needed, NONE, env->handle).val;
+
+                res_for_found = mmap_based_capmalloc(res_size_needed, env);
                 e0 = foundation_create(res_for_found, contig_size, out_im->load_type.secure.contig_wr,
 						out_im->entry, MAX_FOUND_ENTRIES, 0);
 				out_im->load_type.secure.foundation_res = res_for_found;
