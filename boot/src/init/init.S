@@ -58,8 +58,9 @@ start:
 	cgetpcc		$c12
 	dla		$t0, crt_init_globals_init
 	csetoffset	$c12, $c12, $t0
+	csetbounds  $idc, $c11, $zero
 	cjalr		$c12, $c17
-	cmove   $c18, $c11
+	cmove   $c18, $idc
 
 	cmove   $idc, $c3
 
