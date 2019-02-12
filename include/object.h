@@ -67,6 +67,7 @@ extern size_t __attribute__((weak)) ctrl_methods_nb;
 void	object_init(act_control_kt self_ctrl, queue_t * queue,
                     kernel_if_t* kernel_if_c, capability plt_auth,
                     startup_flags_e startup_flags, int first_thread);
+void object_init_post_compact(startup_flags_e startup_flags, int first_thread);
 
 void	ctor_null(void);
 void	dtor_null(void);

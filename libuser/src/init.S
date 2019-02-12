@@ -218,6 +218,9 @@ start_common:
 
     call_func compact_code_tramp
 
+    move        $a0, $s2                        # Startup flags
+    li          $a1, 1                          # first thread
+    call_func object_init_post_compact
 	# Restore arguments
 	move		$a0, $s0
 	clc		    $c3, $zero, 0($c11)

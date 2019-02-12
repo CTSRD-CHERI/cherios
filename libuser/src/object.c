@@ -77,6 +77,14 @@ std_sock std_err_sock;
 
 #endif
 
+static void setup_temporal_handle(startup_flags) {
+    if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
+        // WARN these will by dangling after compact. Call again to fix.
+        register_vectored_cap_exception(&temporal_exception_handle, Tag_Violation);
+        register_vectored_cap_exception(&temporal_exception_handle, Length_Violation);
+    }
+}
+
 void object_init(act_control_kt self_ctrl, queue_t * queue,
                  kernel_if_t* kernel_if_c, capability plt_auth, // TODO remove plt_auth, we have fixed plt stubs
                  startup_flags_e startup_flags, int first_thread) {
@@ -114,13 +122,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     // Tag exceptions can happen when we first use an unsafe stack. We will handle these to get a stack.
     // We can also get a length violation if we need a new one.
 
-    if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
-        // FIXME: these functions may be moved by compaction =(
-        // FIXME: compaction needs to be called from the root level
-        // FIXME: probably best to have an init_last and do so afterwards
-        register_vectored_cap_exception(&temporal_exception_handle, Tag_Violation);
-        register_vectored_cap_exception(&temporal_exception_handle, Length_Violation);
-    }
+    setup_temporal_handle(startup_flags);
 
 
     if(first_thread) {
@@ -190,6 +192,10 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
                stats.too_large);
     }
 #endif
+}
+
+void object_init_post_compact(startup_flags_e startup_flags, int first_thread) {
+    setup_temporal_handle(startup_flags);
 }
 
 // Called when main exits
