@@ -31,8 +31,12 @@
 #ifndef CHERIOS_CPROGRAM_H
 #define CHERIOS_CPROGRAM_H
 
-#define DEFAULT_STACK_SIZE 0x10000
-#define DEFAULT_STACK_ALIGN_p2 6
+// We request our default queue (about 0x820 ) and the queue in one go. We can do exact bounds on 0xff00.
+// Sadly requesting via alloc with mmap can only give us 0xfe00.
+// so a stack of f600 + 0x900 for the queue works nicely and wastes about 0x1c0 bytes. A bit of work could make this 0xc0.
+
+#define DEFAULT_STACK_SIZE 0xf600
+#define DEFAULT_STACK_ALIGN_p2 8
 #define DEFAULT_STACK_ALIGN (1 << DEFAULT_STACK_ALIGN_p2)
 
 

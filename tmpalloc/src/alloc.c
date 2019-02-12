@@ -35,6 +35,8 @@
 #include "sys/mman.h"
 #include "utils.h"
 
+#define TMP_ALLOC_ALIGN 0x1000
+
 static inline void *align_upwards(void *p, uintptr_t align)
 {
     size_t rounded;
@@ -50,13 +52,14 @@ static char * pool_next = NULL;
 
 static char * pool_ex = NULL;
 
-cap_pair tmp_alloc(size_t s, Elf_Env unused __unused) {
+cap_pair tmp_alloc(size_t s, Elf_Env* unused __unused) {
+	s = roundup2(s, TMP_ALLOC_ALIGN);
 	if(pool_next + s >= pool_end) {
 		return (cap_pair){.code = NULL, .data = NULL};
 	}
 	void * p = pool_next;
-	p = __builtin_cheri_bounds_set(p, s);
-	pool_next = align_upwards(pool_next+s, 0x1000);
+	p = cheri_setbounds_exact(p, s);
+	pool_next += s;
 
 	return (cap_pair){.code = rederive_perms(p, pool_ex), .data = p};
 }
@@ -64,8 +67,10 @@ cap_pair tmp_alloc(size_t s, Elf_Env unused __unused) {
 void init_tmp_alloc(cap_pair pool) {
 	char * pool_start = pool.data;
 
-	size_t pool_remaining = cheri_getlen(pool_start) - cheri_getoffset(pool_start);
-	pool_start = cheri_setbounds(pool_start, pool_remaining);
+    size_t align_up = (size_t)(-((size_t)pool_start)) & (TMP_ALLOC_ALIGN-1);
+
+	size_t pool_remaining = cheri_getlen(pool_start) - cheri_getoffset(pool_start) - align_up;
+	pool_start = cheri_setbounds(pool_start + align_up, pool_remaining);
 
 	pool_end = pool_start + pool_remaining;
 

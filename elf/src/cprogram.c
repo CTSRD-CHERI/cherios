@@ -52,25 +52,35 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
                      capability pcc, char* stack_args, size_t stack_args_size, mop_t mop) {
 
-    size_t queue_size = align_up_to(sizeof(queue_default_t), DEFAULT_STACK_ALIGN);
-    size_t stack_size = im->secure_loaded ?  queue_size : DEFAULT_STACK_SIZE;
+    size_t space_for_segs = im->secure_loaded ? 0 : sizeof(im->load_type.basic.seg_table);
+
+    size_t queue_size = sizeof(queue_default_t);
+
+    size_t stack_size = im->secure_loaded ?  0 : DEFAULT_STACK_SIZE;
     size_t stack_align = DEFAULT_STACK_ALIGN;
 
-    void * stack = env->alloc(stack_size, env).data;
-    if(!stack) {
+    // Request as much as we can without going over a page boundry
+    size_t request_size = align_up_to(queue_size + stack_size + MEM_REQUEST_FAST_OFFSET, UNTRANSLATED_PAGE_SIZE) -
+            MEM_REQUEST_FAST_OFFSET;
+
+    void * space = env->alloc(request_size, env).data;
+    if(!space) {
         return NULL;
     }
 
-    /* Steal a few bytes from the bottom of the stack to use as the message queue */
-    queue_t* queue = (queue_t*)((char*)stack + stack_size - queue_size);
+    /* Use the first few bytes for the queue */
+    queue_t* queue = (queue_t*)(space);
 
-    queue = cheri_setbounds(queue, queue_size);
+    queue = cheri_setbounds_exact(queue, queue_size);
 
-    // FIXME: we should adjust the stacks base so we can use non exact
-    stack = cheri_setbounds_exact(stack, stack_size - queue_size);
-    size_t space_for_segs = im->secure_loaded ? 0 : sizeof(im->load_type.basic.seg_table);
+    /* now the stack */
+    char* stack = space + queue_size;
+    size_t extra_to_align = (size_t)(-(size_t)stack) & (DEFAULT_STACK_ALIGN-1);
 
-    stack = (char*)stack + (stack_size - queue_size - space_for_segs - stack_args_size);
+    stack = cheri_setbounds_exact(stack + extra_to_align, stack_size);
+
+    // Stack starts with space for a segment table and some stack passed args
+    stack = (char*)stack + (stack_size - space_for_segs - stack_args_size);
 
     /* Use some more stack to pass the seg table */
 
