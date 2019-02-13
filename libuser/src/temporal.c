@@ -36,6 +36,8 @@
 
 #define MinStackSize    0x2000 // The compiler throws away stacks smaller than this!
 
+// WARN: It is a _really_ bad idea to call a function that will use too much unsafe stack from here.
+// WARN: We can cope with exactly 1 use of the unsafe stack (enough for secure loaded things to make a call out)
 int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
 // Looking for: csetbounds     $c15, $c15, MinStackSize  <-- will fail if too small or non existant
 
@@ -45,20 +47,29 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
     uint32_t handle_instr = 0x480f7848;
     uint32_t * epcc = (uint32_t*)get_ctl()->ex_pcc;
 
-    if(!((cheri_getoffset(epcc) >= 0) && (cheri_getoffset(epcc) < cheri_getlen(epcc)))) return 1;
+    //if(!((cheri_getoffset(epcc) >= 0) && (cheri_getoffset(epcc) < cheri_getlen(epcc)))) return 1;
 
     uint32_t fault_instr = *(epcc) &~mask;
 
     // We might fail because we have no unsafe stack, or because its not large enough to use
     if(handle_instr != fault_instr) return 1;
 
-    capability old_c10 = cheri_getreg(10);
+    capability old_c10;
+
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+    old_c10 = restore_frame->c10;
+#else
+    old_c10 = cheri_getreg(10);
+#endif
+
     uint64_t default_unsafe_stack_size = MinStackSize + UNTRANSLATED_PAGE_SIZE + MEM_REQUEST_MIN_REQUEST;
 
     if(old_c10 != NULL) {
         mem_release(cheri_getbase(old_c10), default_unsafe_stack_size, 1, own_mop);
     }
 
+    // FIXME: mem_request will consume some of the temporal unsafe stack
+    // FIXME: we should give ourselves a new one if it looks like its running out
     ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, 0, own_mop);
     //if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
 
@@ -68,8 +79,14 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
     capability new_c10 = pair.data;
 
     new_c10 = cheri_setoffset(new_c10, default_unsafe_stack_size);
-    restore_frame->c15 = new_c10 - 0x2000;
+
+    get_ctl()->ex_pcc = (ex_pcc_t*)(((char*)epcc) + 4);
+
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+    restore_frame->c10 = new_c10;
+#else
     cheri_setreg(10, new_c10);
+#endif
 
     return 0;
 }

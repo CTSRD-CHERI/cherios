@@ -33,8 +33,16 @@
 #include "cheric.h"
 #include "dylink.h"
 
+// WARN: If you bump this, make sure to increase the size of the statically sized TLS section in init/init.c
 #define USE_EXCEPTION_STACK
 #define EXCEPTION_STACK_SIZE 0x1000
+#define USE_EXCEPTION_UNSAFE_STACK
+#define EXCEPTION_UNSAFE_STACK_SIZE 0x400
+
+
+#ifdef  USE_EXCEPTION_UNSAFE_STACK
+    #define USE_EXCEPTION_STACK
+#endif
 
 #ifndef __ASSEMBLY__
 
@@ -49,6 +57,9 @@ typedef struct {
     register_t  padding;
 
     capability c2,c3,c4,c5,c6,c7,c8,c9, c12, c13,c14,c15,c16,c17,c18,c25;
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+    capability c10;
+#endif
 #ifdef USE_EXCEPTION_STACK
     capability c11;
 #endif

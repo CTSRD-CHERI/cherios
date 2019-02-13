@@ -38,6 +38,7 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "asm.S"
 #include "syscalls.h"
+#include "dylink.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Jump to various startup functions to initialise the C
@@ -77,6 +78,7 @@ start_common:
 # s2    : startup_args                                                                                                  #
 #                                                                                                                       #
 # c9    : auth (null if unsecure, otherwise our auth cap                                                                #
+# c7    : domain type reservation (may be null, be always have one if secure loaded)                                    #
 # These fields are setup by act_register itself. Although the queue is an argument to the function                      #
 #                                                                                                                       #
 # c20   : queue                                                                                                         #
@@ -87,7 +89,7 @@ start_common:
 
 	# Save arguments
 
-	cincoffset  $c11, $c11, -(7*CAP_SIZE)
+	cincoffset  $c11, $c11, -(8*CAP_SIZE)
 	move		$s0, $a0
     csc         $c3, $zero, 0($c11)
     csc         $c19, $zero, (CAP_SIZE*1)($c11)
@@ -96,6 +98,7 @@ start_common:
     csc         $c22, $zero, (CAP_SIZE*4)($c11)
     csc         $c6,  $zero, (CAP_SIZE*5)($c11)
     csc         $c9,  $zero, (CAP_SIZE*6)($c11)
+    csc         $c7,  $zero, (CAP_SIZE*7)($c11)
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -115,6 +118,9 @@ start_common:
     dsubu       $s6, $t0, $a6
     clc         $c26, $s1, 0($c4)
     cincoffset  $c26, $c26, $s6                  #   Locals (unbounded)
+
+
+    cscbi       $c7, CTLP_OFFSET_CDS($idc)      # store our sealing type
 
     dla		    $t0, crt_init_new_globals
     dsubu       $t0, $t0, $a5
@@ -190,7 +196,7 @@ start_common:
 	clc $c6, $zero, (CAP_SIZE*2)($c11)          # queue
 	clc $c7, $zero, (CAP_SIZE*4)($c11)          # process ref
     clc $c8, $zero, (CAP_SIZE*1)($c11)          # mop
-    clc $c9, $zero, (CAP_SIZE*5)($c11)          # code_write
+    clc $c9, $zero, (CAP_SIZE*7)($c11)          # cdl tres
     move        $a0, $s2                        # flags
 
     call_func   libuser_init

@@ -59,26 +59,30 @@
 # entry function pointers have the same type. But they cannot be interchanged due to this guard.
 # The guard should also be used to encode state to protect against multi threading/
 
-# Layout of globals table:
 
-###########  FIXME: There are now ABI requirements for exception handler pcc/idc/c1 here
+# These diagrams are in increasing address order. Stacks grow downwards so the base of a stack is last.
+
+# Layout of capability thread local pointer (CTLP) table:
+
+###########
 # Guard   # <-- $ctlp, a guard with type and state
+# ex_pcc  #
+# ex_idc  #
+# ex_c1   #
 # csp     # the stack to use on entry
 # cusp    # the unsafe stack to use on entry, currently must update this in every prolog as we may be exiting
 # cds     # the domain sealer
 # cdl     # the domain link procedure
 # cgp     # the capability to our globals
-###########
-# Locals  # the result of our globals
+# ....    # the rest of our thread local capabilities
 ###########
 
 
 # An unsafe stack (not in use):
 
-############## <--- cusp
-# spare slot # Filled in when we up the stack
-# cnsp       # Loaded when we up the stack, and stored when we down
 ##############
+# cnsp       # Loaded when we up the stack, and stored when we down
+############## <--- cusp
 
 # An unsafe stack (in use):
 
@@ -88,22 +92,24 @@
 
 # A safe stack:
 
-################# <-- cfp
-# UNSAFE static #
-# SAFE static   # The first item here is a back pointer to the last csp
+#################
+# SAFE dynamic  # <-- csp
 ################# <-- cbp
-# SAFE dynamic  #
-################# <-- csp
+# SAFE static   #
+# cpsp          # a pointer back to the previous stack
+# cnsp space    # space for cnsp when we empty this stack
+# UNSAFE static #
+################# <-- cfp
 
 
-
-# A return closure :
+# A return closure. The saves are safe, the guard and ctlp are unsafe:
 
 #########
-# Guard # <- idc (only unsafe thing, padded to one cap)
-######### # FIXME: There are now ABI requirements for exception handler pcc/idc/c1 here
 # Saves #
 #########
+# Guard # <- idc
+# ctlp  # the ctlp to restore
+######### # FIXME: There are now ABI requirements for exception handler pcc/idc/c1 here (put a null in ex_pcc / ex_idc?)
 
 
 
@@ -157,7 +163,7 @@
 # really just a tmp
 
 #define cds                 $c14
-#define ctmp                $c14
+#define ctmp                $c15
 
 .text
 
@@ -291,15 +297,21 @@ STUB_END plt_common_trusting
 # We will need multiple copies of this for different arg numbers in order to clear the correct argument regs
 # We give one here that will pass all argument regs (including c13)
 
-#define CLO_SAFE_SIZE       ( CAP_SIZE + (8 * CAP_SIZE) + (8 * REG_SIZE))
-#define CLO_UNSAFE_SIZE     CAP_SIZE
+# We have 8 cap regs to save (not including stacks). We normally need 2 caps for forward/back, but we are scavenging the one normally used for forward
+#define CLO_SAFE_SIZE       ((STACK_LINK_SIZE - CAP_SIZE) + (8 * CAP_SIZE) + (8 * REG_SIZE))
+#define CLO_UNSAFE_SIZE     (CAP_SIZE * 2)
 #define CLO_SIZE            (CLO_SAFE_SIZE + CLO_UNSAFE_SIZE)
 
 STUB_BEGIN plt_common_untrusting
 
 # FIXME: Now out of date since nanokernel introduced constraints on idc for exceptions
 
-csc             csp,    $zero,  -(CLO_UNSAFE_SIZE + 2*CAP_SIZE)(cusp)
+li              $1, -0x200
+cincoffset      $c15,   cusp, $1
+neg             $1, $1
+csetbounds      $c15,   $c15, $1        # WARN: use _exactly_ this instruction to trigger a new unsafe stack to be created
+
+csc             csp,    $zero,  (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack
 clc             cusp,   $zero,  CSP_OFF_NEXT(cusp)
 
@@ -319,7 +331,7 @@ csc             cusp,   $zero,  CTLP_OFFSET_CUSP(ctlp)                # store ou
 
 # Save all our callee saved regs as we do not trust our callee to do it
 
-SAVE_C  $c17
+SAVE_C  $c17  # scavanged forward pointer
 .set    ctr, (ctr + CAP_SIZE) # We stored csp here so skip this slot
 SAVE_C  $c18
 SAVE_C  $c19
@@ -338,26 +350,29 @@ SAVE_R  $s6
 SAVE_R  $s7
 
 cgetpcc         cra
-cincoffset      cra, cra, (4 * 15)
+cincoffset      cra, cra, (4 * 16)
 
 clc             cds,    $zero,  CTLP_OFFSET_CDS(ctlp)                                        # seal our return closure
-cincoffset      csp,    csp,    (CLO_SIZE - REG_SIZE)
+cincoffset      ctmp,   csp,    CLO_SAFE_SIZE
 cseal           cra,    cra,    cds
-cseal           crd,    csp,    cds
+cseal           crd,    ctmp,   cds
 
 cld             $at,    $zero,  0(ctlp)
 daddiu          $t0,    $at,    ((returnable_ready - callable_taken) + (1 * 256))
-csd             $t0,    $zero,  0(csp)                                              # set type of this closure
+csd             $t0,    $zero,  0(ctmp)                                              # set type of this closure
+csc             ctlp,   $zero,  CAP_SIZE(ctmp)
 sync
 
 daddiu          $at, $at, ((callable_ready - callable_taken) + (1 * 256))
-csd             $at, $zero, 0(ctlp)                                                  # set type of ctlp
+csd             $at, $zero, 0(ctlp)                                                  # set type of ctlp. Adverary can enter now
 
 cclearhi        0b0000011111111001                                                  # this passes c17/c18
 cclearlo        0b1111110000000001                                                  # this passes c1/c2 and arg regs
 ccall_slotless  $c1, $c2, 2
 
-# Here is the return code
+# Here is the return code. First check the guard
+
+# idc points to the stack. It is actually already what will be our unsafe stack
 
 3:
 dli             $t1,    returnable_used
@@ -368,9 +383,21 @@ cscd            $t0,    $t1,    $idc
 beqz            $t0,    2b
 daddiu          $at,    (callable_ready - returnable_ready)
 
-# We know this is a legal return closure, but we still might be returning too early
-cincoffset      cusp,   $idc,   (REG_SIZE - CLO_UNSAFE_SIZE)                       # this will be our eventual cusp
+# We know this is a legal return closure. We can now load ctlp and check it is in a correct state.
+cmove           cusp, $idc                      # actually our current stack, but will be cusp on return so might as well be in this reg
+clc             ctlp, $zero, CAP_SIZE($idc)
 
+# We still might be returning too early
+# at contains what we expect to find in our ctlp. Check we have it then mark ourselves as taken
+
+2:clld          $t0,    ctlp
+tne             $t0,    $at
+daddiu          $t0,    (callable_taken - callable_ready) + (-1 * 256)
+cscd            $t0,    $t0,    $idc
+beqz            $t0,    2b
+nop
+
+# It is only now safe to access other fields of ctlp, so restore our stacks. We have the stacks,
 
 .set            ctr,    0
 .macro REST_C reg
@@ -378,14 +405,14 @@ cincoffset      cusp,   $idc,   (REG_SIZE - CLO_UNSAFE_SIZE)                    
     clc  \reg, $zero, (-ctr)(cusp)
 .endmacro
 .macro REST_R reg
-    .set ctr, (ctr + CAP_SIZE)
+    .set ctr, (ctr + REG_SIZE)
     cld  \reg, $zero, (-ctr)(cusp)
 .endmacro
 
-# Restore everything saved
+# Restore everything saved. If this is an attack this will be junk, but we don't use any of it until the check
 
-REST_C  $c17
-REST_C  csp
+REST_C  $c17 # scavanged forward pointer
+REST_C  csp # back pointer
 REST_C  $c18
 REST_C  $c19
 REST_C  $c20
@@ -402,21 +429,14 @@ REST_R  $s5
 REST_R  $s6
 REST_R  $s7
 
-# at contains what we expect to find in our ctlp. Check we have it then remark ourselves as taken
-
-2:clld          $t0,    ctlp
-tne             $t0,    $at
-daddiu          $t0,    (callable_taken - callable_ready) + (-1 * 256)
-cscd            $t0,    $t0,    $idc
-beqz            $t0,    2b
-
-# It is only now safe to access other fields of ctlp, so restore our stacks. We have the stacks,
 # We just need to correct the up link on cusp
 
 clc             ctmp,   $zero,  CTLP_OFFSET_CUSP(ctlp)
 # -MIGHT- need to store csp and cusp if someone got the address of this from another function. unsure.
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
 csc             ctmp,   $zero,  CSP_OFF_NEXT(cusp)
+
+
 ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_untrusting

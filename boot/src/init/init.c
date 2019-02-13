@@ -439,7 +439,7 @@ static void load_modules(init_info_t * init_info) {
 }
 
 // Init will not have a TLS segment provided
-char tls_segment[0x1000];
+char tls_segment[0x2000];
 
 capability
 crt_init_globals_init()

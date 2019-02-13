@@ -68,7 +68,7 @@ __asm__ (                       \
     ".end " #name "\n"          \
 );
 
-#define PLT_STUB_CGP_ONLY_COMPLETE_TRUST(name, obj, tls, tls_reg, alias, alias2) \
+#define PLT_STUB_CGP_ONLY_MODE_SEL(name, obj, tls, tls_reg, alias, alias2) \
 __asm__ (                       \
     SANE_ASM                    \
     ".text\n"                   \
@@ -78,48 +78,13 @@ __asm__ (                       \
     "" #name ":\n"              \
     alias                       \
     WEAK_DUMMY(name)            \
-    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
-    "clcbi       $c12,%capcall20(plt_common_complete_trusting)($c25)\n"             \
+    WEAK_DUMMY(obj)             \
+    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n" \
+    "clcbi       $c12,%capcall20(" EVAL5(STRINGIFY(obj)) "_dummy)($c25)\n"          \
     "cjr         $c12                                 \n"                           \
     "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     alias2                      \
     ".end " #name "\n"          \
-);
-
-#define PLT_STUB_CGP_ONLY_TRUST(name, obj, tls, tls_reg, alias, alias2) \
-__asm__ (                       \
-    SANE_ASM                    \
-    ".text\n"                   \
-    ".p2align 3\n"              \
-    ".global " #name "\n"       \
-    ".ent " #name "\n"          \
-    "" #name ":\n"              \
-    alias                       \
-    WEAK_DUMMY(name)            \
-    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
-    "clcbi       $c12,%capcall20(plt_common_trusting)($c25)\n"             \
-    "cjr         $c12                                 \n"                           \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
-    ".end " #name "\n"          \
-    alias2                      \
-);
-
-#define PLT_STUB_CGP_ONLY_UNTRUST(name, obj, tls, tls_reg, alias, alias2) \
-__asm__ (                       \
-    SANE_ASM                    \
-    ".text\n"                   \
-    ".p2align 3\n"              \
-    ".global " #name "\n"       \
-    ".ent " #name "\n"          \
-    "" #name ":\n"              \
-    alias                       \
-    WEAK_DUMMY(name)            \
-    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
-    "clcbi       $c12,%capcall20(plt_common_untrusting)($c25)\n"                    \
-    "cjr         $c12                                 \n"                           \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
-    ".end " #name "\n"          \
-    alias2                      \
 );
 
 typedef void common_t(void);
@@ -141,16 +106,21 @@ typedef void common_t(void);
         __asm__ ("cscbi %[d], %%capcall20(" #name "_dummy)($c25)\n"::[d]"C"(plt_if -> name):);
 
     #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
-    void init_ ## type (type* plt_if, capability data);      \
+    void init_ ## type (type* plt_if, capability data, capability trust_mode);      \
+    void init_ ## type ##_change_mode(capability trust_mode);                       \
     void init_ ## type ##_new_thread(type* plt_if, capability data);
 
     #define DEFINE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
-    void init_ ## type (type* plt_if, capability data) {      \
+    void init_ ## type (type* plt_if, capability data, capability trust_mode) {      \
         __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
+        __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
         LIST(INIT_OBJ)                                                                \
     }\
     void init_ ## type ##_new_thread(type* plt_if, capability data) {      \
             __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
+    }\
+    void init_ ## type ##_change_mode(capability trust_mode) {\
+    __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
     }
 
     #define PLT_common(type, LIST, per_thr, tls_reg, tls)    \
@@ -161,7 +131,8 @@ typedef void common_t(void);
     DECLARE_DEFAULT(type, per_thr)          \
     LIST(DECLARE_STUB,)                     \
     DECLARE_PLT_INIT(type, LIST, tls_reg, tls) \
-    DEFINE_DUMMYS(LIST)
+    DEFINE_DUMMYS(LIST) \
+    __attribute__((weak)) extern void type ## _data_obj_dummy(void);
 
     #define DUMMY_HELP(name,...) __attribute__((weak)) extern void name ## _dummy(void);
 
@@ -181,8 +152,8 @@ typedef void common_t(void);
 
 
     #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_CSD)
-    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_COMPLETE_TRUST)
-    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB_CGP_ONLY_COMPLETE_TRUST)
+    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_MODE_SEL)
+    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB_CGP_ONLY_MODE_SEL)
 
     // These are the mode stubs
     extern void plt_common_single_domain(void);

@@ -116,6 +116,29 @@ static mop_t make_mop_for_process(process_t* proc) {
 	return mop;
 }
 
+static top_t proc_get_own_top(void) {
+	// For now proc_man will grab the first top.
+	static top_t own_top;
+
+	if(own_top == NULL) {
+		assert(try_init_tman_ref() != NULL);
+		own_top = type_get_first_top();
+		assert(own_top != NULL);
+	}
+	return own_top;
+}
+
+static top_t top_for_process(process_t* proc) {
+    if(proc->top == NULL) {
+        top_t own_top = proc_get_own_top();
+        ERROR_T(top_t) new = type_new_top(own_top);
+        if(!IS_VALID(new)) return NULL;
+        proc->top = new.val;
+    }
+
+    return proc->top;
+}
+
 static act_control_kt create_activation_for_image(image* im, const char* name, register_t arg, capability carg, capability pcc,
                                                   char* stack_args, size_t stack_args_size, process_t * process, uint8_t cpu_hint, startup_flags_e flags) {
     reg_frame_t frame;
@@ -125,11 +148,17 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
     queue_t* queue = setup_c_program(&env, &frame, im, arg, carg, pcc, stack_args, stack_args_size, process->mop);
 
-    if(process->im.secure_loaded) {
-    	frame.mf_t0 = foundation_entry_vaddr(process->im.load_type.secure.secure_entry) - process->im.entry;
-    } else {
-		frame.mf_t0 = cheri_getbase(im->load_type.basic.seg_table[im->code_index]);
-    }
+    uint64_t base;
+    if(im->tls_num == 1) {
+        if(process->im.secure_loaded) {
+           base = foundation_entry_vaddr(process->im.load_type.secure.secure_entry) - process->im.entry;
+        } else {
+            base = cheri_getbase(im->load_type.basic.seg_table[im->code_index]);
+        }
+        process->load_base = base;
+    } else base = process->load_base;
+
+    frame.mf_t0 = base;
 
     if(queue == NULL) {
         cap_pair pair = env.alloc(0x100, &env);
@@ -144,6 +173,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 		// we need c3 for the trampoline. C0 would be useless anyway as it points to the unsecure copy
   		frame.cf_c1 = &foundation_enter_dummy;
 	 	frame.cf_c2 = &PLT_UNIQUE_OBJECT(nano_kernel_if_t);
+	 	frame.cf_c7 = type_get_new(top_for_process(process)).val;
 	}
 
 	frame.mf_s2 = flags;
@@ -244,32 +274,13 @@ static void deliver_mop(mop_t mop) {
 	}
 }
 
-static top_t proc_get_own_top(void) {
-	// For now proc_man will grab the first top.
-	static top_t own_top;
-
-	if(own_top == NULL) {
-		assert(try_init_tman_ref() != NULL);
-		own_top = type_get_first_top();
-		assert(own_top != NULL);
-	}
-	return own_top;
-}
-
 static top_t __get_top_for_process(process_t* proc) {
 
 	proc = unseal_live_proc(proc);
 
 	if(proc == NULL) return NULL;
 
-	if(proc->top == NULL) {
-		top_t own_top = proc_get_own_top();
-		ERROR_T(top_t) new = type_new_top(own_top);
-		if(!IS_VALID(new)) return NULL;
-		proc->top = new.val;
-	}
-
-	return proc->top;
+    return top_for_process(proc);
 }
 
 static void handle_termination(register_t thread_num, process_t* proc, act_kt target) {

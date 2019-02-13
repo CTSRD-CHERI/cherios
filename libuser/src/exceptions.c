@@ -35,14 +35,19 @@
 #include "assert.h"
 #include "exception_cause.h"
 
-int trampoline_registered = 0;
+__thread int trampoline_registered = 0;
 
 handler_t* handle_vector[MIPS_CP0_EXCODE_NUM];
 handler_t* chandle_vector[CAP_CAUSE_NUM];
 
 #ifdef USE_EXCEPTION_STACK
-capability exception_stack[EXCEPTION_STACK_SIZE/sizeof(capability)];
+// Really want an annotation to set offset for this, but it doesn't exit. Will hack it in assembly in register.
+__thread capability exception_stack[EXCEPTION_STACK_SIZE/sizeof(capability)];
 #endif
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+__thread capability unsafe_exception_stack[EXCEPTION_UNSAFE_STACK_SIZE/sizeof(capability)];
+#endif
+
 
 void register_vectored_exception(handler_t* handler, register_t excode) {
     assert(excode < MIPS_CP0_EXCODE_NUM);
@@ -63,7 +68,23 @@ void register_exception_raw(ex_pcc_t* exception_pcc, capability exception_idc) {
     get_ctl()->ex_idc = exception_idc;
 
     if(trampoline_registered == 0) {
-
+        // Dont know how to get relocations with offsets in C so...
+#define INC_STACK(SN, I)    \
+        __asm__ (\
+                "clcbi  $c1, %%captab_tls20("SN")($c26)      \n"\
+                "li     $t0, %[im]                                      \n"\
+                "cincoffset $c1, $c1, $t0                               \n"\
+                "cscbi  $c1, %%captab_tls20("SN")($c26)      \n"\
+                    :\
+                    : [im]"i"(I)\
+                    : "t0", "$c1"\
+                )
+#ifdef USE_EXCEPTION_STACK
+        INC_STACK("exception_stack", EXCEPTION_STACK_SIZE);
+#endif
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+        INC_STACK("unsafe_exception_stack", EXCEPTION_UNSAFE_STACK_SIZE);
+#endif
         exception_subscribe();
         trampoline_registered = 1;
     }

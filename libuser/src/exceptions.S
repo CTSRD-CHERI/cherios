@@ -110,6 +110,9 @@
 #ifdef USE_EXCEPTION_STACK
     .set SAVE_SIZE, (SAVE_SIZE + CAP_SIZE)
 #endif
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+    .set SAVE_SIZE, (SAVE_SIZE + CAP_SIZE)
+#endif
 
 .set STACK_INC, RED_ZONE + SAVE_SIZE
 
@@ -126,18 +129,14 @@ user_exception_trampoline_vector:
 ## Create a new stack
 
 #ifdef USE_EXCEPTION_STACK
-clcbi       $c1, CTLP_OFFSET_CGP($idc)
-clcbi       $c1, %captab20(exception_stack)($c1)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
-cincoffset  $c1, $c1, (EXCEPTION_STACK_SIZE/8)
+clcbi       $c1, %captab_tls20(exception_stack)($idc)
 cscbi       $c11, -CAP_SIZE($c1)
 cmove       $c11, $c1
+#endif
+
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+cscbi       $c10, -(CAP_SIZE*2)($c11)
+clcbi       $c10, %captab_tls20(unsafe_exception_stack)($idc)
 #endif
 
 cincoffset  $c11, $c11, -(STACK_INC)
@@ -226,6 +225,10 @@ foreachi    load_reg, 0, 0, REG_LIST
 
 cincoffset  $c11, $c11, (STACK_INC)
 
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+cscbi       $c10, %captab_tls20(unsafe_exception_stack)($idc)
+#endif
+
 clcbi       $c1, CTLP_OFFSET_CGP($idc)                          # $c1 is now our globals
 clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)
 
@@ -242,6 +245,11 @@ normal_return:
 # So we can use the macros
 
 # LLVM is really stupid, we can't use idc for non thread local things - have to use c1
+
+#FIXME: We need to save c10 otherwise we will not actually be using unsafe stack properly
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+clcbi       $c10, (-CAP_SIZE*2)($c11)
+#endif
 #ifdef USE_EXCEPTION_STACK
 clcbi       $c11, (-CAP_SIZE)($c11)
 #endif
@@ -249,6 +257,9 @@ clcbi       $c1, %capcall20(exception_return_dummy)($c1)
 ccall_slotless $c1, $idc, 2
 
 replay_return:
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+clcbi       $c10, (-CAP_SIZE*2)($c11)
+#endif
 #ifdef USE_EXCEPTION_STACK
 clcbi       $c11, (-CAP_SIZE)($c11)
 #endif

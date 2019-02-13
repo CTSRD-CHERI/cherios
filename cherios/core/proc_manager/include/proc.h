@@ -53,6 +53,7 @@ typedef struct process_t {
     act_control_kt threads[MAX_THREADS];
     size_t n_threads;
     size_t terminated_threads;
+    uint64_t load_base;
 } process_t;
 
 

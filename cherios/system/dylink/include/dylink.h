@@ -67,6 +67,8 @@ DECLARE_ENUM(domain_type_t, DOMAIN_TYPE_LIST)
 // From unsafe stack end
 #define CSP_OFF_PREV    (-2 * CAP_SIZE)
 
+#define STACK_LINK_SIZE (2 * CAP_SIZE)
+
 #ifndef __ASSEMBLY__
 
 #include "stddef.h"
@@ -93,7 +95,7 @@ typedef struct CTL_t {
     capability ex_c1;
     capability csp;
     capability cusp;
-    capability cds;
+    sealing_cap cds;
     entry_stub_t* cdl;
     capability cgp;
     capability captable[];

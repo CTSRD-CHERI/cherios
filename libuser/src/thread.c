@@ -46,6 +46,7 @@
 
 act_kt proc_man_ref = NULL;
 process_kt proc_handle = NULL;
+sealing_cap cds_for_new_threads;
 
 extern void thread_start(void);
 extern void secure_thread_start(void);
@@ -210,6 +211,8 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
 
     crt_init_new_locals(segment_table, r_start, r_stop);
 
+    get_ctl()->cds = cds_for_new_threads;
+
     object_init(self_ctrl, queue, kernel_if_c, NULL, flags, 0);
 
     start(arg, carg);
@@ -345,6 +348,7 @@ thread thread_new(const char* name, register_t arg, capability carg, thread_star
 void thread_init(void) {
     if(was_secure_loaded) {
         // New threads in secure load mode should go through secure_thread_start
+        cds_for_new_threads = get_ctl()->cds;
         entry_t e = foundation_new_entry(0, &secure_thread_start, own_auth);
         assert(e != NULL);
     }

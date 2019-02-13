@@ -77,7 +77,7 @@ start:
 	cmove       $c6, $c20 # queue
 	cmove       $c7, $c4  # process ref (NULL)
     cmove       $c8, $c4  # MOP         (NULL)
-    cgetdefault $c9       # plt_auth
+    cnull       $c9       # cdl tres
     li          $a0, 0    # flags (NONE)
     call_func   libuser_init
 

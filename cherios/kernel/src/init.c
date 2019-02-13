@@ -95,7 +95,7 @@ int cherios_main(nano_kernel_if_t* interface,
 	/* This MUST be called before trying to use the nano kernel, which we will need to do in order
 	 * to get access to the phy mem we need */
 
-    init_nano_kernel_if_t(interface, def_data);
+    init_nano_kernel_if_t(interface, def_data, &plt_common_complete_trusting);
 
     int_cap = get_integer_space_cap();
 

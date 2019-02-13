@@ -86,17 +86,26 @@ static void setup_temporal_handle(startup_flags) {
 }
 
 void object_init(act_control_kt self_ctrl, queue_t * queue,
-                 kernel_if_t* kernel_if_c, capability plt_auth, // TODO remove plt_auth, we have fixed plt stubs
+                 kernel_if_t* kernel_if_c, tres_t cds_res,
                  startup_flags_e startup_flags, int first_thread) {
 
     act_self_ctrl = self_ctrl;
 
 	if(first_thread) {
+        was_secure_loaded = (own_auth != NULL);
         init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
-        init_kernel_if_t(kernel_if_c, self_ctrl);
+        if(cds_res) {
+            get_ctl()->cds = tres_take(cds_res);
+        }
+        // WARN: These are non de-dupped versions. We will have to do this _again_ after dedup
+        init_kernel_if_t(kernel_if_c, self_ctrl, was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
     } else {
         init_kernel_if_t_new_thread(kernel_if_c, self_ctrl);
     }
+
+	// For secure loaded things this is needed before any calls into the kernel
+	// However this is pre-dedup / compact. Will have to call a couple more times
+    setup_temporal_handle(startup_flags);
 
     int_cap = get_integer_space_cap();
 
@@ -116,17 +125,14 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
                 get_dedup() != NULL) {
                 stats = deduplicate_all_functions(0);
                 did_dedup = 1;
+                // Re-do these. Will need to do again after compact.
+                init_kernel_if_t_change_mode(was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
+                setup_temporal_handle(startup_flags);
         }
     }
 #endif
-    // Tag exceptions can happen when we first use an unsafe stack. We will handle these to get a stack.
-    // We can also get a length violation if we need a new one.
-
-    setup_temporal_handle(startup_flags);
-
 
     if(first_thread) {
-        was_secure_loaded = (own_auth != NULL);
         if(was_secure_loaded) own_found_id = foundation_get_id(own_auth);
     }
 
@@ -196,6 +202,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 
 void object_init_post_compact(startup_flags_e startup_flags, int first_thread) {
     setup_temporal_handle(startup_flags);
+    init_kernel_if_t_change_mode(was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
 }
 
 // Called when main exits

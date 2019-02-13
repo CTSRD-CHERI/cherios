@@ -70,6 +70,6 @@ static inline void init_nano_if_sys(void) {
     : "a0", "a1", "t0", "$c1", "$c2"
     );
 
-    init_nano_kernel_if_t(&interface, data);
+    init_nano_kernel_if_t(&interface, data, NULL);
 }
 #endif //CHERIOS_USERNANO_H
