@@ -134,7 +134,6 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
         frame->mf_s5 = im->tls_mem_size;
     } else {
         frame->cf_c8 = im->load_type.secure.secure_entry;
-        frame->cf_c9 = carg;
     }
 
     frame->mf_t0 = cheri_getbase(pcc);

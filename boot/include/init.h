@@ -42,21 +42,21 @@
 #include "elf.h"
 
 typedef enum module_type {
+    m_user = 0,
 	m_memmgt,
 	m_namespace,
 	m_uart,
 	m_fs,
     m_proc,
 	m_core,
-	m_user,
 	m_dedup,
 	m_dedup_init,
 	m_tman,
 	m_virtblk,
 	m_virtnet,
-	m_secure,
 	m_nginx,
-	m_fence
+	m_fence,
+	m_secure = 0x100
 } module_t;
 
 typedef struct init_elem_s {

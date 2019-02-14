@@ -168,7 +168,7 @@ init_elem_t init_list[] = {
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, 1)
-    B_PENTRY(m_nginx, "nginx.elf",NGINX_ARGS_L,1)
+    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1)
     B_PENTRY(m_user, "top.elf", 0, 1)
 #if 0
 	#define T3(_arg) \
@@ -219,6 +219,7 @@ Elf_Env env;
 
 /* Return the capability needed by the activation */
 static void * get_act_cap(module_t type, init_info_t* info) {
+    type = (type & ~m_secure);
     switch(type) {
         case m_uart:
             return info->uart_cap;
@@ -405,7 +406,10 @@ static void load_modules(init_info_t * init_info) {
 		if(be->cond == 0)
 			continue;
 
-		if(be->type == m_fence) {
+		int secure = (be->type & m_secure) == m_secure;
+		module_t type = be->type & ~m_secure;
+
+		if(type == m_fence) {
             if(be->arg) {
                 while(namespace_get_ref((int)be->arg) == NULL) {
                     nssleep(3);
@@ -416,7 +420,7 @@ static void load_modules(init_info_t * init_info) {
 			continue;
 		}
 
-        void *carg = get_act_cap(be->type, init_info);
+        void *carg = get_act_cap(type, init_info);
         capability  addr = load_check(be->name);
 
         desc.arg = be->arg;
@@ -425,13 +429,14 @@ static void load_modules(init_info_t * init_info) {
         desc.stack_args_size = 0;
         desc.cpu_hint = SMP_CORES-1;
         desc.flags = STARTUP_NONE;
+        desc.cert = NULL;
 
-        if(be->type == m_virtblk || be->type == m_virtnet) desc.cpu_hint = 0; // Some things really like to scheduled on core0 for interrupts
+        if(type == m_virtblk || type == m_virtnet) desc.cpu_hint = 0; // Some things really like to scheduled on core0 for interrupts
 
         /* This version allows the process to spawn new threads */
-        be->ctrl = thread_start_process(thread_create_process(be->name, addr, be->type == m_secure), &desc);
+        be->ctrl = thread_start_process(thread_create_process(be->name, addr, secure), &desc);
 
-        if(be->type == m_dedup) {
+        if(type == m_dedup) {
             dedup_act = syscall_act_ctrl_get_ref(be->ctrl);
         }
 		printf("Module ready: %s\n", be->name);

@@ -333,7 +333,8 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
         startup.stack_args_size = 0;
         startup.stack_args = NULL;
-        startup.carg = locked; // The C arg for a foundation doubles here as what to use as the invocation for the entry
+        startup.cert = locked;
+        startup.carg = NULL;
         startup.arg = 0; // DUMMY, passed through the start_message
         startup.pcc = NULL; // DUMMY, passed through the start_message
     }
