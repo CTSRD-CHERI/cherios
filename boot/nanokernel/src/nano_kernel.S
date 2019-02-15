@@ -339,7 +339,7 @@ nano_kernel_init:
     dli             $t2, (TOTAL_LOW_RAM_PAGES - (NANO_SIZE / PHY_PAGE_SIZE))
     dsubu           $t1, $t2, $t1   # len = LO_PAGES - NANO_PAGES - SYSTEM_PAGES
     PHY_LINK_LEN
-    PHY_SET_STATE   page_dirty
+    PHY_SET_STATE   PAGE_START_STATE
 
 #if RAM_TAGS != 0
     # Then the tag block
@@ -1413,7 +1413,7 @@ take_sub:
     nop
 
     # calculate base offset
-    neg         $t2, $t2
+    negu        $t2, $t2
     clb         $t2, $t2, (RES_SUBFIELD_SIZE_OFFSET-RES_SUBFIELD_BITMAP_OFFSET)($c3)   # t2 is the scale
     daddiu      $t8, $t3, 1
     dsllv       $t3, $t3, $t2                               # baseoff
@@ -2595,7 +2595,7 @@ foundation_create:
     # calculate amount needed to ensure after
     cgetaddr    $t3, $c3            # start of reservation
     daddu       $t3, $t3, $t1       # earliest place imagae can be placed
-    neg         $t3, $t3
+    negu        $t3, $t3
     and         $t3, $t3, $t2       # how much to round up image placement
     daddu       $t1, $t1, $t3       # treat as extra meta size
 
