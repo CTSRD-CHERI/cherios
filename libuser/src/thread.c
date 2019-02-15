@@ -43,6 +43,7 @@
 #include "string.h"
 #include "tman.h"
 #include "cprogram.h"
+#include "stdlib.h"
 
 act_kt proc_man_ref = NULL;
 process_kt proc_handle = NULL;
@@ -75,7 +76,6 @@ struct secure_start_t {
     register_t arg;
     spinlock_t once;
     capability segment_table[MAX_SEGS];
-    capability end[];
 };
 
 
@@ -296,11 +296,13 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
     } else {
 
         // New threads created by a foundation are started in foundation mode
+        // Can't allocate these as one block, this would make setting bounds hard
+
+        capability stack = malloc(DEFAULT_STACK_SIZE);
+        capability tls_seg = malloc(crt_tls_seg_size);
 
         size_t space_required =  RES_CERT_META_SIZE +           // to lock
-                                sizeof(struct secure_start_t) + // for our fields
-                                 DEFAULT_STACK_SIZE +           // for a stack
-                                crt_tls_seg_size;               // for tls
+                                sizeof(struct secure_start_t);  // for our fields
 
         res_t res = cap_malloc(space_required);
 
@@ -308,11 +310,8 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         cert_t locked = rescap_take_cert(res, &pair, CHERI_PERM_ALL, 1, own_auth);
 
         struct secure_start_t* start_message = ( struct secure_start_t*)pair.data;
-        char* stack = (char*)start_message->end;
-        char* tls_seg = stack + DEFAULT_STACK_SIZE;
 
-        stack = cheri_incoffset(cheri_setbounds(stack, DEFAULT_STACK_SIZE), DEFAULT_STACK_SIZE);
-        tls_seg = cheri_setbounds(tls_seg, crt_tls_seg_size);
+        stack = cheri_incoffset(stack, DEFAULT_STACK_SIZE);
 
         start_message->carg = carg;
         start_message->arg = arg;
