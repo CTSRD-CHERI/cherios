@@ -94,7 +94,7 @@ static void user_tcp_close_recv(tcp_session* tcp);
 static void user_tcp_close(tcp_session* tcp);
 
 tcp_session* tcp_head = NULL;
-
+size_t n_listens = 0;
 #define FOR_EACH_TCP(T) for(tcp_session* T = tcp_head; T != NULL; T = T->next)
 
 static tcp_session* alloc_tcp_session(void) {
@@ -414,7 +414,7 @@ static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
 
 static void send_connect_callback(tcp_session* tcp, err_t err) {
     capability sealed_tcp = (capability)tcp;
-    message_send((register_t)err, tcp->tcp_pcb->local_port, tcp->tcp_pcb->local_ip.addr, 0, tcp->callback_arg,
+    message_send((register_t)err, tcp->tcp_pcb->remote_port, tcp->tcp_pcb->remote_ip.addr, 0, tcp->callback_arg,
                  sealed_tcp, (capability)socket_internal_make_read_only(&tcp->tcp_output_pusher.r), NULL,
                  tcp->callback, SEND, tcp->callback_port);
     socket_internal_requester_connect(&tcp->tcp_output_pusher.r);
@@ -535,6 +535,8 @@ static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
 
     if(er != ERR_OK) return (uintptr_t)er;
 
+    n_listens++;
+
     return cheri_seal(listen_session, sealer);
 }
 
@@ -544,6 +546,8 @@ static void stop_listening(capability sealed) {
     err_t er = tcp_close(listen_session->tcp_pcb);
 
     assert(er == ERR_OK);
+
+    n_listens--;
 
     free(listen_session);
 
@@ -671,8 +675,8 @@ int main(register_t arg, capability carg) {
             FOR_EACH_TCP(T) {
                 n++;
             }
-            printf("Sign of life now = %lx. (%d)(%d) Open TCPS = %lx\n",
-                   now, ints, fake_ints, n);
+            printf("Sign of life now = %lx. (%d)(%d) Listeners = %ld. Open TCPS = %lx\n",
+                   now, ints, fake_ints, n_listens, n);
             stats_display();
         }
         sock_event = 0;
