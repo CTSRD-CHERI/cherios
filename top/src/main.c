@@ -179,6 +179,6 @@ int main(register_t arg, capability carg) {
         socket_internal_requester_space_wait(stdout->write.push_writer,1,0,0);
         socket_internal_request_ind(stdout->write.push_writer, table_buffer, LTOTAL, 0);
 
-        sleep(MS_TO_CLOCK(5 * 1000));
+        sleep(MS_TO_CLOCK(1 * 1000));
     }
 }
