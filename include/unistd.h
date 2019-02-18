@@ -50,6 +50,8 @@ static inline FILE_t open(const char* name, int mode, enum SOCKET_FLAGS flags) {
     ERROR_T(FILE_t) res = open_er(name, mode, flags);
     return IS_VALID(res) ? res.val : NULL;
 }
+
+void process_async_closes(int force);
 ssize_t close(FILE_t file);
 #define write(file,buf,length) socket_send(file,buf,length,0)
 #define read(file,buf,length) socket_recv(file,buf,length,0)

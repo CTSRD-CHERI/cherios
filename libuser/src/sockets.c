@@ -1118,7 +1118,9 @@ ssize_t socket_requester_request_wait_for_fulfill(uni_dir_socket_requester* requ
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags) {
     // Need to copy to buffer in order not to expose buf
 
-    socket_flush_drb(sock);
+    ssize_t flush = socket_flush_drb(sock);
+    if(flush < 0) return flush;
+
     if((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR) catch_up_write(sock);
 
     int dont_wait;
@@ -1166,7 +1168,9 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags) {
 
-    socket_flush_drb(sock);
+    ssize_t flush = socket_flush_drb(sock);
+    if(flush < 0) return flush;
+
     if(((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) catch_up_read(sock);
 
     int dont_wait;
@@ -1229,8 +1233,10 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
     uint8_t in_type;
     uint8_t out_type;
 
-    socket_flush_drb(sockout);
-    socket_flush_drb(sockin);
+    ssize_t flush = socket_flush_drb(sockout);
+    if(flush < 0) return flush;
+    flush = socket_flush_drb(sockin);
+    if(flush < 0) return flush;
 
     int em_w = sockout->flags & MSG_EMULATE_SINGLE_PTR;
     int em_r = sockin->flags & MSG_EMULATE_SINGLE_PTR;
@@ -1339,12 +1345,14 @@ ssize_t socket_flush_drb(unix_like_socket* socket) {
         ssize_t align_extra = socket_internal_drb_space_alloc(&socket->write_copy_buffer,
                                                               (uint64_t)-1,
                                         len,
-                                        0,
+                                        socket->flags & MSG_DONT_WAIT,
                                         &c1,
                                         &c2,
                                         &p1,
                                         socket->write.push_writer);
-        assert_int_ex(align_extra, ==, 0);
+
+        if(align_extra < 0) return align_extra;
+
         socket->write_copy_buffer.partial_length = 0;
 
         socket_internal_request_ind(socket->write.push_writer, c1, p1, p1);

@@ -109,8 +109,11 @@ int fputc(int character, FILE *f) {
 
     drb->buffer[(drb->requeste_ptr + drb->partial_length++) & (drb->buffer_size-1)] = (char)character;
 
-    if(character == '\n' || (drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size))
-        socket_flush_drb(f);
+    if(character == '\n' || (drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size)) {
+        ssize_t flush = socket_flush_drb(f);
+        assert(flush >= 0);
+    }
+
 }
 
 int fputs(const char* str, FILE* f) {

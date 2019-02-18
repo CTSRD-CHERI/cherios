@@ -212,6 +212,7 @@ void object_destroy() {
         flush(stdout);
         flush(stderr);
     #endif
+    process_async_closes(1);
     syscall_act_terminate(act_self_ctrl);
 }
 

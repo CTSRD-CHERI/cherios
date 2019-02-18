@@ -78,8 +78,11 @@ FRESULT unlink(const char* name) {
 }
 
 ssize_t truncate(FILE_t file) {
-    socket_flush_drb(file);
+    ssize_t flush = socket_flush_drb(file);
+    if(flush < 0) return flush;
     assert(file->con_type & CONNECT_PUSH_WRITE);
+    ssize_t space = socket_internal_requester_space_wait(file->write.push_writer, 1, file->flags & MSG_DONT_WAIT, 0);
+    if(space < 0) return space;
     return socket_internal_request_oob(file->write.push_writer, REQUEST_TRUNCATE, NULL, 0, 0);
 }
 
@@ -149,36 +152,108 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
     return MAKE_ER(FILE_t,result);
 }
 
+__thread FILE_t async_free_head;
+
+asyn_close_state_e try_close(FILE_t file) {
+    asyn_close_state_e new_state = file->close_state;
+
+    ssize_t res;
+
+    int dont_wait = file->flags & MSG_DONT_WAIT;
+
+    switch (new_state) {
+        case ASYNC_NEED_FLUSH_DRB:
+            res = socket_flush_drb(file);
+            if(res == E_SOCKET_CLOSED) res = 0;
+            if(res < 0) break;
+
+            new_state =  ASYNC_NEED_REQ_CLOSE;
+        case ASYNC_NEED_REQ_CLOSE:
+            if(file->con_type & CONNECT_PUSH_WRITE) {
+                res = socket_internal_requester_space_wait(file->write.push_writer, 1, dont_wait, 0);
+                if(res == E_SOCKET_CLOSED) res = 0;
+                if(res < 0) break;
+                socket_internal_request_oob(file->write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
+            }
+
+            new_state = ASYNC_NEED_REQS_WRITE;
+        case ASYNC_NEED_REQS_WRITE:
+            if(file->con_type & CONNECT_PUSH_WRITE) {
+                res = socket_internal_requester_space_wait(file->write.push_writer, file->write.push_writer->buffer_size, dont_wait, 0);
+                if(res == E_SOCKET_CLOSED) res = 0;
+                if(res < 0) break;
+            }
+
+            new_state = ASYNC_NEED_REQS_READ;
+        case ASYNC_NEED_REQS_READ:
+
+            if(file->con_type & CONNECT_PULL_READ) {
+                res = socket_internal_requester_space_wait(file->read.pull_reader, file->read.pull_reader->buffer_size, dont_wait, 0);
+                if(res == E_SOCKET_CLOSED) res = 0;
+                if(res < 0) break;
+            }
+
+            new_state = ASYNC_FREE_RES;
+        case ASYNC_FREE_RES:
+            res = socket_close(file);
+            if(res == E_SOCKET_CLOSED) res = 0;
+            assert(res == 0);
+            if(!(file->flags & SOCKF_RR_INLINE) && (file->con_type & CONNECT_PULL_READ)) free(file->read.pull_reader);
+            if(!(file->flags & SOCKF_WR_INLINE) && (file->con_type & CONNECT_PUSH_WRITE)) free(file->write.push_writer);
+            if(!(file->flags & SOCKF_DRB_INLINE) && (file->write_copy_buffer.buffer)) free(file->write_copy_buffer.buffer);
+            if(!(file->flags & SOCKF_SOCK_INLINE)) free(file);
+
+            new_state = ASYNC_DONE;
+        case ASYNC_DONE:
+            {}
+    }
+
+    if(new_state != ASYNC_DONE) file->close_state = new_state;
+    return new_state;
+}
+
+static ssize_t delay_close(FILE_t file) {
+    file->delay_close_next = async_free_head;
+    async_free_head = file;
+    return 0;
+}
+
+void process_async_closes(int force) {
+    FILE_t* last_ptr = &async_free_head;
+    FILE_t f = async_free_head;
+
+    while(f) {
+        FILE_t next = f->delay_close_next;
+        if(force) f->flags &=~MSG_DONT_WAIT;
+        if(try_close(f) != ASYNC_DONE) {
+            assert(!force);
+            *last_ptr = f;
+            last_ptr = &f->delay_close_next;
+        }
+        f = next;
+    }
+
+    *last_ptr = NULL;
+}
+
+
+
 ssize_t close(FILE_t file) {
+    process_async_closes(0); // Now is a good time to do this
+
     if(file->custom_close) return file->custom_close(file);
 
-    socket_flush_drb(file);
+    asyn_close_state_e try = try_close(file);
 
-    if(file->con_type & CONNECT_PUSH_WRITE &&
-            socket_internal_requester_space_wait(file->write.push_writer, 1, 0, 0) == 0) {
-        socket_internal_request_oob(file->write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
-    }
+    if(try != ASYNC_DONE) delay_close(file);
 
-    // TODO this flush may block and lead to performance degradation. Should setup async close
-    flush(file);
-
-    ssize_t result = socket_close(file);
-
-    if(result == E_SOCKET_CLOSED) result = 0;
-
-    if(result == 0) {
-        if(!(file->flags & SOCKF_RR_INLINE) && (file->con_type & CONNECT_PULL_READ)) free(file->read.pull_reader);
-        if(!(file->flags & SOCKF_WR_INLINE) && (file->con_type & CONNECT_PUSH_WRITE)) free(file->write.push_writer);
-        if(!(file->flags & SOCKF_DRB_INLINE) && (file->write_copy_buffer.buffer)) free(file->write_copy_buffer.buffer);
-        if(!(file->flags & SOCKF_SOCK_INLINE)) free(file);
-    }
-
-    return result;
+    return 0;
 }
 
 ssize_t lseek(FILE_t file, int64_t offset, int whence) {
 
-    socket_flush_drb(file);
+    ssize_t flush = socket_flush_drb(file);
+    if(flush < 0) return flush;
 
     unix_like_socket* sock = file;
     int em = file->flags & MSG_EMULATE_SINGLE_PTR;
@@ -210,9 +285,15 @@ ssize_t lseek(FILE_t file, int64_t offset, int whence) {
     return 0;
 }
 
+ssize_t soft_flush(FILE_t file) {
+    // TODO send a flush on the socket.
+    return 0;
+}
+
 ssize_t flush(FILE_t file) {
     if(file->con_type & CONNECT_PUSH_WRITE) {
-        socket_flush_drb(file);
+        ssize_t flush = socket_flush_drb(file);
+        assert(flush >= 0);
         socket_internal_requester_wait_all_finish(file->write.push_writer, 0);
     }
     if(file->con_type & CONNECT_PULL_READ) {

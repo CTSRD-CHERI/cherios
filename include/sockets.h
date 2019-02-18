@@ -241,6 +241,15 @@ typedef union {
     uni_dir_socket_fulfiller pull_writer;
 } socket_writer_t;
 
+typedef enum {
+    ASYNC_NEED_FLUSH_DRB = 0,
+    ASYNC_NEED_REQ_CLOSE,
+    ASYNC_NEED_REQS_WRITE,
+    ASYNC_NEED_REQS_READ,
+    ASYNC_FREE_RES,
+    ASYNC_DONE
+} asyn_close_state_e;
+
 typedef ssize_t close_fun(struct unix_like_socket* sock);
 typedef enum poll_events custom_poll_f(struct unix_like_socket* sock, enum poll_events asked_events, int set_waiting);
 
@@ -248,9 +257,11 @@ typedef enum poll_events custom_poll_f(struct unix_like_socket* sock, enum poll_
 typedef struct unix_like_socket {
     enum SOCKET_FLAGS flags;
     enum socket_connect_type con_type;
+    asyn_close_state_e close_state;
     uint8_t sockn;
     close_fun* custom_close;
     custom_poll_f* custom_poll;
+    struct unix_like_socket* delay_close_next;
     data_ring_buffer write_copy_buffer; // If we push write and are worried about delays we need a buffer
     // data_ring_buffer read_copy_buffer; // Do we copy for pull reading? Otherwise how do we know when consume has happened?
     // If we emulate a single pointer these are used to track how far behind we are with read/write
