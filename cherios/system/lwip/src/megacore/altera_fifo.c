@@ -157,7 +157,7 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 #define WRITE                                                                           \
         word = (uint32_t)((read_buf >> (got_bits)) & 0xFFFFFFFF);                       \
         while(tx_fifo->ctrl_fill_level == AVALON_FIFO_TX_BASIC_OPTS_DEPTH);             \
-        if(len == 0 && !more) tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP);   \
+        if(len == 0 && (got_bits == 0) && !more) tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP);   \
         tx_fifo->symbols = word;
 
         uint32_t word;
