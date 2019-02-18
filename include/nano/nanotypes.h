@@ -144,8 +144,10 @@
 #define PHY_RAM_SIZE                    (1024 * 1024 * 1024) // 1GB
 #define RAM_PRE_IO_END                  PHY_RAM_SIZE
 #define RAM_POST_IO_START               0x80008000
-#define RAM_TAGS                        ((((PHY_RAM_SIZE + (1024 * 1024)) / (8 * CAP_SIZE)) + (PHY_PAGE_SIZE-1)) & ~(PHY_PAGE_SIZE-1))
+#define RAM_TAGS                        (((((PHY_RAM_SIZE + (1024 * 1024)) / (8 * CAP_SIZE)) + (PHY_PAGE_SIZE-1)) & ~(PHY_PAGE_SIZE-1)) * 8)
 #endif
+
+#define PAGE_START_STATE                page_dirty // Should be page_dirty
 
 #define IO_HOLE                         (RAM_POST_IO_START - RAM_PRE_IO_END)
 
