@@ -290,8 +290,6 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 			idc = *rd_ptr;
 		}
 
-		// Offset by 2 instructions for the cjal + nop
-		return_address = (capability)((uint32_t*)return_address-2);
 		stack_pointer = stack_pointer - stack_size;
 
         if(unsafe) {
@@ -306,8 +304,18 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 
 		if(last_idc != idc) {
 			// we are backtracking across a boundry
+
+			// FIXME: Teach backtracer about untrusting ABI / temporal safe ABI better
+			int sealed = cheri_getsealed(idc);
+
 			idc = NONSEALED(idc);
 			return_address = NONSEALED(return_address);
+
+			if(sealed) {
+				// Untusting call creates a closure. Puts IDC here:
+				idc = ((capability*)(idc))[1];
+			}
+
 			capability * sp_ptr = (capability *)(((char*)idc) + CTLP_OFFSET_CSP);
 			if(check_cap(sp_ptr)) {
 				printf("***bad frame (idc switch bad)***");
@@ -316,6 +324,9 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 			stack_pointer = (char*)*sp_ptr;
 			print_change_stack(stack_pointer);
 		}
+
+		// Offset by 2 instructions for the cjal + nop
+		return_address = (capability)((uint32_t*)return_address-2);
 
         print_end();
 
