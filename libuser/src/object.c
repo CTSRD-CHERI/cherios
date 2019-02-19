@@ -59,6 +59,7 @@ __thread queue_t * act_self_queue = NULL;
 int    was_secure_loaded;
 auth_t own_auth;
 found_id_t* own_found_id;
+startup_flags_e default_flags;
 
 extern void memset_c(void);
 
@@ -90,6 +91,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
                  startup_flags_e startup_flags, int first_thread) {
 
     act_self_ctrl = self_ctrl;
+    default_flags = startup_flags;
 
 	if(first_thread) {
         was_secure_loaded = (own_auth != NULL);

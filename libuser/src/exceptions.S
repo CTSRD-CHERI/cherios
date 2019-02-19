@@ -215,6 +215,10 @@ call_func_reg
 
 # Restore everything (but v0 which contains what to do next)
 
+#ifdef USE_EXCEPTION_UNSAFE_STACK
+cscbi       $c10, %captab_tls20(unsafe_exception_stack)($idc)
+#endif
+
 load_reg    $t0, 21, 0
 mthi        $t0
 load_reg    $t0, 22, 0
@@ -224,10 +228,6 @@ foreachi    load_cap, 0, 0, CAP_LIST
 foreachi    load_reg, 0, 0, REG_LIST
 
 cincoffset  $c11, $c11, (STACK_INC)
-
-#ifdef USE_EXCEPTION_UNSAFE_STACK
-cscbi       $c10, %captab_tls20(unsafe_exception_stack)($idc)
-#endif
 
 clcbi       $c1, CTLP_OFFSET_CGP($idc)                          # $c1 is now our globals
 clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)

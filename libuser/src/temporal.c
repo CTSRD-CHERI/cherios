@@ -38,6 +38,33 @@
 
 // WARN: It is a _really_ bad idea to call a function that will use too much unsafe stack from here.
 // WARN: We can cope with exactly 1 use of the unsafe stack (enough for secure loaded things to make a call out)
+
+capability new_stack(capability old_c10) {
+
+    assert(cheri_getlen(old_c10) != EXCEPTION_UNSAFE_STACK_SIZE);
+
+    uint64_t default_unsafe_stack_size = MinStackSize + UNTRANSLATED_PAGE_SIZE + MEM_REQUEST_MIN_REQUEST;
+
+    if(old_c10 != NULL) {
+        assert(cheri_getoffset(old_c10) < MinStackSize);
+        mem_release(cheri_getbase(old_c10), default_unsafe_stack_size, 1, own_mop);
+    }
+
+    // FIXME: mem_request will consume some of the temporal unsafe stack
+    // FIXME: we should give ourselves a new one if it looks like its running out
+    ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, 0, own_mop);
+    // if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
+
+    cap_pair pair;
+    rescap_take(stack_res.val, &pair);
+
+    capability new_c10 = pair.data;
+
+    new_c10 = cheri_setoffset(new_c10, default_unsafe_stack_size);
+
+    return new_c10;
+}
+
 int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
 // Looking for: csetbounds     $c15, $c15, MinStackSize  <-- will fail if too small or non existant
 
@@ -62,28 +89,21 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
     old_c10 = cheri_getreg(10);
 #endif
 
-    uint64_t default_unsafe_stack_size = MinStackSize + UNTRANSLATED_PAGE_SIZE + MEM_REQUEST_MIN_REQUEST;
-
-    if(old_c10 != NULL) {
-        mem_release(cheri_getbase(old_c10), default_unsafe_stack_size, 1, own_mop);
-    }
-
-    // FIXME: mem_request will consume some of the temporal unsafe stack
-    // FIXME: we should give ourselves a new one if it looks like its running out
-    ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, 0, own_mop);
-    //if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
-
-    cap_pair pair;
-    rescap_take(stack_res.val, &pair);
-
-    capability new_c10 = pair.data;
-
-    new_c10 = cheri_setoffset(new_c10, default_unsafe_stack_size);
+    capability new_c10 = new_stack(old_c10);
 
     get_ctl()->ex_pcc = (ex_pcc_t*)(((char*)epcc) + 4);
 
 #ifdef USE_EXCEPTION_UNSAFE_STACK
     restore_frame->c10 = new_c10;
+
+    __thread static int replaced_first_c10 = 0;
+    capability  old_ex_c10 = cheri_getreg(10);
+
+    if(replaced_first_c10 == 0 || cheri_getoffset(old_ex_c10) < MinStackSize) {
+        capability new_ex_c10 = new_stack(replaced_first_c10 ? old_ex_c10 : NULL);
+        cheri_setreg(10, new_ex_c10);
+        replaced_first_c10 = 1;
+    }
 #else
     cheri_setreg(10, new_c10);
 #endif

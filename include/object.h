@@ -53,6 +53,7 @@ extern __thread queue_t * act_self_queue;
 extern int    was_secure_loaded;
 extern auth_t own_auth; // like a private key for a foundation
 extern found_id_t* own_found_id; // like a public key
+extern startup_flags_e default_flags;
 extern act_kt memmgt_ref;
 
 act_kt try_init_memmgt_ref(void);

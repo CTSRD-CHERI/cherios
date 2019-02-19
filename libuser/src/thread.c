@@ -150,8 +150,6 @@ __asm__ (
     ".end thread_start"
 );
 
-// FIXME: Just wont work with the new ABI
-
 __asm__ (
     SANE_ASM
         ".text\n"
@@ -281,6 +279,8 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
     startup_desc_t startup;
 
     startup.cpu_hint = cpu_hint;
+
+    startup.flags = default_flags;
 
     if(!was_secure_loaded) {
 
