@@ -503,8 +503,6 @@ static capability pool[POOL_SIZE/sizeof(capability)];
 
 int main(init_info_t * init_info, capability pool_auth_cap) {
 
-	stats_init();
-
     env.free = &tmp_free;
     env.alloc = &tmp_alloc;
     env.printf = &printf;
@@ -528,7 +526,6 @@ int main(init_info_t * init_info, capability pool_auth_cap) {
     acts_wait_for_finish(init_list, init_list_len);
 
 	printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
-	stats_display();
 
     syscall_shutdown(REBOOT);
 }

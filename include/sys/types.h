@@ -81,6 +81,18 @@ typedef struct cap_pair {
     capability data;
 } cap_pair;
 
+#ifdef HARDWARE_fpga
+#define STAT_DEBUG_LIST(ITEM,...) 		\
+	ITEM(cycle, 	" cycle "__VA_ARGS__)			\
+	ITEM(inst, 		" insts " __VA_ARGS__)				\
+	ITEM(dtlb_miss, "dtlbmis"__VA_ARGS__)		\
+	ITEM(itlb_miss, "itlbmis"__VA_ARGS__)
+#else
+#define STAT_DEBUG_LIST(ITEM, ...)
+#endif
+
+#define STAT_MEMBER(name, ...) uint64_t name;
+
 typedef struct act_info_s {
     char* name;
     uint64_t had_time;
@@ -90,6 +102,8 @@ typedef struct act_info_s {
     status_e status;
     sched_status_e sched_status;
     uint8_t cpu;
+
+    STAT_DEBUG_LIST(STAT_MEMBER)
 
     uint64_t had_time_epoch;
 } act_info_t;

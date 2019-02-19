@@ -48,7 +48,6 @@ set(INIT_SRCS
     src/init/init_utils.c
     ${CMAKE_SOURCE_DIR}/tmpalloc/src/alloc.c
     ${CMAKE_SOURCE_DIR}/elf/src/cprogram.c
-    src/init/stats.c
     src/init/ufs_module.c
     ${UFS_DIR}/src/ufs_read.c
 )

@@ -33,6 +33,7 @@
 #include "syscalls.h"
 #include "sys/types.h"
 #include "stdlib.h"
+#include "macroutils.h"
 
 #define MAX_TRACK 100
 #define MAX_DISPLAY 30
@@ -40,7 +41,7 @@
 act_info_t* info_global;
 
 int cmp(const void* a, const void* b) {
-    int64_t diff = (int64_t)(info_global[*(size_t*)b].had_time_epoch - info_global[*(size_t*)a].had_time_epoch);
+    int64_t diff = (int64_t)(info_global[*(size_t*)b].had_time - info_global[*(size_t*)a].had_time);
     return diff > 0 ? 1 : (int)(diff >> 32);
 }
 
@@ -59,10 +60,14 @@ int cmp(const void* a, const void* b) {
 #define CTRL_START ANSI_CURSOR_SAVE ANSI_ESC_C ANSI_CURSOR_HOME
 #define CTRL_END ANSI_CURSOR_RESTORE
 
-#define H1 "|----------------------------------------------------------------------------|\n"
-#define H2 "|      Name      |Total Time| Time |CPU| Switches | Sent | Recv |   Status   |\n"
-#define H3 "|----------------+----------+------+---+----------+------+------+------------|\n"
-#define H4 "                                                                              \n"
+#define STAT_STR_TOP(item, ...) "--------------"
+#define STAT_STR_MID(item, str, ...) "|" str "/ cpX "
+#define STAT_STR_BOT(item, ...) "+-------------"
+#define STAT_STR_EMP(item, ...) "              "
+#define H1 "|----------------------------------------------------------------------------"STAT_DEBUG_LIST(STAT_STR_TOP)"|\n"
+#define H2 "|      Name      |Total Time| Time |CPU| Switches | Sent | Recv |   Status   "STAT_DEBUG_LIST(STAT_STR_MID)"|\n"
+#define H3 "|----------------+----------+------+---+----------+------+------+------------"STAT_DEBUG_LIST(STAT_STR_BOT)"|\n"
+#define H4 "                                                                             "STAT_DEBUG_LIST(STAT_STR_EMP)" \n"
 
 #define LL (sizeof(H1)-1)
 #define LC0 (sizeof(CTRL_START)-1)
@@ -70,6 +75,25 @@ int cmp(const void* a, const void* b) {
 
 #define LTOTAL (LL * (MAX_DISPLAY + 4)) + LC0 + LC1
 
+
+char suf_ar[] = {' ', 'K', 'M', 'G', 'T', 'P', 'E'};
+
+#define factor 1000
+
+typedef struct n_short {
+    uint64_t val;
+    char suffix;
+} n_short;
+
+static n_short make_short(uint64_t large, size_t largest) {
+    uint64_t val = large;
+    size_t ndx = 0;
+    while(val > largest) {
+        val /= factor;
+        ndx ++;
+    }
+    return (n_short){.val = val, .suffix = suf_ar[ndx]};
+}
 
 
 int main(register_t arg, capability carg) {
@@ -156,9 +180,22 @@ int main(register_t arg, capability carg) {
             uint64_t per_c = per_k / 10;
             uint64_t decimal = per_k % 10;
             uint64_t total = CLOCK_TO_MS(act_info->had_time) / 1000;
-            snprintf(buf, LL + 1, "|%16s|%9lds|%3ld.%1ld%%|%3d|%10ld|%6ld|%6ld|%12s|\n",
+
+#define STAT_FORMAT(item, ...) "|%6ld%c/%1ld.%02ld%c"
+
+#define STAT_DEF(item, ...) n_short item ## _short = make_short(act_info-> item, 999999); \
+                            n_short item ## _shortC = act_info->item ? make_short((act_info->cycle * 100) / act_info->item , 999) : \
+                                                      (n_short){.val = 0, .suffix = 'X'};
+
+#define STAT_VAL(item, ...) \
+    , (item ## _short).val, (item ## _short).suffix, \
+    (item ## _shortC).val / 100, (item ## _shortC).val % 100, (item ## _shortC).suffix
+
+            STAT_DEBUG_LIST(STAT_DEF)
+
+            snprintf(buf, LL + 1, "|%16s|%9lds|%3ld.%1ld%%|%3d|%10ld|%6ld|%6ld|%12s"STAT_DEBUG_LIST(STAT_FORMAT)"|\n",
                    act_info->name, total, per_c, decimal, act_info->cpu, act_info->switches,
-                   act_info->sent_n, act_info->received_n, sched_str);
+                   act_info->sent_n, act_info->received_n, sched_str STAT_DEBUG_LIST(STAT_VAL));
             buf += LL;
         }
 

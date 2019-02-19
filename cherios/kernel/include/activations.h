@@ -109,6 +109,12 @@ typedef struct act_t
     uint64_t switches;
     uint64_t had_time;
     uint64_t had_time_epoch;
+
+#ifdef HARDWARE_fpga
+    // on FPGA we get some hardware counters
+	STAT_DEBUG_LIST(STAT_MEMBER)
+#endif
+
 #endif
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */

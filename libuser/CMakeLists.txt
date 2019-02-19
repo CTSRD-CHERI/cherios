@@ -48,7 +48,6 @@ set(LIBUSER_SRCS
     src/ctype.c
     src/ssleep.c
     src/errno.c
-    src/statcounters.c
     src/net.c
     src/virtioblk.c
     ${LWIP_DIR}/src/core/ipv4/ip4_addr.c

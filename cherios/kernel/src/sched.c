@@ -37,6 +37,11 @@
 #include "nano/nanokernel.h"
 #include "cp0.h"
 #include "boot_info.h"
+#ifdef K_DEBUG
+#ifdef HARDWARE_fpga
+#include "statcounters.h"
+#endif
+#endif
 
 /* todo: sleep cpu */
 static act_t idle_acts[SMP_CORES];
@@ -73,6 +78,7 @@ typedef struct sched_pool {
     uint8_t     pool_id;
 #if (K_DEBUG)
     uint32_t    last_time;
+    STAT_DEBUG_LIST(STAT_MEMBER)
 #endif
 } sched_pool;
 
@@ -440,11 +446,20 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 #if (K_DEBUG)
         uint32_t last_time = pool->last_time;
         uint32_t now = (uint32_t)cp0_count_get();
+#define GET_STAT(item, ...) uint64_t item = get_ ## item ##_count();
+#define INC_STAT(item, ...) kernel_curr_act->item += (item - pool->item);
+#define SET_STAT(item, ...) pool->item = item;
+
+        STAT_DEBUG_LIST(GET_STAT)
+
         if(kernel_curr_act) {
+            //resetStatCounters(); reset is a lie for some of the stats. Track ourselves.
+			STAT_DEBUG_LIST(INC_STAT)
             kernel_curr_act->had_time += now - last_time;
             kernel_curr_act->had_time_epoch += now - last_time;
         }
         pool->last_time = now;
+        STAT_DEBUG_LIST(SET_STAT)
 #endif
 
 		if(hint != kernel_curr_act) {
