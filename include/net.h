@@ -33,6 +33,10 @@
 #define LWIP_SOCKET_TYPES           1
 #define LWIP_SOCKET                 0
 
+#define SHUT_RD 1
+#define SHUT_WR 2
+#define SHUT_RDWR (SHUT_RD | SHUT_WR)
+
 #include "sockets.h"
 #include "lwip/ip_addr.h"
 #include "lwip/err.h"
@@ -123,6 +127,6 @@ NET_SOCK accept(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen
 
 NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags);
 
-int shutdown(NET_SOCK sockfd, int how);
+ssize_t shutdown(NET_SOCK sockfd, int how);
 
 #endif //CHERIOS_NET_H

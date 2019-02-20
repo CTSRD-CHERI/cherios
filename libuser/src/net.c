@@ -377,7 +377,39 @@ NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrle
     return ns;
 }
 
-int shutdown(NET_SOCK sockfd, int how) {
-    // TODO
-    assert(0);
+ssize_t shutdown(NET_SOCK sockfd, int how) {
+
+    if( how & SHUT_RD) {
+        assert(0);
+    }
+
+    if( how & SHUT_WR) {
+        asyn_close_state_e new_state = sockfd->sock.close_state;
+
+        ssize_t res = 0;
+
+        int dont_wait = sockfd->sock.flags & MSG_DONT_WAIT;
+
+        switch (new_state) {
+            case ASYNC_NEED_FLUSH_DRB:
+                res = socket_flush_drb(&(sockfd->sock));
+                if (res == E_SOCKET_CLOSED) res = 0;
+                if (res < 0) break;
+
+                new_state = ASYNC_NEED_REQ_CLOSE;
+            case ASYNC_NEED_REQ_CLOSE:
+                if (sockfd->sock.con_type & CONNECT_PUSH_WRITE) {
+                    res = socket_internal_requester_space_wait(sockfd->sock.write.push_writer, 1, dont_wait, 0);
+                    if (res == E_SOCKET_CLOSED) res = 0;
+                    if (res < 0) break;
+                    socket_internal_request_oob(sockfd->sock.write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
+                }
+
+                new_state = ASYNC_NEED_REQS_WRITE;
+            default:{}
+        }
+
+        sockfd->sock.close_state = new_state;
+        return res;
+    }
 }
