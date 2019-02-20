@@ -139,6 +139,7 @@ static precision_rounded_length round_cheri_length(size_t length) {
 #define STOREC(type) "csc" SUF_ ## type
 #define STORE(type) "cs" SUF_ ## type
 #define OUT(type) "=" OUT_ ## type
+#define CLOBOUT(type) "=&" OUT_ ## type
 #define IN(type) OUT_ ## type
 #define INOUT(type) "+" OUT_ ## type
 #define CTYPE(type) CTYPE_ ## type

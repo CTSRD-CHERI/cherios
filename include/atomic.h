@@ -44,7 +44,7 @@ __asm__ __volatile__ (                              \
     STOREC(type) "   %[tmp], %[add], %[ptr]  \n"    \
     "beqz           %[tmp], 1b              \n"     \
     "nop                                    \n"     \
-: [tmp] "=r" (tmp), [out] OUT(type) (result), [add] OUT(type) (added) \
+: [tmp] "=r" (tmp), [out] CLOBOUT(type) (result), [add] CLOBOUT(type) (added) \
 : [ptr] "C" (pointer), [v] IN(val_type) (val)       \
 :)    ;                                             \
 }                                                   \
@@ -67,7 +67,7 @@ STOREC(type) " %[res], %[new], %[ptr]    \n"                \
 "beqz   %[res], 1b                      \n"                 \
 "nop                                    \n"                 \
 "2:                                     \n"                 \
-: [tmp] OUT(type) (tmp), [res] "=r" (result)                     \
+: [tmp] CLOBOUT(type) (tmp), [res] "=&r" (result)                     \
 : [ptr] "C" (pointer), [old] IN(type) (old_val), [new] IN(type) (new_val) \
 :);                                                         \
 }
