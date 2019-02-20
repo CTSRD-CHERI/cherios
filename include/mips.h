@@ -352,10 +352,12 @@ INT_SIZES(define_intypes)
 #define	MIPS_CP0_CAUSE_IP_TIMER		(1 << MIPS_CP0_INTERRUPT_TIMER)
 
 
-#define L1_LINE_SIZE                128 // Not according to the doc, but according to john
+#define L1_LINE_SIZE                128 // Not according to the doc, but according to john. Will be 64 for MEM128
 #define L2_LINE_SIZE                128
 
-#define CACHE_L1_INDEXS             ((16 * 1024) / 32) // 16K, 32 byte entries
+#define L1_SIZE						(32 * 1024)
+
+#define CACHE_L1_INDEXS             ((L1_SIZE) / L1_LINE_SIZE)
 
 #define CACHE_L1_INST               0
 #define CACHE_L1_DATA               1

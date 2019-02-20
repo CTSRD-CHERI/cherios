@@ -312,6 +312,12 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
     // TODO: Currently this compact allows overlap (as this is the same behavior as the linker)
     // TODO: We coould also have a mode where we pad to stop aliasing
 
+    // L2 is shared, so just invalidate L1
+
+    for(uint64_t j = 0; j != CACHE_L1_INDEXS; j++) {
+        CACHE_OP(CACHE_OP_INDEX_INVAL(CACHE_L1_INST), 0, j);
+    }
+
     capability last_compact = NULL;
     for(i = 0; i != n_to_move; i++) {
 
@@ -377,7 +383,9 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
 
     }
 
-    // FIXME: Invalidate ICache
+    for(uint64_t j = 0; j != CACHE_L1_INDEXS; j++) {
+        CACHE_OP(CACHE_OP_INDEX_INVAL(CACHE_L1_INST), 0, j);
+    }
 
     // Danger over. Can call things again.
 
