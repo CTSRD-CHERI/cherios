@@ -55,6 +55,7 @@ __thread act_control_kt act_self_ctrl = NULL;
 __thread act_kt act_self_ref  = NULL;
 __thread act_notify_kt act_self_notify_ref = NULL;
 __thread queue_t * act_self_queue = NULL;
+__thread user_stats_t* own_stats;
 
 int    was_secure_loaded;
 auth_t own_auth;
@@ -110,6 +111,16 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     setup_temporal_handle(startup_flags);
 
     int_cap = get_integer_space_cap();
+
+    own_stats = syscall_act_user_info_ref(self_ctrl);
+
+    if(cheri_getreg(10) != NULL) {
+        // temporal will have failed to bump stats correctly
+        own_stats->temporal_reqs = 2;
+        own_stats->temporal_depth = 2;
+    } else {
+        own_stats->temporal_depth = 1;
+    }
 
 	act_self_ref  = syscall_act_ctrl_get_ref(self_ctrl);
     act_self_notify_ref = syscall_act_ctrl_get_notify_ref(self_ctrl);

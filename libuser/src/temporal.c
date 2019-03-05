@@ -35,7 +35,8 @@
 #include "mman.h"
 
 #define MinStackSize    0x2000 // The compiler throws away stacks smaller than this!
-
+// TODO - make this as large as can be represented exactly, or add logic to align up base/top
+#define Overrequest     (1*UNTRANSLATED_PAGE_SIZE) + MEM_REQUEST_MIN_REQUEST
 // WARN: It is a _really_ bad idea to call a function that will use too much unsafe stack from here.
 // WARN: We can cope with exactly 1 use of the unsafe stack (enough for secure loaded things to make a call out)
 
@@ -43,7 +44,7 @@ capability new_stack(capability old_c10) {
 
     assert(cheri_getlen(old_c10) != EXCEPTION_UNSAFE_STACK_SIZE);
 
-    uint64_t default_unsafe_stack_size = MinStackSize + UNTRANSLATED_PAGE_SIZE + MEM_REQUEST_MIN_REQUEST;
+    uint64_t default_unsafe_stack_size = MinStackSize + Overrequest;
 
     if(old_c10 != NULL) {
         assert(cheri_getoffset(old_c10) < MinStackSize);
@@ -54,6 +55,8 @@ capability new_stack(capability old_c10) {
     // FIXME: we should give ourselves a new one if it looks like its running out
     ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, 0, own_mop);
     // if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
+
+    if(own_stats) own_stats->temporal_reqs++;
 
     cap_pair pair;
     rescap_take(stack_res.val, &pair);
@@ -89,8 +92,18 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
     old_c10 = cheri_getreg(10);
 #endif
 
+    capability old_link = NULL;
+
+    if(old_c10) {
+        old_link = *(capability *)(((char*)old_c10) + CSP_OFF_NEXT);
+    }
+
+    if(!old_c10 && own_stats) own_stats->temporal_depth++;
     capability new_c10 = new_stack(old_c10);
 
+    if(old_link) {
+        *(capability *)(((char*)new_c10) + CSP_OFF_NEXT) = old_link;
+    }
     get_ctl()->ex_pcc = (ex_pcc_t*)(((char*)epcc) + 4);
 
 #ifdef USE_EXCEPTION_UNSAFE_STACK

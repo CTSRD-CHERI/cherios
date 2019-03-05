@@ -60,6 +60,12 @@ act_control_kt kernel_syscall_actlist_next(act_control_kt act) {
 	return next ? (act_control_kt)act_create_sealed_ctrl_ref(next) : NULL;
 }
 
+DECLARE_WITH_CD(user_stats_t*, kernel_syscall_act_user_info_ref(act_control_kt act));
+user_stats_t* kernel_syscall_act_user_info_ref(act_control_kt act) {
+	act_control_t* ctrl = act_unseal_ctrl_ref(act);
+	return cheri_setbounds_exact(&(ctrl->user_stats), sizeof(user_stats_t));
+}
+
 DECLARE_WITH_CD(void, kernel_syscall_act_info(act_control_kt act, act_info_t* info));
 void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
 	act_control_t* ctrl = act_unseal_ctrl_ref(act);
@@ -78,6 +84,7 @@ void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
 #define COPY_STAT(item, ...) info->item = ctrl->item;
     STAT_DEBUG_LIST(COPY_STAT)
 
+    info->user_stats = ctrl->user_stats;
 #endif
 }
 

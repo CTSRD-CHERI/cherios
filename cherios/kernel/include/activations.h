@@ -115,6 +115,7 @@ typedef struct act_t
 	STAT_DEBUG_LIST(STAT_MEMBER)
 #endif
 
+	user_stats_t user_stats;
 #endif
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */

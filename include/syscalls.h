@@ -77,6 +77,7 @@
         ITEM(syscall_actlist_first, act_control_kt, (void), __VA_ARGS__)\
         ITEM(syscall_actlist_next, act_control_kt, (act_control_kt act), __VA_ARGS__)\
         ITEM(syscall_act_info, void, (act_control_kt act, act_info_t* info), __VA_ARGS__)\
+        ITEM(syscall_act_user_info_ref, user_stats_t*, (act_control_kt act), __VA_ARGS__)\
         ITEM(syscall_info_epoch, void, (void), __VA_ARGS__)
 
 // Found by trial and error

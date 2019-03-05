@@ -49,6 +49,7 @@ extern __thread act_control_kt act_self_ctrl;
 extern __thread act_kt act_self_ref;
 extern __thread act_notify_kt act_self_notify_ref;
 extern __thread queue_t * act_self_queue;
+extern __thread user_stats_t* own_stats;
 
 extern int    was_secure_loaded;
 extern auth_t own_auth; // like a private key for a foundation

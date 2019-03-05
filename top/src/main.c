@@ -64,10 +64,17 @@ int cmp(const void* a, const void* b) {
 #define STAT_STR_MID(item, str, ...) "|" str "/ cpX "
 #define STAT_STR_BOT(item, ...) "+-------------"
 #define STAT_STR_EMP(item, ...) "              "
-#define H1 "|----------------------------------------------------------------------------"STAT_DEBUG_LIST(STAT_STR_TOP)"|\n"
-#define H2 "|      Name      |Total Time| Time |CPU| Switches | Sent | Recv |   Status   "STAT_DEBUG_LIST(STAT_STR_MID)"|\n"
-#define H3 "|----------------+----------+------+---+----------+------+------+------------"STAT_DEBUG_LIST(STAT_STR_BOT)"|\n"
-#define H4 "                                                                             "STAT_DEBUG_LIST(STAT_STR_EMP)" \n"
+
+#define USTAT_STR_TOP(item, ...) "-------"
+#define USTAT_STR_MID(item, str, ...) "|" str ""
+#define USTAT_STR_BOT(item, ...) "+------"
+#define USTAT_STR_EMP(item, ...) "       "
+
+
+#define H1 "|----------------------------------------------------------------------------"USER_STATS_LIST(USTAT_STR_TOP)STAT_DEBUG_LIST(STAT_STR_TOP)"|\n"
+#define H2 "|      Name      |Total Time| Time |CPU| Switches | Sent | Recv |   Status   "USER_STATS_LIST(USTAT_STR_MID)STAT_DEBUG_LIST(STAT_STR_MID)"|\n"
+#define H3 "|----------------+----------+------+---+----------+------+------+------------"USER_STATS_LIST(USTAT_STR_BOT)STAT_DEBUG_LIST(STAT_STR_BOT)"|\n"
+#define H4 "                                                                             "USER_STATS_LIST(USTAT_STR_EMP)STAT_DEBUG_LIST(STAT_STR_EMP)" \n"
 
 #define LL (sizeof(H1)-1)
 #define LC0 (sizeof(CTRL_START)-1)
@@ -191,11 +198,16 @@ int main(register_t arg, capability carg) {
     , (item ## _short).val, (item ## _short).suffix, \
     (item ## _shortC).val / 100, (item ## _shortC).val % 100, (item ## _shortC).suffix
 
-            STAT_DEBUG_LIST(STAT_DEF)
+#define USTAT_FORMAT(item, ...) "|%5ld%c"
+#define USTAT_DEF(item, ...) n_short item ## _short = make_short(act_info->user_stats. item, 99999);
+#define USTAT_VAL(item, ...) , (item ## _short).val, (item ## _short).suffix
 
-            snprintf(buf, LL + 1, "|%16s|%9lds|%3ld.%1ld%%|%3d|%10ld|%6ld|%6ld|%12s"STAT_DEBUG_LIST(STAT_FORMAT)"|\n",
+            STAT_DEBUG_LIST(STAT_DEF)
+            USER_STATS_LIST(USTAT_DEF)
+
+            snprintf(buf, LL + 1, "|%16s|%9lds|%3ld.%1ld%%|%3d|%10ld|%6ld|%6ld|%12s"USER_STATS_LIST(USTAT_FORMAT)STAT_DEBUG_LIST(STAT_FORMAT)"|\n",
                    act_info->name, total, per_c, decimal, act_info->cpu, act_info->switches,
-                   act_info->sent_n, act_info->received_n, sched_str STAT_DEBUG_LIST(STAT_VAL));
+                   act_info->sent_n, act_info->received_n, sched_str USER_STATS_LIST(USTAT_VAL) STAT_DEBUG_LIST(STAT_VAL));
             buf += LL;
         }
 

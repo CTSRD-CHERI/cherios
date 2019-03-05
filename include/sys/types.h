@@ -91,7 +91,15 @@ typedef struct cap_pair {
 #define STAT_DEBUG_LIST(ITEM, ...)
 #endif
 
+#define USER_STATS_LIST(ITEM, ...) \
+    ITEM(temporal_depth, "tdepth", __VA_ARGS__)\
+    ITEM(temporal_reqs, "treqst", __VA_ARGS__)\
+
 #define STAT_MEMBER(name, ...) uint64_t name;
+
+typedef struct user_stats_s {
+    USER_STATS_LIST(STAT_MEMBER)
+} user_stats_t;
 
 typedef struct act_info_s {
     char* name;
@@ -104,6 +112,7 @@ typedef struct act_info_s {
     uint8_t cpu;
 
     STAT_DEBUG_LIST(STAT_MEMBER)
+    user_stats_t user_stats;
 
     uint64_t had_time_epoch;
 } act_info_t;
