@@ -336,8 +336,21 @@ function(make_usage _target)
     )
 endfunction()
 
+set(CLANG_LOAD "SHELL:-Xclang -load")
+set(CLANG_LIB_T "SHELL:-Xclang ${CHERI_SDK_DIR}/lib/libTemporal.so")
+set(CLANG_STATS "-save-stats=obj")
+set(TEMP_A "SHELL:-mllvm -TemporalType=analysis")
+set(TEMP_C "SHELL:-mllvm -TemporalType=capture_track")
+set(TEMP_64 "SHELL:-mllvm -TemporalExpandLimit=64")
+set(TEMP_16 "SHELL:-mllvm -TemporalExpandLimit=16")
+set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
+
 function(add_cherios_module _target)
-  cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A)
+  set(oneValueArgs LINKER_SCRIPT)
+  set(multiValueArgs SOURCES)
+  cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
   if(NOT add_exe_LINKER_SCRIPT)
     message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
   elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
@@ -365,6 +378,11 @@ function(add_cherios_module _target)
     )
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
+
+  if(${add_exe_TEMPORAL_A})
+      target_compile_options(${_target} PUBLIC ${CLANG_LOAD} ${CLANG_LIB_T} ${TEMP_A} ${CLANG_STATS} ${TEMP_64})
+  endif()
+
 
   # add it to the filesystem dir if requested
   if(add_exe_ADD_TO_FILESYSTEM)
