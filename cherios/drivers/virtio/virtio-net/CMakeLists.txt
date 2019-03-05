@@ -9,4 +9,3 @@ set(VIRTIONET_SRCS
 )
 
 add_cherios_executable(virtio-net ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${VIRTIONET_SRCS})
-set_target_properties(virtio-net PROPERTIES COMPILE_FLAGS -mxgot)

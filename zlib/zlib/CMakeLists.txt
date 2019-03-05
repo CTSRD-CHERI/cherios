@@ -17,5 +17,5 @@ set(LIBZ_SRCS
 )
 
 add_library(z STATIC ${LIBZ_SRCS})
-set_target_properties(z PROPERTIES COMPILE_FLAGS -mxgot)
+
 add_library(CheriOS::LibZ ALIAS z)

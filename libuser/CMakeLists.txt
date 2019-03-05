@@ -55,8 +55,8 @@ set(LIBUSER_SRCS
 )
 
 add_library(user_early STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
+target_compile_definitions(user_early PUBLIC -DUSE_SYSCALL_PUTS)
 add_library(CheriOS::LibUserEarly ALIAS user_early)
-set_target_properties(user_early PROPERTIES COMPILE_FLAGS -DUSE_SYSCALL_PUTS)
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
 add_library(CheriOS::LibUser ALIAS user)

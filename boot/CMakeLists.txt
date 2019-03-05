@@ -106,7 +106,7 @@ add_dependencies(cherios init)
 add_dependencies(cherios kernel)
 add_dependencies(cherios nano)
 
-set_target_properties(cherios PROPERTIES COMPILE_FLAGS -DCHERIOS_BOOT)
+target_compile_definitions(cherios PUBLIC -DCHERIOS_BOOT)
 
 # Create the file system
 # HACK to make sure that file system is rebuilt after one of the targets changes

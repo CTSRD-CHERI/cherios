@@ -8,4 +8,3 @@ set(PRGA_SRCS
 )
 
 add_cherios_executable(prga ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${PRGA_SRCS})
-set_target_properties(prga PROPERTIES COMPILE_FLAGS -mxgot)
