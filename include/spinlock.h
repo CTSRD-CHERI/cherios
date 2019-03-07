@@ -83,7 +83,7 @@ static inline int spinlock_try_acquire(spinlock_t* lock, register_t times) {
             "beqz   %[result], 1b               \n"
             "nop                                \n"
     "2:"
-    :  [result]"=r"(result), [tmp]"=r"(tmp0)
+    :  [result]"=&r"(result), [tmp]"=&r"(tmp0)
     : [lock]"C"(&lock->lock), [times]"r"(times)
     :
     );

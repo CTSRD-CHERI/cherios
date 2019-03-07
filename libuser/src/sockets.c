@@ -69,10 +69,8 @@ static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_v
             "csh    %[new_requeste], $zero, 0(%[new_cap])      \n"
             "cscc   $at, %[res], %[waiting_cap]                \n"
             "clc    %[res], $zero, 0(%[waiting_cap])           \n"
-    : [res]"=C"(waiter),
-    [new_cap]"+C"(ptr) // This is listed as an output because otherwise it seems to get clobered...
-    : [waiting_cap]"C"(waiter_cap),
-    [new_requeste]"r"(new_val)
+    : [res]"=&C"(waiter)
+    : [waiting_cap]"C"(waiter_cap), [new_cap]"C"(ptr), [new_requeste]"r"(new_val)
     : "at"
     );
 
@@ -114,7 +112,7 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
                 "beqz   %[res], 2b                  \n"
                 "li     %[res], 1                   \n"
                 "1:                                 \n"
-        : [res]"+r"(result)
+        : [res]"=&r"(result)
         : [wc]"C"(wait_cap), [cc]"C"(closed_cap), [mc]"C"(monitor_cap),[self]"C"(act_self_notify_ref),
                 [im]"r"(im_off), [cmp]"r"(comp_val)
         : "$c1"
@@ -975,7 +973,7 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
     "cllc   %[res], %[wc]           \n"
             "cscc   $at, %[res], %[wc]      \n"
             "clc    %[res], $zero, 0(%[wc]) \n"
-    : [res]"=C"(waiter)
+    : [res]"=&C"(waiter)
     : [wc]"C"(waiter_cap)
     : "at"
     );
