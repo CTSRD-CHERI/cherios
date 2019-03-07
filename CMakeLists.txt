@@ -157,6 +157,8 @@ include_directories(cherios/system/fatfs/include)
 include_directories(libcrt/include)
 include_directories(lwip/src/include)
 
+set(O_LVL 1)
+
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
     -DHARDWARE_${HARDWARE}
@@ -183,7 +185,7 @@ set(C_COMPILER_FLAGS
     -nostdinc
     -fno-builtin
     -ffreestanding
-    -O1 # TODO: make this depend on the configuration
+    -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
     ${MSGDMA_FLAGS}
     -fpic
@@ -346,7 +348,7 @@ set(TEMP_16 "SHELL:-mllvm -TemporalExpandLimit=16")
 set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
 
 function(add_cherios_module _target)
-  set(options ADD_TO_FILESYSTEM TEMPORAL_A)
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO)
   set(oneValueArgs LINKER_SCRIPT)
   set(multiValueArgs SOURCES)
   cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -378,9 +380,18 @@ function(add_cherios_module _target)
     )
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
+  if(${add_exe_USE_LTO} OR ${add_exe_TEMPORAL_A})
+      # In order to do lto we need to pass all these flags
+      target_link_libraries(${_target}
+              -Wl,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+      )
+      target_compile_options(${_target} PUBLIC "-flto")
+  endif()
 
   if(${add_exe_TEMPORAL_A})
-      target_compile_options(${_target} PUBLIC ${CLANG_LOAD} ${CLANG_LIB_T} ${TEMP_A} ${CLANG_STATS} ${TEMP_64})
+      target_link_libraries(${_target}
+          -Wl,-mllvm,-TemporalType=analysis,-mllvm,-TemporalExpandLimit=64
+      )
   endif()
 
 
