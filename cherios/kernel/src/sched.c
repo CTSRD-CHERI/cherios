@@ -271,7 +271,7 @@ void sched_receive_event(act_t* act, sched_status_e events) {
         if(events & sched_wait_notify) {
             act->early_notify = 1;
         }
-        if(events & sched_waiting) {
+        if(events & sched_wait_commit) {
             act->commit_early_notify = 1;
         }
     }
