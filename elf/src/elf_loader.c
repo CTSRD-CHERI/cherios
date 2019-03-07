@@ -298,8 +298,8 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 		// For secure loaded programs what we have loaded is a prototype. Therefore we don't need a new one per process
 		// Instead for each process we create a foundation
 
-		// We allocate enough space for all segments plus a TLS segment
-		size_t contig_size = out_im->image_size + out_im->tls_mem_size;
+		// We allocate enough space for all segments plus a TLS segment (plus enough to align to a capability)
+		size_t contig_size = out_im->image_size + out_im->tls_mem_size + CAP_SIZE;
         cap_pair pair;
         size_t res_size_needed;
         res_t res_for_found;

@@ -162,7 +162,10 @@ loop_footer: # with checks inlined at all the ends of the loop
 
 
     # Build _real_ tls segment and store in table
-
+    # a7 is where the last of our segments ended. Round up to ensure alignment.
+    daddiu      $a7, $a7, (CAP_SIZE-1)
+    dli         $t0, ~(CAP_SIZE-1)
+    and         $a7, $a7, $t0
     cincoffset  $c13, $c8, $a7
     csetbounds  $c13, $c13, $s5
     csc         $c13, $s1, 0($c4)
