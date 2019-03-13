@@ -73,7 +73,7 @@ SECTIONS
 	 * This only worked before because we ran with a global C0 / never used this stack
 	 */
 
-	 .heapandstack ALIGN(CAP_ALIGN): {
+	 .heapandstack ALIGN(PAGE_ALIGN): {
 	    __start_init_stack	= .;
 	    . += __size_init_stack;
 	    __stop_init_stack = .;

@@ -59,9 +59,9 @@ start:
 	dla		$t0, __start_exception_stack
 	dla		$t1, __size_exception_stack
 	cgetdefault	$c11
-	csetoffset	$c11, $c11, $t0
-	csetbounds	$c11, $c11, $t1
-	csetoffset  $c11, $c11, $t1
+	cincoffset	$c11, $c11, $t0
+	csetboundsexact	$c11, $c11, $t1
+	cincoffset  $c11, $c11, $t1
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C

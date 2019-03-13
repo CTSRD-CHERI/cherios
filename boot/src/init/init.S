@@ -50,9 +50,9 @@ start:
     dla         $t0, __start_init_stack
     cgetdefault $c11
     dla         $t1, __size_init_stack
-    csetoffset  $c11, $c11, $t0
-    csetbounds  $c11, $c11, $t1
-    csetoffset  $c11, $c11, $t1
+    cincoffset  $c11, $c11, $t0
+    csetboundsexact  $c11, $c11, $t1
+    cincoffset  $c11, $c11, $t1
 
 	# Initialise globals. We need to use dla to call this function. Can only do this because dla was loaded contiguously
 	cgetpcc		$c12

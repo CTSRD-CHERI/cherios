@@ -183,10 +183,10 @@ cherios_init_jump_target:
 	# assume that $c0 is a sensible starting capability for this.
 	dla		$t0, __start_boot_stack
 	dla		$t1, __size_boot_stack
-	cgetdefault	$c11
-	csetoffset	$c11, $c11, $t0
-	csetbounds	$c11, $c11, $t1
-	csetoffset  $c11, $c11, $t1
+	cgetdefault	    $c11
+	cincoffset	    $c11, $c11, $t0
+	csetboundsexact	$c11, $c11, $t1
+	cincoffset      $c11, $c11, $t1
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C

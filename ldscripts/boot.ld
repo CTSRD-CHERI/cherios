@@ -98,11 +98,6 @@ SECTIONS
 	 * No need to include anything after the following in the binary --
 	 * we just define symbols, and don't move '.'.
 	 */
-	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_heap = ALIGN((__boot_load_virtaddr + __size_memory) - __size_boot_stack, PAGE_ALIGN);
-	__size_heap = __stop_heap - __start_heap;
-
-	__start_boot_stack	= __stop_heap;
-	__stop_boot_stack	= __start_boot_stack + __size_boot_stack;
-	__rest_of_memory	= __stop_boot_stack;
+	 __start_boot_stack = ALIGN(__stop_bss, PAGE_ALIGN);
+     __stop_boot_stack  = __start_boot_stack + __size_boot_stack;
 }
