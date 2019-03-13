@@ -46,7 +46,7 @@ __asm__ __volatile__ (                              \
     "nop                                    \n"     \
 : [tmp] "=r" (tmp), [out] CLOBOUT(type) (result), [add] CLOBOUT(type) (added) \
 : [ptr] "C" (pointer), [v] IN(val_type) (val)       \
-:)    ;                                             \
+: "memory")    ;                                             \
 }                                                   \
 
 
@@ -69,7 +69,7 @@ STOREC(type) " %[res], %[new], %[ptr]    \n"                \
 "2:                                     \n"                 \
 : [tmp] CLOBOUT(type) (tmp), [res] "=&r" (result)                     \
 : [ptr] "C" (pointer), [old] IN(type) (old_val), [new] IN(type) (new_val) \
-:);                                                         \
+: "memory");                                                         \
 }
 
 #define ATOMIC_CAS_RV(pointer, type, old_val, new_val) \
