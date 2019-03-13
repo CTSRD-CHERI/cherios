@@ -69,9 +69,9 @@ static void big_test_recv(unix_like_socket* sock) {
     for(size_t i = 0; i != BIG_TEST_SIZE; i++) {
         res = socket_recv(sock, buf, 3, MSG_NONE);
         assert_int_ex(res, ==, 3);
-        assert(buf[0] == (char)(i & 0xFF));
-        assert(buf[1] == (char)((i>>8) & 0xFF));
-        assert(buf[2] == (char)((i>>16) & 0xFF));
+        assert_int_ex(buf[0], ==, (char)(i & 0xFF));
+        assert_int_ex(buf[1], ==, (char)((i>>8) & 0xFF));
+        assert_int_ex(buf[2], ==, (char)((i>>16) & 0xFF));
     }
 }
 
@@ -226,6 +226,8 @@ void init_pair(proxy_pair* pp) {
     socket_internal_requester_connect(&pp->req.r);
 }
 
+char co3data[BIG_TEST_SIZE * 3];
+
 void con3_start(register_t arg, capability carg) {
     uni_dir_socket_fulfiller ff;
 
@@ -241,35 +243,36 @@ void con3_start(register_t arg, capability carg) {
     char data[BIG_TEST_SIZE * 3];
 
     for(size_t i = 0; i != BIG_TEST_SIZE; i++) {
-        data[(3 * i) + 0] = (char)(i & 0xFF);
-        data[(3 * i) + 1] = (char)((i >> 8) & 0xFF);
-        data[(3 * i) + 2] = (char)((i >> 16) & 0xFF);
+        co3data[(3 * i) + 0] = (char)(i & 0xFF);
+        co3data[(3 * i) + 1] = (char)((i >> 8) & 0xFF);
+        co3data[(3 * i) + 2] = (char)((i >> 16) & 0xFF);
     }
 
     // Send but offer buffers, error if normal fulfill is used
     ssize_t sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
-                                           con3_full, data, 0, NULL, con3_sub);
+                                           con3_full, co3data, 0, NULL, con3_sub);
 
     assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
     // Send normally
 
     sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
-                                                          con3_full2, data, 0, NULL, NULL);
+                                                          con3_full2, co3data, 0, NULL, NULL);
 
     assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
     // Send, offer a buffer, via a proxy
     sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
-                                                          con3_full, data, 0, NULL, con3_sub);
+                                                          con3_full, co3data, 0, NULL, con3_sub);
 
     assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
+    // TODO Wait everything to have completed as we want to allocate this buffer on the stack
     return;
 }
 
 void connector_start(register_t arg, capability carg) {
-    char data_buffer[DATA_SIZE];
+    capability data_buffer[DATA_SIZE/sizeof(capability)];
 
     unix_like_socket socket;
 
@@ -355,8 +358,9 @@ void connector_start(register_t arg, capability carg) {
     sent = socket_sendfile(sock2, sock4, 3 * BIG_TEST_SIZE);
     assert_int_ex(sent, ==, 3 * BIG_TEST_SIZE);
 
-    // Now attach a drb
-    char drb_buf[BIG_TEST_SIZE/8];
+    // Now attach a drb. Must align to a capability.
+
+    capability drb_buf[BIG_TEST_SIZE/(8 * sizeof(capability))];
     init_data_buffer(&sock2->write_copy_buffer,drb_buf,BIG_TEST_SIZE/8);
     sock2->write.push_writer->drb_fulfill_ptr = &sock2->write_copy_buffer.fulfill_ptr;
 
@@ -483,7 +487,7 @@ int main(register_t arg, capability carg) {
 
     thread t = thread_new("socket_part2", 0, act_self_ref, &connector_start);
 
-    char data_buffer[DATA_SIZE];
+    capability data_buffer[DATA_SIZE/CAP_SIZE];
     struct stack_request on_stack1;
     struct stack_request on_stack2;
     unix_like_socket socket;
@@ -555,7 +559,7 @@ int main(register_t arg, capability carg) {
     res = socket_internal_requester_init(sock2->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH, &sock2->write_copy_buffer);
     assert_int_ex(res, ==, 0);
 
-    char data_buffer2[DATA_SIZE];
+    capability data_buffer2[DATA_SIZE/CAP_SIZE];
 
     socket_init(sock2, MSG_NONE, data_buffer2, DATA_SIZE, CONNECT_PUSH_WRITE);
     assert_int_ex(res, ==, 0);
