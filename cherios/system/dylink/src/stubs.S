@@ -306,10 +306,9 @@ STUB_BEGIN plt_common_untrusting
 
 # FIXME: Now out of date since nanokernel introduced constraints on idc for exceptions
 
-li              $1, -(0x10 * CAP_SIZE)
-cincoffset      $c15,   cusp, $1
-neg             $1, $1
-csetbounds      $c15,   $c15, $1        # WARN: use _exactly_ this instruction to trigger a new unsafe stack to be created
+# Ensure adequate stack space
+cgetoffset      $1, cusp
+tltiu           $1, (0x10 * CAP_SIZE)
 
 csc             csp,    $zero,  (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack

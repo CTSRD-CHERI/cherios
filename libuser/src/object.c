@@ -82,8 +82,7 @@ __thread std_sock std_err_sock;
 static void setup_temporal_handle(startup_flags) {
     if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
         // WARN these will by dangling after compact. Call again to fix.
-        register_vectored_cap_exception(&temporal_exception_handle, Tag_Violation);
-        register_vectored_cap_exception(&temporal_exception_handle, Length_Violation);
+        register_vectored_exception(&temporal_exception_handle, MIPS_CP0_EXCODE_TRAP);
     }
 }
 

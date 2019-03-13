@@ -69,20 +69,41 @@ capability new_stack(capability old_c10) {
 }
 
 int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
-// Looking for: csetbounds     $c15, $c15, MinStackSize  <-- will fail if too small or non existant
+// Looking for: cgetoffset $X, $c10; tltiu $X, Y
 
-    // TODO
-    uint32_t mask = 0; // If we don't care exactly what the immediate/reg/exact instruction is
+#define REG_MASK            0b11111
 
-    uint32_t handle_instr = 0x480f7848;
+#define CGETOFFSET              0b01001000000000000101000000000111
+#define CGETOFFSET_CHECK_MASK   0b11111111111000001111100000000111
+#define CGETOFFSET_REG_SHIFT    16
+
+
+#define TLTIU                   0b00000100000010110000000000000000
+#define TLTIU_CHECK_MASK        0b11111100000111110000000000000000
+#define TLTIU_REG_SHIFT         21
+#define TLTIU_IM_MASK           0xFFFF
+
+
     uint32_t * epcc = (uint32_t*)get_ctl()->ex_pcc;
 
-    //if(!((cheri_getoffset(epcc) >= 0) && (cheri_getoffset(epcc) < cheri_getlen(epcc)))) return 1;
+    if(!((cheri_getoffset(epcc) >= 4) && (cheri_getoffset(epcc) < cheri_getlen(epcc)))) return 1;
 
-    uint32_t fault_instr = *(epcc) &~mask;
+    uint32_t fault_instr = *(epcc);
+    uint32_t prev_fault_instr = *(epcc-1);
 
-    // We might fail because we have no unsafe stack, or because its not large enough to use
-    if(handle_instr != fault_instr) return 1;
+    // Check instructions are what we are looking for
+
+    if(!(((fault_instr & TLTIU_CHECK_MASK) == TLTIU) && ((prev_fault_instr & CGETOFFSET_CHECK_MASK) == CGETOFFSET)))
+        return 1;
+
+    // Check they use the same reg
+    if(((fault_instr >> TLTIU_REG_SHIFT) ^ (prev_fault_instr >> CGETOFFSET_REG_SHIFT)) & REG_MASK)
+        return 1;
+
+    // Get the immediate
+    uint16_t user_wants_size = (uint16_t)(fault_instr & TLTIU_IM_MASK);
+
+    // TODO We really should provide a stack with max(Y,MinStackSize) + extra. But for now just give MinStackSize + Extra
 
     capability old_c10;
 
