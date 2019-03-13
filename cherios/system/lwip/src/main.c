@@ -708,6 +708,9 @@ int main(register_t arg, capability carg) {
         }
 
         restart_poll:
+
+        if(sock_sleep) syscall_cond_cancel();
+
         // respond to sockets
         FOR_EACH_TCP(tcp_session) {
             // The user stops reading
@@ -737,9 +740,9 @@ int main(register_t arg, capability carg) {
             if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
                 if(tcp_session->tcp_pcb->snd_buf) { // dont even bother if the send window is already full
                     enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1, 0);
-                    if(revents && sock_sleep) {
+                    if(revents) {
+                        sock_event = 1;
                         sock_sleep = 0;
-                        goto restart_poll;
                     }
                     if(revents & POLL_IN) {
                         sock_event = 1;
@@ -752,6 +755,10 @@ int main(register_t arg, capability carg) {
                         user_tcp_close(tcp_session);
                         // Don't trust the for each after modifying the set
                         goto restart_poll;
+                    } else if(revents){
+                        printf("Got an unexpected event: %d\n", revents);
+                        sleep(1000);
+                        assert(0);
                     }
                 }
             }
