@@ -81,6 +81,9 @@ void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
 	info->had_time = ctrl->had_time;
     info->had_time_epoch = ctrl->had_time_epoch;
 
+	queue_t* q = ctrl->msg_queue;
+
+	info->queue_fill = *q->header.end - q->header.start;
 #define COPY_STAT(item, ...) info->item = ctrl->item;
     STAT_DEBUG_LIST(COPY_STAT)
 
