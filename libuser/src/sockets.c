@@ -67,11 +67,11 @@ static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_v
             SANE_ASM
             "cllc   %[res], %[waiting_cap]                     \n"
             "csh    %[new_requeste], $zero, 0(%[new_cap])      \n"
-            "cscc   $at, %[res], %[waiting_cap]                \n"
+            "cscc   $at, %[res], %[waiting_cap]                \n" // FIXME: Might be wrong. We might fail to fail the other process as our own store fails
             "clc    %[res], $zero, 0(%[waiting_cap])           \n"
     : [res]"=&C"(waiter)
     : [waiting_cap]"C"(waiter_cap), [new_cap]"C"(ptr), [new_requeste]"r"(new_val)
-    : "at"
+    : "at", "memory"
     );
 
     if(waiter) {
@@ -115,7 +115,7 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
         : [res]"=&r"(result)
         : [wc]"C"(wait_cap), [cc]"C"(closed_cap), [mc]"C"(monitor_cap),[self]"C"(act_self_notify_ref),
                 [im]"r"(im_off), [cmp]"r"(comp_val)
-        : "$c1"
+        : "$c1", "memory"
         );
 
         if(result == 2) {
@@ -135,6 +135,7 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
 
 // Until we use exceptions properly this can check whether a requester closed their end even if unmapped
 static int socket_internal_fulfiller_closed_safe(uni_dir_socket_fulfiller* fulfiller) {
+    if(!fulfiller->connected) return 0;
     volatile uint8_t * req_closed = &fulfiller->requester->requester_closed;
     volatile uint8_t * ful_closed = &fulfiller->requester->fulfiller_component.fulfiller_closed;
 
@@ -144,6 +145,8 @@ static int socket_internal_fulfiller_closed_safe(uni_dir_socket_fulfiller* fulfi
 
     return rc || fc;
 }
+
+#define TRUNCATE16(X) ({uint16_t _tmpx; __asm ("andi   %[out], %[in], 0xFFFF\n":[out]"=r"(_tmpx):[in]"r"(X):); _tmpx;})
 
 int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait, int delay_sleep) {
 
@@ -161,12 +164,16 @@ int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, ui
 
     if(dont_wait) return E_AGAIN;
 
+    uint16_t amount = ((~(requester->buffer_size - need_space)));
+    amount = TRUNCATE16(amount);
+
+
     // Funky use of common code, with lots of off by 1 adjustments to be able to use the same comparison
     return socket_internal_sleep_for_condition(&requester->fulfiller_component.requester_waiting,
                                                &requester->fulfiller_component.fulfiller_closed,
                                                &(requester->fulfiller_component.fulfill_ptr),
                                                requester->requeste_ptr+1,
-                                               0xFFFF - ((requester->buffer_size - need_space)), delay_sleep);
+                                               amount, delay_sleep);
 }
 
 // Wait for 'amount' requests to be outstanding
@@ -208,7 +215,7 @@ ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller
         uni_dir_socket_requester* proxying = fulfiller->proxyied_in;
         int ret = socket_internal_sleep_for_condition(&proxying->fulfiller_component.requester_waiting,
                                                    &proxying->fulfiller_component.fulfiller_closed,
-                                                   &fulfiller->proxy_fin_times, fulfiller->proxy_times+1, 0xFFFF, delay_sleep);
+                                                   &fulfiller->proxy_fin_times, fulfiller->proxy_times+1, 0xFFFFu, delay_sleep);
         return (fulfiller->proxy_times != fulfiller->proxy_fin_times) ? ret : 0; // Ignore errors from the requester if the proxy has finished
     }
     return 0;
@@ -1068,7 +1075,7 @@ ssize_t socket_close(unix_like_socket* sock) {
 
 int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size) {
     if(!is_power_2(data_buffer_size)) return E_BUFFER_SIZE_NOT_POWER_2;
-
+    if(((size_t)char_buffer) & (sizeof(capability)-1)) return E_BUFFER_SIZE_NOT_POWER_2; // TODO add different error code
     buffer->buffer_size = data_buffer_size;
     buffer->buffer = cheri_setbounds(char_buffer, data_buffer_size);
     buffer->fulfill_ptr = 0;
@@ -1378,9 +1385,10 @@ enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfille
     // Wait until there is something to fulfill and we are not proxying
     enum poll_events ret = POLL_NONE;
 
-    if(!fulfiller->connected) return POLL_NVAL;
 
     if(io) {
+
+        if(!fulfiller->connected) return POLL_NVAL;
 
         if(!set_waiting) socket_internal_fulfill_cancel_wait(fulfiller);
 
