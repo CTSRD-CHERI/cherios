@@ -74,8 +74,8 @@ typedef struct {
     char buf[STD_BUF_SIZE];
 } std_sock;
 
-std_sock std_out_sock;
-std_sock std_err_sock;
+__thread std_sock std_out_sock;
+__thread std_sock std_err_sock;
 
 #endif
 
@@ -157,8 +157,6 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
         thread_init();
     }
 
-    // FIXME: These really should be thread local
-
     // This creates two sockets with the UART driver and sets stdout/stderr to them
 #ifndef USE_SYSCALL_PUTS
 
@@ -218,7 +216,7 @@ void object_init_post_compact(startup_flags_e startup_flags, int first_thread) {
     init_kernel_if_t_change_mode(was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
 }
 
-// Called when main exits
+// Called when any thread exits
 __attribute__((noreturn))
 void object_destroy() {
     #ifndef USE_SYSCALL_PUTS

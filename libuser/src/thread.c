@@ -218,7 +218,7 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
     if(msg_enable) {
         msg_entry(0);
     } else {
-        syscall_act_terminate(self_ctrl);
+        object_destroy();
     }
 }
 

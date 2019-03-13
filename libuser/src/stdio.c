@@ -30,5 +30,5 @@
 
 #include "stdio.h"
 
-FILE * stderr;
-FILE * stdout;
+__thread FILE * stderr;
+__thread FILE * stdout;

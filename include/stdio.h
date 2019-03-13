@@ -40,8 +40,8 @@
 
 typedef unix_like_socket FILE;
 
-extern FILE * stderr;
-extern FILE * stdout;
+extern __thread FILE * stderr;
+extern __thread FILE * stdout;
 
 int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
 int	vsprintf(char *buf, const char *cfmt, va_list ap);
