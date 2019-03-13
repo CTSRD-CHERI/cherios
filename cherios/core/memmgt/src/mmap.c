@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <mmap.h>
 #include "sys/mman.h"
 #include "types.h"
 #include "utils.h"
@@ -117,6 +118,7 @@ static vpage_range_desc_t* remove_from_pool(vpage_range_desc_t* desc) {
 static void add_to_pool(vpage_range_desc_t* desc, size_t pool) {
     assert(desc->allocation_type == open_node);
     desc->tracking.free_chain.next = pool_heads[pool];
+    desc->tracking.free_chain.prev = NULL;
     if(pool_heads[pool]) pool_heads[pool]->tracking.free_chain.prev = desc;
     desc->tracking.free_chain.pool_id = pool+1;
     pool_heads[pool] = desc;
@@ -128,6 +130,7 @@ static void add_desc_after(vpage_range_desc_t* after, vpage_range_desc_t* desc) 
     assert(after->tracking.free_chain.pool_id);
     desc->tracking.free_chain.pool_id = after->tracking.free_chain.pool_id;
     desc->tracking.free_chain.next = after->tracking.free_chain.next;
+    desc->tracking.free_chain.prev = after;
     after->tracking.free_chain.next = desc;
     if(desc->tracking.free_chain.next) desc->tracking.free_chain.next->tracking.free_chain.prev = desc;
 }
@@ -573,7 +576,6 @@ static vpage_range_desc_t* pull_up_node(vpage_range_desc_t* child) {
     } else if(parent->allocation_type == open_node) {
         assert((parent->reservation != NULL));
         fixup_desc_chain(parent);
-        check_pool(0);
     }
 
     child->allocation_type = free_node;
@@ -1119,11 +1121,12 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         vpage_range_desc_table_t* tbl = &desc_table_root;
 
         size_t search_page_n = 0;
-
+#ifdef MAX_POOLS
+        vpage_range_desc_t* desc = peek_from_pool_head(PAGE_POOL_FREE);
+#endif
         while(1) {
 
 #ifdef MAX_POOLS
-            vpage_range_desc_t* desc = peek_from_pool_head(PAGE_POOL_FREE);
             assert(desc != NULL);
             assert(desc->allocation_type == open_node);
             search_page_n = desc->start;
