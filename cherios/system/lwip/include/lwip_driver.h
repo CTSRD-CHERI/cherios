@@ -126,8 +126,6 @@ typedef struct net_session {
 #endif
 
 typedef struct custom_for_tcp {
-    uint64_t reuse;
-    size_t offset;
     union {
         struct {
             struct pbuf_custom custom;
@@ -137,8 +135,11 @@ typedef struct custom_for_tcp {
             struct custom_for_tcp* next_free;
         } as_free;
     };
+    uint64_t reuse;
+    size_t offset;
 } custom_for_tcp;
 
+_Static_assert(offsetof(custom_for_tcp, as_pbuf) == 0, "We cast between these so it better be 0");
 
 // Generic things
 
