@@ -38,7 +38,6 @@ ENTRY(start)
 SECTIONS
 {
     __text_segment_start = .;
-	. += __kernel_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
 	.init : {
@@ -93,7 +92,6 @@ SECTIONS
 	{
 	   *(.MIPS.options)
 	   *(.MIPS.abiflags)
-	   *(.pdr)
 	   *(.comment)
 	   *(.tbss)
 	   *(.tdata)

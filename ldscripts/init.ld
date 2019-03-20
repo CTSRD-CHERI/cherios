@@ -39,7 +39,6 @@ ENTRY(start)
 SECTIONS
 {
     __text_segment_start = .;
-	. += __init_load_virtaddr;
 	. += SIZEOF_HEADERS;
 
 	.init : {
