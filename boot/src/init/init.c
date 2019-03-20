@@ -459,7 +459,7 @@ crt_init_globals_init()
     uint64_t tls_start;
 
     cheri_dla(__text_segment_start, text_start);
-    cheri_dla(__data_segment_start, data_start);
+    cheri_dla(__cap_table_local_start, data_start); // This seems to come data now
     cheri_dla(__cap_table_local_start, tls_start); // A guess that this comes before tbss and tdata
 
     capability text_segment = pcc + text_start;
@@ -506,7 +506,7 @@ int main(init_info_t * init_info, capability pool_auth_cap) {
     env.free = &tmp_free;
     env.alloc = &tmp_alloc;
     env.printf = &printf;
-    env.vprintf = &printf;
+    env.vprintf = &vprintf;
     env.memcpy = &memcpy;
 
     printf("Init loaded\n");
