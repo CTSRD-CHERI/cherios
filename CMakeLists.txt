@@ -165,6 +165,7 @@ set(ASMC_COMPILER_FLAGS
     ${SMP_FLAGS}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
+    -march=${CHERI_CPU}
     -cheri-cap-table
     -cheri-cap-table-abi=plt
     -cheri-linker
@@ -184,6 +185,7 @@ set(C_COMPILER_FLAGS
     -ftls-model=local-exec
     -nostdinc
     -fno-builtin
+    -fomit-frame-pointer
     -ffreestanding
     -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
@@ -376,7 +378,8 @@ function(add_cherios_module _target)
     -G0
     -nostartfiles
     -nodefaultlibs
-    -z norelro
+    -mabi=purecap
+    -Wl,-z,norelro
     )
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
