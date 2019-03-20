@@ -632,6 +632,8 @@ int main(register_t arg, capability carg) {
 
     net_session session;
 
+    bzero(&session, sizeof(net_session));
+
     inet_aton(CHERIOS_NET_MASK, &session.netmask.addr);
     inet_aton(CHERIOS_IP, & session.my_ip.addr);
     inet_aton(CHERIOS_GATEWAY, &session.gw_addr.addr);
@@ -639,6 +641,7 @@ int main(register_t arg, capability carg) {
     memcpy(session.mac, mac, 6);
 
     struct netif nif;
+    bzero(&nif, sizeof(struct netif));
 
     // Init LWIP (calls the rest of init session)
     int res = init_net(&session, &nif);
