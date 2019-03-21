@@ -99,7 +99,7 @@
     ITEM(make_first_reservation, res_t, (void), __VA_ARGS__) \
 /* Get a read only capability to the nano kernels book */\
     ITEM(get_book, page_t*, (void), __VA_ARGS__) \
-/* Thw page must have a non zero length. Will make its length new length */\
+/* The page must have a non zero length. Will make its length new length */\
     ITEM(split_phy_page_range, void, (register_t, pagen, register_t, new_len), __VA_ARGS__)\
 /* The page must have non zero length, and the the next page must have identical status. Merges the records. */\
     ITEM(merge_phy_page_range, void, (register_t, pagen), __VA_ARGS__)\
@@ -133,7 +133,7 @@
     ITEM(rescap_check_cert, found_id_t*, (cert_t, cert, cap_pair*, out), __VA_ARGS__)\
 /* Take a reservation and lock for intended user (identified by id) */\
     ITEM(rescap_take_locked, locked_t, (res_t, res, cap_pair*, out, register_t, user_perms, found_id_t*, recipient_id), __VA_ARGS__)\
-/* Unlock a lcoked capability. Can only be done inside correct foundation */\
+/* Unlock a locked capability. Can only be done inside correct foundation */\
     ITEM(rescap_unlock, void, (locked_t, locked, cap_pair*, out, auth_t, auth), __VA_ARGS__)\
 /* If in a foundation get own foundation_id */\
     ITEM(foundation_get_id, found_id_t*, (auth_t, auth), __VA_ARGS__)\
@@ -150,9 +150,9 @@
     ITEM(exception_subscribe, void, (void), __VA_ARGS__)\
 /* Return from an exception (pcc, idc and c1 are allowed to have been changed */\
     ITEM(exception_return, void, (void), __VA_ARGS__)\
-/*Same as return. But ALSO replay exception that the user handled to the exception context */\
+/* Same as return. But ALSO replay exception that the user handled to the exception context */\
     ITEM(exception_replay, void, (void), __VA_ARGS__)\
-/* Send a user generated signal to another context\ */\
+/* Send a user generated signal to another context */\
     ITEM(exception_signal, void, (context_t, other_context, register_t, code), __VA_ARGS__)\
 /* Get the last user exception */\
     ITEM(exception_getcause, user_exception_cause_t, (void), __VA_ARGS__)\
