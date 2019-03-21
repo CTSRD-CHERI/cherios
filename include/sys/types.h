@@ -83,10 +83,14 @@ typedef struct cap_pair {
 
 #ifdef HARDWARE_fpga
 #define STAT_DEBUG_LIST(ITEM,...) 		\
-	ITEM(cycle, 	" cycle "__VA_ARGS__)			\
-	ITEM(inst, 		" insts " __VA_ARGS__)				\
-	ITEM(dtlb_miss, "dtlbmis"__VA_ARGS__)		\
-	ITEM(itlb_miss, "itlbmis"__VA_ARGS__)
+	ITEM(cycle, 	" cycle ", __VA_ARGS__)			\
+	ITEM(inst, 		" insts ",  __VA_ARGS__)				\
+	ITEM(dtlb_miss, "dtlbmis", __VA_ARGS__)		\
+	ITEM(itlb_miss, "itlbmis", __VA_ARGS__)	\
+	ITEM(dcache_read_hit, "drd hit", __VA_ARGS__) \
+	ITEM(dcache_read_miss, "drdmiss", __VA_ARGS) \
+	ITEM(dcache_write_hit, "dwr hit", __VA_ARGS__)\
+	ITEM(dcache_write_miss, "dwrmiss", __VA_ARGS__)
 #else
 #define STAT_DEBUG_LIST(ITEM, ...)
 #endif
