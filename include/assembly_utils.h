@@ -84,39 +84,39 @@
 
 // To make cclearhi and cclearlo easier to read
 
-#define Reg_Encode_all (1 << 16) - 1
-#define Reg_Encode_c0 1
-#define Reg_Encode_c1 2
-#define Reg_Encode_c2 4
-#define Reg_Encode_c3 8
-#define Reg_Encode_c4 0x10
-#define Reg_Encode_c5 0x20
-#define Reg_Encode_c6 0x40
-#define Reg_Encode_c7 0x80
-#define Reg_Encode_c8 0x100
-#define Reg_Encode_c9 0x200
-#define Reg_Encode_c10 0x400
-#define Reg_Encode_c11 0x800
-#define Reg_Encode_c12 0x1000
-#define Reg_Encode_c13 0x2000
-#define Reg_Encode_c14 0x4000
-#define Reg_Encode_c15 0x8000
-#define Reg_Encode_c16 1
-#define Reg_Encode_c17 2
-#define Reg_Encode_c18 4
-#define Reg_Encode_c19 8
-#define Reg_Encode_c20 0x10
-#define Reg_Encode_c21 0x20
-#define Reg_Encode_c22 0x40
-#define Reg_Encode_c23 0x80
-#define Reg_Encode_c24 0x100
-#define Reg_Encode_c25 0x200
-#define Reg_Encode_c26 0x400
-#define Reg_Encode_c27 0x800
-#define Reg_Encode_c28 0x1000
-#define Reg_Encode_c29 0x2000
-#define Reg_Encode_c30 0x4000
-#define Reg_Encode_c31 0x8000
+#define Reg_Encode_all ((1 << 16) - 1)
+#define Reg_Encode_c0 0
+#define Reg_Encode_c1 1
+#define Reg_Encode_c2 2
+#define Reg_Encode_c3 3
+#define Reg_Encode_c4 4
+#define Reg_Encode_c5 5
+#define Reg_Encode_c6 6
+#define Reg_Encode_c7 7
+#define Reg_Encode_c8 8
+#define Reg_Encode_c9 9
+#define Reg_Encode_c10 10
+#define Reg_Encode_c11 11
+#define Reg_Encode_c12 12
+#define Reg_Encode_c13 13
+#define Reg_Encode_c14 14
+#define Reg_Encode_c15 15
+#define Reg_Encode_c16 16
+#define Reg_Encode_c17 17
+#define Reg_Encode_c18 18
+#define Reg_Encode_c19 19
+#define Reg_Encode_c20 20
+#define Reg_Encode_c21 21
+#define Reg_Encode_c22 22
+#define Reg_Encode_c23 23
+#define Reg_Encode_c24 24
+#define Reg_Encode_c25 25
+#define Reg_Encode_c26 26
+#define Reg_Encode_c27 27
+#define Reg_Encode_c28 28
+#define Reg_Encode_c29 29
+#define Reg_Encode_c30 30
+#define Reg_Encode_c31 31
 
 #define Reg_Encode_kr1c Reg_Encode_c27
 #define Reg_Encode_kr2c Reg_Encode_c28
@@ -124,7 +124,13 @@
 #define Reg_Encode_kdc  Reg_Encode_c30
 #define Reg_Encode_epcc Reg_Encode_c31
 
-#define EncodeReg(Reg) (Reg_Encode ## _ ## Reg)
+#define CLRSHIFT(X) (1 << ((X) & 0xF))
+
+#define EncodeReg(Reg) (CLRSHIFT(Reg_Encode ## _ ## Reg))
+#define EncodeReg2(Reg) (Reg_Encode ## _ ## Reg)
+
+#define ALL_NON_CALLEE_SAVE_LO Reg_Encode_all
+#define ALL_NON_CALLEE_SAVE_HI  (EncodeReg(t8) | EncodeReg(t9))
 
 #define EN1(X) EncodeReg(X)
 #define EN2(X,...) EncodeReg(X) | EN1(__VA_ARGS__)
@@ -145,16 +151,16 @@
 #define mftr_encode (0b01000 << 21)
 #define mttr_encode (0b01100 << 21)
 
-#define MFTC0_I(rd, rt, sel) .word (cop0_encode | mftr_encode | (rt << 16) | (EncodeReg(rd) << 11) | sel)
+#define MFTC0_I(rd, rt, sel) .word (cop0_encode | mftr_encode | (rt << 16) | (EncodeReg2(rd) << 11) | sel)
 
 #define MFTC0(...) MFTC0_I(__VA_ARGS__)
 
 
-#define MTTC0_I(rt, rd, sel) .word (cop0_encode | mttr_encode | (EncodeReg(rt) << 16) | (rd << 11) | sel)
+#define MTTC0_I(rt, rd, sel) .word (cop0_encode | mttr_encode | (EncodeReg2(rt) << 16) | (rd << 11) | sel)
 #define MTTC0(...) MTTC0_I(__VA_ARGS__)
 
 #define DVPE(rt) \
-.word (0b01000001011 << 21)  | (EncodeReg(rt) << 16) |  0b0000000000000001; \
+.word (0b01000001011 << 21)  | (EncodeReg2(rt) << 16) |  0b0000000000000001; \
 ehb
 
 #define EVPE .word   0x41600021; \
@@ -166,7 +172,7 @@ ehb
     ori $ ## tmp, $ ## tmp, (1 << (MIPS_CP0_STATUS_IM_SHIFT + n)); \
     MTTC0(tmp, 13, 0); \
 
-#define FORK(rs,rt,rd) .word (0b011111 << 26) | (EncodeReg(rs) << 21) | (EncodeReg(rt) << 16) | (EncodeReg(rd) << 11) | (0b001000)
+#define FORK(rs,rt,rd) .word (0b011111 << 26) | (EncodeReg2(rs) << 21) | (EncodeReg2(rt) << 16) | (EncodeReg2(rd) << 11) | (0b001000)
 
 
 

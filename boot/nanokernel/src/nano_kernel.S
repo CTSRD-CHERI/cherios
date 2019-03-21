@@ -37,6 +37,7 @@
 #include "nano/nanokernel.h"
 #include "dylink.h"
 #include "math.h"
+#include "sha256.h"
 
 # FIXME. SPecial registers are now no longer general purpose. This makes things work:
 .set cheri_sysregs_accessible
@@ -133,6 +134,12 @@ local_array_end context_array, CAP_SIZE_BITS,  SMP_CORES
 # For context allocation
 local_cap_var next_context
 
+# Ptrs to some stuff in the code segment
+local_cap_var take_routine
+local_cap_var sha256_routine
+local_cap_var master_key
+
+
 # Stuff to do with virtual space management
 local_reg_var made_first_res
 local_reg_var revoke_state
@@ -169,7 +176,20 @@ if_offset_table:
 #define DIFF_MACRO(item, ...) .hword(item - get_pcc_label);
 NANO_KERNEL_IF_LIST(DIFF_MACRO)
 
-.align 4
+.align 7
+
+# The master key used by the nano kernel
+# The key is 0x40 bytes by design so it as wide as a block. This makes HMAC simpler
+
+nano_master_key_data:
+.dword 0xDEADBEEFCAFEBABE
+.dword 0xDEADBEEFCAFEBABE
+.dword 0xDEADBEEFCAFEBABE
+.dword 0xDEADBEEFCAFEBABE
+.dword 0xDEADBEEFCAFEBABE
+.dword 0xDEADBEEFCAFEBABE
+.dword 0xDEADBEEFCAFEBABE
+.dword 0xDEADBEEFCAFEBABE
 
 ################################################################# (TODO unsafe)
 # nano_kernel_init(register_t unmanaged_space, register_t return_addr, packaged args)
@@ -285,6 +305,18 @@ nano_kernel_init:
     csetoffset  $c13, $kdc, $t0
     csetbounds  $c13, $c13, $t1
     csc         $c13, $zero, K_CAP($kr1c)
+
+    # Some symbols that are nice to not have to keep materializing
+
+.macro MAT_SYM sym_label, table_name
+    dla         $t0, \sym_label
+    cincoffset  $c13, $kcc, $t0
+    cscbi       $c13, \table_name($kr1c)
+.endm
+
+    MAT_SYM     nano_master_key_data, master_key
+    MAT_SYM     rescap_take, take_routine
+    MAT_SYM     sha256_copy, sha256_routine
 
     # This sets up the physical book
 
@@ -442,8 +474,8 @@ init_table_loop:
     # c2 a data capability for the nano kernel
     # c3 the first context handle
     # a0 is to allow boot to pass an argument to the kernel. Don't want capabilities or they would have to be checked.
-    cclearlo    EncodeReg(all) & ~(EN5(c0, c1, c2, c3, c5))
-    cclearhi    EncodeReg(all) & ~(EN6(c17, kdc, kcc, epcc, kr1c, kr2c))
+    cclearlo    Reg_Encode_all & ~(EN5(c0, c1, c2, c3, c5))
+    cclearhi    Reg_Encode_all & ~(EN6(c17, kdc, kcc, epcc, kr1c, kr2c))
 
     cjr         $c17
     nop
@@ -524,14 +556,12 @@ nano_smp_spin:
 # Subroutine will clober c3,c4,c5,c14,c15,t*,a7. c3_in=res.c3_out=code.c4_out=data #
 
 .macro SUBROUTINE_TAKE
+    clcbi       $c12, take_routine($idc)
     cmove       $c14, $c17                          # save return code
     cmove       $c15, $c18                          # save return data
-
-    dla         $t0, rescap_take
-    cgetpccsetoffset $c12, $t0
+    cmove       $c18, $idc
     cjalr       $c12, $c17                          # call rescap_take
     cnull       $c4                                 # null c4 for call to rescap_take
-
     cmove       $c17, $c14                          # restore return code
     cmove       $c18, $c15                          # restore return data
 .endm
@@ -2645,13 +2675,11 @@ foundation_create:
 
     # memcpy into image calculating sha256 as we go. c3 = source. c4 = dest. a0 = size.
     # Normal ABI, but saves c14 to c16 for us (how kind)
-    cmove       $c3, $c13
-    cmove       $c16, $c17          # save c17
 
-    dla         $t0, sha256_copy    # jump to sha256 routine
-    cgetpccsetoffset $c12, $t0
+    cmove       $c16, $c17          # save c17
+    clcbi       $c12, sha256_routine($idc)
     cjalr       $c12, $c17
-    nop
+    cmove       $c3, $c13
 
     # restore c17
     cmove       $c17, $c16
@@ -2752,6 +2780,91 @@ foundation_entry_get_id:
     dli         $t0, Perm_Load
     candperm    $c3, $c3, $t0                           # read only
     cclearlo    EN1(c4)
+    CRETURN
+
+########################################################################################### (safe)
+# found_key_t* make_key_for_auth(res_t res, auth_t)
+.global make_key_for_auth
+make_key_for_auth:
+###########################################################################################
+
+# Unseal the auth token. Also makes sure to move it in to a register not clobbered my take routine
+    cincoffset  $c6, $kdc, FOUND_AUTH_TYPE
+    cunseal     $c16, $c4, $c6
+
+    # Then take out the reservation
+    SUBROUTINE_TAKE
+
+    # c3 is now code. c4 is data.
+    cgetlen     $t0, $c4
+    daddiu      $t0, $t0, (-FOUND_KEY_SIZE)
+    bltz        $t0, make_key_end
+
+    # Now perform an HMAC
+
+    # First do H((K^ipad)|M)
+
+    li          $t0, 0x36363636
+    li          $t1, SHA256_BLOCK_SIZE + FOUNDATION_ID_SIZE
+
+    cincoffset  $c15, $c4, -SHA256_BLOCK_SIZE   # This is our reservation. We will need it soon.
+    cincoffset  $c3, $c16, -SHA256_BLOCK_SIZE   # We pass the first block by value, so we pretend our buffer starts early
+    clcbi       $c16, master_key($idc)          # This is our key
+
+
+    cmove       $c14, $c17          # save c17
+
+hmac_h_round:
+    cmove       $c4, $c3
+    li          $a0, 1
+    dsll        $a0, $a0, 63                # High bit 1 indicates we have already loaded the first block
+    daddu       $a0, $a0, $t1
+
+    cld         w0_1,   $zero, 0x00($c16)
+    cld         w2_3,   $zero, 0x08($c16)
+    cld         w4_5,   $zero, 0x10($c16)
+    cld         w6_7,   $zero, 0x18($c16)
+    cld         w8_9,   $zero, 0x20($c16)
+    cld         w10_11, $zero, 0x28($c16)
+    cld         w12_13, $zero, 0x30($c16)
+    cld         w14_15, $zero, 0x38($c16)
+    dsll        $t1, $t0, 32
+    or          $t0, $t0, $t1
+    xor         w0_1, w0_1, $t0
+    xor         w2_3, w2_3, $t0
+    xor         w4_5, w4_5, $t0
+    xor         w6_7, w6_7, $t0
+    xor         w8_9, w8_9, $t0
+    xor         w10_11, w10_11, $t0
+    xor         w12_13, w12_13, $t0
+
+    # Normal ABI but jumps (not ccall) back, and will not clobber c14 to c16
+    clcbi       $c12, sha256_routine($idc)
+    cjalr       $c12, $c17
+    xor         w14_15, w14_15, $t0
+
+    # First store out the previous hash. We offset c15 by a block size so we need to offset again by that much
+    csd         out_h0_1, $zero, (SHA256_BLOCK_SIZE + 0x00)($c15)
+    csd         out_h2_3, $zero, (SHA256_BLOCK_SIZE + 0x08)($c15)
+    csd         out_h4_5, $zero, (SHA256_BLOCK_SIZE + 0x10)($c15)
+    csd         out_h6_7, $zero, (SHA256_BLOCK_SIZE + 0x18)($c15)
+
+    cexeq       $t0, $c3, $c15  # If this is the second round we are done
+    bnez        $t0, make_key_success
+    cmove       $c3, $c15
+
+    #  Now do H((K ^ opad) || Y) where Y is previous hash
+    li          $t0, 0x5c5c5c5c
+    b           hmac_h_round
+    li          $t1, SHA256_BLOCK_SIZE + SHA256_DIGEST_SIZE
+
+make_key_success:
+    cincoffset  $c3, $c15, SHA256_BLOCK_SIZE
+    cmove       $c17, $c14
+make_key_end:
+    clearlo     ALL_NON_CALLEE_SAVE_LO
+    clearhi     ALL_NON_CALLEE_SAVE_HI
+    cclearlo    EN11(c4,c5,c6,c7,c8,c9,c12,c13,c14,c15,c16)
     CRETURN
 
 ########################################################################################### (safe)

@@ -313,12 +313,19 @@ typedef struct found_id_t {
     size_t pad;
 } found_id_t;
 
+typedef struct found_key_t {
+    char bytes[256/8];
+} found_key_t;
+
+#define FOUND_KEY_SIZE (256/8)
+
 typedef struct type_res_bitfield_t {
     char bitfield[TRES_BITFIELD_SIZE];
 } type_res_bitfield_t;
 
 /* This is how big the structure is in the nano kernel */
 _Static_assert(sizeof(found_id_t) == FOUNDATION_ID_SIZE, "Assumed by nano kernel");
+_Static_assert(sizeof(found_key_t) == FOUND_KEY_SIZE, "Assumed by nano kernel");
 
 typedef capability cert_t;                  // A certified capability
 typedef capability locked_t;               // A capability that can be unlocked by intended code

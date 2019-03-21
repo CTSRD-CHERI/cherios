@@ -32,6 +32,7 @@
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "mips.h"
 #include "asm.S"
+#include "sha256.h"
 
 # This is an implementation of sha256 that tries not to spill any registers - due to lack of stack trusted memory being
 # In short supply when we don't trust the system.
@@ -40,6 +41,7 @@
 
 # Input #
 
+# Setting top bit of arg has special meaning. It means that the first block has already been loaded in the window
 #define len_arg     $a0
 #define IN_CAP      $c3
 #define OUT_CAP     $c4
@@ -50,14 +52,7 @@
 
 # Message schedule. This is actually one big shift register of words, each register holds 2 words
 
-#define w0_1        $t0
-#define w2_3        $t1
-#define w4_5        $t2
-#define w6_7        $t3
-#define w8_9        $v0
-#define w10_11      $v1
-#define w12_13      $at
-#define w14_15      $t8
+# In sha256.h as they are also args for nano kernel version
 
 # Hash in a weird permutation packed two words per register #
 
@@ -89,10 +84,7 @@
 
 # The registers for the un-permutated output. Can be duplicates
 
-#define out_h0_1    $v0
-#define out_h2_3    $v1
-#define out_h4_5    $t0
-#define out_h6_7    $t1
+# also in header
 
 .data
 
@@ -163,9 +155,15 @@ dli         h3_7, 0xa54ff53a5be0cd19
 #endif
 
 li      ctr, 0
+
+dsrl    tmp1, len_arg, 63
+dsll    tmp1, tmp1, 63
+bnez    tmp1, process_chunk         # If len_arg has top bit set then the first block is already in the window
+xor     len_arg, len_arg, tmp1      # Clear top bit of len_arg either way
+
 move    tmp1, len_arg
 b       load_chunk
-daddiu      tmp0, tmp1, -(0x40-1)   # hoisted from process chunk
+daddiu      tmp0, tmp1, -(0x40-1)   # hoisted from load_chunk chunk
 
 ##########################################################
 # Add to hash values. Reset K. Load next chunk or finish #
@@ -193,7 +191,7 @@ VECTOR_ADD  h3_7, dh, tmp0, tmp1, tmp2
 dsubu           tmp1, len_arg, ctr
 daddiu          tmp0, tmp1, 16-1
 bltz            tmp0, hash_finish
-daddiu          tmp0, tmp1, -(0x40-1)  # hoisted from process chunk
+daddiu          tmp0, tmp1, -(0x40-1)  # hoisted from load_chunk chunk
 
 ###################################
 # Load a chunk (and maybe pad it) #

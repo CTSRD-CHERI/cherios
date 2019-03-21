@@ -123,6 +123,8 @@
     ITEM(foundation_entry_expose, capability, (entry_t, entry), __VA_ARGS__)\
 /* Gets the -canonical- foundation id for an entry */\
     ITEM(foundation_entry_get_id, found_id_t*, (entry_t, entry), __VA_ARGS__)\
+/* Get a cryptograpic key for this auth token. Is HMAC(nano_master_key, found_id).*/\
+    ITEM(make_key_for_auth, found_key_t*, (res_t, res, auth_t, auth), __VA_ARGS__)\
 /* Get the vaddr of an entry point. Mostly useful for debugging, this is not a capability */\
     ITEM(foundation_entry_vaddr, register_t, (entry_t, entry), __VA_ARGS__)\
 /* Create a new entry from within a foundation */\
