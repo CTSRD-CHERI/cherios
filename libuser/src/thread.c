@@ -307,7 +307,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         res_t res = cap_malloc(space_required);
 
         cap_pair pair;
-        cert_t locked = rescap_take_cert(res, &pair, CHERI_PERM_ALL, 1, own_auth);
+        invocable_t invocable = rescap_take_authed(res, &pair, CHERI_PERM_ALL, AUTH_INVOCABLE, own_auth).invocable;
 
         struct secure_start_t* start_message = ( struct secure_start_t*)pair.data;
 
@@ -332,7 +332,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
         startup.stack_args_size = 0;
         startup.stack_args = NULL;
-        startup.cert = locked;
+        startup.inv = invocable;
         startup.carg = NULL;
         startup.arg = 0; // DUMMY, passed through the start_message
         startup.pcc = NULL; // DUMMY, passed through the start_message

@@ -54,9 +54,10 @@
 #define TRES_TYPE          0x0004         // The type of a type reservation
 #define FOUND_AUTH_TYPE    0x0010         // The type of an auth handle (like a private key)
 #define FOUND_ENTRY_TYPE   0x0011         // The type of a foundation entry handle
-#define FOUND_CERT_TYPE    0x0012         // The type of a foundation certificate handle (signed by an auth)
-#define FOUND_LOCKED_TYPE  0x0013         // The type of a foundation locked message handle (only unlocked by an auth)
-#define FOUND_INV_TYPE     0x0014         // The type of a foundation invocation handle (signed and only unlockable by auth)
+#define FOUND_LOCKED_TYPE  0x0012         // The type of a foundation locked message handle (only unlocked by an auth, made by any)
+#define FOUND_CERT_TYPE    0x0013         // The type of a foundation certificate handle (made by an auth, unlocked by any)
+#define FOUND_SYM_TYPE     0x0014         // The type of a foundation symetric locked handle (made by an auth, only unlockable by auth)
+#define FOUND_INV_TYPE     0x0015         // The type of a foundation invocation handle (made by an auth, unlockable by auth with found_enter)
 #define VTABLE_TYPE_L0     0x0020         // The type of the top level page table
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
@@ -329,6 +330,22 @@ _Static_assert(sizeof(found_key_t) == FOUND_KEY_SIZE, "Assumed by nano kernel");
 
 typedef capability cert_t;                  // A certified capability
 typedef capability locked_t;               // A capability that can be unlocked by intended code
+typedef capability invocable_t;
+typedef capability sym_locked_t;
+
+typedef union auth_result_u {
+    locked_t locked;
+    cert_t cert;
+    sym_locked_t symetric;
+    invocable_t invocable;
+} auth_result_t;
+
+typedef enum auth_types_e {
+    AUTH_PUBLIC_LOCKED = FOUND_LOCKED_TYPE,
+    AUTH_CERT = FOUND_CERT_TYPE,
+    AUTH_SYMETRIC = FOUND_SYM_TYPE,
+    AUTH_INVOCABLE = FOUND_INV_TYPE,
+} auth_types_t;
 
 typedef struct {
     e_page_status	status;

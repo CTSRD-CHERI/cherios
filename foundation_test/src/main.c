@@ -54,7 +54,7 @@ static void secure_thread(register_t arg, capability carg) {
 
     cap_pair pair4 = NULL_PAIR;
 
-    rescap_unlock(locked, &pair4, own_auth);
+    rescap_unlock((auth_result_t)locked, &pair4, own_auth, AUTH_PUBLIC_LOCKED);
 
     assert(pair4.data != NULL);
 
@@ -70,7 +70,7 @@ int main(register_t arg, capability carg) {
 
     res_t res1 = cap_malloc(0x500);
     cap_pair pair1;
-    cert_t certificate = rescap_take_cert(res1, &pair1, CHERI_PERM_LOAD, 0, own_auth);
+    cert_t certificate = rescap_take_authed(res1, &pair1, CHERI_PERM_LOAD, AUTH_CERT, own_auth).cert;
 
     assert(pair1.data != NULL);
     assert(certificate != NULL);
@@ -111,7 +111,7 @@ int main(register_t arg, capability carg) {
 
     cap_pair pair4 = NULL_PAIR;
 
-    rescap_unlock(locked, &pair4, own_auth);
+    rescap_unlock((auth_result_t)locked, &pair4, own_auth, AUTH_PUBLIC_LOCKED);
 
     CHERI_PRINT_CAP(pair3.code);
     CHERI_PRINT_CAP(pair3.data);

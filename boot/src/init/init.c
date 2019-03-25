@@ -429,7 +429,7 @@ static void load_modules(init_info_t * init_info) {
         desc.stack_args_size = 0;
         desc.cpu_hint = SMP_CORES-1;
         desc.flags = STARTUP_NONE;
-        desc.cert = NULL;
+        desc.inv = NULL;
 
         if(type == m_virtblk || type == m_virtnet) desc.cpu_hint = 0; // Some things really like to scheduled on core0 for interrupts
 

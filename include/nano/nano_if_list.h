@@ -118,7 +118,7 @@
 /* Enter a foundation created with foundation_create or foundation_new_entry. The entry will be jumped to, and optionally a locked idc will be unclocked into idc*/\
 /* c8 will contain the data componant of the foundation. c9 will have a copy of idc. c12 will be correctly set to target as well.
  * This function acts a whole lot like ccall entry, lock_idc but with foundations instead of sealed objects*/\
-    ITEM(foundation_enter, void, (capability, c3, capability, c4, capability, c5, capability, c6, capability, c7, entry_t, entry, locked_t, lock_idc), __VA_ARGS__)\
+    ITEM(foundation_enter, void, (capability, c3, capability, c4, capability, c5, capability, c6, capability, c7, entry_t, entry, invocable_t, lock_idc), __VA_ARGS__)\
 /* Unlock a public foundation */\
     ITEM(foundation_entry_expose, capability, (entry_t, entry), __VA_ARGS__)\
 /* Gets the -canonical- foundation id for an entry */\
@@ -129,14 +129,14 @@
     ITEM(foundation_entry_vaddr, register_t, (entry_t, entry), __VA_ARGS__)\
 /* Create a new entry from within a foundation */\
     ITEM(foundation_new_entry, entry_t, (size_t, eid, capability, at, auth_t, auth), __VA_ARGS__)\
-/* Take and sign a reservation. Signer gets full access. */\
-    ITEM(rescap_take_cert, cert_t, (res_t, res, cap_pair*, out, register_t, user_perms, register_t, invocation, auth_t, auth), __VA_ARGS__)\
+/* Take and sign a reservation. Result depends on type used.*/\
+    ITEM(rescap_take_authed, auth_result_t, (res_t, res, cap_pair*, out, register_t, user_perms, auth_types_t, type, auth_t, auth), __VA_ARGS__)\
 /* Get access to certfied capability from signed handle. Only has user_perms. Will return identity of signer*/\
     ITEM(rescap_check_cert, found_id_t*, (cert_t, cert, cap_pair*, out), __VA_ARGS__)\
 /* Take a reservation and lock for intended user (identified by id) */\
     ITEM(rescap_take_locked, locked_t, (res_t, res, cap_pair*, out, register_t, user_perms, found_id_t*, recipient_id), __VA_ARGS__)\
 /* Unlock a locked capability. Can only be done inside correct foundation */\
-    ITEM(rescap_unlock, void, (locked_t, locked, cap_pair*, out, auth_t, auth), __VA_ARGS__)\
+    ITEM(rescap_unlock, void, (auth_result_t, locked, cap_pair*, out, auth_t, auth, auth_types_t, type), __VA_ARGS__)\
 /* If in a foundation get own foundation_id */\
     ITEM(foundation_get_id, found_id_t*, (auth_t, auth), __VA_ARGS__)\
     NANO_KERNEL_IF_RAW_LIST_SMP(ITEM,__VA_ARGS__)\

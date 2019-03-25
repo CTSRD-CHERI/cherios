@@ -2918,9 +2918,9 @@ foundation_get_id:
     CRETURN
 
 ########################################################################################### (safe)
-# cert_t rescap_take_cert(res_t res, cap_pair* out, register_t user_perms, register_t invocation, auth_t auth)
-.global rescap_take_cert
-rescap_take_cert:
+# cert_t rescap_take_authed(res_t res, cap_pair* out, register_t user_perms, auth_types_t type, auth_t auth)
+.global rescap_take_authed
+rescap_take_authed:
 ###########################################################################################
 
     # Unseal auth
@@ -2931,12 +2931,17 @@ rescap_take_cert:
     dli         $t0, FOUNDATION_ID_SIZE
     csetboundsexact  $c5, $c5, $t0
     dli         $t0, Perm_Load
-    candperm    $c5, $c5, $t0
 
-    dli         $t0, FOUND_INV_TYPE
-    dli         $a2, FOUND_CERT_TYPE
+
+    # Check type is somewhere between cert
+    daddiu      $t1, $a1, -FOUND_CERT_TYPE
+    bltz        $t1, take_cert_er
+    daddiu      $t1, $a1, -FOUND_INV_TYPE
+    bgtz        $t1, take_cert_er
+    candperm    $c5, $c5, $t0                   # hoisted here to fill slot
+
     b           rescap_take_locked_cert_shared
-    movn        $a2, $t0, $a1
+    move        $a2, $a1
 
 ########################################################################################### (safe)
 # locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms, found_id_t* recipient_id)
@@ -3019,13 +3024,19 @@ rescap_check_cert:
 
 
 ########################################################################################### (safe)
-# void rescap_unlock(locked_t locked, cap_pair* out, auth_t auth)
+# void rescap_unlock(locked_t locked, cap_pair* out, auth_t auth, auth_types_t type)
 .global rescap_unlock
 rescap_unlock:
 ###########################################################################################
 
+    # Check in range
+    daddiu      $t0, $a0, -FOUND_LOCKED_TYPE
+    bltz        $t0, 1f
+    daddiu      $t0, $a0, -FOUND_INV_TYPE
+    bgtz        $t0, 1f
+
     # unlock
-    cincoffset  $c6, $kdc, FOUND_LOCKED_TYPE
+    cincoffset  $c6, $kdc, $a0
     cunseal     $c3, $c3, $c6
 
     # get current foundation

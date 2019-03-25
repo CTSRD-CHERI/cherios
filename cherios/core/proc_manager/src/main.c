@@ -258,14 +258,14 @@ act_control_kt start_process(process_t* proc, register_t arg, capability carg, c
 act_control_kt user_start_process(process_t* proc, startup_desc_t* desc) {
     proc = unseal_proc(proc);
     return start_process(proc, desc->arg, desc->carg, desc->stack_args, desc->stack_args_size,
-    		desc->cpu_hint, desc->flags, desc->cert);
+    		desc->cpu_hint, desc->flags, desc->inv);
 }
 
 act_control_kt user_create_thread(process_t* proc, const char* name, startup_desc_t* desc) {
     proc = unseal_proc(proc);
     act_control_kt ctrl = create_thread(proc, name, desc->arg, desc->carg,
                                          desc->pcc, desc->stack_args, desc->stack_args_size, desc->cpu_hint,
-                                         desc->flags, desc->cert);
+                                         desc->flags, desc->inv);
     return ctrl;
 }
 

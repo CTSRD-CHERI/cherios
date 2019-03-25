@@ -52,7 +52,7 @@ typedef struct startup_desc_t {
     capability carg;
     pcc_type* pcc;
     char* stack_args;
-    cert_t cert; // only for secure loaded things
+    invocable_t inv; // only for secure loaded things
     register_t arg;
     size_t stack_args_size;
     startup_flags_e flags;
