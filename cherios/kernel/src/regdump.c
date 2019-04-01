@@ -203,6 +203,12 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 	do {
 		print_frame(i++, return_address);
 
+
+		if(i == 1) {
+			// don't include the faulting instruction in backtrace in case the faulting instruction is storing ra
+			return_address = (capability) ((char *) return_address - 4);
+		}
+
         // This handles a branch out of the current function
 		if(i == 1 && cheri_getoffset(return_address) >= cheri_getlen(return_address)) {
 			return_address = cheri_setoffset(return_address, cheri_getlen(return_address)-4);

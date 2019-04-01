@@ -204,8 +204,8 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
 
     // The __stop___cap_relocs will be incorrect as it doesn't have size and so compaction fluffs it up =(
 
-    struct capreloc* r_start = &__start___cap_relocs;
-    struct capreloc* r_stop = cheri_incoffset(r_start, cap_relocs_size);
+    struct capreloc* r_start = RELOCS_START;
+    struct capreloc* r_stop = RELOCS_END;
 
     crt_init_new_locals(segment_table, r_start, r_stop);
 
@@ -307,7 +307,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         res_t res = cap_malloc(space_required);
 
         cap_pair pair;
-        invocable_t invocable = rescap_take_authed(res, &pair, CHERI_PERM_ALL, AUTH_INVOCABLE, own_auth).invocable;
+        invocable_t invocable = rescap_take_authed(res, &pair, CHERI_PERM_ALL, AUTH_INVOCABLE, own_auth, NULL, NULL).invocable;
 
         struct secure_start_t* start_message = ( struct secure_start_t*)pair.data;
 

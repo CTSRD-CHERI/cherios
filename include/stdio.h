@@ -31,12 +31,12 @@
 #ifndef __STDIO_H__
 #define __STDIO_H__
 
+#include "sockets.h"
 #include "mips.h"
 #include "cdefs.h"
 #include "stdarg.h"
 #include "colors.h"
 #include "types.h"
-#include "sockets.h"
 
 typedef unix_like_socket FILE;
 

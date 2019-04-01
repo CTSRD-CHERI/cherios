@@ -56,8 +56,8 @@ struct header {
 };
 
 
-int parse_initial(uni_dir_socket_fulfiller* push_read, struct initial* initial, char* name_to, size_t name_to_length);
-ssize_t parse_header(uni_dir_socket_fulfiller* push_read, struct header* header);
+int parse_initial(fulfiller_t push_read, struct initial* initial, char* name_to, size_t name_to_length);
+ssize_t parse_header(fulfiller_t push_read, struct header* header);
 
 void handle_loop(void);
 

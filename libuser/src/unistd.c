@@ -34,7 +34,6 @@
 #include "stdlib.h"
 #include "namespace.h"
 #include "stdio.h"
-#include "sockets.h"
 #include "assert.h"
 
 act_kt fs_act;
@@ -51,7 +50,7 @@ act_kt try_get_fs(void) {
 void alloc_drb(FILE_t file) {
     char* buffer = (char*)malloc(DEFAULT_DRB_SIZE);
     init_data_buffer(&file->write_copy_buffer, buffer, DEFAULT_DRB_SIZE);
-    file->write.push_writer->drb_fulfill_ptr = &file->write_copy_buffer.fulfill_ptr;
+    socket_requester_set_drb(file->write.push_writer, &file->write_copy_buffer);
 }
 
 FRESULT mkdir(const char* name) {
@@ -81,9 +80,9 @@ ssize_t truncate(FILE_t file) {
     ssize_t flush = socket_flush_drb(file);
     if(flush < 0) return flush;
     assert(file->con_type & CONNECT_PUSH_WRITE);
-    ssize_t space = socket_internal_requester_space_wait(file->write.push_writer, 1, file->flags & MSG_DONT_WAIT, 0);
+    ssize_t space = socket_requester_space_wait(file->write.push_writer, 1, file->flags & MSG_DONT_WAIT, 0);
     if(space < 0) return space;
-    return socket_internal_request_oob(file->write.push_writer, REQUEST_TRUNCATE, NULL, 0, 0);
+    return socket_request_oob(file->write.push_writer, REQUEST_TRUNCATE, NULL, 0, 0);
 }
 
 struct socket_with_file_drb {
@@ -102,7 +101,7 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
 
     if(!dest) return MAKE_ER(FILE_t,FR_NOT_READY);
 
-    struct requester_32* r32_read = NULL, *r32_write = NULL;
+    requester_t r32_read = NULL, r32_write = NULL;
 
     enum socket_connect_type  con_type = CONNECT_NONE;
 
@@ -112,20 +111,18 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
 
     if(read) {
         con_type |= CONNECT_PULL_READ;
-        r32_read = (struct requester_32*)malloc(SIZE_OF_request(32));
-        socket_internal_requester_init(&r32_read->r, 32, SOCK_TYPE_PULL, NULL);
+        r32_read = socket_malloc_requester_32(SOCK_TYPE_PULL, NULL);
     }
     if(write) {
         con_type |= CONNECT_PUSH_WRITE;
-        r32_write = (struct requester_32*)malloc(SIZE_OF_request(32));
-        socket_internal_requester_init(&r32_write->r, 32, SOCK_TYPE_PUSH, &sock->write_copy_buffer);
+        r32_write = socket_malloc_requester_32(SOCK_TYPE_PUSH, &sock->write_copy_buffer);
     }
 
     ssize_t result;
 
     if((result = message_send(mode,0,0,0,r32_read, r32_write, name, NULL, dest, SYNC_CALL, 0))) goto er1;
-    if(r32_read) socket_internal_requester_connect(&r32_read->r);
-    if(r32_write) socket_internal_requester_connect(&r32_write->r);
+    if(r32_read) socket_requester_connect(r32_read);
+    if(r32_write) socket_requester_connect(r32_write);
 
 
 
@@ -139,8 +136,9 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
 
     if((result = socket_init(sock, flags, sock_and_drb->drb_data, DEFAULT_DRB_SIZE, con_type))) goto er2;
 
-    sock->write.push_writer = &r32_write->r;
-    sock->read.pull_reader = &r32_read->r;
+    sock->read.pull_reader = r32_read;
+    sock->write.push_writer = r32_write;
+
     sock->read_behind = sock->read_behind = 0;
     return MAKE_VALID(FILE_t,sock);
 
@@ -170,16 +168,16 @@ asyn_close_state_e try_close(FILE_t file) {
             new_state =  ASYNC_NEED_REQ_CLOSE;
         case ASYNC_NEED_REQ_CLOSE:
             if(file->con_type & CONNECT_PUSH_WRITE) {
-                res = socket_internal_requester_space_wait(file->write.push_writer, 1, dont_wait, 0);
+                res = socket_requester_space_wait(file->write.push_writer, 1, dont_wait, 0);
                 if(res == E_SOCKET_CLOSED) res = 0;
                 if(res < 0) break;
-                socket_internal_request_oob(file->write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
+                socket_request_oob(file->write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
             }
 
             new_state = ASYNC_NEED_REQS_WRITE;
         case ASYNC_NEED_REQS_WRITE:
             if(file->con_type & CONNECT_PUSH_WRITE) {
-                res = socket_internal_requester_space_wait(file->write.push_writer, file->write.push_writer->buffer_size, dont_wait, 0);
+                res = socket_requester_space_wait(file->write.push_writer, SPACE_AMOUNT_ALL, dont_wait, 0);
                 if(res == E_SOCKET_CLOSED) res = 0;
                 if(res < 0) break;
             }
@@ -188,7 +186,7 @@ asyn_close_state_e try_close(FILE_t file) {
         case ASYNC_NEED_REQS_READ:
 
             if(file->con_type & CONNECT_PULL_READ) {
-                res = socket_internal_requester_space_wait(file->read.pull_reader, file->read.pull_reader->buffer_size, dont_wait, 0);
+                res = socket_requester_space_wait(file->read.pull_reader, SPACE_AMOUNT_ALL, dont_wait, 0);
                 if(res == E_SOCKET_CLOSED) res = 0;
                 if(res < 0) break;
             }
@@ -198,8 +196,10 @@ asyn_close_state_e try_close(FILE_t file) {
             res = socket_close(file);
             if(res == E_SOCKET_CLOSED) res = 0;
             assert(res == 0);
-            if(!(file->flags & SOCKF_RR_INLINE) && (file->con_type & CONNECT_PULL_READ)) free(file->read.pull_reader);
-            if(!(file->flags & SOCKF_WR_INLINE) && (file->con_type & CONNECT_PUSH_WRITE)) free(file->write.push_writer);
+            if((file->con_type & CONNECT_PULL_READ)) free(file->read.pull_reader);
+            if((file->con_type & CONNECT_PUSH_READ)) free(file->read.push_reader);
+            if((file->con_type & CONNECT_PULL_WRITE)) free(file->write.pull_writer);
+            if((file->con_type & CONNECT_PUSH_WRITE)) free(file->write.push_writer);
             if(!(file->flags & SOCKF_DRB_INLINE) && (file->write_copy_buffer.buffer)) free(file->write_copy_buffer.buffer);
             if(!(file->flags & SOCKF_SOCK_INLINE)) free(file);
 
@@ -265,7 +265,7 @@ ssize_t lseek(FILE_t file, int64_t offset, int whence) {
         int64_t offset_w = offset;
         if(em && whence == SEEK_CUR) offset_w+=file->write_behind;
         if(whence != SEEK_CUR || offset_w) {
-            ret = socket_internal_requester_lseek(sock->write.push_writer, offset_w, whence, dont_wait);
+            ret = socket_requester_lseek(sock->write.push_writer, offset_w, whence, dont_wait);
             if(ret < 0) return ret;
         }
         if(em) file->write_behind = 0;
@@ -274,7 +274,7 @@ ssize_t lseek(FILE_t file, int64_t offset, int whence) {
         int64_t offset_r = offset;
         if(em && whence == SEEK_CUR) offset_r+=file->read_behind;
         if(whence != SEEK_CUR || offset_r) {
-            ret = socket_internal_requester_lseek(sock->read.pull_reader, offset_r, whence, dont_wait);
+            ret = socket_requester_lseek(sock->read.pull_reader, offset_r, whence, dont_wait);
             if(ret < 0) return ret;
         }
         if(em) file->read_behind = 0;
@@ -294,10 +294,10 @@ ssize_t flush(FILE_t file) {
     if(file->con_type & CONNECT_PUSH_WRITE) {
         ssize_t flush = socket_flush_drb(file);
         assert(flush >= 0);
-        socket_internal_requester_wait_all_finish(file->write.push_writer, 0);
+        socket_requester_wait_all_finish(file->write.push_writer, 0);
     }
     if(file->con_type & CONNECT_PULL_READ) {
-        socket_internal_requester_wait_all_finish(file->read.pull_reader, 0);
+        socket_requester_wait_all_finish(file->read.pull_reader, 0);
     }
     return 0;
     // TODO send a flush on the socket.
@@ -305,14 +305,14 @@ ssize_t flush(FILE_t file) {
 
 ssize_t filesize(FILE_t file) {
     _unsafe ssize_t fsize;
-    uni_dir_socket_requester* req = file->con_type & CONNECT_PUSH_WRITE ?
+    requester_t req = file->con_type & CONNECT_PUSH_WRITE ?
                                     file->write.push_writer :
                                     file->read.pull_reader;
 
-    ssize_t res = socket_internal_requester_space_wait(req,1,0,0);
+    ssize_t res = socket_requester_space_wait(req,1,0,0);
     if(res < 0) return res;
-    socket_internal_request_oob(req, REQUEST_SIZE, (intptr_t)&fsize, 0, 0);
-    res = socket_internal_requester_wait_all_finish(req, 0);
+    socket_request_oob(req, REQUEST_SIZE, (intptr_t)&fsize, 0, 0);
+    res = socket_requester_wait_all_finish(req, 0);
     if(res < 0) return res;
     return fsize;
 }

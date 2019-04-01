@@ -132,7 +132,9 @@ init_elem_t init_list[] = {
     B_DENTRY(m_proc,     "proc.elf", 0, 1)
 	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
 // NOTE: IDLE processes are loaded here
-    B_DENTRY(m_uart,	"uart.elf",		0,	1)      // Needed for stdout so bring up asap
+    B_DENTRY(m_secure,    "libsocket.elf", 0, 1)
+    B_WAIT_FOR(namespace_num_lib_socket)
+    B_DENTRY(m_uart,	"uart.elf",		0,	1)      // Needed for stdout so bring up asap. This needs the link server for libsocket
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
     B_DENTRY(m_dedup,    "dedup.elf", 0 ,1)
     B_DENTRY(m_dedup_init, "dedup_init.elf", 0, 1)

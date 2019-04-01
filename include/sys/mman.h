@@ -38,6 +38,7 @@
 #include "nano/nanokernel.h"
 #include "elf.h"
 #include "cheric.h"
+#include "object.h"
 
 #define NULL_PAIR (cap_pair){.code = NULL, .data = NULL}
 
@@ -48,7 +49,7 @@ typedef capability mop_t;
 // Request bases with this alignment, and sizes that are this much less than multiples of pages
 #define MEM_REQUEST_FAST_OFFSET (2 * RES_META_SIZE)
 #define MEM_REQUEST_MIN_REQUEST (UNTRANSLATED_PAGE_SIZE - MEM_REQUEST_FAST_OFFSET)
-extern mop_t own_mop;
+extern LW_THR mop_t own_mop;
 
 #define MEM_OK      (0)
 #define MEM_BAD_MOP (-1)
@@ -153,7 +154,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 
 int munmap(void *addr, size_t length);
 
-typedef enum {
+typedef enum phy_handle_flags_e {
     PHY_HANDLE_NONE = 0,
     PHY_HANDLE_SOP = 1,
     PHY_HANDLE_EOP = 2,
@@ -162,7 +163,7 @@ typedef enum {
 typedef int phy_handle_func(capability arg, phy_handle_flags flags, size_t phy_addr, size_t length);
 
 static inline int for_each_phy(capability arg, phy_handle_flags flags, phy_handle_func* func, char* addr, size_t length) {
-    addr = cheri_setbounds(addr, length); // Force an exception here
+    addr = (char*)cheri_setbounds(addr, length); // Force an exception here
 
     int num = 0;
     // This breaks the virtual range into (maybe many) physically contiguous block
@@ -182,8 +183,8 @@ static inline int for_each_phy(capability arg, phy_handle_flags flags, phy_handl
         } else {
             // Break here
             num ++;
-            int res = func(arg, flags &~PHY_HANDLE_EOP, start_p, conti_len);
-            flags = flags & ~PHY_HANDLE_SOP;
+            int res = func(arg, (phy_handle_flags)(flags &~PHY_HANDLE_EOP), start_p, conti_len);
+            flags = (phy_handle_flags)(flags & ~PHY_HANDLE_SOP);
             if(res != 0) return res;
             length-=conti_len;
             conti_len = UNTRANSLATED_PAGE_SIZE;

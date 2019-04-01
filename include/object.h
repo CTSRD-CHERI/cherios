@@ -66,6 +66,7 @@ extern size_t __attribute__((weak)) msg_methods_nb;
 extern void __attribute__((weak)) (*ctrl_methods[]);
 extern size_t __attribute__((weak)) ctrl_methods_nb;
 
+void    dylink_sockets(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_flags, int first_thread);
 void	object_init(act_control_kt self_ctrl, queue_t * queue,
                     kernel_if_t* kernel_if_c, tres_t cds_res,
                     startup_flags_e startup_flags, int first_thread);
@@ -93,5 +94,11 @@ int msg_queue_empty(void);
 extern void msg_entry(int return_if_empty);
 void msg_delay_return(sync_state_t* delay_store);
 int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store);
+
+#if (LIGHTWEIGHT_OBJECT)
+#define LW_THR __thread
+#else
+#define LW_THR
+#endif
 
 #endif

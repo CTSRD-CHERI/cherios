@@ -1,6 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2019 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,29 +27,29 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_SOCKETS_H
+#define CHERIOS_SOCKETS_H
 
-#include "sys/types.h"
-#include "cheric.h"
-#include "object.h"
-#include "namespace.h"
-#include "queue.h"
-#include "assert.h"
-#include "syscalls.h"
-#include "thread.h"
-#include "mman.h"
+#include "socket_common.h"
 
-void libuser_init(act_control_kt self_ctrl,
-				  act_kt ns_ref,
-				  kernel_if_t* kernel_if_c,
-				  queue_t * queue,
-				  capability proc,
-				  mop_t mop,
-				  tres_t cds_res,
-				  startup_flags_e flags) {
-#if !(LIGHTWEIGHT_OBJECT)
-	proc_handle = proc;
-#endif
-	mmap_set_mop(mop);
-	namespace_init(ns_ref);
-	object_init(self_ctrl, queue, kernel_if_c, cds_res, flags, 1);
-}
+PLT_ty(lib_socket_if_t, SOCKET_LIB_IF_LIST)
+PLT_define(SOCKET_LIB_IF_LIST)
+
+// A sealed type to be passed outside this library
+enum {
+    invalid_guard_type = 0,
+    requester_guard_type = 1,
+    fulfiller_guard_type = 2,
+} lib_socket_types;
+
+#define UNSEAL_CHECK_REQUESTER(R)     ({ \
+    uni_dir_socket_requester* _requester_tmp = cheri_unseal(R, get_cds()); \
+    (_requester_tmp->fulfiller_component.guard.guard == MAKE_USER_GUARD_TYPE(requester_guard_type)) ? _requester_tmp : NULL; \
+    })
+
+#define UNSEAL_CHECK_FULFILLER(F)     ({ \
+    uni_dir_socket_requester* _requester_tmp = cheri_unseal(F, get_cds()); \
+    (_requester_tmp->fulfiller_component.guard.guard == MAKE_USER_GUARD_TYPE(fulfiller_guard_type)) ? _requester_tmp : NULL;\
+    })
+
+#endif //CHERIOS_SOCKETS_H

@@ -44,7 +44,8 @@
 #define REQ2    "GET somefile.txt HTTP/1.0\n" \
                 "\n" \
 
-static ssize_t ful_print(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(ful_print)(capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t ful_print(capability arg, char* buf, uint64_t offset, uint64_t length) {
     printf("%.*s",(int)length, buf);
     return length;
 }
@@ -80,7 +81,8 @@ int main(register_t arg, capability carg) {
 
     assert_int_ex(res, ==, sizeof(REQ1));
 
-    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL, NULL);
+    res = socket_fulfill_progress_bytes_unauthorised(netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS,
+            TRUSTED_CROSS_DOMAIN(ful_print), NULL, 0, NULL, NULL, TRUSTED_DATA, NULL);
 
     close(netsock);
 
@@ -99,7 +101,8 @@ int main(register_t arg, capability carg) {
 
     assert_int_ex(res, ==, sizeof(REQ2)-1);
 
-    res = socket_internal_fulfill_progress_bytes(&netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS, ful_print, NULL, 0, NULL, NULL);
+    res = socket_fulfill_progress_bytes_unauthorised(netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS,
+            TRUSTED_CROSS_DOMAIN(ful_print), NULL, 0, NULL, NULL, TRUSTED_DATA, NULL);
 
     assert_int_ex(res, > , 0);
 }

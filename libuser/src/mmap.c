@@ -38,7 +38,7 @@
 #include "assert.h"
 
 act_kt memmgt_ref = NULL;
-mop_t own_mop = NULL;
+LW_THR mop_t own_mop = NULL;
 
 act_kt try_init_memmgt_ref(void) {
     if(memmgt_ref == NULL) {
@@ -138,7 +138,6 @@ cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
 	ERROR_T(res_t) res = mem_request(0, pr.length + pr.mask, NONE, env->handle);
 
 	if(!IS_VALID(res))  {
-		printf("mmap based alloc failed %ld\n", (long)res.er);
 		return NULL_PAIR;
 	}
 

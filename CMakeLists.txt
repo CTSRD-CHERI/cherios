@@ -299,6 +299,12 @@ function(add_cherios_executable_early _target)
     target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
+function(add_cherios_executable_light _target)
+    add_cherios_module(${_target} ${ARGN})
+    target_link_libraries(${_target} CheriOS::LibUserLight)
+endfunction()
+
+
 function(add_cherios_kernel _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})

@@ -40,12 +40,14 @@ struct copy_until_status {
     int done;
 };
 
-static ssize_t ful_expect(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(ful_expect)(capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t ful_expect(capability arg, char* buf, uint64_t offset, uint64_t length) {
     int res = memcmp((char*)arg+offset,buf,length);
     return (res == 0) ? (ssize_t)length : E_USER_FULFILL_ERROR;
 }
 
-static ssize_t ful_copy_until(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(ful_copy_until)(capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t ful_copy_until(capability arg, char* buf, uint64_t offset, uint64_t length) {
     struct copy_until_status *copy = (struct copy_until_status*)arg;
     if(copy->done) return 0;
     for(uint64_t i = 0; i < length; i++) {
@@ -69,17 +71,17 @@ static ssize_t ful_copy_until(capability arg, char* buf, uint64_t offset, uint64
 
 #define POP(A) \
     do { \
-    res = socket_internal_fulfill_progress_bytes(push_read,1,F_CHECK | F_PROGRESS,copy_out, (capability)&A, 0, NULL, NULL);\
+    res = socket_fulfill_progress_bytes_unauthorised(push_read,1,F_CHECK | F_PROGRESS,OTHER_DOMAIN_FP(copy_out), (capability)&A, 0, NULL, NULL, LIB_SOCKET_DATA, NULL);\
     if(res != 1) return -1; \
     } while(0)
 
 #define EXPECT(X) \
     do { \
-        res = socket_internal_fulfill_progress_bytes(push_read, sizeof(X)-1, F_CHECK | F_PROGRESS, ful_expect, (capability)X, 0, NULL, NULL);\
+        res = socket_fulfill_progress_bytes_unauthorised(push_read, sizeof(X)-1, F_CHECK | F_PROGRESS, TRUSTED_CROSS_DOMAIN(ful_expect), (capability)X, 0, NULL, NULL, TRUSTED_DATA, NULL);\
         if(res != sizeof(X) -1) return -1;\
     } while(0)
 
-int parse_initial(uni_dir_socket_fulfiller* push_read, struct initial* initial, char* name_to, size_t name_to_length) {
+int parse_initial(fulfiller_t push_read, struct initial* initial, char* name_to, size_t name_to_length) {
     char a;
     ssize_t res;
 
@@ -137,7 +139,9 @@ int parse_initial(uni_dir_socket_fulfiller* push_read, struct initial* initial, 
     status.to = name_to;
     status.done = 0;
     status.delim = ' ';
-    res = socket_internal_fulfill_progress_bytes(push_read, name_to_length, F_CHECK | F_PROGRESS, &ful_copy_until, (capability)&status, 0, NULL, NULL);
+    res = socket_fulfill_progress_bytes_unauthorised(push_read, name_to_length, F_CHECK | F_PROGRESS,
+            TRUSTED_CROSS_DOMAIN(ful_copy_until), (capability)&status, 0, NULL, NULL,
+            TRUSTED_DATA, NULL);
 
     if(res < 0 || status.done != 1) {
         return -1;
@@ -149,7 +153,7 @@ int parse_initial(uni_dir_socket_fulfiller* push_read, struct initial* initial, 
 }
 
 
-ssize_t parse_header(uni_dir_socket_fulfiller* push_read, struct header* header) {
+ssize_t parse_header(fulfiller_t push_read, struct header* header) {
     char a;
     ssize_t res;
 
@@ -163,7 +167,9 @@ ssize_t parse_header(uni_dir_socket_fulfiller* push_read, struct header* header)
     status.done = 0;
     status.delim = ':';
 
-    res = socket_internal_fulfill_progress_bytes(push_read, sizeof(header->header)-1, F_CHECK | F_PROGRESS, &ful_copy_until, (capability)&status, 0, NULL, NULL);
+    res = socket_fulfill_progress_bytes_unauthorised(push_read, sizeof(header->header)-1, F_CHECK | F_PROGRESS,
+            &TRUSTED_CROSS_DOMAIN(ful_copy_until), (capability)&status, 0, NULL, NULL,
+            TRUSTED_DATA, NULL);
 
     if(res < 0 || status.done != 1) return  -1;
 
@@ -171,7 +177,9 @@ ssize_t parse_header(uni_dir_socket_fulfiller* push_read, struct header* header)
     status.done = 0;
     status.delim = '\n';
 
-    res = socket_internal_fulfill_progress_bytes(push_read, sizeof(header->value), F_CHECK | F_PROGRESS, &ful_copy_until, (capability)&status, 0, NULL, NULL);
+    res = socket_fulfill_progress_bytes_unauthorised(push_read, sizeof(header->value), F_CHECK | F_PROGRESS,
+            &ful_copy_until, (capability)&status, 0, NULL, NULL,
+            TRUSTED_DATA, NULL);
 
     if(res < 0 || status.done != 1) return -1;
 

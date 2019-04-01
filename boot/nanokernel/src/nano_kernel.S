@@ -167,7 +167,7 @@ END_LOCALS
 .text
 
 .set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal | Perm_Unseal))
-.set DEF_SEALING_PERMS, (Perm_Seal | Perm_Unseal)
+.set DEF_SEALING_PERMS, (Perm_Seal | Perm_Unseal | Perm_Global)
 
 nano_kernel_start:
 
@@ -2918,7 +2918,8 @@ foundation_get_id:
     CRETURN
 
 ########################################################################################### (safe)
-# cert_t rescap_take_authed(res_t res, cap_pair* out, register_t user_perms, auth_types_t type, auth_t auth)
+# cert_t rescap_take_authed(res_t res, cap_pair* out, register_t user_perms, auth_types_t type
+#                            auth_t auth, capability code, capability data)
 .global rescap_take_authed
 rescap_take_authed:
 ###########################################################################################
@@ -2944,7 +2945,8 @@ rescap_take_authed:
     move        $a2, $a1
 
 ########################################################################################### (safe)
-# locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms, found_id_t* recipient_id)
+# locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms,
+#                               found_id_t* recipient_id, capability code, capability data)
 .global rescap_take_locked
 rescap_take_locked:
 ###########################################################################################
@@ -2955,8 +2957,9 @@ rescap_take_locked:
 rescap_take_locked_cert_shared:
 
     cmove       $c13, $c4
-    cmove       $c7, $c5        # c5 clobbered by take
+    cmove       $c8, $c5        # c5 clobbered by take
 
+# Subroutine will clober c3,c4,c5,c14,c15,t*,a7. c3_in=res.c3_out=code.c4_out=data #
     SUBROUTINE_TAKE
 
     cbtu        $c3, take_cert_er
@@ -2965,40 +2968,72 @@ rescap_take_locked_cert_shared:
     dli         $t0, RES_CERT_META_SIZE
     cgetlen     $t1, $c3
     daddiu      $t1, $t1, -RES_CERT_META_SIZE
+    cbtu        $c13, use_inputs
+    csetboundsexact  $c9, $c4, $t0                  # c9 is the token. c6 is code. c7 is data. c8 is id.
 
     # make space for cert metadata
-    cmove       $c6, $c4
     cincoffset  $c3, $c3, $t0
     cincoffset  $c4, $c4, $t0
-    csetboundsexact  $c6, $c6, $t0
+
     csetboundsexact  $c3, $c3, $t1
-    csetboundsexact   $c4, $c4, $t1
-
-    # store cert
-    csc         $c7, $zero, RES_CERT_OWNER_OFF($c6)
-    # store user code
-    candperm    $c5, $c3, $a0
-    csc         $c5, $zero, RES_CERT_CODE_OFF($c6)
-    # store user data
-    candperm    $c5, $c4, $a0
-    csc         $c5, $zero, RES_CERT_DATA_OFF($c6)
-
+    csetboundsexact  $c4, $c4, $t1
+    candperm    $c6, $c3, $a0
+    candperm    $c7, $c4, $a0
     # store out code
     csc         $c3, $zero, 0($c13)
     # store out data
     csc         $c4, $zero, CAP_SIZE($c13)
 
+use_inputs:
+
+    # store id
+    csc         $c8, $zero, RES_CERT_OWNER_OFF($c9)
+    # store user code
+    csc         $c6, $zero, RES_CERT_CODE_OFF($c9)
+    # store user data
+    csc         $c7, $zero, RES_CERT_DATA_OFF($c9)
 
     # construct token
     csetoffset  $c5, $kdc, $a2
-    cseal       $c3, $c6, $c5
+    cseal       $c3, $c9, $c5
 
-    cclearlo    EN7(c4,c5,c6,c7,c13,c14,c15)
+    cclearlo    EN9(c4,c5,c6,c7,c8,c9,c13,c14,c15)
     CRETURN
 
 take_cert_er:
-    cclearlo    EN8(c3,c4,c5,c6,c7,c13,c14,c15)
+    cclearlo    EN10(c3,c4,c5,c6,c7,c8,c9,c13,c14,c15)
     CRETURN
+
+########################################################################################### (safe)
+# found_id_t* rescap_check_single_cert(single_use_cert cert, cap_pair* out)
+.global rescap_check_single_cert
+rescap_check_single_cert:
+###########################################################################################
+
+    # unlock
+    cincoffset  $c5, $kdc, FOUND_SINGLE_CERT
+    cunseal     $c5, $c3, $c5
+    cincoffset  $c5, $c5, RES_CERT_OWNER_OFF
+
+    # get id and set to null in an atomic way
+1:  cllc        $c3, $c5
+    cscc        $t0, $cnull, $c5
+    beqz        $t0, 1b
+    nop
+
+    cbtu        $c3, check_cert_er
+    # get user code
+    clc         $c6, $zero, (RES_CERT_CODE_OFF-RES_CERT_OWNER_OFF)($c5)
+    # get user data
+    clc         $c7, $zero, (RES_CERT_DATA_OFF-RES_CERT_OWNER_OFF)($c5)
+
+    csc         $c6, $zero, 0($c4)
+    csc         $c7, $zero, CAP_SIZE($c4)
+
+check_cert_er:
+    cclearlo    EN4(c4,c5,c6,c7)
+    CRETURN
+
 
 ########################################################################################### (safe)
 # found_id_t* rescap_check_cert(cert_t cert, cap_pair* out)
@@ -3011,13 +3046,14 @@ rescap_check_cert:
     cunseal     $c5, $c3, $c5
 
     # get user code
-    clc         $c3, $zero, RES_CERT_CODE_OFF($c5)
-    csc         $c3, $zero, 0($c4)
+    clc         $c6, $zero, RES_CERT_CODE_OFF($c5)
     # get user data
-    clc         $c3, $zero, RES_CERT_DATA_OFF($c5)
-    csc         $c3, $zero, CAP_SIZE($c4)
+    clc         $c7, $zero, RES_CERT_DATA_OFF($c5)
     # get found id
     clc         $c3, $zero, RES_CERT_OWNER_OFF($c5)
+
+    csc         $c6, $zero, 0($c4)
+    csc         $c7, $zero, CAP_SIZE($c4)
 
     cclearlo    EN2(c4,c5)
     CRETURN

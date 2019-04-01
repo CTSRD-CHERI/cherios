@@ -73,6 +73,10 @@ DECLARE_ENUM(domain_type_t, DOMAIN_TYPE_LIST)
 
 #include "stddef.h"
 
+#define MAKE_USER_GUARD_TYPE(info) (((info) << DOMAIN_INFO_SHIFT) | user_type)
+#define GET_GUARD_TYPE(guard) ((domain_type_t)((guard) & DOMAIN_TYPE_MASK))
+#define GET_GUARD_INFO(guard) ((guard) >> DOMAIN_INFO_SHIFT)
+
 typedef struct guard_t {
     register_t guard; // of type (domain_type_t | (info << 8))
     char pad[CAP_SIZE - sizeof(register_t)];
@@ -116,6 +120,11 @@ CTL_t* __ret;                                             \
 __asm__ ("cmove %[ret], $idc" : [ret]"=C"(__ret) ::);     \
 __ret;}))
 
+#define get_cds() (sealing_cap) ({\
+sealing_cap __ret;                                             \
+__asm__ ("clcbi %[ret], (%[im])($idc)" : [ret]"=C"(__ret) : [im]"i"(CTLP_OFFSET_CDS):);     \
+__ret;})
+
 static inline size_t ctl_get_num_table_entries(CTL_t* ctl) {
     return (cheri_getlen(ctl) / sizeof(capability)) - 9;
 }
@@ -125,7 +134,22 @@ capability* __ret;                                             \
 __asm__ ("cmove %[ret], $c25" : [ret]"=C"(__ret) ::);     \
 __ret;}))
 
+// Actually has a type of whatever function pointer is passed in invoke_c1
+extern void call_function_pointer_arg_mem(void);
+
+// FIXME: have to pass ptr/ptr_data as c1/c2
+// FIXME: have to cclearreg depends on number of varargs
+#define INVOKE_FUNCTION_POINTER(ptr, ptr_data, ...) ({ \
+    SET_TLS_SYM(invoke_c1,ptr);\
+    SET_TLS_SYM(invoke_c2,ptr_data);\
+    ((typeof(ptr))(&call_function_pointer_arg_mem))(__VA_ARGS__);})
 
 #endif // ASSEMBLY
+
+#define CROSS_DOMAIN(X) (__cross_domain_ ## X)
+#define TRUSTED_CROSS_DOMAIN(X) (__cross_domain_trusted_ ## X)
+
+#define TRUSTED_DATA get_ctl()
+#define UNTRUSTED_DATA ({CTL_t* _ctl_tmp = get_ctl(); return cheri_seal(_ctl_tmp,_ctl_tmp->cds);})
 
 #endif //CHERIOS_DYLINK_H

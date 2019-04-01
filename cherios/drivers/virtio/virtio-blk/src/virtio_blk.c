@@ -54,7 +54,7 @@ size_t n_socks = 0;
 
 struct session_sock {
     session_t* session;
-    uni_dir_socket_fulfiller ff;
+    fulfiller_t ff;
     uint16_t in_sector_prog;
     le16 req_tail;
     le16 req_head;
@@ -183,7 +183,8 @@ static void add_desc(session_t* session, le16 desc_no) {
     virtio_device_notify((virtio_mmio_map*)session->mmio_cap, 0);
 }
 
-static ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
     request_type_e req = request->type;
 
@@ -217,7 +218,8 @@ static ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uin
     return E_OOB;
 }
 
-static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(ful_ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
 
     assert(length <= SECTOR_SIZE);
@@ -235,15 +237,16 @@ static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t lengt
 }
 
 static void translate_sock(struct session_sock* ss) {
-    uint64_t bytes = socket_internal_requester_bytes_requested(ss->ff.requester);
+    uint64_t bytes = socket_fulfiller_bytes_requested(ss->ff);
 
     ss->in_sector_prog = 0;
 
     if(bytes == 0) {
         // Just an oob
-        ssize_t ret = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF,
+        ssize_t ret = socket_fulfill_progress_bytes_unauthorised(ss->ff, SOCK_INF,
                                                              F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                             &ful_func_cancel_non_oob, (capability)ss,0,full_oob, NULL);
+                                                             OTHER_DOMAIN_FP(ful_func_cancel_non_oob), (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
+                                                                 LIB_SOCKET_DATA, TRUSTED_DATA);
         return;
     }
 
@@ -259,9 +262,10 @@ static void translate_sock(struct session_sock* ss) {
     desc_head->flags = VIRTQ_DESC_F_NEXT;
 
     // TODO can use checkpoint to allow queueing here
-    ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&ss->ff, SECTOR_SIZE,
+    ssize_t bytes_translated = socket_fulfill_progress_bytes_unauthorised(ss->ff, SECTOR_SIZE,
                                                                       F_CHECK | F_DONT_WAIT,
-                                                                      ful_ff, (capability)ss,0,full_oob, NULL);
+                                                                          TRUSTED_CROSS_DOMAIN(ful_ff), (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
+                                                                          TRUSTED_DATA, TRUSTED_DATA);
     assert_int_ex(bytes_translated, ==, SECTOR_SIZE);
 
     assert_int_ex(-bytes_translated, ==, -SECTOR_SIZE);
@@ -274,7 +278,7 @@ static void translate_sock(struct session_sock* ss) {
     add_desc(ss->session, ss->req_head);
 }
 
-int new_socket(session_t* session, uni_dir_socket_requester* requester, enum socket_connect_type type) {
+int new_socket(session_t* session, requester_t requester, enum socket_connect_type type) {
     session = unseal_session(session);
     assert(session != NULL);
 
@@ -290,8 +294,14 @@ int new_socket(session_t* session, uni_dir_socket_requester* requester, enum soc
     } else return -1;
 
     ssize_t res;
-    if((res = socket_internal_fulfiller_init(&sock->ff, sock_type)) < 0) return (int)res;
-    if((res = socket_internal_fulfiller_connect(&sock->ff, requester)) < 0) return (int)res;
+
+    fulfiller_t ff = socket_malloc_fulfiller(sock_type);
+
+    sock->ff = ff;
+
+    if(ff == NULL) return -1;
+
+    if((res = socket_fulfiller_connect(ff, requester)) < 0) return (int)res;
 
     sock->session = session;
     sock->out.ioprio = 0;
@@ -329,7 +339,7 @@ void handle_loop(void) {
 
         for(size_t i = 0; i < n_socks;i++) {
             if(socks[i].req_head == QUEUE_SIZE) {
-                enum poll_events event = socket_internal_fulfill_poll(&socks[i].ff, POLL_IN, set_waiting, 0, 0);
+                enum poll_events event = socket_fulfill_poll(socks[i].ff, POLL_IN, set_waiting, 0, 0);
                 if(event) {
                     if(event & (POLL_HUP | POLL_ER | POLL_NVAL)) assert(0 && "Socket error in block device");
                     translate_sock(socks+i);
@@ -423,8 +433,9 @@ static void vblk_rw_ret(session_t* session) {
             for(size_t i = 0; i < n_socks; i++) {
                 if(socks[i].req_head == used_desc_id) {
                     // This sockets request has finished
-                    ssize_t ret = socket_internal_fulfill_progress_bytes(&socks[i].ff, SECTOR_SIZE, F_PROGRESS | F_DONT_WAIT,
-                                                                         NULL, NULL, 0, ful_oob_func_skip_oob, NULL);
+                    ssize_t ret = socket_fulfill_progress_bytes_unauthorised(socks[i].ff, SECTOR_SIZE, F_PROGRESS | F_DONT_WAIT,
+                                                                         NULL, NULL, 0, OTHER_DOMAIN_FP(ful_oob_func_skip_oob), NULL,
+                                                                         NULL, LIB_SOCKET_DATA);
                     assert_int_ex(-ret, ==, -SECTOR_SIZE);
                     assert_int_ex(socks[i].in.status, ==, VIRTIO_BLK_S_OK);
                     virtio_q_free(&socks[i].session->queue, &session->free_head, socks[i].req_head, socks[i].req_tail);

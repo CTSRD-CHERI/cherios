@@ -28,14 +28,13 @@
  * SUCH DAMAGE.
  */
 
-#include <sockets.h>
+#include "sockets.h"
 #include <ff.h>
 #include "spinlock.h"
 #include "ff.h"
 #include "misc.h"
 #include "virtioblk.h"
 #include "stdio.h"
-#include "sockets.h"
 #include "thread.h"
 #include "stdlib.h"
 #include "atomic.h"
@@ -78,6 +77,7 @@ __thread fs_proxy sr_write;
 
 act_notify_kt main_notify;
 
+ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
 ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     struct sessions_t* fil = (struct sessions_t*)arg;
     request_type_e req = request->type;
@@ -139,17 +139,19 @@ void handle(enum poll_events events, struct sessions_t* session) {
 
     if(events & POLL_IN) {
         // service write (we read)
-        uni_dir_socket_fulfiller* read_fulfill = &session->sock.read.push_reader;
-        assert_int_ex(read_fulfill->proxy_times, ==, read_fulfill->proxy_fin_times);
-        uint64_t btp = socket_internal_requester_bytes_requested(read_fulfill->requester);
+        fulfiller_t read_fulfill = session->sock.read.push_reader;
+        assert_int_ex(in_proxy(read_fulfill), ==, 0);
+        uint64_t btp = socket_fulfiller_bytes_requested(read_fulfill);
         do {
 
             bytes_to_push = (btp > UINT_MAX) ? (UINT) UINT_MAX : (UINT)btp;
             // This will handle all oob requests before any data
             session->current = 1;
-            res = socket_internal_fulfill_progress_bytes(read_fulfill, SOCK_INF,
+            res = socket_fulfill_progress_bytes_unauthorised(read_fulfill, SOCK_INF,
                                                                  F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                                 &ful_func_cancel_non_oob, (capability)session, 0, full_oob, NULL);
+                                                                 OTHER_DOMAIN_FP(ful_func_cancel_non_oob),
+                                                                 (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
+                                                                 NULL, LIB_SOCKET_DATA, TRUSTED_DATA);
             if(res == E_SOCKET_CLOSED) break;
             assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->write_fptr) {
@@ -162,17 +164,19 @@ void handle(enum poll_events events, struct sessions_t* session) {
     }
     if(events & POLL_OUT) {
         // service read (we write)
-        uni_dir_socket_fulfiller* write_fulfill = &session->sock.write.pull_writer;
-        assert_int_ex(write_fulfill->proxy_times, ==, write_fulfill->proxy_fin_times);
-        uint64_t btp = socket_internal_requester_bytes_requested(write_fulfill->requester);
+        fulfiller_t write_fulfill = session->sock.write.pull_writer;
+        assert_int_ex(in_proxy(write_fulfill), ==, 0);
+        uint64_t btp = socket_fulfiller_bytes_requested(write_fulfill);
         do {
 
             bytes_to_push = (btp > UINT_MAX) ? (UINT) UINT_MAX : (UINT)btp;
             // This will handle all oob requests before any data
             session->current = 0;
-            res = socket_internal_fulfill_progress_bytes(write_fulfill, SOCK_INF,
+            res = socket_fulfill_progress_bytes_unauthorised(write_fulfill, SOCK_INF,
                                                          F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                         &ful_func_cancel_non_oob, (capability)session, 0, full_oob, NULL);
+                                                         OTHER_DOMAIN_FP(ful_func_cancel_non_oob),
+                                                         (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
+                                                         NULL,LIB_SOCKET_DATA, TRUSTED_DATA);
             if(res == E_SOCKET_CLOSED) break;
             assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->read_fptr) {
@@ -198,16 +202,20 @@ void worker_loop(register_t r, capability c) {
 
     ssize_t ret;
 
-    ret = socket_internal_requester_init(&sr_read.req.r, 32, SOCK_TYPE_PULL, NULL);
+    requester_t read = socket_malloc_requester_32(SOCK_TYPE_PULL, NULL);
+    requester_t write = socket_malloc_requester_32(SOCK_TYPE_PUSH, NULL);
+
+    assert(read != NULL && write != NULL);
+
+    ret = virtio_new_socket(read, CONNECT_PULL_READ);
     assert_int_ex(ret, ==, 0);
-    ret = socket_internal_requester_init(&sr_write.req.r, 32, SOCK_TYPE_PUSH, NULL);
-    assert_int_ex(ret, ==, 0);
-    ret = virtio_new_socket(&sr_read.req.r, CONNECT_PULL_READ);
-    assert_int_ex(ret, ==, 0);
-    ret = virtio_new_socket(&sr_write.req.r, CONNECT_PUSH_WRITE);
+    ret = virtio_new_socket(write, CONNECT_PUSH_WRITE);
     assert_int_ex(ret, ==, 0);
 
     sr_read.socket_sector = sr_write.socket_sector = sr_read.length = sr_write.length = 0;
+
+    sr_read.requester = read;
+    sr_write.requester = write;
 
     while(1) {
         msg_t *msg = get_message();
@@ -242,7 +250,7 @@ void spawn_workers(void) {
 }
 
 
-int open_file(int mode, uni_dir_socket_requester* read_requester, uni_dir_socket_requester* write_requester, const char* file_name) {
+int open_file(int mode, requester_t read_requester, requester_t write_requester, const char* file_name) {
 
     int read = mode & FA_READ;
     int write = mode & FA_WRITE;
@@ -266,16 +274,26 @@ int open_file(int mode, uni_dir_socket_requester* read_requester, uni_dir_socket
     if(write) {
         assert(write_requester);
         con_type |= CONNECT_PUSH_READ;
-        socket_internal_fulfiller_init(&session->sock.read.push_reader, SOCK_TYPE_PUSH);
-        socket_internal_fulfiller_connect(&session->sock.read.push_reader, write_requester);
+        if(session->sock.read.push_reader) {
+            int ret = socket_reuse_fulfiller(session->sock.read.push_reader, SOCK_TYPE_PUSH);
+            assert_int_ex(ret, ==, 0);
+        } else {
+            session->sock.read.push_reader = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
+        }
+        socket_fulfiller_connect(session->sock.read.push_reader, write_requester);
         events |= POLL_IN;
     }
     if(read) {
         assert(read_requester);
         con_type |= CONNECT_PULL_WRITE;
         mode |= FA_READ;
-        socket_internal_fulfiller_init(&session->sock.write.pull_writer, SOCK_TYPE_PULL);
-        socket_internal_fulfiller_connect(&session->sock.write.pull_writer, read_requester);
+        if(session->sock.write.pull_writer) {
+            int ret = socket_reuse_fulfiller(session->sock.write.pull_writer, SOCK_TYPE_PULL);
+            assert_int_ex(ret, ==, 0);
+        } else {
+            session->sock.write.pull_writer = socket_malloc_fulfiller(SOCK_TYPE_PULL);
+        }
+        socket_fulfiller_connect(session->sock.write.pull_writer, read_requester);
         events |= POLL_OUT;
     }
 

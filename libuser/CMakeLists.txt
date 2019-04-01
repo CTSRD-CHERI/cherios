@@ -23,6 +23,7 @@ set(LIBUSER_ASM_SRCS
     src/msg.S
     src/exceptions.S
     ${PLT_ASM}
+    src/invoke_function_pointer.S
 )
 
 set(LIBUSER_SRCS
@@ -54,12 +55,40 @@ set(LIBUSER_SRCS
     src/act_events.c
 )
 
+# Single thread. Exceptions, message sending and mmap. Meant to be used to make link servers work.
+# On the way to proper dynamic linking.
+
+set(LIBCRT_LIGHT_SRCS
+    ${CMAKE_SOURCE_DIR}/libcrt/memcpy.S
+    ${CMAKE_SOURCE_DIR}/libcrt/memset.c
+    ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
+    ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
+)
+
+set(LIBUSER_LIGHT_SRCS
+    src/plt_allocations.c
+    src/libuser.c
+    src/object.c
+    src/mmap.c
+    src/exceptions.c
+    src/namespace.c
+    src/temporal.c
+    src/msg.c
+    src/type_man.c
+    src/errno.c
+    src/lightdummies.c
+)
+
 add_library(user_early STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
 target_compile_definitions(user_early PUBLIC -DUSE_SYSCALL_PUTS)
 add_library(CheriOS::LibUserEarly ALIAS user_early)
 
 add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
 add_library(CheriOS::LibUser ALIAS user)
+
+add_library(user_light STATIC ${LIBCRT_LIGHT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_LIGHT_SRCS})
+target_compile_definitions(user_light PUBLIC -DLIGHTWEIGHT_OBJECT=1)
+add_library(CheriOS::LibUserLight ALIAS user_light)
 
 add_library(libcrt STATIC ${LIBCRT_SRCS})
 add_library(CheriOS::LibCRT ALIAS libcrt)

@@ -28,24 +28,19 @@
  * SUCH DAMAGE.
  */
 
-#include <sockets.h>
-#include "cheric.h"
 #include "sockets.h"
+#include "cheric.h"
 #include "thread.h"
 #include "assert.h"
 #include "stdio.h"
 #include "string.h"
+#include "capmalloc.h"
 
 #define DATA_SIZE 0x800
 #define INDIR_SIZE 16
 #define PORT 777
 
 #define BIG_TEST_SIZE (1 << 12)
-
-struct stack_request {
-    uni_dir_socket_requester r;
-    request_t pad[INDIR_SIZE];
-};
 
 const char* str1 = "Hello World!\n";
 const int size1 = 14;
@@ -132,12 +127,13 @@ void con2_start(register_t arg, capability carg) {
 
     ssize_t res;
 
-    res = socket_internal_fulfiller_init(&sock->read.push_reader, SOCK_TYPE_PUSH);
-    assert_int_ex(res, ==, 0);
+    sock->read.push_reader = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
+    assert(sock->read.push_reader);
+
     res = socket_init(sock, MSG_NONE, NULL, DATA_SIZE, CONNECT_PUSH_READ);
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_connect(carg, PORT+2, NULL, &sock->read.push_reader);
+    res = socket_connect_via_rpc(carg, PORT+2, NULL, sock->read.push_reader);
 
     assert_int_ex(res, ==, 0);
 
@@ -158,20 +154,17 @@ void con2_start(register_t arg, capability carg) {
 
     assert_int_ex(res, ==, 0);
 
-    struct stack_request on_stack1;
     unix_like_socket socket2;
     unix_like_socket* sock2 = &socket2;
-    sock2->read.pull_reader = &on_stack1.r;
+    sock2->read.pull_reader = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PULL, NULL).val;
 
-    res = socket_internal_requester_init(sock2->read.pull_reader, INDIR_SIZE, SOCK_TYPE_PULL, NULL);
-
-    assert_int_ex(res, ==, 0);
+    assert(sock2->read.pull_reader != NULL);
 
     res = socket_init(sock2, MSG_NO_COPY, NULL, 0, CONNECT_PULL_READ);
 
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_connect(carg, PORT+3, sock2->read.pull_reader, NULL);
+    res = socket_connect_via_rpc(carg, PORT+3, sock2->read.pull_reader, NULL);
 
     assert_int_ex(res, ==, 0);
 
@@ -189,16 +182,19 @@ void con2_start(register_t arg, capability carg) {
     return;
 }
 
+ssize_t TRUSTED_CROSS_DOMAIN(con3_full)(capability arg, char* buf, uint64_t offset, uint64_t length);
 ssize_t con3_full(capability arg, char* buf, uint64_t offset, uint64_t length) {
     assert(0);
 }
 
+ssize_t TRUSTED_CROSS_DOMAIN(con3_full2)(capability arg, char* buf, uint64_t offset, uint64_t length);
 ssize_t con3_full2(capability arg, char* buf, uint64_t offset, uint64_t length) {
     char* data = (char*)arg;
     memcpy(buf, data+offset,length);
     return length;
 }
 
+ssize_t TRUSTED_CROSS_DOMAIN(con3_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf);
 ssize_t con3_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
     // Gives the buffer out in small parts to test that multiple calls works
     char* data = (char*)arg;
@@ -215,28 +211,26 @@ ssize_t con3_sub(capability arg, uint64_t offset, uint64_t length, char** out_bu
 }
 
 typedef struct proxy_pair {
-    uni_dir_socket_fulfiller ff;
-    struct requester_32 req;
+    fulfiller_t ff;
+    requester_t req;
 } proxy_pair;
 
 void init_pair(proxy_pair* pp) {
-    socket_internal_requester_init(&pp->req.r, 32, SOCK_TYPE_PUSH, NULL);
-    socket_internal_fulfiller_init(&pp->ff, SOCK_TYPE_PUSH);
-    socket_internal_fulfiller_connect(&pp->ff, socket_internal_make_read_only(&pp->req.r));
-    socket_internal_requester_connect(&pp->req.r);
+    pp->ff = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
+    pp->req = socket_malloc_requester_32(SOCK_TYPE_PUSH, NULL);
+    socket_fulfiller_connect(pp->ff, socket_make_ref_for_fulfill(pp->req));
+    socket_requester_connect(pp->req);
 }
 
 char co3data[BIG_TEST_SIZE * 3];
 
 void con3_start(register_t arg, capability carg) {
-    uni_dir_socket_fulfiller ff;
+    fulfiller_t ff = socket_malloc_fulfiller(SOCK_TYPE_PULL);
+    assert(ff);
 
     int res;
 
-    res = socket_internal_fulfiller_init(&ff, SOCK_TYPE_PULL);
-    assert_int_ex(res, ==, 0);
-
-    int result = socket_internal_connect(carg, PORT + 5, NULL, &ff);
+    int result = socket_connect_via_rpc(carg, PORT + 5, NULL, ff);
     assert_int_ex(result, ==, 0);
 
     // Do a BIG_TEST send with our own buffers
@@ -249,21 +243,24 @@ void con3_start(register_t arg, capability carg) {
     }
 
     // Send but offer buffers, error if normal fulfill is used
-    ssize_t sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
-                                           con3_full, co3data, 0, NULL, con3_sub);
+    ssize_t sent = socket_fulfill_progress_bytes_unauthorised(ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
+                                           TRUSTED_CROSS_DOMAIN(con3_full), co3data, 0, NULL, TRUSTED_CROSS_DOMAIN(con3_sub),
+                                           TRUSTED_DATA, NULL);
 
     assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
     // Send normally
 
-    sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
-                                                          con3_full2, co3data, 0, NULL, NULL);
+    sent = socket_fulfill_progress_bytes_unauthorised(ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
+                                                      TRUSTED_CROSS_DOMAIN(con3_full2), co3data, 0, NULL, NULL,
+                                                      TRUSTED_DATA, NULL);
 
     assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
     // Send, offer a buffer, via a proxy
-    sent = socket_internal_fulfill_progress_bytes(&ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
-                                                          con3_full, co3data, 0, NULL, con3_sub);
+    sent = socket_fulfill_progress_bytes_unauthorised(ff, BIG_TEST_SIZE*3, F_CHECK | F_PROGRESS,
+                                                      TRUSTED_CROSS_DOMAIN(con3_full), co3data, 0, NULL, TRUSTED_CROSS_DOMAIN(con3_sub),
+                                                      TRUSTED_DATA, NULL);
 
     assert_int_ex(sent, ==, BIG_TEST_SIZE * 3);
 
@@ -280,17 +277,18 @@ void connector_start(register_t arg, capability carg) {
 
     int res;
 
-    res = socket_internal_fulfiller_init(&sock->write.pull_writer, SOCK_TYPE_PULL);
-    assert_int_ex(res, ==, 0);
-    res = socket_internal_fulfiller_init(&sock->read.push_reader, SOCK_TYPE_PUSH);
-    assert_int_ex(res, ==, 0);
+    sock->read.push_reader = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
+    assert(sock->read.push_reader);
+    sock->write.pull_writer = socket_malloc_fulfiller(SOCK_TYPE_PULL);
+    assert(sock->write.pull_writer);
+
     res = socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_READ | CONNECT_PULL_WRITE);
     assert_int_ex(res, ==, 0);
 
 
-    int result = socket_internal_connect(carg, PORT, NULL, &sock->read.push_reader);
+    int result = socket_connect_via_rpc(carg, PORT, NULL, sock->read.push_reader);
     assert_int_ex(result, ==, 0);
-    result = socket_internal_connect(carg, PORT+1, NULL, &sock->write.pull_writer);
+    result = socket_connect_via_rpc(carg, PORT+1, NULL, sock->write.pull_writer);
     assert_int_ex(result, ==, 0);
 
     char buf[100];
@@ -319,18 +317,16 @@ void connector_start(register_t arg, capability carg) {
 
     thread t = thread_new("socket_part3", 0, act_self_ref, &con2_start);
 
-    struct stack_request on_stack1;
     unix_like_socket socket2;
     unix_like_socket* sock2 = &socket2;
-    sock2->write.push_writer = &on_stack1.r;
+    sock2->write.push_writer = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PUSH, NULL).val;
 
-    res = socket_internal_requester_init(sock2->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH, NULL);
     assert_int_ex(res, ==, 0);
 
     res = socket_init(sock2, MSG_NO_COPY, NULL, 0, CONNECT_PUSH_WRITE);
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_listen(PORT+2, sock2->write.push_writer, NULL);
+    res = socket_listen_rpc(PORT+2, sock2->write.push_writer, NULL);
     assert_int_ex(res, == , 0);
 
     sent = socket_sendfile(sock2, sock, 3 * BIG_TEST_SIZE);
@@ -340,18 +336,16 @@ void connector_start(register_t arg, capability carg) {
 
     thread t2 = thread_new("socket_part4", 0, act_self_ref, &con3_start);
 
-    struct stack_request on_stack2;
     unix_like_socket socket4;
     unix_like_socket* sock4 = &socket4;
-    sock4->read.pull_reader = &on_stack2.r;
+    sock4->read.pull_reader = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PULL, NULL).val;
 
-    res = socket_internal_requester_init(sock4->read.pull_reader, INDIR_SIZE, SOCK_TYPE_PULL, NULL);
     assert_int_ex(res, ==, 0);
 
     res = socket_init(sock4, MSG_NO_COPY, NULL, 0, CONNECT_PULL_READ);
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_listen(PORT+5, sock4->read.pull_reader, NULL);
+    res = socket_listen_rpc(PORT+5, sock4->read.pull_reader, NULL);
     assert_int_ex(res, == , 0);
 
     // Send twice, without drb
@@ -362,24 +356,24 @@ void connector_start(register_t arg, capability carg) {
 
     capability drb_buf[BIG_TEST_SIZE/(8 * sizeof(capability))];
     init_data_buffer(&sock2->write_copy_buffer,drb_buf,BIG_TEST_SIZE/8);
-    sock2->write.push_writer->drb_fulfill_ptr = &sock2->write_copy_buffer.fulfill_ptr;
+    socket_requester_set_drb(sock2->write.push_writer, &sock2->write_copy_buffer);
 
     // And sendfile agagain
     sent = socket_sendfile(sock2, sock4, 3 * BIG_TEST_SIZE);
     assert_int_ex(sent, ==, 3 * BIG_TEST_SIZE);
 
-    socket_internal_requester_wait_all_finish(sock4->read.pull_reader, 0);
+    socket_requester_wait_all_finish(sock4->read.pull_reader, 0);
 
     // and again, but this time use join_proxy
     proxy_pair pp;
     init_pair(&pp);
 
-    socket_internal_requester_space_wait(sock4->read.pull_reader, 1, 0, 0);
-    socket_internal_requester_space_wait(sock2->write.push_writer, 1, 0, 0);
+    socket_requester_space_wait(sock4->read.pull_reader, 1, 0, 0);
+    socket_requester_space_wait(sock2->write.push_writer, 1, 0, 0);
 
-    rec = socket_internal_request_proxy_join(sock4->read.pull_reader, &pp.req.r,
+    rec = socket_request_proxy_join(sock4->read.pull_reader, pp.req,
                                        NULL, 3 * BIG_TEST_SIZE, 0,
-                                       sock2->write.push_writer, &pp.ff, 0);
+                                       sock2->write.push_writer, pp.ff, 0);
 
     assert_int_ex(rec, ==, 0);
 
@@ -389,21 +383,18 @@ void connector_start(register_t arg, capability carg) {
     rec = socket_close(sock2);
     assert_int_ex(rec, ==, 0);
 
-    assert(pp.req.r.requeste_ptr != 0);
-    assert_int_ex(pp.req.r.requeste_ptr, ==, pp.req.r.fulfiller_component.fulfill_ptr);
-
     // Test a fulfill -> fulfill send file
 
     unix_like_socket socket3;
     unix_like_socket* sock3 = &socket3;
 
-    res = socket_internal_fulfiller_init(&sock3->write.pull_writer, SOCK_TYPE_PULL);
-    assert_int_ex(res, ==, 0);
+    sock3->write.pull_writer = socket_malloc_fulfiller(SOCK_TYPE_PULL);
+    assert(sock3->write.pull_writer);
 
     res = socket_init(sock3, MSG_NONE, NULL, 0, CONNECT_PULL_WRITE);
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_listen(PORT+3, NULL, &sock3->write.pull_writer);
+    res = socket_listen_rpc(PORT+3, NULL, sock3->write.pull_writer);
     assert_int_ex(res, == , 0);
 
     sent = socket_sendfile(sock3, sock, 3 * BIG_TEST_SIZE);
@@ -432,13 +423,16 @@ void connector_start(register_t arg, capability carg) {
     assert(!cheri_gettag(cap_rec));
 
     // Test poll. Re-use 3
-    res = socket_internal_fulfiller_init(&sock3->read.push_reader, SOCK_TYPE_PUSH);
+    sock3->read.push_reader = sock3->write.pull_writer;
+    sock3->write.pull_writer = NULL;
+    res = socket_reuse_fulfiller(sock3->read.push_reader, SOCK_TYPE_PUSH);
+
     assert_int_ex(res, ==, 0);
 
     res = socket_init(sock3, MSG_NONE, NULL, 0, CONNECT_PUSH_READ);
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_connect(carg, PORT+4, NULL, &sock3->read.push_reader);
+    res = socket_connect_via_rpc(carg, PORT+4, NULL, sock3->read.push_reader);
     assert_int_ex(res, ==, 0);
 
     poll_sock_t socks[2];
@@ -488,24 +482,33 @@ int main(register_t arg, capability carg) {
     thread t = thread_new("socket_part2", 0, act_self_ref, &connector_start);
 
     capability data_buffer[DATA_SIZE/CAP_SIZE];
-    struct stack_request on_stack1;
-    struct stack_request on_stack2;
+
     unix_like_socket socket;
 
     unix_like_socket* sock = &socket;
-    sock->write.push_writer = &on_stack1.r;
-    sock->read.pull_reader = &on_stack2.r;
 
-    int res = socket_internal_requester_init(sock->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH, &sock->write_copy_buffer);
-    assert_int_ex(res, ==, 0);
-    socket_internal_requester_init(sock->read.pull_reader, INDIR_SIZE, SOCK_TYPE_PULL, NULL);
-    assert_int_ex(res, ==, 0);
-    socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_WRITE | CONNECT_PULL_READ);
+    ERROR_T(requester_t) new_req =
+            socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PUSH, &sock->write_copy_buffer);
+
+    assert(IS_VALID(new_req));
+
+    sock->write.push_writer = new_req.val;
+
+    new_req = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PULL, NULL);
+
+    assert(IS_VALID(new_req));
+
+    sock->read.pull_reader = new_req.val;
+
+    assert(sock->write.push_writer != NULL);
+    assert(sock->read.pull_reader != NULL);
+
+    int res = socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_WRITE | CONNECT_PULL_READ);
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_listen(PORT, sock->write.push_writer,NULL);
+    res = socket_listen_rpc(PORT, sock->write.push_writer,NULL);
     assert_int_ex(res, ==, 0);
-    res = socket_internal_listen(PORT+1, sock->read.pull_reader,NULL);
+    res = socket_listen_rpc(PORT+1, sock->read.pull_reader,NULL);
     assert_int_ex(res, ==, 0);
 
     ssize_t sent = socket_send(sock, str1, size1, MSG_NONE);
@@ -549,14 +552,13 @@ int main(register_t arg, capability carg) {
 
     // Test polling
 
-    struct stack_request on_stack3;
+
     unix_like_socket socket2;
 
     unix_like_socket* sock2 = &socket2;
 
-    sock2->write.push_writer = &on_stack3.r;
+    sock2->write.push_writer = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PUSH, &sock2->write_copy_buffer).val;
 
-    res = socket_internal_requester_init(sock2->write.push_writer, INDIR_SIZE, SOCK_TYPE_PUSH, &sock2->write_copy_buffer);
     assert_int_ex(res, ==, 0);
 
     capability data_buffer2[DATA_SIZE/CAP_SIZE];
@@ -564,7 +566,7 @@ int main(register_t arg, capability carg) {
     socket_init(sock2, MSG_NONE, data_buffer2, DATA_SIZE, CONNECT_PUSH_WRITE);
     assert_int_ex(res, ==, 0);
 
-    res = socket_internal_listen(PORT+4, sock2->write.push_writer,NULL);
+    res = socket_listen_rpc(PORT+4, sock2->write.push_writer,NULL);
     assert_int_ex(res, ==, 0);
 
     act_kt t_act = syscall_act_ctrl_get_ref(get_control_for_thread(t));

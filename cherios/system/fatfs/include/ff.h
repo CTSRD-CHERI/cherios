@@ -25,7 +25,7 @@
 typedef struct fs_proxy {
 	size_t socket_sector;
 	size_t length;
-	struct requester_32 req;
+	requester_t requester;
 } fs_proxy;
 
 #ifdef __cplusplus
@@ -253,8 +253,8 @@ typedef enum {
 
 FRESULT f_open (FIL* fp, const TCHAR* path, BYTE mode);				/* Open or create a file */
 FRESULT f_close (FIL* fp);											/* Close an open file object */
-FRESULT f_read (FIL* fp, uni_dir_socket_fulfiller* fulfill, UINT btr, UINT* br);			/* Read data from a file */
-FRESULT f_write (FIL* fp, uni_dir_socket_fulfiller* fulfill, UINT btw, UINT* bw);	/* Write data to a file */
+FRESULT f_read (FIL* fp, fulfiller_t fulfill, UINT btr, UINT* br);			/* Read data from a file */
+FRESULT f_write (FIL* fp, fulfiller_t fulfill, UINT btw, UINT* bw);	/* Write data to a file */
 FRESULT f_lseek (FIL* fp, FSIZE_t ofs);								/* Move file pointer of a file object */
 FRESULT f_truncate (FIL* fp);										/* Truncate file */
 FRESULT f_sync (FIL* fp);											/* Flush cached data of a writing file */

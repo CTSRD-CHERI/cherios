@@ -50,6 +50,8 @@ static const int namespace_num_proc_manager = 3;
 static const int namespace_num_memmgt = 4;
 static const int namespace_num_tman = 5;
 
+static const int namespace_num_lib_socket = 0x20;
+
 static const int namespace_num_uart = 0x40;
 static const int namespace_num_zlib = 0x41;
 static const int namespace_num_sockets = 0x42;

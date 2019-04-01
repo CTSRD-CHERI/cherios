@@ -56,8 +56,9 @@
 #define FOUND_ENTRY_TYPE   0x0011         // The type of a foundation entry handle
 #define FOUND_LOCKED_TYPE  0x0012         // The type of a foundation locked message handle (only unlocked by an auth, made by any)
 #define FOUND_CERT_TYPE    0x0013         // The type of a foundation certificate handle (made by an auth, unlocked by any)
-#define FOUND_SYM_TYPE     0x0014         // The type of a foundation symetric locked handle (made by an auth, only unlockable by auth)
-#define FOUND_INV_TYPE     0x0015         // The type of a foundation invocation handle (made by an auth, unlockable by auth with found_enter)
+#define FOUND_SINGLE_CERT  0x0014         // A certificate that destructs after checking it once
+#define FOUND_SYM_TYPE     0x0015         // The type of a foundation symetric locked handle (made by an auth, only unlockable by auth)
+#define FOUND_INV_TYPE     0x0016         // The type of a foundation invocation handle (made by an auth, unlockable by auth with found_enter)
 #define VTABLE_TYPE_L0     0x0020         // The type of the top level page table
 #define VTABLE_TYPE_L1     VTABLE_TYPE_L0 + 1  // The type of the L1 level page table
 #define VTABLE_TYPE_L2     VTABLE_TYPE_L0 + 2  // The type of the L2 level page table
@@ -247,7 +248,6 @@ DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 #define FOUNDATION_META_ENTRY_VECTOR_OFFSET     (FOUNDATION_ID_SIZE + CAP_SIZE)
 
 
-// FIXME: Foundation meta size should take a length and add in the extra amount required for precision
 #define FOUNDATION_META_SIZE(N,L)                 (FOUNDATION_ID_SIZE + CAP_SIZE + (N * CAP_SIZE) + round_cheri_length(L).mask)
 
 #define RES_CERT_META_SIZE                      (3 * CAP_SIZE)
@@ -329,6 +329,7 @@ _Static_assert(sizeof(found_id_t) == FOUNDATION_ID_SIZE, "Assumed by nano kernel
 _Static_assert(sizeof(found_key_t) == FOUND_KEY_SIZE, "Assumed by nano kernel");
 
 typedef capability cert_t;                  // A certified capability
+typedef capability single_use_cert;
 typedef capability locked_t;               // A capability that can be unlocked by intended code
 typedef capability invocable_t;
 typedef capability sym_locked_t;
@@ -336,6 +337,7 @@ typedef capability sym_locked_t;
 typedef union auth_result_u {
     locked_t locked;
     cert_t cert;
+    single_use_cert scert;
     sym_locked_t symetric;
     invocable_t invocable;
 } auth_result_t;
@@ -343,9 +345,14 @@ typedef union auth_result_u {
 typedef enum auth_types_e {
     AUTH_PUBLIC_LOCKED = FOUND_LOCKED_TYPE,
     AUTH_CERT = FOUND_CERT_TYPE,
+    AUTH_SINGLE_USE_CERT = FOUND_SINGLE_CERT,
     AUTH_SYMETRIC = FOUND_SYM_TYPE,
     AUTH_INVOCABLE = FOUND_INV_TYPE,
 } auth_types_t;
+
+static inline int is_of_authed_type(capability c, auth_types_t type) {
+    return cheri_gettype(c) == type;
+}
 
 typedef struct {
     e_page_status	status;

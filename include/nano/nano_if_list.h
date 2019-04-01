@@ -129,12 +129,14 @@
     ITEM(foundation_entry_vaddr, register_t, (entry_t, entry), __VA_ARGS__)\
 /* Create a new entry from within a foundation */\
     ITEM(foundation_new_entry, entry_t, (size_t, eid, capability, at, auth_t, auth), __VA_ARGS__)\
-/* Take and sign a reservation. Result depends on type used.*/\
-    ITEM(rescap_take_authed, auth_result_t, (res_t, res, cap_pair*, out, register_t, user_perms, auth_types_t, type, auth_t, auth), __VA_ARGS__)\
+/* Take and sign a reservation. Result depends on type used. If no cap_pair* out is provided, will sign inputs. Otherwise signs rest of reservation and also returns them via out.*/\
+    ITEM(rescap_take_authed, auth_result_t, (res_t, res, cap_pair*, out, register_t, user_perms, auth_types_t, type, auth_t, auth, capability, code, capability, data), __VA_ARGS__)\
 /* Get access to certfied capability from signed handle. Only has user_perms. Will return identity of signer*/\
     ITEM(rescap_check_cert, found_id_t*, (cert_t, cert, cap_pair*, out), __VA_ARGS__)\
+/* Get access to certfied capability from signed handle. Only has user_perms. Will return identity of signer. Destructive of the cert.*/\
+    ITEM(rescap_check_single_cert, found_id_t*, (single_use_cert, cert, cap_pair*, out), __VA_ARGS__)\
 /* Take a reservation and lock for intended user (identified by id) */\
-    ITEM(rescap_take_locked, locked_t, (res_t, res, cap_pair*, out, register_t, user_perms, found_id_t*, recipient_id), __VA_ARGS__)\
+    ITEM(rescap_take_locked, locked_t, (res_t, res, cap_pair*, out, register_t, user_perms, found_id_t*, recipient_id, capability, code, capability, data), __VA_ARGS__)\
 /* Unlock a locked capability. Can only be done inside correct foundation */\
     ITEM(rescap_unlock, void, (auth_result_t, locked, cap_pair*, out, auth_t, auth, auth_types_t, type), __VA_ARGS__)\
 /* If in a foundation get own foundation_id */\

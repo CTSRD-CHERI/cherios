@@ -392,6 +392,9 @@ __asm __volatile (                              \
     "daddiu %[res], %[res], %%lo(" #symbol ")\n" \
 : [res]"=r"(result) ::)
 
+#define SET_SYM(S, V) __asm (".weak " # S"; cscbi %[arg], %%captab20(" #S ")($c25)" ::[arg]"C"(V):"memory")
+#define SET_TLS_SYM(S, V) __asm (".weak " #S "; cscbi %[arg], %%captab_tls20(" #S ")($c26)" ::[arg]"C"(V):"memory")
+
 static __inline capability
 cheri_maketype(capability root_type, register_t type)
 {

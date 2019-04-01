@@ -29,10 +29,9 @@
  */
 
 
-#include <sockets.h>
+#include "sockets.h"
 #include "unistd.h"
 #include "cheric.h"
-#include "sockets.h"
 #include "stdlib.h"
 #include "assert.h"
 #include "mman.h"
@@ -66,8 +65,8 @@ typedef struct tcp_session {
     capability callback_arg;
     register_t callback_port;
 
-    uni_dir_socket_fulfiller tcp_input_pushee;
-    struct requester_32 tcp_output_pusher;
+    fulfiller_t tcp_input_pushee;
+    requester_t tcp_output_pusher;
 
     enum poll_events events;
 
@@ -107,8 +106,8 @@ static tcp_session* alloc_tcp_session(void) {
     tcp_head = new;
 
     // Init
-    socket_internal_fulfiller_init(&new->tcp_input_pushee, SOCK_TYPE_PUSH);
-    socket_internal_requester_init(&new->tcp_output_pusher.r, 32, SOCK_TYPE_PUSH, NULL);
+    new->tcp_input_pushee = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
+    new->tcp_output_pusher = socket_malloc_requester_32(SOCK_TYPE_PUSH, NULL);
 
     static int id = 0;
     new->session_id = id++;
@@ -120,6 +119,9 @@ void free_tcp_session(tcp_session* tcp_session) {
     if(tcp_session->prev) tcp_session->prev->next = tcp_session->next;
     else tcp_head = tcp_session->next; // If we have no previous we are the head
     if(tcp_session->next) tcp_session->next->prev = tcp_session->prev;
+
+    free(tcp_session->tcp_input_pushee);
+    free(tcp_session->tcp_output_pusher);
 
     free(tcp_session);
 
@@ -228,9 +230,10 @@ err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
     // This is how many bytes have been been sent this. NOT total.
 
     // Progress len bytes
-    ssize_t res = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, len,
+    ssize_t res = socket_fulfill_progress_bytes_unauthorised(tcp->tcp_input_pushee, len,
                                             F_PROGRESS | F_DONT_WAIT,
-                                           NULL, NULL, 0, &ful_oob_func_skip_oob, NULL);
+                                           NULL, NULL, 0, OTHER_DOMAIN_FP(ful_oob_func_skip_oob), NULL,
+                                           NULL, LIB_SOCKET_DATA);
     assert_int_ex(res, ==, len);
 
     if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
@@ -263,7 +266,7 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
         count++;
     }
 
-    int res = socket_internal_requester_space_wait(&tcp->tcp_output_pusher.r, count, 1, 0);
+    int res = socket_requester_space_wait(tcp->tcp_output_pusher, count, 1, 0);
 
     assert_int_ex(-res, == , -0);
 
@@ -285,7 +288,7 @@ err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
             // These must not be re-used if they go to user space.
             ((struct custom_for_tcp*)pp)->reuse = 0;
         }
-        socket_internal_request_ind(&tcp->tcp_output_pusher.r, (char*)pp->payload, pp->len, pp->len);
+        socket_request_ind(tcp->tcp_output_pusher, (char*)pp->payload, pp->len, pp->len);
         tcp->recv += pp->len;
     } while(pp->len != pp->tot_len && (pp = pp->next));
 
@@ -339,6 +342,7 @@ static void tcp_application_ack(tcp_session* tcp) {
 }
 
 // Application -> TCP
+ssize_t TRUSTED_CROSS_DOMAIN(tcp_ful_func)(capability arg, char* buf, uint64_t offset, uint64_t length);
 ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
@@ -354,7 +358,8 @@ ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length
     return to_send;
 }
 
-static ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(tcp_ful_oob_func)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
     switch(request->type) {
@@ -378,9 +383,10 @@ void handle_fulfill(tcp_session* tcp) {
     assert(!(tcp->close_state & (SCS_FULFILL_CLOSED | SCS_USER_CLOSING_REQUESTER)));
 
     // We expect only data
-    ssize_t bytes_translated = socket_internal_fulfill_progress_bytes(&tcp->tcp_input_pushee, SOCK_INF,
+    ssize_t bytes_translated = socket_fulfill_progress_bytes_unauthorised(tcp->tcp_input_pushee, SOCK_INF,
                                                                       F_CHECK | F_START_FROM_LAST_MARK | F_SET_MARK | F_DONT_WAIT,
-                                                                      &tcp_ful_func, tcp, 0, &tcp_ful_oob_func, NULL);
+                                                                      &TRUSTED_CROSS_DOMAIN(tcp_ful_func), tcp, 0, &TRUSTED_CROSS_DOMAIN(tcp_ful_oob_func),
+                                                                      NULL, TRUSTED_DATA, TRUSTED_DATA);
 
     err_t flush = tcp_output(tcp->tcp_pcb);
 
@@ -399,7 +405,7 @@ static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
 
     session->application_recv_ack = session->recv= session->ack_handled = 0;
     session->ack_head = session->ack_tail = NULL;
-    session->tcp_output_pusher.r.drb_fulfill_ptr = &session->application_recv_ack;
+    socket_requester_set_drb_ptr(session->tcp_output_pusher, &session->application_recv_ack);
     session->events = POLL_NONE;
     session->tcp_pcb = pcb;
 
@@ -415,9 +421,9 @@ static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
 static void send_connect_callback(tcp_session* tcp, err_t err) {
     capability sealed_tcp = (capability)tcp;
     message_send((register_t)err, tcp->tcp_pcb->remote_port, tcp->tcp_pcb->remote_ip.addr, 0, tcp->callback_arg,
-                 sealed_tcp, (capability)socket_internal_make_read_only(&tcp->tcp_output_pusher.r), NULL,
+                 sealed_tcp, (capability)socket_make_ref_for_fulfill(tcp->tcp_output_pusher), NULL,
                  tcp->callback, SEND, tcp->callback_port);
-    socket_internal_requester_connect(&tcp->tcp_output_pusher.r);
+    socket_requester_connect(tcp->tcp_output_pusher);
 }
 
 static void tcp_er(void *arg, err_t err) {
@@ -488,15 +494,15 @@ static err_t tcp_accept_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
 }
 
 static int user_tcp_connect_sockets(capability sealed_session,
-                                      uni_dir_socket_requester* tcp_input_pusher) {
+                                      requester_t tcp_input_pusher) {
 
     tcp_session* tcp = (tcp_session*)sealed_session; // TODO seal/unseal
     tcp->events = POLL_IN;
-    int res = socket_internal_fulfiller_connect(&tcp->tcp_input_pushee, tcp_input_pusher);
+    int res = socket_fulfiller_connect(tcp->tcp_input_pushee, tcp_input_pusher);
     if(res < 0) return res;
     if(tcp->close_state & SCS_FULFILL_CLOSED) {
         // We got the connect AFTER we tried to close! We have to close again to signal the pusher that we closed.
-        socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
+        socket_close_fulfiller(tcp->tcp_input_pushee, 0, 1);
     }
 }
 
@@ -560,7 +566,7 @@ static void user_tcp_close_send(tcp_session* tcp) {
 
     if(!(tcp->close_state & SCS_FULFILL_CLOSED)) {
         // We will have done this earlier otherwise
-        res = socket_internal_close_fulfiller(&tcp->tcp_input_pushee, 0, 1);
+        res = socket_close_fulfiller(tcp->tcp_input_pushee, 0, 1);
         tcp->close_state |= SCS_FULFILL_CLOSED;
         assert_int_ex(res, ==, 0);
         if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) tcp_shutdown(tcp->tcp_pcb,0,1);
@@ -579,7 +585,7 @@ static void user_tcp_close_recv(tcp_session* tcp) {
     tcp_application_ack_all(tcp);
 
     if(!(tcp->close_state & SCS_REQUEST_CLOSED)) {
-        res = socket_internal_close_requester(&tcp->tcp_output_pusher.r, 0, 1);
+        res = socket_close_requester(tcp->tcp_output_pusher, 0, 1);
         tcp->close_state |= SCS_REQUEST_CLOSED;
         assert_int_ex(res, ==, 0);
         if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) tcp_shutdown(tcp->tcp_pcb,1,0);
@@ -718,7 +724,7 @@ int main(register_t arg, capability carg) {
         FOR_EACH_TCP(tcp_session) {
             // The user stops reading
             if(!(tcp_session->close_state & SCS_USER_FULFILL_CLOSED) &&
-                    tcp_session->tcp_output_pusher.r.fulfiller_component.fulfiller_closed) {
+                    socket_requester_is_fulfill_closed(tcp_session->tcp_output_pusher)) {
                 tcp_session->close_state |= SCS_USER_FULFILL_CLOSED;
                 user_tcp_close_recv(tcp_session);
             }
@@ -726,7 +732,7 @@ int main(register_t arg, capability carg) {
             // Remote has closed and we have finished having
             if((tcp_session->close_state & (SCS_REMOTE_CLOSE)) &&
                     !(tcp_session->close_state & (SCS_USER_FULFILL_CLOSED | SCS_REQUEST_CLOSED)) &&
-                        (socket_internal_requester_wait_all_finish(&tcp_session->tcp_output_pusher.r, 1) == 0)) {
+                        (socket_requester_wait_all_finish(tcp_session->tcp_output_pusher, 1) == 0)) {
                 user_tcp_close_recv(tcp_session);
             }
 
@@ -742,7 +748,7 @@ int main(register_t arg, capability carg) {
 
             if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
                 if(tcp_session->tcp_pcb->snd_buf) { // dont even bother if the send window is already full
-                    enum poll_events revents = socket_internal_fulfill_poll(&tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1, 0);
+                    enum poll_events revents = socket_fulfill_poll(tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1, 0);
                     if(revents) {
                         sock_event = 1;
                         sock_sleep = 0;

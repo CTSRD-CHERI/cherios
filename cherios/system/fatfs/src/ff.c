@@ -3372,8 +3372,8 @@ FRESULT f_open (
 extern __thread fs_proxy sr_read;
 extern __thread fs_proxy sr_write;
 
-static ssize_t flush_proxy(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill) {
-	uni_dir_socket_requester* requester = &proxy->req.r;
+static ssize_t flush_proxy(fs_proxy* proxy, fulfiller_t fulfill) {
+	requester_t requester = proxy->requester;
 	size_t* ss = &proxy->socket_sector;
 	size_t length = proxy->length;
 	ssize_t res;
@@ -3381,11 +3381,11 @@ static ssize_t flush_proxy(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill) {
 	if(length != 0) {
 
 		// 2: Wait for enough request space
-		res = socket_internal_requester_space_wait(requester, 1, 0, 0);
+		res = socket_requester_space_wait(requester, 1, 0, 0);
 		assert_int_ex(-res, ==, 0);
 
 		// 3: Send proxy request
-		res = socket_internal_request_proxy(requester, fulfill, length, 0);
+		res = socket_request_proxy(requester, fulfill, length, 0);
 		assert_int_ex(-res, ==, 0);
 
 		(*ss) += length / SS(NULL);
@@ -3393,7 +3393,7 @@ static ssize_t flush_proxy(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill) {
 	}
 }
 
-static ssize_t proxy_amount(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill, DWORD sect, uint64_t length) {
+static ssize_t proxy_amount(fs_proxy* proxy, fulfiller_t fulfill, DWORD sect, uint64_t length) {
 	// TODO fulfill using a proxy to the block devices sectors [sect,sect+count)
 	ssize_t res;
 
@@ -3403,7 +3403,7 @@ static ssize_t proxy_amount(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill, 
 
 	if((proxy->socket_sector) + (proxy->length/SS(NULL)) != sect) {
 		flush_proxy(proxy, fulfill);
-		res = socket_internal_requester_lseek(&proxy->req.r, sect, SEEK_SET, 0);
+		res = socket_requester_lseek(proxy->requester, sect, SEEK_SET, 0);
 		assert_int_ex(-res, ==, 0);
 		proxy->socket_sector = sect;
 	}
@@ -3419,7 +3419,7 @@ static ssize_t proxy_amount(fs_proxy* proxy, uni_dir_socket_fulfiller* fulfill, 
 
 FRESULT f_read (
 	FIL* fp, 	/* Pointer to the file object */
-	uni_dir_socket_fulfiller* fulfill,
+	fulfiller_t fulfill,
 	UINT btr,	/* Number of bytes to read */
 	UINT* br	/* Pointer to number of bytes read */
 )
@@ -3512,8 +3512,9 @@ FRESULT f_read (
 #else
 		/* Pick partial sector */
         flush_proxy(&sr_read, fulfill);
-        sret = socket_internal_fulfill_progress_bytes(fulfill, rcnt, F_PROGRESS,
-													  &copy_in, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL);
+        sret = socket_fulfill_progress_bytes_unauthorised(fulfill, rcnt, F_PROGRESS,
+													  OTHER_DOMAIN_FP(copy_in), (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL,
+													  LIB_SOCKET_DATA, NULL);
 		if(sret >=0 ) rcnt = (UINT)sret;
 #endif
 	}
@@ -3532,7 +3533,7 @@ FRESULT f_read (
 
 FRESULT f_write (
 	FIL* fp,			/* Pointer to the file object */
-	uni_dir_socket_fulfiller* fulfill,
+	fulfiller_t fulfill,
 	UINT btw,			/* Number of bytes to write */
 	UINT* bw			/* Pointer to number of bytes written */
 )
@@ -3646,8 +3647,9 @@ FRESULT f_write (
 #else
 		/* Pick partial sector */
         flush_proxy(&sr_write, fulfill);
-		sret = socket_internal_fulfill_progress_bytes(fulfill, wcnt, F_PROGRESS,
-													  &copy_out, (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL);
+		sret = socket_fulfill_progress_bytes_unauthorised(fulfill, wcnt, F_PROGRESS,
+													  OTHER_DOMAIN_FP(copy_out), (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL,
+													  LIB_SOCKET_DATA, NULL);
 		if(sret >=0 ) wcnt = (UINT)sret;
 		fp->flag |= _FA_DIRTY;
 #endif

@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2018 Lawrence Esswood
+ * Copyright (c) 2019 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,835 +28,102 @@
  * SUCH DAMAGE.
  */
 
-#include <sockets.h>
-#include <queue.h>
-#include "object.h"
-#include "string.h"
+
+
 #include "sockets.h"
-#include "stdio.h"
-#include "assert.h"
+#include "stdlib.h"
+#include "misc.h"
 
-#define printf(...) syscall_printf(__VA_ARGS__)
+ALLOCATE_PLT_SOCKETS
 
-static int is_empty(uni_dir_socket_requester* requester) {
-    return (requester->fulfiller_component.fulfill_ptr == requester->requeste_ptr);
-}
-
-static int is_full(uni_dir_socket_requester* requester) {
-    return ((requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr) == requester->buffer_size);
-}
-
-static uint16_t fill_level(uni_dir_socket_requester* requester) {
-    return (requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr);
-}
-
-static uint16_t space(uni_dir_socket_requester* requester) {
-    return (requester->buffer_size - (requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr));
-}
-
-static size_t data_buf_space(data_ring_buffer* data_buffer) {
-    return (data_buffer->buffer_size - (data_buffer->requeste_ptr - data_buffer->fulfill_ptr));
-}
-
-/* Sets a condition and notifies anybody waiting on it */
-static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_val, volatile act_kt* waiter_cap) {
-
-    act_kt waiter;
-
-    __asm__ __volatile(
-            SANE_ASM
-            "cllc   %[res], %[waiting_cap]                     \n"
-            "csh    %[new_requeste], $zero, 0(%[new_cap])      \n"
-            "cscc   $at, %[res], %[waiting_cap]                \n" // FIXME: Might be wrong. We might fail to fail the other process as our own store fails
-            "clc    %[res], $zero, 0(%[waiting_cap])           \n"
-    : [res]"=&C"(waiter)
-    : [waiting_cap]"C"(waiter_cap), [new_cap]"C"(ptr), [new_requeste]"r"(new_val)
-    : "at", "memory"
-    );
-
-    if(waiter) {
-        *waiter_cap = NULL;
-        syscall_cond_notify(waiter);
-    }
-
-    return 0;
-}
-
-/* Checks condition - or sleeps waiting for it */
-/* Condition is not((*monitor - im_off) &0xFFFF < comp_val. Also breaks if *closed_cap = 1. This condition can
- * be coerced into doing all the sleeping needs with judicious overflowing */
-
-static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volatile uint8_t* closed_cap,
-                                               volatile uint16_t* monitor_cap,
-                                                uint16_t im_off, uint16_t comp_val, int delay_sleep) {
-    int result;
-
-    do {
-        __asm__ __volatile(
-                SANE_ASM
-                "2: cllc   $c1, %[wc]               \n"
-                        MAGIC_SAFE
-                "li     %[res], 1                   \n"
-                "clb    %[res], $zero, 0(%[cc])     \n"
-                        MAGIC_SAFE
-                "bnez   %[res], 1f                  \n"
-                "li     %[res], 2                   \n"
-                "clhu   %[res], $zero, 0(%[mc])     \n"
-                        MAGIC_SAFE
-                "subu   %[res], %[res], %[im]       \n"
-                "andi   %[res], %[res], 0xFFFF      \n"
-                "sltu   %[res], %[res], %[cmp]      \n"
-                "beqz   %[res], 1f                  \n"
-                "li     %[res], 0                   \n"
-                "cscc   %[res], %[self], %[wc]      \n"
-                "beqz   %[res], 2b                  \n"
-                "li     %[res], 1                   \n"
-                "1:                                 \n"
-        : [res]"=&r"(result)
-        : [wc]"C"(wait_cap), [cc]"C"(closed_cap), [mc]"C"(monitor_cap),[self]"C"(act_self_notify_ref),
-                [im]"r"(im_off), [cmp]"r"(comp_val)
-        : "$c1", "memory"
-        );
-
-        if(result == 2) {
-            *wait_cap = NULL;
-            return E_SOCKET_CLOSED;
-        }
-
-        if(delay_sleep) return result;
-
-        if(result) syscall_cond_wait(0, 0);
-
-    } while(result);
-
-    *wait_cap = NULL;
-    return 0;
-}
-
-// Until we use exceptions properly this can check whether a requester closed their end even if unmapped
-static int socket_internal_fulfiller_closed_safe(uni_dir_socket_fulfiller* fulfiller) {
-    if(!fulfiller->connected) return 0;
-    volatile uint8_t * req_closed = &fulfiller->requester->requester_closed;
-    volatile uint8_t * ful_closed = &fulfiller->requester->fulfiller_component.fulfiller_closed;
-
-    uint8_t rc = 1, fc = 1;
-    VMEM_SAFE_DEREFERENCE(req_closed, rc, 8);
-    VMEM_SAFE_DEREFERENCE(ful_closed, fc, 8);
-
-    return rc || fc;
-}
-
-#define TRUNCATE16(X) ({uint16_t _tmpx; __asm ("andi   %[out], %[in], 0xFFFF\n":[out]"=r"(_tmpx):[in]"r"(X):); _tmpx;})
-
-int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait, int delay_sleep) {
-
-    if(requester->fulfiller_component.fulfiller_closed || requester->requester_closed) {
-        return E_SOCKET_CLOSED;
-    }
-
-    // FIXME: We really should check this here unless this is being called from fulfill.
-    // FIXME: Currently can't be bothered with the refactor
-    // if(requester->joined) return E_IN_JOIN;
-
-    int full = space(requester) < need_space;
-
-    if(!full) return 0;
-
-    if(dont_wait) return E_AGAIN;
-
-    uint16_t amount = ((~(requester->buffer_size - need_space)));
-    amount = TRUNCATE16(amount);
-
-
-    // Funky use of common code, with lots of off by 1 adjustments to be able to use the same comparison
-    return socket_internal_sleep_for_condition(&requester->fulfiller_component.requester_waiting,
-                                               &requester->fulfiller_component.fulfiller_closed,
-                                               &(requester->fulfiller_component.fulfill_ptr),
-                                               requester->requeste_ptr+1,
-                                               amount, delay_sleep);
-}
-
-// Wait for 'amount' requests to be outstanding
-int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, int dont_wait, int delay_sleep) {
-    uni_dir_socket_requester_fulfiller_component* access = NULL;
-    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
-    if(access == NULL) {
-        return E_SOCKET_CLOSED;
-    }
-
-    if(socket_internal_fulfiller_closed_safe(fulfiller)) {
-        return E_SOCKET_CLOSED;
-    }
-
-    int empty = fill_level(fulfiller->requester) < amount;
-
-    if(!empty) return 0;
-
-    if(dont_wait) return E_AGAIN;
-
-    return socket_internal_sleep_for_condition(&access->fulfiller_waiting,
-                                               &fulfiller->requester->requester_closed,
-                                               &(fulfiller->requester->requeste_ptr),
-                                               access->fulfill_ptr, amount, delay_sleep);
-}
-
-// Wait for all requests to be marked as fulfilled
-ssize_t socket_internal_requester_wait_all_finish(uni_dir_socket_requester* requester, int dont_wait) {
-    ssize_t ret = socket_internal_requester_space_wait(requester, requester->buffer_size, dont_wait, 0);
-    if(ret != 0 && fill_level(requester) == 0) ret = 0;
-    return ret;
-}
-
-// Wait for proxying to be finished
-ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fulfiller, int dont_wait, int delay_sleep) {
-
-    if(fulfiller->proxy_times != fulfiller->proxy_fin_times) {
-        if(dont_wait) return E_IN_PROXY;
-        uni_dir_socket_requester* proxying = fulfiller->proxyied_in;
-        int ret = socket_internal_sleep_for_condition(&proxying->fulfiller_component.requester_waiting,
-                                                   &proxying->fulfiller_component.fulfiller_closed,
-                                                   &fulfiller->proxy_fin_times, fulfiller->proxy_times+1, 0xFFFFu, delay_sleep);
-        return (fulfiller->proxy_times != fulfiller->proxy_fin_times) ? ret : 0; // Ignore errors from the requester if the proxy has finished
-    }
-    return 0;
-}
-
-
-// NOTE: Before making a request call space_wait for enough space
-
-// Request length (< cap_size) number of bytes. Bytes will be copied in from buf_in, and *buf_out will return the buffer
-ssize_t socket_internal_request_im(uni_dir_socket_requester* requester, uint8_t length, char** buf_out, char* buf_in, uint32_t drb_off) {
-
-    if(length > sizeof(capability)) return E_MSG_SIZE;
-
-    uint16_t request_ptr = requester->requeste_ptr;
-    uint16_t mask = requester->buffer_size-1;
-
-    request_t* req = &requester->request_ring_buffer[request_ptr & mask];
-
-    req->type = REQUEST_IM;
-    req->length = length;
-    req->drb_fullfill_inc = drb_off;
-    if(buf_in) memcpy(req->request.im, buf_in, length);
-    if(buf_out) *buf_out = req->request.im;
-
-    requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
-                                          request_ptr+1,
-                                          &requester->fulfiller_component.fulfiller_waiting);
-}
-
-// Requests length bytes, bytes are put in / taken from buf
-ssize_t socket_internal_request_ind(uni_dir_socket_requester* requester, char* buf, uint64_t length, uint32_t drb_off) {
-
-    uint16_t request_ptr = requester->requeste_ptr;
-    uint16_t mask = requester->buffer_size-1;
-
-    request_t* req = &requester->request_ring_buffer[request_ptr & mask];
-
-    req->type = REQUEST_IND;
-    req->length = length;
-    req->request.ind = buf;
-    req->drb_fullfill_inc = drb_off;
-    requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
-                                          request_ptr+1,
-                                          &requester->fulfiller_component.fulfiller_waiting);
-}
-
-// Requests length bytes to be proxied as fulfillment to fulfiller
-ssize_t socket_internal_request_proxy(uni_dir_socket_requester* requester, uni_dir_socket_fulfiller* fulfiller, uint64_t length, uint32_t drb_off) {
-
-    if(fulfiller->proxy_times != fulfiller->proxy_fin_times) {
-        if(fulfiller->proxyied_in != requester) return E_IN_PROXY;
-    }
-
-    if(fulfiller->socket_type != requester->socket_type) return E_SOCKET_WRONG_TYPE;
-
-    fulfiller->proxyied_in = requester;
-    fulfiller->proxy_times +=1;
-
-    uint16_t request_ptr = requester->requeste_ptr;
-    uint16_t mask = requester->buffer_size-1;
-
-    request_t* req = &requester->request_ring_buffer[request_ptr & mask];
-
-    req->type = REQUEST_PROXY;
-    req->length = length;
-    req->request.proxy_for = fulfiller;
-    req->drb_fullfill_inc = drb_off;
-
-    requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
-                                          request_ptr+1,
-                                          &requester->fulfiller_component.fulfiller_waiting);
-}
-
-// Requests length bytes be fulfilled by a puller, and then pushed into a push request
-// A drb is provided, but either party may substitute their own (TODO: Only the writer currently can do this)
-ssize_t socket_internal_request_join(uni_dir_socket_requester* pull, uni_dir_socket_requester* push, data_ring_buffer* drb, uint64_t length, uint32_t drb_off) {
-
-    if(pull->socket_type != SOCK_TYPE_PULL || push->socket_type != SOCK_TYPE_PUSH) return E_SOCKET_WRONG_TYPE;
-
-    uint16_t request_ptr = pull->requeste_ptr;
-    uint16_t mask = pull->buffer_size-1;
-
-    request_t* req = &pull->request_ring_buffer[request_ptr & mask];
-
-    req->type = REQUEST_JOIN;
-    req->length = length;
-    req->request.push_to = push;
-
-    push->drb_for_join = drb;
-    // push->joined = 1;
-
-    pull->requested_bytes +=length;
-    return socket_internal_set_and_notify(&pull->requeste_ptr,
-                                          request_ptr+1,
-                                          &pull->fulfiller_component.fulfiller_waiting);
-}
-
-// This mad request will try join pull->push for length bytes, but will block neither of them.
-// Instead a proxy request queue (that you have both ends of) is used as an intermediate.
-// The proxy queue cannot be used until this is finished
-// It IS (somewhat) safe to use the same proxy queue for the same pull/push pair even if the first proxy_join has not finished
-// You could also use some barriers (if implemented) to queue up more uses of the same proxy without a wait
-
-ssize_t socket_internal_request_proxy_join(uni_dir_socket_requester* pull, uni_dir_socket_requester* proxy_req,
-                                           data_ring_buffer* drb, uint64_t length, uint32_t drb_off_pull,
-                                           uni_dir_socket_requester* push, uni_dir_socket_fulfiller* proxy_full, uint32_t drb_off_push) {
-
-    if(     pull->socket_type != SOCK_TYPE_PULL ||
-            push->socket_type != SOCK_TYPE_PUSH ||
-            proxy_req->socket_type != SOCK_TYPE_PUSH) return E_SOCKET_WRONG_TYPE;
-
-    if((size_t)proxy_full->requester != (size_t)proxy_req) return E_NOT_CONNECTED;
-
-
-    ssize_t res = socket_internal_request_join(pull, proxy_req, drb, length, drb_off_pull);
-
-    if(res != 0) return res;
-
-    return socket_internal_request_proxy(push, proxy_full, length, drb_off_push);
-}
-
-ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t align, uint64_t size, int dont_wait,
-                                        char** c1, char**c2, size_t* part1_out, uni_dir_socket_requester* requester) {
-    ssize_t res = 0;
-
-    uint64_t extra_to_align = 0;
-    uint64_t mask = data_buffer->buffer_size-1;
-    uint64_t copy_from = (data_buffer->requeste_ptr);
-
-
-    uint64_t align_mask = sizeof(capability)-1;
-    uint64_t buf_align = (align) & align_mask;
-    uint64_t data_buf_align = copy_from & align_mask;
-
-
-    if(size >= sizeof(capability) && align != (uint64_t)(-1)) {
-        extra_to_align = (buf_align - data_buf_align) & align_mask;
-    }
-
-    copy_from = (copy_from + extra_to_align) & mask;
-    size_t part_1 = data_buffer->buffer_size - copy_from;
-    int two_parts = part_1 < size;
-
-    if(requester) {
-        // We will need one or two requests depending if we are wrapping round the buffer
-        res = socket_internal_requester_space_wait(requester, two_parts ? 2 : 1, dont_wait, 0);
-    }
-
-    if(res < 0) return res;
-
-    uint16_t requeste_ptr;
-    uint16_t fulfill_ptr;
-    if(requester) {
-        requeste_ptr = requester->requeste_ptr;
-        fulfill_ptr = requester->fulfiller_component.fulfill_ptr;
-    }
-
-    size_t data_space = data_buf_space(data_buffer);
-    size += extra_to_align;
-
-    if(data_space < size && (dont_wait || requester == NULL)) return E_AGAIN;
-
-    while(data_space < size) {
-        uint16_t space = requester->buffer_size - (requeste_ptr - fulfill_ptr);
-
-        if(space == requester->buffer_size) {
-            data_space = data_buf_space(data_buffer);
-            break;
-        }
-        // Wait for space to increase by at least 1
-        res = socket_internal_requester_space_wait(requester, space+1, dont_wait, 0);
-
-        if(res < 0) return res;
-
-        requester->fulfiller_component.fulfill_ptr;
-        data_space = data_buf_space(data_buffer);
-    }
-
-    // This means the DRB is not being managed properly
-    assert_int_ex(data_buf_space(data_buffer), >=, size);
-    data_buffer->requeste_ptr += size;
-    size -=extra_to_align;
-
-    part_1 = two_parts ? part_1 : size;
-
-    *part1_out = part_1;
-    char* cap1 = data_buffer->buffer + copy_from;
-    *c1 = cap1;
-    char* cap2 = NULL;
-    if(two_parts) {
-        cap2 = data_buffer->buffer;
-    }
-    *c2 = cap2;
-
-    return extra_to_align;
-}
-
-ssize_t socket_internal_request_ind_db(uni_dir_socket_requester* requester, const char* buf, uint32_t size,
-                                       data_ring_buffer* data_buffer,
-                                       int dont_wait, register_t perms) {
-    ssize_t res;
-
-    if(!data_buffer->buffer) return E_NO_DATA_BUFFER;
-
-    if(size + sizeof(capability) > data_buffer->buffer_size) return E_MSG_SIZE;
-
-    if(size == 0) return 0;
-
-    char* cap1;
-    char* cap2;
-    size_t part_1;
-    assert(data_buffer->partial_length == 0);
-
-    res = socket_internal_drb_space_alloc(data_buffer, (uint64_t)buf, size, dont_wait, &cap1, &cap2, &part_1, requester);
-
-    if(res < 0) return res;
-
-    uint64_t align_off = res;
-
-    if(requester->socket_type == SOCK_TYPE_PUSH) {
-        memcpy(cap1, buf, part_1);
-    }
-    cap1 = cheri_andperm(cap1, perms);
-
-    res = socket_internal_request_ind(requester, cap1, part_1, part_1 + align_off);
-    if(res < 0) return res;
-
-    if(cap2) {
-        size_t part_2 = size - part_1;
-        if(requester->socket_type == SOCK_TYPE_PUSH) {
-            memcpy(cap2, buf + part_1, part_2);
-        }
-        cap2 = cheri_andperm(cap2, perms);
-        res = socket_internal_request_ind(requester, cap2, part_2, part_2);
-        if(res < 0) return res;
-        part_1+=part_2;
-    }
-
-    assert_int_ex(part_1, ==, size);
-    return size;
-}
-
-ssize_t socket_internal_request_oob(uni_dir_socket_requester* requester, request_type_e r_type, intptr_t oob_val, uint64_t length, uint32_t drb_off) {
-    uint16_t request_ptr = requester->requeste_ptr;
-    uint16_t mask = requester->buffer_size-1;
-
-    request_t* req = &requester->request_ring_buffer[request_ptr & mask];
-
-    req->type = r_type;
-    req->length = length;
-    req->request.oob = oob_val;
-    req->drb_fullfill_inc = drb_off;
-
-    requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
-                                          request_ptr+1,
-                                          &requester->fulfiller_component.fulfiller_waiting);
-}
-
-void socket_internal_dump_requests(uni_dir_socket_requester* requester) {
-    CHERI_PRINT_CAP(requester);
-    for(uint16_t i = requester->fulfiller_component.fulfill_ptr; i != requester->requeste_ptr; i++) {
-        request_t* req = &requester->request_ring_buffer[i & (requester->buffer_size-1)];
-        const char* type_s = (req->type == REQUEST_IM) ? "Immediate" :
-                             (req->type == REQUEST_IND ? "Indirect" :
-                              (req->type == REQUEST_PROXY) ? "Proxy" :
-                              "other");
-        if(req->type == REQUEST_IND) {
-            CHERI_PRINT_CAP(req->request.ind);
-        }
-
-        printf("Type: %10s(%x). Length %8lx. DB_add %8x\n", type_s, req->type, req->length, req->drb_fullfill_inc);
-    }
-}
-
-static void socket_internal_dump_fulfiller(uni_dir_socket_fulfiller* f) {
-
-    printf("Fulfiller: fp:%x(%lx). mp:%x(%lx). hd %x\n",
-           f->requester->fulfiller_component.fulfill_ptr,
-           f->partial_fulfill_bytes,
-           f->fulfill_mark_ptr,
-           f->partial_fulfill_mark_bytes,
-           f->requester->requeste_ptr);
-
-    socket_internal_dump_requests(f->requester);
-}
+// TODO do something similar to sockets.c in libsocket
+#define printf
 
 void dump_socket(unix_like_socket* sock) {
     if(sock->con_type & CONNECT_PUSH_WRITE) {
         printf("Push writer:\n");
-        socket_internal_dump_requests(sock->write.push_writer);
+        socket_dump_requests(sock->write.push_writer);
     }
     if(sock->con_type & CONNECT_PUSH_READ) {
         printf("Push read:\n");
-        socket_internal_dump_requests(sock->read.push_reader.requester);
+        socket_dump_fulfiller(sock->read.push_reader);
     }
     if(sock->con_type & CONNECT_PULL_WRITE) {
         printf("pull writer:\n");
-        socket_internal_dump_requests(sock->write.pull_writer.requester);
+        socket_dump_fulfiller(sock->write.pull_writer);
     }
     if(sock->con_type & CONNECT_PULL_READ) {
         printf("pull read:\n");
-        socket_internal_dump_requests(sock->read.pull_reader);
+        socket_dump_requests(sock->read.pull_reader);
     }
 }
-// This will fulfill n bytes, progress if progress is set (otherwise this is a peek), and check if check is set.
-// Visit will be called on each buffer, with arguments arg, length (for the buffer) and offset + previous lengths
-// oob_visit will be called on out of band requests. If oob_visit is null, fulfill stops and E_OOB is returned if
-// no fulfillment was made
 
-// If set mark is on (only allowed when peeking) then a mark is placed where progress would otherwise be set to
-// When peeking it is allowed to start from the last mark (but not when fulfilling)
-ssize_t socket_internal_fulfill_progress_bytes(uni_dir_socket_fulfiller* fulfiller, size_t bytes,
-                                               enum FULFILL_FLAGS flags,
-                                               ful_func* visit, capability arg, uint64_t offset,
-                                               ful_oob_func* oob_visit, ful_sub* sub_visit) {
-
-    uni_dir_socket_requester* requester = fulfiller->requester;
-
-    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill %lx bytes. flags %x\n", bytes, flags);
-
-    if((flags & F_PROGRESS) && (flags & (F_START_FROM_LAST_MARK | F_SET_MARK))) {
-        if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill bad flags\n");
-        return E_BAD_FLAGS;
-    }
-
-    if(socket_internal_fulfiller_closed_safe(fulfiller)) {
-        return E_SOCKET_CLOSED;
-    }
-
+ssize_t socket_requester_lseek(requester_t requester, int64_t offset, int whence, int dont_wait) {
     ssize_t ret;
+    if((ret = socket_requester_space_wait(requester, 1, dont_wait, 0)) != 0) return ret;
+    seek_desc desc;
+    desc.v.offset = offset;
+    desc.v.whence = whence;
 
-    // We cannot fulfill anything until proxying is done
-    if(!(flags & F_IN_PROXY)) {
-        ret = socket_internal_fulfiller_wait_proxy(fulfiller, flags & F_DONT_WAIT, 0);
-        if(ret < 0) return ret;
-        assert_int_ex(fulfiller->proxy_times, ==, fulfiller->proxy_fin_times);
-    }
-
-    uni_dir_socket_requester_fulfiller_component* access = NULL;
-    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
-    if(access == NULL) {
-        return E_SOCKET_CLOSED;
-    }
-
-    size_t bytes_remain = bytes;
-    uint64_t partial_bytes = (flags & F_START_FROM_LAST_MARK) ?
-                             fulfiller->partial_fulfill_mark_bytes : fulfiller->partial_fulfill_bytes;
-    uint16_t mask = requester->buffer_size - 1;
-    uint16_t fptr = (flags & F_START_FROM_LAST_MARK) ?
-                    fulfiller->fulfill_mark_ptr : requester->fulfiller_component.fulfill_ptr;
-
-    uint16_t required = 1;
-
-    // To account for the fact that we have fast forwarded
-    if(flags & F_START_FROM_LAST_MARK)
-        required +=
-                (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & mask;
-
-    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill begin %x \n", fptr);
-    while(bytes_remain != 0) {
-
-        if((flags & F_CHECK) && partial_bytes == 0) {
-             // make sure there is something in the queue to read
-            if(flags & F_TRACE) printf("Sock fulfill space wait %x\n", required);
-            ret = socket_internal_fulfill_outstanding_wait(fulfiller, required, flags & F_DONT_WAIT, 0);
-            if(ret < 0) break;
-        }
-
-        request_t* req = &requester->request_ring_buffer[(fptr)&mask];
-
-        // Work out how much we should process
-
-        uint64_t effective_len = req->length - partial_bytes;
-
-        uint64_t new_partial;
-        uint64_t bytes_to_process;
-        int progress_this;
-        if(effective_len > bytes_remain) {
-            // We don't free this one
-            new_partial = partial_bytes + bytes_remain;
-            bytes_to_process = bytes_remain;
-            progress_this = 0;
-        } else {
-            // We free this one
-            new_partial = 0;
-            bytes_to_process = effective_len;
-            fptr++;
-            progress_this = (flags & (F_PROGRESS | F_SET_MARK));
-            required++;
-        }
-
-        uni_dir_socket_fulfiller* proxy;
-        uni_dir_socket_requester* push_to;
-
-        // Bytes to progress can be 0, this might very well be the case for an oob request
-        ret = bytes_to_process;
-
-        // Try process this many bytes
-        if(req->type & REQUEST_BARRIER) {
-            assert(0 && "TODO");
-        } else if(req->type == REQUEST_BARRIER_TARGET) {
-            assert(0 && "TODO");
-            request_t* other_request = req->request.barrier_target;
-            volatile act_notify_kt* to_notify = &other_request->request.barrier_waiting;
-        }
-        else if(req->type == REQUEST_PROXY) {
-            // FIXME: We might need to reset the mark the first time we proxy
-            if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill proxy\n");
-            proxy = req->request.proxy_for;
-            ret = socket_internal_fulfill_progress_bytes(proxy, bytes_to_process,
-                                                         flags | F_IN_PROXY,
-                                                         visit, arg, offset, oob_visit, sub_visit);
-        } else if(req->type == REQUEST_JOIN) {
-
-            push_to = req->request.push_to;
-            ssize_t sub_ret;
-
-            if(sub_visit) {
-                ret = 0;
-                if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with sub visit\n");
-                // User can sub their own buffers. Keep getting them and pushing as requests
-                char* user_buf;
-
-                while(ret != bytes_to_process) {
-
-                    sub_ret = socket_internal_requester_space_wait(push_to, 1, flags & F_DONT_WAIT, 0);
-
-                    if(sub_ret < 0) break;
-
-                    sub_ret = sub_visit(arg, offset + ret, bytes_to_process - ret, &user_buf);
-
-                    if(sub_ret <= 0) break;
-
-                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join makes request\n");
-                    socket_internal_request_ind(push_to, user_buf, (uint64_t)sub_ret, 0);
-
-                    ret +=sub_ret;
-                }
-
-            } else if(visit) {
-                ret = 0;
-
-                if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with normal visit\n");
-
-                // User can only put data in buffers. Use the drb instead.
-                data_ring_buffer* drb = push_to->drb_for_join;
-
-                // Unless we hijack this pointer this needs to be true
-                assert((size_t)&drb->fulfill_ptr == (size_t)push_to->drb_fulfill_ptr);
-
-                sub_ret = E_NO_DATA_BUFFER;
-
-                if(drb) {
-                    ret = 0;
-                    size_t chunk_size = drb->buffer_size / 2;
-
-                    while(ret != bytes_to_process) {
-                        uint64_t req_size = (chunk_size > (bytes_to_process-ret)) ? (bytes_to_process-ret) : chunk_size;
-
-                        char* cap1;
-                        char* cap2;
-                        size_t part1;
-
-                        sub_ret = socket_internal_drb_space_alloc(drb, drb->requeste_ptr, req_size,
-                                                                  flags & F_DONT_WAIT, &cap1, &cap2, &part1, push_to);
-
-                        if(sub_ret < 0) break;
-
-                        uint64_t align_off = (uint64_t)sub_ret;
-                        uint64_t size1 = part1;
-                        uint64_t size2 = req_size - part1;
-
-                        size_t visit_gave = 0;
-
-                        sub_ret = visit(arg, cap1, offset + ret, size1);
-
-                        if(sub_ret > 0) {
-                            socket_internal_request_ind(push_to, cap1, (size_t)sub_ret, (size_t)sub_ret+align_off);
-                            visit_gave = (size_t)sub_ret;
-                        }
-
-                        if(sub_ret == size1 && cap2) {
-                            sub_ret = visit(arg, cap2, offset + size1 + ret, size2);
-
-                            if(sub_ret > 0) {
-                                socket_internal_request_ind(push_to, cap2, (size_t)sub_ret, sub_ret);
-                                visit_gave += sub_ret;
-                            }
-                        }
-
-                        ret += visit_gave;
-
-                        if(visit_gave != req_size) {
-                            // We allocated more than the visit managed to give, so undo
-                            size_t over_alloc = visit_gave == 0 ? (size_t)req_size : (size_t)(req_size + align_off - visit_gave);
-                            drb->requeste_ptr -=over_alloc;
-                            break;
-                        }
-
-                    }
-                }
-            }
-
-            if(ret == 0) ret = sub_ret;
-
-        } else {
-            if(visit) {
-                if (req->type == REQUEST_IM) {
-                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill immediate\n");
-                    char *buf = req->request.im + partial_bytes;
-                    ret = visit(arg, buf, offset, bytes_to_process);
-                } else if (req->type == REQUEST_IND) {
-                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill indirect\n");
-                    char *buf = req->request.ind + partial_bytes;
-                    ret = visit(arg, buf, offset, bytes_to_process);
-                }
-            }
-            if (req->type >= REQUEST_OUT_BAND) {
-                if(oob_visit) {
-                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob visit\n");
-                    ret = oob_visit(arg, req, offset, partial_bytes, bytes_to_process);
-                } else {
-                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob visit no func\n");
-                    ret = E_OOB;
-                }
-            }
-        }
-
-        // We may fail for some reason, in which case ret is an error, or how many bytes we actually managed
-        if(ret != bytes_to_process) {
-            if(ret > 0) {
-                partial_bytes += ret;
-                bytes_remain -= ret;
-            }
-            break;
-        }
-
-        // Release this request as it is finished
-        if(progress_this) {
-            if(progress_this & F_PROGRESS) {
-                access->fulfilled_bytes += req->length;
-                if(req->type == REQUEST_PROXY) {
-                    // If it was a proxy we tell our proxier we are done too
-                    uint16_t set_to = proxy->proxy_fin_times+1;
-                    uint16_t cmp = proxy->proxy_times;
-                    if(set_to == cmp) socket_internal_set_and_notify(&proxy->proxy_fin_times, set_to, &requester->access->requester_waiting);
-                    else proxy->proxy_fin_times = set_to;
-                }
-                if(req->type == REQUEST_JOIN) {
-                    // TODO we may wish to be able have the original owner sleep and be notified when this happens
-                    // push_to->joined = 0;
-                }
-                if(requester->drb_fulfill_ptr) *requester->drb_fulfill_ptr += req->drb_fullfill_inc;
-                socket_internal_set_and_notify(&access->fulfill_ptr, fptr, &access->requester_waiting);
-                required = 1;
-            } else {
-                fulfiller->fulfill_mark_ptr = fptr;
-            }
-        }
-
-        partial_bytes = new_partial;
-        bytes_remain -= bytes_to_process;
-        offset += bytes_to_process;
-    }
-
-    if(flags & F_PROGRESS) {
-        fulfiller->partial_fulfill_bytes = partial_bytes;
-    } else if(flags & F_SET_MARK) {
-        fulfiller->partial_fulfill_mark_bytes = partial_bytes;
-    }
-
-    ssize_t actually_fulfill = bytes - bytes_remain;
-
-    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill finish. %lx bytes fulfilled\n", actually_fulfill);
-    return (actually_fulfill == 0) ? ret : actually_fulfill;
+    return socket_request_oob(requester, REQUEST_SEEK, desc.as_intptr_t, 0, 0);
 }
 
-int socket_internal_fulfiller_reset_check(uni_dir_socket_fulfiller* fulfiller) {
-    if(fulfiller->proxy_times != fulfiller->proxy_fin_times) return E_IN_PROXY;
-    fulfiller->partial_fulfill_mark_bytes = fulfiller->partial_fulfill_bytes;
-    fulfiller->fulfill_mark_ptr = fulfiller->requester->fulfiller_component.fulfill_ptr;
-    return 0;
-}
+#define MAX_SOCKNS 64
+uint8_t free_ns[MAX_SOCKNS];
+uint8_t free_n;
 
-int socket_internal_fulfiller_init(uni_dir_socket_fulfiller* fulfiller, uint8_t socket_type) {
-    bzero(fulfiller, sizeof(uni_dir_socket_fulfiller));
-    fulfiller->socket_type = socket_type;
-    return 0;
-}
-
-int socket_internal_requester_init(uni_dir_socket_requester* requester, uint16_t buffer_size, uint8_t socket_type, data_ring_buffer* paired_drb) {
-    if(!is_power_2(buffer_size)) return E_BUFFER_SIZE_NOT_POWER_2;
-
-    bzero(requester, SIZE_OF_request(buffer_size));
-    requester->buffer_size = buffer_size;
-    requester->socket_type = socket_type;
-    if(paired_drb) {
-        requester->drb_fulfill_ptr = &paired_drb->fulfill_ptr;
+// Not thread safe, bit of a hack to help nginx...
+static uint8_t alloc_sockn(void) {
+    static int init = 0;
+    if(!init) {
+        init = 1;
+        for(uint8_t i = 0; i != MAX_SOCKNS;i++) {
+            free_ns[i] = i+1;
+        }
     }
-    uni_dir_socket_requester_fulfiller_component* access = &(requester->fulfiller_component);
-    access = cheri_setbounds(access, sizeof(uni_dir_socket_requester_fulfiller_component));
-    requester->access = access;
 
-    return 0;
+    uint8_t res = free_n;
+
+    assert(res != MAX_SOCKNS);
+
+    free_n = free_ns[free_n];
+
+    return res;
 }
 
-uni_dir_socket_requester*  socket_internal_make_read_only(uni_dir_socket_requester* requester) {
-    size_t size = SIZE_OF_request(requester->buffer_size);
-    requester = cheri_setbounds(requester, size);
-    return (uni_dir_socket_requester*)cheri_andperm(requester, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
+static void free_sockn(uint8_t n) {
+    free_ns[n] = free_n;
+    free_n = n;
 }
 
-
-int socket_internal_listen(register_t port,
-                           uni_dir_socket_requester* requester,
-                           uni_dir_socket_fulfiller* fulfiller) {
+int socket_listen_rpc(register_t port,
+                      requester_t requester,
+                      fulfiller_t fulfiller) {
 
     if(requester == NULL && fulfiller == NULL) return E_SOCKET_NO_DIRECTION;
 
     // THEIR connection type
     enum socket_connect_type con_type = CONNECT_NONE;
-    capability ro_req = NULL;
+    requester_t ro_req = NULL;
+
+    uint8_t req_type = SOCK_TYPE_ER;
+    uint8_t ful_type = SOCK_TYPE_ER;
+
     if(requester) {
-        if(requester->connected) return E_ALREADY_CONNECTED;
-        ro_req = (capability)socket_internal_make_read_only(requester);
-        if(requester->socket_type == SOCK_TYPE_PULL) {
+        req_type = socket_requester_get_type(requester);
+        ro_req = socket_make_ref_for_fulfill(requester);
+        if(req_type == SOCK_TYPE_PULL) {
             con_type |= CONNECT_PULL_WRITE;
-        } else {
+        } else  if(req_type == SOCK_TYPE_PUSH){
             con_type |= CONNECT_PUSH_READ;
         }
     }
 
     if(fulfiller) {
-        if(fulfiller->connected) return E_ALREADY_CONNECTED;
-        if(fulfiller->socket_type == SOCK_TYPE_PULL) {
+        ful_type = socket_fulfiller_get_type(fulfiller);
+        if(ful_type == SOCK_TYPE_PULL) {
             con_type |= CONNECT_PULL_READ;
-        } else {
+        } else if(ful_type == SOCK_TYPE_PUSH) {
             con_type |= CONNECT_PUSH_WRITE;
         }
     }
@@ -884,49 +151,59 @@ int socket_internal_listen(register_t port,
             message_reply((capability)E_CONNECT_FAIL,0,0,msg.c1);
             return (E_CONNECT_FAIL);
         }
-        fulfiller->requester = (uni_dir_socket_requester*) msg.c3;
+        int res = socket_fulfiller_connect(fulfiller, msg.c3);
+        if(res != 0) return res;
     }
 
     // ACK receipt
     message_reply((capability)ro_req,0,0, msg.c1);
 
-    if(requester) requester->connected = 1;
-    if(fulfiller) fulfiller->connected = 1;
+
+    if(requester) {
+        int res = socket_requester_connect(requester);
+        return res;
+    }
+
     // TODO should we add an extra ack?
 
     return 0;
 }
 
-int socket_internal_connect(act_kt target, register_t port,
-                            uni_dir_socket_requester* requester,
-                            uni_dir_socket_fulfiller* fulfiller) {
+int socket_connect_via_rpc(act_kt target, register_t port,
+                           requester_t requester,
+                           fulfiller_t fulfiller) {
+
     if(requester == NULL && fulfiller == NULL) return E_SOCKET_NO_DIRECTION;
 
     msg_t msg;
 
     enum socket_connect_type con_type = CONNECT_NONE;
-    capability ro_req = NULL;
+    requester_t ro_req = NULL;
 
     if(requester) {
-        ro_req = (capability)socket_internal_make_read_only(requester);
-        if(requester->socket_type == SOCK_TYPE_PULL) {
+        ro_req = socket_make_ref_for_fulfill(requester);
+        uint8_t req_type = socket_requester_get_type(requester);
+        if(req_type == SOCK_TYPE_PULL) {
             con_type |= CONNECT_PULL_READ;
-        } else {
+        } else if(req_type == SOCK_TYPE_PUSH) {
             con_type |= CONNECT_PUSH_WRITE;
         }
     }
 
+    uint8_t ful_type = SOCK_TYPE_ER;
+
     if(fulfiller) {
-        if(fulfiller->socket_type == SOCK_TYPE_PULL) {
+        ful_type = socket_fulfiller_get_type(fulfiller);
+        if(ful_type == SOCK_TYPE_PULL) {
             con_type |= CONNECT_PULL_WRITE;
-        } else {
+        } else if(ful_type == SOCK_TYPE_PUSH) {
             con_type |= CONNECT_PUSH_READ;
         }
     }
 
     capability cap_result = message_send_c(port,con_type,0,0,(capability)ro_req, NULL, NULL, NULL, target, SYNC_CALL, SOCKET_CONNECT_IPC_NO);
 
-    ERROR_T(requester_ptr_t) res = ER_T_FROM_CAP(requester_ptr_t, cap_result);
+    ERROR_T(requester_t) res = ER_T_FROM_CAP(requester_t, cap_result);
 
     // Check ACK
     if(!IS_VALID(res)) return (int)res.er;
@@ -935,119 +212,12 @@ int socket_internal_connect(act_kt target, register_t port,
         if(res.val == NULL) {
             return E_CONNECT_FAIL;
         }
-        fulfiller->requester = (uni_dir_socket_requester*) res.val;
-        fulfiller->connected = 1;
+        socket_fulfiller_connect(fulfiller, res.val);
     }
 
-    if(requester) requester->connected = 1;
+    if(requester) socket_requester_connect(requester);
 
     return 0;
-}
-
-int socket_internal_fulfiller_connect(uni_dir_socket_fulfiller* fulfiller, uni_dir_socket_requester* requester) {
-    if(fulfiller->connected) return E_ALREADY_CONNECTED;
-    fulfiller->requester = requester;
-    fulfiller->connected = 1;
-    return 0;
-}
-
-int socket_internal_requester_connect(uni_dir_socket_requester* requester) {
-    if(requester->connected) return E_ALREADY_CONNECTED;
-    requester->connected = 1;
-    return 0;
-}
-
-static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint8_t* other_close, volatile act_notify_kt * waiter_cap) {
-    if(*own_close) return E_ALREADY_CLOSED;
-
-    // We need to signal the other end
-
-    *own_close = 1;
-
-    uint8_t other_close_val = 1;
-
-    VMEM_SAFE_DEREFERENCE(other_close, other_close_val, 8);
-
-    if(*other_close) {
-        return 0; // If the other has closed on their end they won't expect a signal
-    }
-
-    // Otherwise the fulfiller may be about to sleep / alfulfilly be asleep.
-
-    act_notify_kt waiter;
-
-    __asm__ __volatile (
-    "cllc   %[res], %[wc]           \n"
-            "cscc   $at, %[res], %[wc]      \n"
-            "clc    %[res], $zero, 0(%[wc]) \n"
-    : [res]"=&C"(waiter)
-    : [wc]"C"(waiter_cap)
-    : "at"
-    );
-
-    if(waiter) {
-        *waiter_cap = NULL;
-        syscall_cond_notify(waiter);
-        return 0;
-    }
-
-    return 0;
-}
-
-ssize_t socket_internal_close_requester(uni_dir_socket_requester* requester, int wait_finish, int dont_wait) {
-    if(wait_finish) {
-        ssize_t ret = socket_internal_requester_wait_all_finish(requester, dont_wait);
-        // Its O.K for the other end to close if all requests are done
-        if(ret < 0) return ret;
-    }
-    return socket_internal_close_safe(&requester->requester_closed,
-                                      &requester->fulfiller_component.fulfiller_closed,
-                                      &requester->fulfiller_component.fulfiller_waiting);
-}
-
-ssize_t socket_internal_close_fulfiller(uni_dir_socket_fulfiller* fulfiller, int wait_finish, int dont_wait) {
-    uni_dir_socket_requester_fulfiller_component* access = NULL;
-    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
-    if(access == NULL) {
-        return 0;
-    }
-    if(wait_finish) {
-        ssize_t ret = socket_internal_fulfiller_wait_proxy(fulfiller, dont_wait, 0);
-        if(ret < 0) return ret;
-    }
-    return socket_internal_close_safe(&access->fulfiller_closed,
-                                      &fulfiller->requester->requester_closed,
-                                      &access->requester_waiting);
-}
-
-// Not thread safe, bit of a hack to help nginx...
-
-#define MAX_SOCKNS 64
-
-uint8_t free_ns[MAX_SOCKNS];
-uint8_t free_n;
-
-static uint8_t alloc_sockn(void) {
-    static int init = 0;
-    if(!init) {
-        init = 1;
-        for(uint8_t i = 0; i != MAX_SOCKNS;i++) {
-            free_ns[i] = i+1;
-        }
-    }
-
-    uint8_t res = free_n;
-
-    assert(res != MAX_SOCKNS);
-
-    free_n = free_ns[free_n];
-
-    return res;
-}
-
-static void free_sockn(uint8_t n) {
-    free_ns[n] = free_n;
-    free_n = n;
 }
 
 ssize_t socket_close(unix_like_socket* sock) {
@@ -1057,17 +227,17 @@ ssize_t socket_close(unix_like_socket* sock) {
     if(sock->flags & SOCKF_GIVE_SOCK_N) free_sockn(sock->sockn);
 
     if(sock->con_type & CONNECT_PULL_READ) {
-        ret = socket_internal_close_requester(sock->read.pull_reader, 1, dont_wait);
+        ret = socket_close_requester(sock->read.pull_reader, 1, dont_wait);
     } else if(sock->con_type & CONNECT_PUSH_READ) {
-        ret = socket_internal_close_fulfiller(&sock->read.push_reader, 1, dont_wait);
+        ret = socket_close_fulfiller(sock->read.push_reader, 1, dont_wait);
     }
 
     if(ret < 0) return  ret;
 
     if(sock->con_type & CONNECT_PUSH_WRITE) {
-        ret = socket_internal_close_requester(sock->write.push_writer, 1, dont_wait);
+        ret = socket_close_requester(sock->write.push_writer, 1, dont_wait);
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
-        ret = socket_internal_close_fulfiller(&sock->write.pull_writer, 1, dont_wait);
+        ret = socket_close_fulfiller(sock->write.pull_writer, 1, dont_wait);
     }
 
     return ret;
@@ -1107,17 +277,17 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
     }
 }
 
-ssize_t socket_requester_request_wait_for_fulfill(uni_dir_socket_requester* requester, char* buf, uint64_t length) {
+ssize_t socket_requester_request_wait_for_fulfill(requester_t requester, char* buf, uint64_t length) {
     int ret;
 
-    ret = socket_internal_requester_space_wait(requester, 1, 0, 0);
+    ret = socket_requester_space_wait(requester, 1, 0, 0);
 
     if(ret < 0) return ret;
 
-    socket_internal_request_ind(requester, buf, length, 0);
+    socket_request_ind(requester, buf, length, 0);
 
     // Wait for everything to be consumed
-    return socket_internal_requester_wait_all_finish(requester, 0);
+    return socket_requester_wait_all_finish(requester, 0);
 }
 
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags) {
@@ -1136,7 +306,7 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
     ssize_t ret = E_SOCKET_WRONG_TYPE;
     if(sock->con_type & CONNECT_PUSH_WRITE) {
-        uni_dir_socket_requester* requester = sock->write.push_writer;
+        requester_t requester = sock->write.push_writer;
 
         if((sock->flags | flags) & MSG_NO_COPY) {
             if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
@@ -1154,17 +324,17 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
             if(SOCK_TRACING && (sock->flags & MSG_TRACE)) printf("Socket sending a request\n");
 
-            ret = socket_internal_request_ind_db(requester, buf, length, &sock->write_copy_buffer, dont_wait, perms);
+            ret = socket_request_ind_db(requester, buf, length, &sock->write_copy_buffer, dont_wait, perms);
         }
 
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
-        uni_dir_socket_fulfiller* fulfiller = &sock->write.pull_writer;
-        ful_func * ff = &copy_in;
+        fulfiller_t fulfiller = sock->write.pull_writer;
+        ful_func * ff = OTHER_DOMAIN_FP(copy_in);
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
         enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
-        ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
-                                                      F_CHECK | progress | dont_wait | trace,
-                                                      ff, (capability)buf, 0, NULL, NULL);
+        ret = socket_fulfill_progress_bytes_unauthorised(fulfiller, length,
+                                                     F_CHECK | progress | dont_wait | trace,
+                                                     ff, (capability)buf, 0, NULL, NULL, LIB_SOCKET_DATA, NULL);
     }
 
     if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->read_behind+=ret;
@@ -1183,7 +353,7 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
 
     ssize_t ret = E_SOCKET_WRONG_TYPE;
     if(sock->con_type & CONNECT_PULL_READ) {
-        uni_dir_socket_requester* requester = sock->read.pull_reader;
+        requester_t requester = sock->read.pull_reader;
 
         // TODO this use case is confusing. If we put the user buffer in, we could return 0, have async fulfill and then
         // TODO numbers on further reads. However, if the user provided a different buffer on the second call this would
@@ -1199,39 +369,18 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         }
 
     } else if(sock->con_type & CONNECT_PUSH_READ) {
-        uni_dir_socket_fulfiller* fulfiller = &sock->read.push_reader;
-        ful_func * ff = ((sock->flags | flags) & MSG_NO_CAPS) ? &copy_out_no_caps : copy_out;
+        fulfiller_t fulfiller = sock->read.push_reader;
+        ful_func * ff = ((sock->flags | flags) & MSG_NO_CAPS) ? OTHER_DOMAIN_FP(copy_out_no_caps) : OTHER_DOMAIN_FP(copy_out);
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
         enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
-        ret = socket_internal_fulfill_progress_bytes(fulfiller, length,
-                                                      F_CHECK | progress | dont_wait | trace,
-                                                      ff, (capability)buf, 0, NULL, NULL);
+        ret = socket_fulfill_progress_bytes_unauthorised(fulfiller, length,
+                                                     F_CHECK | progress | dont_wait | trace,
+                                                     ff, (capability)buf, 0, NULL, NULL, LIB_SOCKET_DATA, NULL);
     }
 
     if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->write_behind+=ret;
 
     return ret;
-}
-
-ssize_t socket_internal_requester_lseek(uni_dir_socket_requester* requester, int64_t offset, int whence, int dont_wait) {
-    ssize_t ret;
-    if((ret = socket_internal_requester_space_wait(requester, 1, dont_wait, 0)) != 0) return ret;
-    seek_desc desc;
-    desc.v.offset = offset;
-    desc.v.whence = whence;
-
-    return socket_internal_request_oob(requester, REQUEST_SEEK, desc.as_intptr_t, 0, 0);
-}
-
-struct fwf_args {
-    uni_dir_socket_fulfiller* writer;
-    int dont_wait;
-};
-
-static ssize_t socket_internal_fulfill_with_fulfill(capability arg, char* buf, uint64_t offset, uint64_t length) {
-    struct fwf_args* args = (struct fwf_args*)arg;
-    // TODO: We can probably avoid a copy for join requests here
-    socket_internal_fulfill_progress_bytes(args->writer, length, F_CHECK | F_PROGRESS | args->dont_wait, &copy_in, (capability)buf, 0, NULL, NULL);
 }
 
 ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, size_t count) {
@@ -1264,49 +413,44 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
 
     if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PULL) {
         // Proxy
-        uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
-        uni_dir_socket_fulfiller* pull_write = &sockout->write.pull_writer;
+        requester_t pull_read = sockin->read.pull_reader;
+        fulfiller_t pull_write = sockout->write.pull_writer;
 
-        ret = socket_internal_requester_space_wait(pull_read, 1, dont_wait, 0);
+        ret = socket_requester_space_wait(pull_read, 1, dont_wait, 0);
 
         if(ret >= 0) {
-            ret = socket_internal_request_proxy(pull_read, pull_write, count, 0);
+            ret = socket_request_proxy(pull_read, pull_write, count, 0);
             if(ret >= 0) ret = count;
         }
 
     } else if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PUSH) {
         // Create custom buffer and generate a request (or few) for each
-        uni_dir_socket_requester* pull_read = sockin->read.pull_reader;
-        uni_dir_socket_requester* push_write = sockout->write.push_writer;
+        requester_t pull_read = sockin->read.pull_reader;
+        requester_t push_write = sockout->write.push_writer;
 
-        ret = socket_internal_requester_space_wait(pull_read, 1, dont_wait, 0);
+        ret = socket_requester_space_wait(pull_read, 1, dont_wait, 0);
 
         if(ret >= 0) {
-            ret = socket_internal_request_join(pull_read, push_write, &sockout->write_copy_buffer, count, 0);
+            ret = socket_request_join(pull_read, push_write, &sockout->write_copy_buffer, count, 0);
             if(ret >= 0) ret = count;
         }
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PULL) {
         // fullfill one read with a function that fulfills write
-        uni_dir_socket_fulfiller* push_read = &sockin->read.push_reader;
-        uni_dir_socket_fulfiller* pull_write = &sockout->write.pull_writer;
+        fulfiller_t push_read = sockin->read.push_reader;
+        fulfiller_t pull_write = sockout->write.pull_writer;
 
-        struct fwf_args args;
-        args.writer = pull_write;
-        args.dont_wait = dont_wait;
-
-        ret = socket_internal_fulfill_progress_bytes(push_read, count, F_CHECK | F_PROGRESS | dont_wait,
-                                                      &socket_internal_fulfill_with_fulfill, (capability)&args, 0, NULL, NULL);
+        ret = socket_fulfill_progress_bytes_soft_join(push_read, pull_write, count, F_CHECK | F_PROGRESS | dont_wait);
 
     } else if(in_type == SOCK_TYPE_PUSH && out_type == SOCK_TYPE_PUSH) {
         // Proxy
-        uni_dir_socket_fulfiller* push_read = &sockin->read.push_reader;
-        uni_dir_socket_requester* push_write = sockout->write.push_writer;
+        fulfiller_t push_read = sockin->read.push_reader;
+        requester_t push_write = sockout->write.push_writer;
 
-        ret = socket_internal_requester_space_wait(push_write, 1, dont_wait, 0);
+        ret = socket_requester_space_wait(push_write, 1, dont_wait, 0);
 
         if(ret >= 0) {
-            socket_internal_request_proxy(push_write, push_read, count, 0);
+            socket_request_proxy(push_write, push_read, count, 0);
             if(ret >= 0) ret = count;
         }
     }
@@ -1322,7 +466,7 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
 void catch_up_write(unix_like_socket* file) {
     if(file->write_behind) {
         if(SOCK_TRACING && (file->flags & MSG_TRACE)) printf("Socket catching up write ptr by %lx\n", file->write_behind);
-        socket_internal_requester_lseek(file->write.push_writer,
+        socket_requester_lseek(file->write.push_writer,
                                         file->write_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
         file->write_behind = 0;
     }
@@ -1331,7 +475,7 @@ void catch_up_write(unix_like_socket* file) {
 void catch_up_read(unix_like_socket* file) {
     if(file->read_behind) {
         if(SOCK_TRACING && (file->flags & MSG_TRACE)) printf("Socket catching up read ptr by %lx\n", file->read_behind);
-        socket_internal_requester_lseek(file->read.pull_reader,
+        socket_requester_lseek(file->read.pull_reader,
                                         file->read_behind, SEEK_CUR, file->flags & MSG_DONT_WAIT);
         file->read_behind = 0;
     }
@@ -1347,109 +491,26 @@ ssize_t socket_flush_drb(unix_like_socket* socket) {
         char* c1;
         char* c2;
         size_t p1;
-        ssize_t align_extra = socket_internal_drb_space_alloc(&socket->write_copy_buffer,
+        ssize_t align_extra = socket_drb_space_alloc(&socket->write_copy_buffer,
                                                               (uint64_t)-1,
-                                        len,
-                                        socket->flags & MSG_DONT_WAIT,
-                                        &c1,
-                                        &c2,
-                                        &p1,
-                                        socket->write.push_writer);
+                                                              len,
+                                                              socket->flags & MSG_DONT_WAIT,
+                                                              &c1,
+                                                              &c2,
+                                                              &p1,
+                                                              socket->write.push_writer);
 
         if(align_extra < 0) return align_extra;
 
         socket->write_copy_buffer.partial_length = 0;
 
-        socket_internal_request_ind(socket->write.push_writer, c1, p1, p1);
+        socket_request_ind(socket->write.push_writer, c1, p1, p1);
         if(p1 != len) {
-            socket_internal_request_ind(socket->write.push_writer, c2, len - p1, len - p1);
+            socket_request_ind(socket->write.push_writer, c2, len - p1, len - p1);
         }
         return len;
     }
     return 0;
-}
-
-static void socket_internal_fulfill_cancel_wait(uni_dir_socket_fulfiller* fulfiller) {
-    uni_dir_socket_requester_fulfiller_component* access = NULL;
-    VMEM_SAFE_DEREFERENCE(&fulfiller->requester->access, access, c);
-    if(access == NULL) return;
-    access->fulfiller_waiting = NULL;
-    if(fulfiller->proxy_times != fulfiller->proxy_fin_times) fulfiller->proxyied_in->fulfiller_component.requester_waiting = NULL;
-}
-
-static void socket_internal_request_cancel_wait(uni_dir_socket_requester* requester) {
-    requester->fulfiller_component.requester_waiting = NULL;
-}
-
-enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting, int from_check, int in_proxy) {
-    // Wait until there is something to fulfill and we are not proxying
-    enum poll_events ret = POLL_NONE;
-
-
-    if(io) {
-
-        if(!fulfiller->connected) return POLL_NVAL;
-
-        if(!set_waiting) socket_internal_fulfill_cancel_wait(fulfiller);
-
-        ssize_t wait_res = 0;
-
-        if(!in_proxy) {
-            wait_res = socket_internal_fulfiller_wait_proxy(fulfiller, !set_waiting, 1);
-        }
-
-        if(wait_res == 0) {
-            uint16_t amount = 1;
-            // We wait for an amount to be present such there is something past our checkpoint
-            if(from_check) amount +=
-               (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & (fulfiller->requester->buffer_size-1);
-
-            wait_res = socket_internal_fulfill_outstanding_wait(fulfiller, amount, !set_waiting, 1);
-
-            if(wait_res == 0) {
-                request_t *req = &fulfiller->requester->request_ring_buffer[
-                        (from_check ? fulfiller->fulfill_mark_ptr : fulfiller->requester->fulfiller_component.fulfill_ptr)
-                        & (fulfiller->requester->buffer_size-1)];
-                if(req->type == REQUEST_PROXY) {
-                    uni_dir_socket_fulfiller* proxy = req->request.proxy_for;
-                    enum poll_events proxy_events = socket_internal_fulfill_poll(proxy, io, set_waiting, from_check, 1);
-                    ret |= proxy_events;
-                } else ret |= io;
-            }
-
-        }
-
-        if(wait_res == E_SOCKET_CLOSED) ret |= POLL_HUP;
-        else if(wait_res == E_AGAIN || wait_res == E_IN_PROXY) return ret;
-        else if(wait_res < 0) ret |= POLL_ER;
-
-    } else {
-        if(socket_internal_fulfiller_closed_safe(fulfiller)) ret |= POLL_HUP;
-    }
-
-    return ret;
-}
-
-enum poll_events socket_internal_request_poll(uni_dir_socket_requester* requester, enum poll_events io, int set_waiting, uint16_t space) {
-    // Wait until there is something to request
-
-    enum poll_events ret = POLL_NONE;
-
-    if(!requester->connected) return POLL_NVAL;
-
-    if(io) {
-        if(!set_waiting) socket_internal_request_cancel_wait(requester);
-
-        int wait_res = socket_internal_requester_space_wait(requester,space, !set_waiting, 1);
-
-        if(wait_res == 0) ret |= io;
-        else if(wait_res == E_AGAIN) return ret;
-        else if(wait_res < 0) ret |= POLL_ER;
-    } else {
-        if(requester->requester_closed || requester->fulfiller_component.fulfiller_closed) ret |= POLL_HUP;
-    }
-
-    return ret;
 }
 
 static enum poll_events be_waiting_for_event(unix_like_socket* sock, enum poll_events asked_events, int set_waiting) {
@@ -1461,20 +522,20 @@ static enum poll_events be_waiting_for_event(unix_like_socket* sock, enum poll_e
 
 
     if(sock->con_type & CONNECT_PUSH_WRITE) {
-        uni_dir_socket_requester* push_write = sock->write.push_writer;
-        ret |= socket_internal_request_poll(push_write, write, set_waiting, 1);
+        requester_t push_write = sock->write.push_writer;
+        ret |= socket_request_poll(push_write, write, set_waiting, 1);
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
-        uni_dir_socket_fulfiller* pull_write = &sock->write.pull_writer;
-        ret |= socket_internal_fulfill_poll(pull_write, write, set_waiting, 0, 0);
+        fulfiller_t pull_write = sock->write.pull_writer;
+        ret |= socket_fulfill_poll(pull_write, write, set_waiting, 0, 0);
     } else if(write) return POLL_NVAL;
 
     if(sock->con_type & CONNECT_PUSH_READ) {
-        uni_dir_socket_fulfiller* push_read = &sock->read.push_reader;
-        ret |= socket_internal_fulfill_poll(push_read, read, set_waiting, 0, 0);
+        fulfiller_t push_read = sock->read.push_reader;
+        ret |= socket_fulfill_poll(push_read, read, set_waiting, 0, 0);
     } else if(sock->con_type & CONNECT_PULL_READ) {
-        uni_dir_socket_requester* pull_read = sock->read.pull_reader;
-        ret |= socket_internal_request_poll(pull_read, read, set_waiting,
-                                            sock->flags & SOCKF_POLL_READ_MEANS_EMPTY ? pull_read->buffer_size : (uint16_t)1);
+        requester_t pull_read = sock->read.pull_reader;
+        ret |= socket_request_poll(pull_read, read, set_waiting,
+                                            sock->flags & SOCKF_POLL_READ_MEANS_EMPTY ? SPACE_AMOUNT_ALL : (uint16_t)1);
     } else if(read) return POLL_NVAL;
 
     return ret;
@@ -1561,4 +622,16 @@ int assign_socket_n(unix_like_socket* sock) {
     if(sock->flags & SOCKF_GIVE_SOCK_N) return -1;
     sock->flags |= SOCKF_GIVE_SOCK_N;
     sock->sockn = alloc_sockn();
+}
+
+requester_t socket_malloc_requester_32(uint8_t socket_type, data_ring_buffer *paired_drb) {
+    res_t res = cap_malloc(SIZE_OF_request(32));
+    ERROR_T(requester_t) requester = socket_new_requester(res, 32, socket_type, paired_drb);
+    return IS_VALID(requester) ? requester.val : NULL;
+}
+
+fulfiller_t socket_malloc_fulfiller(uint8_t socket_type) {
+    res_t res = cap_malloc(SIZE_OF_fulfill);
+    ERROR_T(fulfiller_t) fulfiller = socket_new_fulfiller(res, socket_type);
+    return IS_VALID(fulfiller) ? fulfiller.val : NULL;
 }

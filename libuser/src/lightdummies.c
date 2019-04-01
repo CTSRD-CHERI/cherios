@@ -1,6 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
- * Copyright (c) 2017 Lawrence Esswood
+ * Copyright (c) 2019 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,28 +28,26 @@
  * SUCH DAMAGE.
  */
 
-#include "sys/types.h"
-#include "cheric.h"
-#include "object.h"
-#include "namespace.h"
-#include "queue.h"
-#include "assert.h"
 #include "syscalls.h"
-#include "thread.h"
-#include "mman.h"
 
-void libuser_init(act_control_kt self_ctrl,
-				  act_kt ns_ref,
-				  kernel_if_t* kernel_if_c,
-				  queue_t * queue,
-				  capability proc,
-				  mop_t mop,
-				  tres_t cds_res,
-				  startup_flags_e flags) {
-#if !(LIGHTWEIGHT_OBJECT)
-	proc_handle = proc;
-#endif
-	mmap_set_mop(mop);
-	namespace_init(ns_ref);
-	object_init(self_ctrl, queue, kernel_if_c, cds_res, flags, 1);
+capability compact_code(capability segment_table, capability start, capability end,
+                        capability code_seg_write, register_t code_seg_offset, register_t flags, capability ret) {
+    return ret;
+}
+
+__attribute__((noreturn))
+void lw_panic(void) {
+    syscall_panic();
+    for(;;);
+}
+
+void __assert(const char *assert_function, const char *assert_file,
+              int assert_lineno, const char *assert_message) {
+    lw_panic();
+}
+
+void __assert_int_ex(const char *assert_function, const char *assert_file,
+                     int assert_lineno, const char *am, const char *opm,const char *bm,
+                     unsigned long long int a, unsigned long long int b) {
+    lw_panic();
 }

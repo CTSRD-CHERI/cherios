@@ -46,6 +46,7 @@
 #include "cheric.h"
 #include "ccall.h"
 #include "utils.h"
+#include "misc.h"
 
 // FIXME: alias needs size too
 #define WEAK_DUMMY(name) ".weak " #name "_dummy \n"
@@ -108,7 +109,7 @@ typedef void common_t(void);
     #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
     void init_ ## type (type* plt_if, capability data, capability trust_mode);      \
     void init_ ## type ##_change_mode(capability trust_mode);                       \
-    void init_ ## type ##_new_thread(type* plt_if, capability data);
+    void init_ ## type ##_new_thread(capability data);
 
     #define DEFINE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
     void init_ ## type (type* plt_if, capability data, capability trust_mode) {      \
@@ -116,18 +117,25 @@ typedef void common_t(void);
         __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
         LIST(INIT_OBJ)                                                                \
     }\
-    void init_ ## type ##_new_thread(type* plt_if, capability data) {      \
+    void init_ ## type ##_new_thread(capability data) {      \
             __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
     }\
     void init_ ## type ##_change_mode(capability trust_mode) {\
     __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
     }
 
-    #define PLT_common(type, LIST, per_thr, tls_reg, tls)    \
+    #define PLT_ty(type, LIST) \
     typedef struct                          \
     {                                       \
         LIST(PLT_GOT_ENTRY,)                \
-    } type;                                 \
+    } type;
+
+
+    #define DEFINE_F(name, ret, ty, ...) ret name ty;
+    #define PLT_define(LIST) LIST(DEFINE_F)
+
+    #define PLT_common(type, LIST, per_thr, tls_reg, tls)  \
+    PLT_ty(type, LIST)                      \
     DECLARE_DEFAULT(type, per_thr)          \
     LIST(DECLARE_STUB,)                     \
     DECLARE_PLT_INIT(type, LIST, tls_reg, tls) \
@@ -164,6 +172,8 @@ typedef void common_t(void);
     // This is the fully untrusting entry stub
     extern void entry_stub(void);
 
+    #define OTHER_DOMAIN_FP(X) (&(X ## _dummy))
+    #define OTHER_DOMAIN_DATA(X) (typeof(PLT_UNIQUE_OBJECT(X)))(&(PLT_UNIQUE_OBJECT(X))) // The data is inlined into the table
 
 #else // __ASSEMBLY__
 

@@ -70,7 +70,7 @@ int main(register_t arg, capability carg) {
 
     res_t res1 = cap_malloc(0x500);
     cap_pair pair1;
-    cert_t certificate = rescap_take_authed(res1, &pair1, CHERI_PERM_LOAD, AUTH_CERT, own_auth).cert;
+    cert_t certificate = rescap_take_authed(res1, &pair1, CHERI_PERM_LOAD, AUTH_CERT, own_auth,NULL,NULL).cert;
 
     assert(pair1.data != NULL);
     assert(certificate != NULL);
@@ -99,7 +99,7 @@ int main(register_t arg, capability carg) {
     res_t res2 = cap_malloc(0x500);
     cap_pair pair3;
 
-    locked_t locked = rescap_take_locked(res2, &pair3, CHERI_PERM_LOAD, id);
+    locked_t locked = rescap_take_locked(res2, &pair3, CHERI_PERM_LOAD, id, NULL, NULL);
 
     assert(pair3.data != NULL);
     assert(locked != NULL);

@@ -138,7 +138,10 @@ int main(register_t arg, capability carg) {
     result = read(file2, dest, BIG_SIZE);
     assert_int_ex(result, ==, BIG_SIZE);
 
-    assert_int_ex(file2->read.pull_reader->requeste_ptr, ==, file2->read.pull_reader->fulfiller_component.fulfill_ptr);
+    result = socket_requester_space_wait(file2->read.pull_reader, SPACE_AMOUNT_ALL, 1, 0);
+
+    assert_int_ex(result, ==, 0);
+
     int once = 1;
     for(size_t i = 0; i < BIG_SIZE; i++) {
         if(LOREM[i] != dest[i]) {

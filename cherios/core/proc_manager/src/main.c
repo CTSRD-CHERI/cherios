@@ -139,6 +139,21 @@ static top_t top_for_process(process_t* proc) {
     return proc->top;
 }
 
+// To defeat bootstrapping problems we allow the process manager to allocate some type reservations
+#define TMP_TRES_START 0x800
+#define TMP_TRES_STOP  0x900
+
+static sealing_cap get_tres_for_process(process_t* process) {
+	static uint64_t type = TMP_TRES_START;
+
+	if(type != TMP_TRES_STOP) {
+		if(try_init_tman_ref() != NULL) type = TMP_TRES_STOP;
+		else return tres_get(type++);
+	}
+
+	return type_get_new(top_for_process(process)).val;
+}
+
 static act_control_kt create_activation_for_image(image* im, const char* name, register_t arg, capability carg, capability pcc,
                                                   char* stack_args, size_t stack_args_size, process_t * process,
                                                   uint8_t cpu_hint, startup_flags_e flags, cert_t found_cert) {
@@ -174,7 +189,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 		// we need c3 for the trampoline. C0 would be useless anyway as it points to the unsecure copy
   		frame.cf_c1 = &foundation_enter_dummy;
 	 	frame.cf_c2 = &PLT_UNIQUE_OBJECT(nano_kernel_if_t);
-	 	frame.cf_c7 = type_get_new(top_for_process(process)).val;
+	 	frame.cf_c7 = get_tres_for_process(process);
 		frame.cf_c9 = found_cert;
 	}
 

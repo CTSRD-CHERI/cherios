@@ -84,7 +84,7 @@ void mmio_disk(void*);
 
 void handle_loop(void);
 void * new_session(void * mmio_cap);
-int new_socket(session_t* session, uni_dir_socket_requester* requester, enum socket_connect_type);
+int new_socket(session_t* session, requester_t requester, enum socket_connect_type);
 int	vblk_init(session_t* session);
 int	vblk_read(session_t* session, void * buf, size_t sector, act_kt async_caller, register_t asyc_no, register_t async_port);
 int	vblk_write(session_t* session, void * buf, size_t sector, act_kt async_caller, register_t asyc_no, register_t async_port);

@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include <sockets.h>
+#include "sockets.h"
 #include "cheric.h"
 #include "assert.h"
 #include "nano/nanokernel.h"
@@ -63,8 +63,9 @@ enum session_state {
 
 typedef struct session_sock {
     struct session_t* session;
-    uni_dir_socket_fulfiller ff;
+    fulfiller_t ff;
     size_t addr;
+    uint8_t sock_type;
     block_cache_ent_t* blocked;
 } session_sock;
 
@@ -89,7 +90,7 @@ typedef struct session_t {
     RINGBUF_DEF_BUF_STATIC(RB_CB);
     RINGBUF_DEF_BUF_STATIC(RB_RD);
     volatile uint64_t blockreads_ack;
-    struct requester_32 read_req;
+    requester_t read_req;
     // TODO a write requester
     DLL_LINK(session_t);
     block_cache_ent_t** block_cache;
@@ -138,12 +139,14 @@ static int vblk_init(session_t* session) {
     if(ret != 0) return ret;
 
     // hook up a requester
-    uni_dir_socket_requester* r = &session->read_req.r;
-    socket_internal_requester_init(r,32,SOCK_TYPE_PULL,NULL);
-    r->drb_fulfill_ptr = &session->blockreads_ack;
+    requester_t r = socket_malloc_requester_32(SOCK_TYPE_PULL, NULL);
+    session->read_req = r;
+
+    socket_requester_set_drb_ptr(r, &session->blockreads_ack);
+
     ret  = (int)message_send(SOCK_TYPE_PULL, 0, 0, 0, session->block_session, r, NULL, NULL, vblk_ref, SYNC_CALL, 5);
     if(ret != 0) return ret;
-    socket_internal_requester_connect(r);
+    socket_requester_connect(r);
 
     // get size and allocate the cache map
     size_t size = (size_t)message_send(0, 0, 0, 0, session->block_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 4) * SECTOR_SIZE;
@@ -157,7 +160,7 @@ static int vblk_init(session_t* session) {
     return 0;
 }
 
-static int new_socket(session_t* session, uni_dir_socket_requester* requester, enum socket_connect_type type) {
+static int new_socket(session_t* session, requester_t requester, enum socket_connect_type type) {
     session = unseal_session(session);
 
     assert(session != NULL);
@@ -175,9 +178,16 @@ static int new_socket(session_t* session, uni_dir_socket_requester* requester, e
     } else return -1;
 
     ssize_t res;
-    if((res = socket_internal_fulfiller_init(&ss->ff, sock_type)) < 0) return (int)res;
-    if((res = socket_internal_fulfiller_connect(&ss->ff, requester)) < 0) return (int)res;
 
+    if(ss->ff) {
+        if((res = socket_reuse_fulfiller(ss->ff, sock_type)) < 0) return (int)res;
+    } else {
+        ss->ff = socket_malloc_fulfiller(sock_type);
+    }
+
+    if((res = socket_fulfiller_connect(ss->ff, requester)) < 0) return (int)res;
+
+    ss->sock_type = sock_type;
     ss->session = session;
     ss->addr = 0;
 
@@ -199,8 +209,8 @@ static int new_block(session_t* session, size_t index) {
     session->block_cache[index] = block;
 
     // Seek and indirect read
-    uni_dir_socket_requester* r = &session->read_req.r;
-    ssize_t res = socket_internal_requester_space_wait(r,2,0,0);
+    requester_t r = session->read_req;
+    ssize_t res = socket_requester_space_wait(r,2,0,0);
     assert(res == 0);
 
     size_t sector_start = (index << BLOCK_BITS) / SECTOR_SIZE;
@@ -211,9 +221,9 @@ static int new_block(session_t* session, size_t index) {
     sk.v.offset = sector_start;
 
     *RINGBUF_PUSH(RB_RD, session) = index;
-    res = socket_internal_request_oob(r,REQUEST_SEEK,sk.as_intptr_t,0,0);
+    res = socket_request_oob(r,REQUEST_SEEK,sk.as_intptr_t,0,0);
     assert(res == 0);
-    res = socket_internal_request_ind(r,block->data,BLOCK_SIZE,1);
+    res = socket_request_ind(r,block->data,BLOCK_SIZE,1);
     assert(res == 0);
 
     session->should_poll = 1;
@@ -276,8 +286,8 @@ static int rw_sector(session_t* session, size_t sector, char* buf, int is_write)
     return 0;
 }
 
-
-static ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -300,7 +310,7 @@ static ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
 
         char* block_buf = ss->session->block_cache[map_index]->data + map_offset;
 
-        cpy(buf,block_buf,ss->ff.socket_type == SOCK_TYPE_PUSH, to_copy);
+        cpy(buf,block_buf,ss->sock_type == SOCK_TYPE_PUSH, to_copy);
 
         copied +=to_copy;
         addr +=to_copy;
@@ -312,7 +322,8 @@ static ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
     return copied;
 }
 
-static ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
+ssize_t TRUSTED_CROSS_DOMAIN(ff_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf);
+ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -340,7 +351,8 @@ static ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** o
     return to_copy;
 }
 
-static ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(oobff)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
 
@@ -376,8 +388,9 @@ static ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64
 
 
 static void handle_sock_session(session_sock* ss) {
-    ssize_t res = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF, F_CHECK | F_DONT_WAIT | F_PROGRESS,
-                                                         &ff, (capability)ss, 0, &oobff, ff_sub);
+    ssize_t res = socket_fulfill_progress_bytes_unauthorised(ss->ff, SOCK_INF, F_CHECK | F_DONT_WAIT | F_PROGRESS,
+                                                         &TRUSTED_CROSS_DOMAIN(ff), (capability)ss, 0, &TRUSTED_CROSS_DOMAIN(oobff), TRUSTED_CROSS_DOMAIN(ff_sub),
+                                                         TRUSTED_DATA, TRUSTED_DATA);
     if(res == E_AGAIN) return;
 
     assert_int_ex(res, >=, 0);
@@ -409,7 +422,7 @@ static void main_loop(void) {
 
             if(!ss->blocked) {
                 // Poll the socket when new incoming reads come in
-                POLL_ITEM_F(event,sleep,any_event,&ss->ff, POLL_IN,0);
+                POLL_ITEM_F(event,sleep,any_event, ss->ff, POLL_IN,0);
                 if(event) {
                     if(event & POLL_IN) {
                         handle_sock_session(ss);
@@ -422,7 +435,7 @@ static void main_loop(void) {
         DLL_FOREACH(session_t, s, &session_list) {
             // Poll for outgoing reads finishing
             if(s->should_poll) {
-                POLL_ITEM_R(event, sleep, any_event, &s->read_req.r, POLL_OUT, 32);
+                POLL_ITEM_R(event, sleep, any_event, s->read_req, POLL_OUT, 32);
                 if(event) {
                     handle_callbacks(s);
                 }

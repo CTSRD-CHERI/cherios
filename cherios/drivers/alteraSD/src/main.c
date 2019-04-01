@@ -49,7 +49,7 @@ enum session_state {
 
 typedef struct session_sock {
     struct session_t* session;
-    uni_dir_socket_fulfiller ff;
+    fulfiller_t ff;
     size_t sector;
     size_t sector_prog;
 } session_sock;
@@ -170,7 +170,7 @@ int vblk_init(session_t* session) {
     return 0;
 }
 
-int new_socket(session_t* session, uni_dir_socket_requester* requester, enum socket_connect_type type) {
+int new_socket(session_t* session, requester_t requester, enum socket_connect_type type) {
     session = unseal_session(session);
 
     assert(session != NULL);
@@ -188,8 +188,10 @@ int new_socket(session_t* session, uni_dir_socket_requester* requester, enum soc
     } else return -1;
 
     ssize_t res;
-    if((res = socket_internal_fulfiller_init(&ss->ff, sock_type)) < 0) return (int)res;
-    if((res = socket_internal_fulfiller_connect(&ss->ff, requester)) < 0) return (int)res;
+
+    ss->ff = socket_malloc_fulfiller(sock_type);
+
+    if((res = socket_fulfiller_connect(ss->ff, requester)) < 0) return (int)res;
 
     ss->session = session;
     ss->sector = 0;
@@ -378,7 +380,7 @@ void handle_loop(void) {
 
         for(size_t i = 0; i < socks_count; i++) {
             session_sock* ss = &socks[i];
-            POLL_ITEM_F(event, sock_sleep, sock_event, &ss->ff, POLL_IN, 0)
+            POLL_ITEM_F(event, sock_sleep, sock_event, ss->ff, POLL_IN, 0)
             if(event) {
                 handle_socket(ss);
             }

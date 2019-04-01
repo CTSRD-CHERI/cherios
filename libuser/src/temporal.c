@@ -33,10 +33,8 @@
 #include "exceptions.h"
 #include "stdlib.h"
 #include "mman.h"
+#include "temporal.h"
 
-#define MinStackSize    0x2000 // The compiler throws away stacks smaller than this!
-// TODO - make this as large as can be represented exactly, or add logic to align up base/top
-#define Overrequest     (1*UNTRANSLATED_PAGE_SIZE) + MEM_REQUEST_MIN_REQUEST
 // WARN: It is a _really_ bad idea to call a function that will use too much unsafe stack from here.
 // WARN: We can cope with exactly 1 use of the unsafe stack (enough for secure loaded things to make a call out)
 
@@ -56,7 +54,15 @@ capability new_stack(capability old_c10) {
     ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, 0, own_mop);
     // if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
 
+    if(!IS_VALID(stack_res)) {
+        __asm __volatile("li $0, 0xbeef     \n"
+                         "move $v0, %[er]   \n"::[er]"r"((ssize_t)stack_res.er):"v0");
+    }
+    assert(IS_VALID(stack_res));
+
+#if !(LIGHTWEIGHT_OBJECT)
     if(own_stats) own_stats->temporal_reqs++;
+#endif
 
     cap_pair pair;
     rescap_take(stack_res.val, &pair);
@@ -119,7 +125,10 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
         old_link = *(capability *)(((char*)old_c10) + CSP_OFF_NEXT);
     }
 
+#if !(LIGHTWEIGHT_OBJECT)
     if(!old_c10 && own_stats) own_stats->temporal_depth++;
+#endif
+
     capability new_c10 = new_stack(old_c10);
 
     if(old_link) {
@@ -138,6 +147,13 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
         cheri_setreg(10, new_ex_c10);
         replaced_first_c10 = 1;
     }
+
+    // The cusp to use on cross domain call may get clobbered by getting a new stack (e.g., by message send)
+    // The temporal unsafe stack should never join the chain of the stack proper
+    // This exception handler may get called from a cross domain stub, where the ctl->cusp matters
+
+    // The correct value to set it to is the old link
+    ((CTL_t*)(get_ctl()->ex_idc))->cusp = old_link;
 #else
     cheri_setreg(10, new_c10);
 #endif

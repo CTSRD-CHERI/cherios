@@ -57,7 +57,6 @@ struct net_sock {
     struct tcp_bind bind;
     struct net_sock* next_to_accept; // Inline linked list to allow out of order accepts
     capability callback_arg;
-    struct requester_32 write_req;
 };
 
 // Without inline drb or inline reqs as this might just be a listen socket

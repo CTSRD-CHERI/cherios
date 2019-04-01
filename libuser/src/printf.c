@@ -38,7 +38,6 @@
 #include "assert.h"
 #include "namespace.h"
 #include "unistd.h"
-#include "sockets.h"
 
 // If the uart driver is not up we can't write to stdout
 // Instead we just use a syscall, currently the kernel has its own uart driver
@@ -101,7 +100,7 @@ int fputc(int character, FILE *f) {
 
     if(drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size) {
         // FIXME: This disrespects the DONT_WAIT flag
-        ssize_t bw = socket_internal_requester_wait_all_finish(f->write.push_writer, 0);
+        ssize_t bw = socket_requester_wait_all_finish(f->write.push_writer, 0);
         assert_int_ex(-bw, ==, 0);
     }
 

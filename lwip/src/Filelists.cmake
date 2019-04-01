@@ -19,11 +19,6 @@ set(LWIP_VERSION_STRING
     "${LWIP_VERSION_MAJOR}.${LWIP_VERSION_MINOR}.${LWIP_VERSION_REVISION}"
 )
 
-# The cherios specific system definitions
-set (lwipportcherios_SRCS
-    ${LWIP_DIR}/
-)
-
 # The minimum set of files needed for lwIP.
 set(lwipcore_SRCS
     ${LWIP_DIR}/src/core/init.c

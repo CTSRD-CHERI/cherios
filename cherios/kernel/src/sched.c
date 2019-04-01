@@ -263,6 +263,8 @@ void sched_receive_event(act_t* act, sched_status_e events) {
 		act->sync_state.sync_condition = 0;
 	}
 	if(act->sched_status & events) {
+	    // TODO on multicore if we wake up a high priority activation on another core
+	    //  we might want to send an IPI to kick off a low priority activation
 		if(act->sched_status & sched_wait_timeout) {
 			kernel_timer_unsubcsribe(act);
 		}

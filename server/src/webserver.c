@@ -119,7 +119,7 @@ int handle_get_post(struct session* s, struct initial* ini) {
     size_t file_size = 0;
 
     do {
-        result = parse_header(&s->sock->read.push_reader, &hdr);
+        result = parse_header(s->sock->read.push_reader, &hdr);
         if(result < 0)
             ER_R("Error parsing headers\n");
         if(result == 0) {
@@ -183,7 +183,7 @@ int handle_request(struct session* s) {
     struct initial ini;
     ini.file = s->file_name_buf;
 
-    int result = parse_initial(&s->sock->read.push_reader, &ini,
+    int result = parse_initial(s->sock->read.push_reader, &ini,
                                ini.file + s->server_root_length, sizeof(s->file_name_buf) - s->server_root_length);
 
     if(result < 0) ER_R("Error parsing initial line\n");

@@ -33,6 +33,7 @@
 #include "dylink.h"
 #include "elf.h"
 #include "math.h"
+#include "string.h"
 
 enum capreloc_flags_e {
     RELOC_FLAGS_NONE = 0,
@@ -61,6 +62,9 @@ __attribute__((weak))
 extern struct capreloc __start___cap_relocs;
 __attribute__((weak))
 extern struct capreloc __stop___cap_relocs; // Stops making sense after compaction. Use size instead.
+
+#define RELOCS_START    (&__start___cap_relocs)
+#define RELOCS_END      (cheri_incoffset(&__start___cap_relocs, cap_relocs_size))
 
 extern size_t cap_relocs_size;
 extern capability crt_segment_table[MAX_SEGS];
@@ -129,6 +133,6 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
 
 void __attribute__((always_inline)) crt_init_new_globals(capability* segment_table, struct capreloc* start, struct capreloc* end);
 
-void __attribute__((always_inline)) crt_init_new_locals(capability* segment_table, struct capreloc* start, struct capreloc* end);
-
+void  crt_init_new_locals(capability* segment_table, struct capreloc* start, struct capreloc* end);
+void __attribute__((always_inline)) crt_init_new_locals_inline(capability* segment_table, struct capreloc* start, struct capreloc* end);
 #endif //CHERIOS_CRT_H

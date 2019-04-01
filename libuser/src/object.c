@@ -48,6 +48,7 @@
 #include "temporal.h"
 #include "unistd.h"
 #include "sys/deduplicate.h"
+#include "cprogram.h"
 
 capability int_cap;
 
@@ -55,15 +56,18 @@ __thread act_control_kt act_self_ctrl = NULL;
 __thread act_kt act_self_ref  = NULL;
 __thread act_notify_kt act_self_notify_ref = NULL;
 __thread queue_t * act_self_queue = NULL;
+
+#if !(LIGHTWEIGHT_OBJECT)
 __thread user_stats_t* own_stats;
+#endif
 
 int    was_secure_loaded;
 auth_t own_auth;
 found_id_t* own_found_id;
 startup_flags_e default_flags;
 
-extern void memset_c(void);
 
+#if !(LIGHTWEIGHT_OBJECT)
 #ifndef USE_SYSCALL_PUTS
 
 #define STD_BUF_SIZE 0x100
@@ -77,7 +81,8 @@ typedef struct {
 __thread std_sock std_out_sock;
 __thread std_sock std_err_sock;
 
-#endif
+#endif // !USE_SYSCALL_PUTS
+#endif // !LIGHTWEIGHT
 
 static void setup_temporal_handle(startup_flags) {
     if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
@@ -85,6 +90,63 @@ static void setup_temporal_handle(startup_flags) {
         register_vectored_exception(&temporal_exception_handle, MIPS_CP0_EXCODE_TRAP);
     }
 }
+
+// Manually link with other libraries (just the socket lib currently)
+
+#if !(LIGHTWEIGHT_OBJECT)
+void dylink_sockets(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_flags, int first_thread) {
+    act_kt dylink_server = namespace_get_ref(namespace_num_lib_socket);
+
+    assert(dylink_server != NULL);
+
+    cap_pair pair;
+    lib_socket_if_t* socket_if;
+    found_id_t* id;
+
+    if(first_thread) {
+        cert_t if_cert = message_send_c(0, 0, 0, 0, NULL, NULL, NULL, NULL, dylink_server, SYNC_CALL, 1);
+        id = rescap_check_cert(if_cert, &pair);
+        assert(id != NULL);
+        socket_if = (lib_socket_if_t*)pair.data;
+    }
+
+    size_t size = message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, dylink_server, SYNC_CALL, 0);
+
+    assert(size != 0);
+
+    // Allocate space / stacks for new thread in other library
+    res_t locals_res, stack_res, ustack_res, sign_res;
+    locals_res = cap_malloc(size);
+    stack_res = mem_request(0, DEFAULT_STACK_SIZE, 0, own_mop).val;
+    ustack_res = mem_request(0, Overrequest + MinStackSize, 0, own_mop).val;
+    sign_res = cap_malloc(RES_CERT_META_SIZE);
+
+    // Create a new thread in target library
+    single_use_cert thread_cert = message_send_c(0, 0, 0, 0, locals_res, stack_res, ustack_res, sign_res, dylink_server, SYNC_CALL, 2);
+
+    // TODO. If we would only accept a certain set of libraries, we would check the sig here
+    found_id_t* id2 = rescap_check_single_cert(thread_cert, &pair);
+
+    capability dataarg = pair.data;
+
+    if(first_thread) {
+        // Needs same interface
+        if(id != id2) {
+            CHERI_PRINT_CAP(id);
+            CHERI_PRINT_CAP(id2);
+            CHERI_PRINT_CAP(thread_cert);
+        }
+        assert(id == id2);
+        init_lib_socket_if_t(socket_if, dataarg, was_secure_loaded ? plt_common_untrusting: plt_common_complete_trusting);
+    } else {
+        init_lib_socket_if_t_new_thread(dataarg);
+    }
+
+    // Then call init in other library
+
+    init_external_thread(self_ctrl, own_mop, queue, startup_flags);
+}
+#endif
 
 void object_init(act_control_kt self_ctrl, queue_t * queue,
                  kernel_if_t* kernel_if_c, tres_t cds_res,
@@ -102,7 +164,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
         // WARN: These are non de-dupped versions. We will have to do this _again_ after dedup
         init_kernel_if_t(kernel_if_c, self_ctrl, was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
     } else {
-        init_kernel_if_t_new_thread(kernel_if_c, self_ctrl);
+        init_kernel_if_t_new_thread(self_ctrl);
     }
 
 	// For secure loaded things this is needed before any calls into the kernel
@@ -111,6 +173,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 
     int_cap = get_integer_space_cap();
 
+#if !(LIGHTWEIGHT_OBJECT)
     own_stats = syscall_act_user_info_ref(self_ctrl);
 
     if(cheri_getreg(10) != NULL) {
@@ -120,6 +183,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     } else {
         own_stats->temporal_depth = 1;
     }
+#endif
 
 	act_self_ref  = syscall_act_ctrl_get_ref(self_ctrl);
     act_self_notify_ref = syscall_act_ctrl_get_notify_ref(self_ctrl);
@@ -127,6 +191,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 
     sync_state = (sync_state_t){.sync_caller = NULL};
 
+#if !(LIGHTWEIGHT_OBJECT)
 #if (AUTO_DEDUP_ALL_FUNCTIONS)
     dedup_stats stats;
     int did_dedup = 0;
@@ -143,11 +208,13 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
         }
     }
 #endif
+#endif
 
     if(first_thread) {
         if(was_secure_loaded) own_found_id = foundation_get_id(own_auth);
     }
 
+#if !(LIGHTWEIGHT_OBJECT)
     if(!(startup_flags & STARTUP_NO_MALLOC)) {
         init_cap_malloc();
     }
@@ -159,6 +226,9 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     // This creates two sockets with the UART driver and sets stdout/stderr to them
 #ifndef USE_SYSCALL_PUTS
 
+    // Dynamic link now.
+    dylink_sockets(self_ctrl, queue, startup_flags, first_thread);
+
     act_kt uart;
 
     while((uart = namespace_get_ref(namespace_num_uart)) == NULL) {
@@ -167,16 +237,15 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 
     int res;
 
-    int flags = MSG_NO_CAPS | SOCKF_WR_INLINE | SOCKF_DRB_INLINE | SOCKF_WR_INLINE | SOCKF_SOCK_INLINE;
+    int flags = MSG_NO_CAPS | SOCKF_DRB_INLINE | SOCKF_SOCK_INLINE;
 
 #define MAKE_STD_SOCK(S,IPC_NO)                                                                                 \
-        S.sock.write.push_writer = &S.reqs.r;                                                                   \
-        socket_internal_requester_init(S.sock.write.push_writer, 32, SOCK_TYPE_PUSH, &S.sock.write_copy_buffer);                   \
+        S.sock.write.push_writer = socket_malloc_requester_32(SOCK_TYPE_PUSH, &S.sock.write_copy_buffer);          \
             res = message_send(0,0,0,0,                                                                         \
-                               socket_internal_make_read_only(S.sock.write.push_writer), NULL, NULL, NULL,      \
+                               socket_make_ref_for_fulfill(S.sock.write.push_writer), NULL, NULL, NULL,         \
                                uart, SYNC_CALL, IPC_NO);                                                        \
         assert(res == 0);                                                                                       \
-        socket_internal_requester_connect(S.sock.write.push_writer);                                            \
+        socket_requester_connect(S.sock.write.push_writer);                                            \
         socket_init(&S.sock, flags, S.buf, STD_BUF_SIZE, CONNECT_PUSH_WRITE);
 
     MAKE_STD_SOCK(std_out_sock, 2);
@@ -208,21 +277,27 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
                stats.too_large);
     }
 #endif
+
+#endif // !LIGHTWEIGHT
 }
 
 void object_init_post_compact(startup_flags_e startup_flags, int first_thread) {
+#if !(LIGHTWEIGHT_OBJECT)
     setup_temporal_handle(startup_flags);
     init_kernel_if_t_change_mode(was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
+#endif // !LIGHTWEIGHT
 }
 
 // Called when any thread exits
 __attribute__((noreturn))
 void object_destroy() {
+#if !(LIGHTWEIGHT_OBJECT)
     #ifndef USE_SYSCALL_PUTS
         flush(stdout);
         flush(stderr);
     #endif
     process_async_closes(1);
+#endif // !LIGHTWEIGHT
     syscall_act_terminate(act_self_ctrl);
 }
 

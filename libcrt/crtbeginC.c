@@ -135,6 +135,10 @@ void __attribute__((always_inline)) crt_init_new_globals(capability* segment_tab
     crt_init_common(segment_table, start, end, RELOC_FLAGS_TLS);
 }
 
-void __attribute__((always_inline)) crt_init_new_locals(capability* segment_table, struct capreloc* start, struct capreloc* end) {
+void crt_init_new_locals(capability* segment_table, struct capreloc* start, struct capreloc* end) {
     crt_init_common(segment_table, start, end, 0);
+}
+
+void __attribute__((always_inline)) crt_init_new_locals_inline(capability* segment_table, struct capreloc* start, struct capreloc* end) {
+	crt_init_common(segment_table, start, end, 0);
 }

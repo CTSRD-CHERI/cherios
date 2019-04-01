@@ -29,11 +29,10 @@
  */
 
 #include <queue.h>
-#include <sockets.h>
+#include "sockets.h"
 #include "cheric.h"
 #include "net.h"
 #include "assert.h"
-#include "sockets.h"
 #include "stdlib.h"
 #include "namespace.h"
 
@@ -89,7 +88,7 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
     uint16_t port = msg->a1;
     uint32_t addr = msg->a2;
 
-    uni_dir_socket_requester* requester = (uni_dir_socket_requester*)msg->c5;
+    requester_t requester = (requester_t*)msg->c5;
     int err = (int)msg->a0;
 
     next_msg();
@@ -102,7 +101,6 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
     NET_SOCK sock = in;
 
     if(!in) {
-        flags |= SOCKF_WR_INLINE;
         size_t size = sizeof(struct net_sock);
 
         char* drb = NULL;
@@ -117,12 +115,12 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
         sock = (NET_SOCK)malloc(size);
 
         if(drb_inline) drb = ((char*)sock) + sizeof(struct net_sock);
-        uni_dir_socket_requester* write_req = &sock->write_req.r;
+        requester_t write_req = socket_malloc_requester_32(SOCK_TYPE_PUSH, drb ? &sock->sock.write_copy_buffer : NULL);
+        fulfiller_t ful = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
 
-        socket_internal_fulfiller_init(&sock->sock.read.push_reader, SOCK_TYPE_PUSH);
-        socket_internal_requester_init(&sock->write_req.r, 32, SOCK_TYPE_PUSH, drb ? &sock->sock.write_copy_buffer : NULL);
         socket_init(&sock->sock, flags, drb, drb_size, CONNECT_PUSH_READ | CONNECT_PUSH_WRITE);
         sock->sock.write.push_writer = write_req;
+        sock->sock.read.push_reader = ful;
     }
 
 
@@ -134,12 +132,12 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
 
     act_kt net = net_try_get_ref();
 
-    message_send(0,0,0,0, session_token, socket_internal_make_read_only(sock->sock.write.push_writer), NULL, NULL, net, SEND, 2);
+    message_send(0,0,0,0, session_token, socket_make_ref_for_fulfill(sock->sock.write.push_writer), NULL, NULL, net, SEND, 2);
 
     assert(requester != NULL);
 
-    socket_internal_requester_connect(&sock->write_req.r);
-    socket_internal_fulfiller_connect(&sock->sock.read.push_reader, requester);
+    socket_requester_connect(sock->sock.write.push_writer);
+    socket_fulfiller_connect(sock->sock.read.push_reader, requester);
 
     return sock;
 }
@@ -204,12 +202,11 @@ ERROR_T(unix_net_sock_ptr) socket_or_er(int domain, int type, int protocol) {
     // Allocate
     unix_net_sock* uns = (unix_net_sock*)malloc(sizeof(unix_net_sock));
 
-    // Init fulfill and socket. Others come in connect
-    ssize_t ret = socket_internal_fulfiller_init(&uns->sock.read.push_reader, SOCK_TYPE_PUSH);
+    fulfiller_t fulfiller = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
 
-    if(ret < 0) return MAKE_ER(unix_net_sock_ptr,ret);
+    uns->sock.read.push_reader = fulfiller;
 
-    ret = socket_init(&uns->sock, MSG_NONE, NULL, 0, CONNECT_PUSH_READ);
+    ssize_t  ret = socket_init(&uns->sock, MSG_NONE, NULL, 0, CONNECT_PUSH_READ);
 
     if(ret < 0) return MAKE_ER(unix_net_sock_ptr,ret);
 
@@ -343,12 +340,12 @@ int connect(unix_net_sock* socket, const struct sockaddr *address,
 
     // init the requester and drb
 
-    uni_dir_socket_requester* requester = &nsr->write_req;
+    requester_t requester = socket_malloc_requester_32(SOCK_TYPE_PUSH, &socket->sock.write_copy_buffer);
     char* buf = nsr->drb_buf;
 
     init_data_buffer(&socket->sock.write_copy_buffer, buf, NET_SOCK_DRB_SIZE);
-    socket_internal_requester_init(requester,32,SOCK_TYPE_PUSH,&socket->sock.write_copy_buffer);
-    socket->sock.write.push_writer = nsr;
+
+    socket->sock.write.push_writer = requester;
     socket->sock.con_type |= CONNECT_PUSH_WRITE;
     // now make the netsock
     NET_SOCK ns = netsock_accept_in(flags, (NET_SOCK)socket);
@@ -399,10 +396,10 @@ ssize_t shutdown(NET_SOCK sockfd, int how) {
                 new_state = ASYNC_NEED_REQ_CLOSE;
             case ASYNC_NEED_REQ_CLOSE:
                 if (sockfd->sock.con_type & CONNECT_PUSH_WRITE) {
-                    res = socket_internal_requester_space_wait(sockfd->sock.write.push_writer, 1, dont_wait, 0);
+                    res = socket_requester_space_wait(sockfd->sock.write.push_writer, 1, dont_wait, 0);
                     if (res == E_SOCKET_CLOSED) res = 0;
                     if (res < 0) break;
-                    socket_internal_request_oob(sockfd->sock.write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
+                    socket_request_oob(sockfd->sock.write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
                 }
 
                 new_state = ASYNC_NEED_REQS_WRITE;

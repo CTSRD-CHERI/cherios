@@ -164,6 +164,7 @@
 
 #define cds                 $c14
 #define ctmp                $c15
+#define ctmp2               $c16
 
 .text
 
@@ -250,16 +251,20 @@ STUB_END plt_common_single_domain
 
 STUB_BEGIN plt_common_complete_trusting
 
-cincoffset      csp, csp, -CAP_SIZE
+cincoffset      csp, csp, -(2*CAP_SIZE)
+clcbi           ctmp, CTLP_OFFSET_CSP(ctlp)
 csc             cra, $zero, (0)(csp)
 csc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 csc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
+cscbi           ctmp, (CAP_SIZE)(csp)
 ccall_l         $c1, $c2, 2, cra
 clc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 clc             cra, $zero, (0)(csp)
+clcbi           ctmp, (CAP_SIZE)(csp)
 clc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
-cincoffset      csp, csp, CAP_SIZE
+cscbi           ctmp, CTLP_OFFSET_CSP(ctlp)
+cincoffset      csp, csp, (CAP_SIZE*2)
 ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_complete_trusting
@@ -271,10 +276,12 @@ STUB_END plt_common_complete_trusting
 
 STUB_BEGIN plt_common_trusting
 
-cincoffset      csp, csp, -CAP_SIZE
+cincoffset      csp, csp, -(2*CAP_SIZE)
+clcbi           ctmp, CTLP_OFFSET_CSP(ctlp)
 csc             cra, $zero, (0)(csp)
 csc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 csc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
+cscbi           ctmp, (CAP_SIZE)(csp)
 sync
 DOMAIN_CHANGE ctlp, callable_taken, callable_ready, 1
 ccall_l         $c1, $c2, 2, cra
@@ -283,9 +290,11 @@ ccall_l         $c1, $c2, 2, cra
 DOMAIN_CAS ctlp, callable_ready, callable_taken, -1
 clc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 clc             cra, $zero, (0)(csp)
+clcbi           ctmp, (CAP_SIZE)(csp)
 clc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
-cincoffset      csp, csp, CAP_SIZE
+cscbi           ctmp, CTLP_OFFSET_CSP(ctlp)
+cincoffset      csp, csp, (CAP_SIZE*2)
 ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_trusting
@@ -298,7 +307,7 @@ STUB_END plt_common_trusting
 # We give one here that will pass all argument regs (including c13)
 
 # We have 8 cap regs to save (not including stacks). We normally need 2 caps for forward/back, but we are scavenging the one normally used for forward
-#define CLO_SAFE_SIZE       ((STACK_LINK_SIZE - CAP_SIZE) + (8 * CAP_SIZE) + (8 * REG_SIZE))
+#define CLO_SAFE_SIZE       ((STACK_LINK_SIZE - CAP_SIZE) + (9 * CAP_SIZE) + (8 * REG_SIZE))
 #define CLO_UNSAFE_SIZE     (CAP_SIZE * 2)
 #define CLO_SIZE            (CLO_SAFE_SIZE + CLO_UNSAFE_SIZE)
 
@@ -314,6 +323,7 @@ csc             csp,    $zero,  (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack
 clc             cusp,   $zero,  CSP_OFF_NEXT(cusp)
 
+clcbi           ctmp,  CTLP_OFFSET_CSP(ctlp)
 csc             csp,    $zero,  CTLP_OFFSET_CSP(ctlp)
 csc             cusp,   $zero,  CTLP_OFFSET_CUSP(ctlp)                # store our stacks for future in calls
 
@@ -339,6 +349,7 @@ SAVE_C  $c21
 SAVE_C  $c22
 SAVE_C  $c23
 SAVE_C  $c24
+SAVE_C  ctmp
 SAVE_R  $s0
 SAVE_R  $s1
 SAVE_R  $s2
@@ -347,6 +358,8 @@ SAVE_R  $s4
 SAVE_R  $s5
 SAVE_R  $s6
 SAVE_R  $s7
+
+cmove           $c12, $c1                                                       # required for ABI
 
 cgetpcc         cra
 cincoffset      cra, cra, (4 * 16)
@@ -366,7 +379,7 @@ daddiu          $at, $at, ((callable_ready - callable_taken) + (1 * 256))
 csd             $at, $zero, 0(ctlp)                                                  # set type of ctlp. Adverary can enter now
 
 cclearhi        0b0000011111111001                                                  # this passes c17/c18
-cclearlo        0b1111110000000001                                                  # this passes c1/c2 and arg regs
+cclearlo        0b1110110000000001                                                  # this passes c1/c2 and arg regs
 ccall_slotless  $c1, $c2, 2
 
 # Here is the return code. First check the guard
@@ -419,6 +432,7 @@ REST_C  $c21
 REST_C  $c22
 REST_C  $c23
 REST_C  $c24
+REST_C  ctmp2
 REST_R  $s0
 REST_R  $s1
 REST_R  $s2
@@ -431,7 +445,9 @@ REST_R  $s7
 # We just need to correct the up link on cusp
 
 clc             ctmp,   $zero,  CTLP_OFFSET_CUSP(ctlp)
-# -MIGHT- need to store csp and cusp if someone got the address of this from another function. unsure.
+# We modified the csp and cusp values in our ctlp and so have to restore them (although cusp may be different now)
+cscbi           ctmp2, CTLP_OFFSET_CSP(ctlp) # csp should be set to what it was
+cscbi           cusp, CTLP_OFFSET_CUSP(ctlp) # set to current value of cusp. More up to date values are saved in every frame
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
 csc             ctmp,   $zero,  CSP_OFF_NEXT(cusp)
 
