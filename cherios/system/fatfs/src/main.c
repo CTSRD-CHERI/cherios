@@ -148,10 +148,10 @@ void handle(enum poll_events events, struct sessions_t* session) {
             // This will handle all oob requests before any data
             session->current = 1;
             res = socket_fulfill_progress_bytes_unauthorised(read_fulfill, SOCK_INF,
-                                                                 F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                                 OTHER_DOMAIN_FP(ful_func_cancel_non_oob),
+                                                                 F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB,
+                                                                 NULL,
                                                                  (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
-                                                                 NULL, LIB_SOCKET_DATA, TRUSTED_DATA);
+                                                                 NULL, NULL, TRUSTED_DATA);
             if(res == E_SOCKET_CLOSED) break;
             assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->write_fptr) {
@@ -173,10 +173,10 @@ void handle(enum poll_events events, struct sessions_t* session) {
             // This will handle all oob requests before any data
             session->current = 0;
             res = socket_fulfill_progress_bytes_unauthorised(write_fulfill, SOCK_INF,
-                                                         F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                         OTHER_DOMAIN_FP(ful_func_cancel_non_oob),
+                                                         F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB,
+                                                         NULL,
                                                          (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
-                                                         NULL,LIB_SOCKET_DATA, TRUSTED_DATA);
+                                                         NULL,NULL, TRUSTED_DATA);
             if(res == E_SOCKET_CLOSED) break;
             assert(res >= 0 || (res == E_AGAIN));
             if(session->fil.fptr != session->read_fptr) {

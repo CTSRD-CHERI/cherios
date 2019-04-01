@@ -713,6 +713,8 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                                                          data_arg, oob_data_arg, for_auth);
         } else if(req->type == REQUEST_JOIN) {
 
+            if(flags & F_CANCEL_NON_OOB) break;
+
             push_to = req->request.push_to;
             ssize_t sub_ret;
 
@@ -805,17 +807,22 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
             if(ret == 0) ret = sub_ret;
 
         } else {
-            if(visit) {
-                if (req->type == REQUEST_IM || req->type == REQUEST_IND) {
+            if (req->type == REQUEST_IM || req->type == REQUEST_IND) {
+                if(flags & F_CANCEL_NON_OOB) break;
+                if(visit) {
                     char *buf = (req->type == REQUEST_IM) ? req->request.im + partial_bytes : req->request.ind + partial_bytes;
                     ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, buf, offset, bytes_to_process);
                 }
             }
             if (req->type >= REQUEST_OUT_BAND) {
-                if(oob_visit) {
+                if(flags & F_SKIP_OOB) {
+                    if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob skip\n");
+                    ret = bytes_to_process;
+                } else if(oob_visit) {
                     if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob visit\n");
                     // FIXME pass the request by value!
-                    ret = INVOKE_FUNCTION_POINTER(oob_visit, oob_data_arg, arg, req, offset, partial_bytes, bytes_to_process);
+                    ret = INVOKE_FUNCTION_POINTER(oob_visit, oob_data_arg, arg, req, offset, partial_bytes,
+                                                  bytes_to_process);
                 } else {
                     if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob visit no func\n");
                     ret = E_OOB;
@@ -1221,14 +1228,6 @@ int in_proxy(fulfiller_t f) {
 }
 
 // Some useful fulfillment functions
-
-ssize_t ful_oob_func_skip_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
-    return length;
-}
-
-ssize_t ful_func_cancel_non_oob(capability arg, char* buf, uint64_t offset, uint64_t length) {
-    return 0;
-}
 
 ssize_t TRUSTED_CROSS_DOMAIN(copy_in)(capability user_buf, char* req_buf, uint64_t offset, uint64_t length);
 ssize_t copy_in(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {

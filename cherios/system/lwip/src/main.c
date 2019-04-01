@@ -231,9 +231,9 @@ err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
 
     // Progress len bytes
     ssize_t res = socket_fulfill_progress_bytes_unauthorised(tcp->tcp_input_pushee, len,
-                                            F_PROGRESS | F_DONT_WAIT,
-                                           NULL, NULL, 0, OTHER_DOMAIN_FP(ful_oob_func_skip_oob), NULL,
-                                           NULL, LIB_SOCKET_DATA);
+                                            F_PROGRESS | F_DONT_WAIT | F_SKIP_OOB,
+                                           NULL, NULL, 0, NULL, NULL,
+                                           NULL, NULL);
     assert_int_ex(res, ==, len);
 
     if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {

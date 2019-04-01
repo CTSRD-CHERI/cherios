@@ -244,9 +244,9 @@ static void translate_sock(struct session_sock* ss) {
     if(bytes == 0) {
         // Just an oob
         ssize_t ret = socket_fulfill_progress_bytes_unauthorised(ss->ff, SOCK_INF,
-                                                             F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                             OTHER_DOMAIN_FP(ful_func_cancel_non_oob), (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
-                                                                 LIB_SOCKET_DATA, TRUSTED_DATA);
+                                                             F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB,
+                                                             NULL, (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
+                                                                 NULL, TRUSTED_DATA);
         return;
     }
 
@@ -433,9 +433,9 @@ static void vblk_rw_ret(session_t* session) {
             for(size_t i = 0; i < n_socks; i++) {
                 if(socks[i].req_head == used_desc_id) {
                     // This sockets request has finished
-                    ssize_t ret = socket_fulfill_progress_bytes_unauthorised(socks[i].ff, SECTOR_SIZE, F_PROGRESS | F_DONT_WAIT,
-                                                                         NULL, NULL, 0, OTHER_DOMAIN_FP(ful_oob_func_skip_oob), NULL,
-                                                                         NULL, LIB_SOCKET_DATA);
+                    ssize_t ret = socket_fulfill_progress_bytes_unauthorised(socks[i].ff, SECTOR_SIZE, F_PROGRESS | F_DONT_WAIT | F_SKIP_OOB,
+                                                                         NULL, NULL, 0, NULL, NULL,
+                                                                         NULL, NULL);
                     assert_int_ex(-ret, ==, -SECTOR_SIZE);
                     assert_int_ex(socks[i].in.status, ==, VIRTIO_BLK_S_OK);
                     virtio_q_free(&socks[i].session->queue, &session->free_head, socks[i].req_head, socks[i].req_tail);

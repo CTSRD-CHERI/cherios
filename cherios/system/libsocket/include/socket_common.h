@@ -106,8 +106,6 @@
     ITEM(socket_requester_set_drb_ptr, int, (requester_t r, uint64_t* drb_ptr), __VA_ARGS__)\
     ITEM(in_proxy, int, (fulfiller_t f), __VA_ARGS__)\
 /*Some Usefull fulfillment functions. These are in the libraries domain so use its */\
-    ITEM(ful_oob_func_skip_oob, ssize_t, (capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length), __VA_ARGS__)\
-    ITEM(ful_func_cancel_non_oob, ssize_t, (capability arg, char* buf, uint64_t offset, uint64_t length), __VA_ARGS__)\
     ITEM(copy_in, ssize_t, (capability user_buf, char* req_buf, uint64_t offset, uint64_t length), __VA_ARGS__)\
     ITEM(copy_out, ssize_t, (capability user_buf, char* req_buf, uint64_t offset, uint64_t length) , __VA_ARGS__)\
     ITEM(copy_out_no_caps, ssize_t, (capability user_buf, char* req_buf, uint64_t offset, uint64_t length), __VA_ARGS__)\
@@ -181,7 +179,8 @@ enum FULFILL_FLAGS {
     F_START_FROM_LAST_MARK  = 0x10,
     F_SET_MARK              = 0x20,
     F_TRACE                 = 0x40, // Same as MSG_TRACE
-    F_APPLY_AUTH            = 0x80, // All capabilities passed to fulfill will be
+    F_CANCEL_NON_OOB        = 0x80,
+    F_SKIP_OOB              = 0x100,
 };
 
 #define SOCK_TYPE_PUSH 0

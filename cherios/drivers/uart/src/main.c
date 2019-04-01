@@ -102,9 +102,9 @@ ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
 
 static int handle_f(f_list_item* item, enum poll_events event, int is_er) {
 	if(event & POLL_OUT) {
-		socket_fulfill_progress_bytes_unauthorised(item->f, SOCK_INF, F_DONT_WAIT | F_CHECK | F_PROGRESS,
-											   &TRUSTED_CROSS_DOMAIN(ff), NULL, 0, OTHER_DOMAIN_FP(ful_oob_func_skip_oob), NULL,
-											   TRUSTED_DATA, LIB_SOCKET_DATA);
+		socket_fulfill_progress_bytes_unauthorised(item->f, SOCK_INF, F_DONT_WAIT | F_CHECK | F_PROGRESS | F_SKIP_OOB,
+											   &TRUSTED_CROSS_DOMAIN(ff), NULL, 0, NULL, NULL,
+											   TRUSTED_DATA, NULL);
 	} else if(event & POLL_HUP) {
 		socket_close_fulfiller(item->f, 0, 0);
 		f_list* list = is_er ? &f_list_err : &f_list_out;
