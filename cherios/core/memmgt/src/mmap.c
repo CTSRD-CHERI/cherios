@@ -303,7 +303,7 @@ static vpage_range_desc_t* hard_index(size_t page_n) {
 }
 
 static size_t find_free_claim_index(vpage_range_desc_t* desc, mop_internal_t* mop) {
-    assert(desc->allocation_type == allocation_node);
+    assert_int_ex(desc->allocation_type, ==, allocation_node);
     size_t free_index = (size_t)-1;
     size_t claim_index = (size_t)-1;
     FOREACH_CLAIMER(desc, index, claim) {
@@ -1264,8 +1264,15 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
     }
 
     /* Then release all claims */
+    restart_loop:{}
+
     FOREACH_CLAIMED_RANGE(mop, desc, lnk) {
+        // A visit_free might invalidate a chain if the next node is pulled up. Rather than track whether this happens
+        // we instead just notice the node is apparently free. Short of another error, this probably means it was pulled up.
+        // Restarting will work just fine as a pull up will fix the head ptr
+        if(desc->allocation_type == free_node) goto restart_loop;
         assert(mop == claim->owner);
+        assert_int_ex(desc->allocation_type, ==, allocation_node);
         claim->n_claims = 1;
         visit_free(desc, desc->start, mop, desc->length, 1);
     }
