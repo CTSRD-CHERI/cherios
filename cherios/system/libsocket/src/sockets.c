@@ -656,6 +656,13 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
         required +=
                 (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & mask;
 
+
+    int can_fulfill = !requester->data_for_foundation || (requester->data_for_foundation == for_auth);
+
+    sealing_cap fulfill_sealer = requester->data_seal;
+#define COND_SEAL(X, Y) (Y ? cheri_seal(X,Y) : X)
+#define CS(X) COND_SEAL(X, fulfill_sealer)
+
     if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill begin %x \n", fptr);
     while(bytes_remain != 0) {
 
@@ -695,6 +702,11 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
         // Bytes to progress can be 0, this might very well be the case for an oob request
         ret = bytes_to_process;
 
+
+        if(!can_fulfill) {
+            if(req->type != REQUEST_PROXY) return E_AUTH_TOKEN_ERROR;
+        }
+
         // Try process this many bytes
         if(req->type & REQUEST_BARRIER) {
             assert(0 && "TODO");
@@ -722,7 +734,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 ret = 0;
                 if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with sub visit\n");
                 // User can sub their own buffers. Keep getting them and pushing as requests
-                char* user_buf;
+                char* user_buf; // FIXME: This is the unsafe thing. It would be preferable to return this.
 
                 while(ret != bytes_to_process) {
 
@@ -775,7 +787,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
                         size_t visit_gave = 0;
 
-                        sub_ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, cap1, offset + ret, size1);
+                        sub_ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, CS(cap1), offset + ret, size1);
 
                         if(sub_ret > 0) {
                             socket_internal_request_ind(push_to, cap1, (size_t)sub_ret, (size_t)sub_ret+align_off);
@@ -783,7 +795,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                         }
 
                         if(sub_ret == size1 && cap2) {
-                            sub_ret = visit(arg, cap2, offset + size1 + ret, size2);
+                            sub_ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, CS(cap2), offset + size1 + ret, size2);
 
                             if(sub_ret > 0) {
                                 socket_internal_request_ind(push_to, cap2, (size_t)sub_ret, sub_ret);
@@ -811,7 +823,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 if(flags & F_CANCEL_NON_OOB) break;
                 if(visit) {
                     char *buf = (req->type == REQUEST_IM) ? req->request.im + partial_bytes : req->request.ind + partial_bytes;
-                    ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, buf, offset, bytes_to_process);
+                    ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, CS(buf), offset, bytes_to_process);
                 }
             }
             if (req->type >= REQUEST_OUT_BAND) {
@@ -821,6 +833,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 } else if(oob_visit) {
                     if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill Oob visit\n");
                     // FIXME pass the request by value!
+                    // FIXME and seal the ptry bit when we do
                     ret = INVOKE_FUNCTION_POINTER(oob_visit, oob_data_arg, arg, req, offset, partial_bytes,
                                                   bytes_to_process);
                 } else {
@@ -1278,4 +1291,18 @@ ssize_t socket_fulfill_progress_bytes_soft_join(fulfiller_t push_read, fulfiller
 uint8_t socket_requester_is_fulfill_closed(requester_t r) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     return requester->fulfiller_component.fulfiller_closed;
+}
+
+int socket_requester_restrict_auth(requester_t r, found_id_t* id) {
+    uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
+    if(!requester) return E_BAD_SEAL;
+    requester->data_for_foundation = id;
+    return 0;
+}
+
+int socket_requester_restrict_seal(requester_t r, sealing_cap sc) {
+    uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
+    if(!requester) return E_BAD_SEAL;
+    requester->data_seal = sc;
+    return 0;
 }
