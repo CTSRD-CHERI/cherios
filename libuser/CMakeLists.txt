@@ -50,6 +50,7 @@ set(LIBUSER_SRCS
     src/ssleep.c
     src/errno.c
     src/net.c
+    src/dylink.c
     src/virtioblk.c
     ${LWIP_DIR}/src/core/ipv4/ip4_addr.c
     src/act_events.c

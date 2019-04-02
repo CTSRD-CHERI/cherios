@@ -40,7 +40,7 @@
 
 #define SOCKET_LIB_IF_LIST(ITEM, ...)\
 /* Call after object init in your own library */\
-    ITEM(init_external_thread, int, (act_control_kt self_ctrl, mop_t mop, queue_t* queue, startup_flags_e start_flags), __VA_ARGS__)\
+    INIT_OTHER_OBJECT_IF_ITEM(ITEM, lib_socket_if_t, __VA_ARGS__)\
 /**/\
     ITEM(socket_new_requester, ERROR_T(requester_t),  (res_t res, uint16_t buffer_size, uint8_t socket_type, data_ring_buffer* paired_drb),__VA_ARGS__)\
 /**/\

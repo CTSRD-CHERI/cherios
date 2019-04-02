@@ -111,13 +111,16 @@ typedef void common_t(void);
     void init_ ## type ##_change_mode(capability trust_mode);                       \
     void init_ ## type ##_new_thread(capability data);
 
+    #define PLT_INIT_MAIN_THREAD(type)  init_ ## type
+    #define PLT_INIT_NEW_THREAD(type) init_ ## type ##_new_thread
+
     #define DEFINE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
-    void init_ ## type (type* plt_if, capability data, capability trust_mode) {      \
+    void PLT_INIT_MAIN_THREAD(type)  (type* plt_if, capability data, capability trust_mode) {      \
         __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
         __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
         LIST(INIT_OBJ)                                                                \
     }\
-    void init_ ## type ##_new_thread(capability data) {      \
+    void PLT_INIT_NEW_THREAD(type) (capability data) {      \
             __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
     }\
     void init_ ## type ##_change_mode(capability trust_mode) {\
@@ -174,6 +177,13 @@ typedef void common_t(void);
 
     #define OTHER_DOMAIN_FP(X) (&(X ## _dummy))
     #define OTHER_DOMAIN_DATA(X) (typeof(PLT_UNIQUE_OBJECT(X)))(&(PLT_UNIQUE_OBJECT(X))) // The data is inlined into the table
+
+
+    typedef void init_if_func_t(capability plt_if, capability data, capability trust_mode);
+    typedef void init_if_new_thread_func_t(capability data);
+
+    #define INIT_OTHER_OBJECT(t) __CONCAT(init_other_object_ , t)
+    #define INIT_OTHER_OBJECT_IF_ITEM(ITEM, t, ...) ITEM(init_other_object_ ## t, int, (act_control_kt self_ctrl, mop_t mop, queue_t* queue, startup_flags_e start_flags), __VA_ARGS__)
 
 #else // __ASSEMBLY__
 

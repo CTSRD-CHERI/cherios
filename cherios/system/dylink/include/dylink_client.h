@@ -27,26 +27,24 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_SOCKETS_H
-#define CHERIOS_SOCKETS_H
+#ifndef CHERIOS_DYLINK_CLIENT_H
+#define CHERIOS_DYLINK_CLIENT_H
 
-#include "socket_common.h"
+#include "mman.h"
+#include "thread.h"
 
-// A sealed type to be passed outside this library
-enum {
-    invalid_guard_type = 0,
-    requester_guard_type = 1,
-    fulfiller_guard_type = 2,
-} lib_socket_types;
+#define DYLINK_IPC_NO_GET_IF            1
+#define DYLINK_IPC_NO_GET_TABLE_SIZE    0
+#define DYLINK_IPC_NO_GET               2
 
-#define UNSEAL_CHECK_REQUESTER(R)     ({ \
-    uni_dir_socket_requester* _requester_tmp = cheri_unseal(R, get_cds()); \
-    (_requester_tmp->fulfiller_component.guard.guard == MAKE_USER_GUARD_TYPE(requester_guard_type)) ? _requester_tmp : NULL; \
-    })
+typedef void init_other_object_func_t(act_control_kt self_ctrl, mop_t* mop, queue_t * queue, startup_flags_e startup_flags);
 
-#define UNSEAL_CHECK_FULFILLER(F)     ({ \
-    uni_dir_socket_requester* _requester_tmp = cheri_unseal(F, get_cds()); \
-    (_requester_tmp->fulfiller_component.guard.guard == MAKE_USER_GUARD_TYPE(fulfiller_guard_type)) ? _requester_tmp : NULL;\
-    })
+void dylink(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_flags, int first_thread,
+            act_kt dylink_server, init_if_func_t* init_if_func, init_if_new_thread_func_t* init_if_new_thread_func,
+            init_other_object_func_t * init_other_object);
 
-#endif //CHERIOS_SOCKETS_H
+#define DYLINK_LIB(lib, self_ctrl, queue, flags, first_thread, server) \
+    dylink(self_ctrl, queue, flags, first_thread, server,  PLT_INIT_MAIN_THREAD(lib), PLT_INIT_NEW_THREAD(lib), INIT_OTHER_OBJECT(lib))
+
+
+#endif //CHERIOS_DYLINK_CLIENT_H

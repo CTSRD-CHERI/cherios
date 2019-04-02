@@ -27,26 +27,9 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_SOCKETS_H
-#define CHERIOS_SOCKETS_H
+#ifndef CHERIOS_DYLINK_SERVER_H
+#define CHERIOS_DYLINK_SERVER_H
 
-#include "socket_common.h"
+int server_start(void);
 
-// A sealed type to be passed outside this library
-enum {
-    invalid_guard_type = 0,
-    requester_guard_type = 1,
-    fulfiller_guard_type = 2,
-} lib_socket_types;
-
-#define UNSEAL_CHECK_REQUESTER(R)     ({ \
-    uni_dir_socket_requester* _requester_tmp = cheri_unseal(R, get_cds()); \
-    (_requester_tmp->fulfiller_component.guard.guard == MAKE_USER_GUARD_TYPE(requester_guard_type)) ? _requester_tmp : NULL; \
-    })
-
-#define UNSEAL_CHECK_FULFILLER(F)     ({ \
-    uni_dir_socket_requester* _requester_tmp = cheri_unseal(F, get_cds()); \
-    (_requester_tmp->fulfiller_component.guard.guard == MAKE_USER_GUARD_TYPE(fulfiller_guard_type)) ? _requester_tmp : NULL;\
-    })
-
-#endif //CHERIOS_SOCKETS_H
+#endif CHERIOS_DYLINK_SERVER_H

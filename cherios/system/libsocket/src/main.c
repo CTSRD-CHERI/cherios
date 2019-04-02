@@ -28,148 +28,24 @@
  * SUCH DAMAGE.
  */
 
-#include <sys/mman.h>
-#include <nano/nanokernel.h>
-#include <crt.h>
+#include "dylink_server.h"
 #include "cheric.h"
 #include "namespace.h"
 #include "object.h"
-#include "assert.h"
-#include "dylink.h"
-#include "libsockets.h"
-#include "cheriplt.h"
-#include "nano/usernano.h"
-#include "crt.h"
-#include "misc.h"
+#include "socket_common.h"
 
-#define DECLARE_CROSS_DOMAIN_SYMBOL(name, ret, sig, ...) extern ret CROSS_DOMAIN(name) sig;
-SOCKET_LIB_IF_LIST(DECLARE_CROSS_DOMAIN_SYMBOL);
+#define LIB_IF_LIST SOCKET_LIB_IF_LIST
+#define LIB_IF_T lib_socket_if_t
 
-cert_t if_cert;
-
-// We still don't have dynamic linking, so this is yet another hacked up dynamic library
-// This is how it should look in the general case (the kernel and nano kernel are somewhat special)
-// Users call a method for how much space is needed, get a certified procedure table and sealed idc
-// They install these, and then call init_external_thread which will do object init
-// These are methods of the link server and called via message pass
-
-// Because we don't have a dynamic linker, we will just duplicate all the locals symbols rather than have them be unique
-// This is fine for the purposes of this library.
-// In the general case symbols would have to be exchanged both ways (in a signed / locked block)
-
-size_t get_size_for_new_socket(void) {
-    return crt_tls_seg_size;
-}
-
-cert_t get_if_cert(void) {
-    return if_cert;
-}
-
-// Should copy data segment. Ive just moved some globals this library uses into locals.
-
-single_use_cert create_new_external_thread(res_t locals_res, res_t stack_res, res_t ustack_res, res_t sign_res) {
-    cap_pair pair;
-
-    rescap_take(locals_res, &pair);
-
-    if(pair.data == NULL || cheri_getlen(pair.data) < get_size_for_new_socket()) return NULL;
-
-    capability tls_seg = pair.data;
-
-    rescap_take(stack_res, &pair);
-    capability stack = pair.data;
-    stack = cheri_setoffset(stack, cheri_getlen(stack));
-
-    rescap_take(ustack_res, &pair);
-    capability ustack = pair.data;
-    ustack = cheri_setoffset(ustack, cheri_getlen(ustack));
-
-    // Create a new segment table and insert our new tls segment
-
-    capability seg_table[MAX_SEGS];
-
-    memcpy(seg_table, crt_segment_table, sizeof(seg_table));
-    seg_table[crt_tls_seg_off/sizeof(capability)] = tls_seg;
-
-    memcpy(tls_seg, crt_tls_proto, crt_tls_proto_size);
-
-    crt_init_new_locals(seg_table, RELOCS_START, RELOCS_END);
-
-    CTL_t* locals = (CTL_t*)((char*)tls_seg + crt_cap_tab_local_addr);
-
-    locals->cds = get_ctl()->cds;
-    locals->cgp = get_ctl()->cgp;
-    locals->cdl = &entry_stub;
-    locals->csp = stack;
-    locals->cusp = ustack;
-    locals->guard.guard = callable_ready;
-
-    capability sealed_locals =  cheri_seal(locals, locals->cds);
-
-    // Now sign
-    single_use_cert cert = rescap_take_authed(sign_res, NULL, 0, AUTH_SINGLE_USE_CERT, own_auth, NULL, sealed_locals).scert;
-
-    return cert;
-}
-
-// This is called via ccall to finish link
-int init_external_thread(act_control_kt self_ctrl, mop_t mop, queue_t* queue, startup_flags_e start_flags) {
-    mmap_set_mop(mop);
-    object_init(self_ctrl, queue, NULL, NULL, start_flags, 0);
-    return 0;
-}
-
-void (*msg_methods[]) = {get_size_for_new_socket, get_if_cert, create_new_external_thread};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
+#include "manual_dylink_server.c"
 
 int main(register_t arg, capability carg) {
+    int ret = server_start();
 
-    // This library must be secure loaded
-    assert(was_secure_loaded);
+    if(!ret) {
+        // Register for callback
+        namespace_register(namespace_num_lib_socket, act_self_ref);
+    }
 
-    // Get a type for this domain (all secure loaded things are given a domain sealer automatically)
-    sealing_cap sc = get_ctl()->cds;
-
-    // Make (and sign) an interface
-
-    size_t size_needed = RES_CERT_META_SIZE + sizeof(lib_socket_if_t);
-
-    res_t if_res = mem_request(0, size_needed, NONE, own_mop).val;
-
-    rescap_split(if_res, size_needed);
-
-    cap_pair pair;
-
-    if_cert = rescap_take_authed(if_res, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, AUTH_CERT, own_auth, NULL, NULL).cert;
-
-    assert(if_cert != NULL);
-
-    lib_socket_if_t* interface = (lib_socket_if_t*)pair.data;
-
-#define ASSIGN_TO_IF(name, ret, sig, table, ...) table -> name = cheri_seal(&CROSS_DOMAIN(name), sc);
-    SOCKET_LIB_IF_LIST(ASSIGN_TO_IF, interface)
-
-    // Register for callback
-
-    namespace_register(namespace_num_lib_socket, act_self_ref);
-
-    // Go into daemon mode
-    msg_enable = 1;
-
-    return 0;
+    return ret;
 }
-
-// LTO currently deletes most of the functions that are used externally. We probably need to fix the compiler to:
-    // declare the cross domain symbols eariler
-    // have uses of the external symbols imply use of the internal symbols
-
-
-// Currenty we just generate some asm that uses the base symbol to force inclusion
-
-#define USE(name, ret, sig, ...) "clcbi $c13, %capcall20(" #name ")($c25)\n"
-
-__asm (
-    SOCKET_LIB_IF_LIST(USE)
-);

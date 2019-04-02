@@ -48,7 +48,7 @@
 #include "temporal.h"
 #include "unistd.h"
 #include "sys/deduplicate.h"
-#include "cprogram.h"
+#include "dylink_client.h"
 
 capability int_cap;
 
@@ -95,57 +95,11 @@ static void setup_temporal_handle(startup_flags) {
 
 #if !(LIGHTWEIGHT_OBJECT)
 void dylink_sockets(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_flags, int first_thread) {
+
     act_kt dylink_server = namespace_get_ref(namespace_num_lib_socket);
-
-    assert(dylink_server != NULL);
-
-    cap_pair pair;
-    lib_socket_if_t* socket_if;
-    found_id_t* id;
-
-    if(first_thread) {
-        cert_t if_cert = message_send_c(0, 0, 0, 0, NULL, NULL, NULL, NULL, dylink_server, SYNC_CALL, 1);
-        id = rescap_check_cert(if_cert, &pair);
-        assert(id != NULL);
-        socket_if = (lib_socket_if_t*)pair.data;
-    }
-
-    size_t size = message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, dylink_server, SYNC_CALL, 0);
-
-    assert(size != 0);
-
-    // Allocate space / stacks for new thread in other library
-    res_t locals_res, stack_res, ustack_res, sign_res;
-    locals_res = cap_malloc(size);
-    stack_res = mem_request(0, DEFAULT_STACK_SIZE, 0, own_mop).val;
-    ustack_res = mem_request(0, Overrequest + MinStackSize, 0, own_mop).val;
-    sign_res = cap_malloc(RES_CERT_META_SIZE);
-
-    // Create a new thread in target library
-    single_use_cert thread_cert = message_send_c(0, 0, 0, 0, locals_res, stack_res, ustack_res, sign_res, dylink_server, SYNC_CALL, 2);
-
-    // TODO. If we would only accept a certain set of libraries, we would check the sig here
-    found_id_t* id2 = rescap_check_single_cert(thread_cert, &pair);
-
-    capability dataarg = pair.data;
-
-    if(first_thread) {
-        // Needs same interface
-        if(id != id2) {
-            CHERI_PRINT_CAP(id);
-            CHERI_PRINT_CAP(id2);
-            CHERI_PRINT_CAP(thread_cert);
-        }
-        assert(id == id2);
-        init_lib_socket_if_t(socket_if, dataarg, was_secure_loaded ? plt_common_untrusting: plt_common_complete_trusting);
-    } else {
-        init_lib_socket_if_t_new_thread(dataarg);
-    }
-
-    // Then call init in other library
-
-    init_external_thread(self_ctrl, own_mop, queue, startup_flags);
+    DYLINK_LIB(lib_socket_if_t, self_ctrl, queue, startup_flags, first_thread, dylink_server);
 }
+
 #endif
 
 void object_init(act_control_kt self_ctrl, queue_t * queue,

@@ -180,6 +180,7 @@ static int socket_internal_requester_space_wait(uni_dir_socket_requester* reques
                                                amount, delay_sleep);
 }
 
+__attribute__((used))
 int socket_requester_space_wait(requester_t requester, uint16_t need_space, int dont_wait, int delay_sleep) {
     uni_dir_socket_requester* r = UNSEAL_CHECK_REQUESTER(requester);
     if(!r) return E_BAD_SEAL;
@@ -212,6 +213,7 @@ static int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fu
                                                access->fulfill_ptr, amount, delay_sleep);
 }
 
+__attribute__((used))
 int socket_fulfiller_outstanding_wait(fulfiller_t fulfiller, uint16_t amount, int dont_wait, int delay_sleep) {
     uni_dir_socket_requester* f = UNSEAL_CHECK_REQUESTER(fulfiller);
     if(!f) return E_BAD_SEAL;
@@ -219,6 +221,7 @@ int socket_fulfiller_outstanding_wait(fulfiller_t fulfiller, uint16_t amount, in
 }
 
 // Wait for all requests to be marked as fulfilled
+__attribute__((used))
 ssize_t socket_requester_wait_all_finish(requester_t * r, int dont_wait) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -245,6 +248,7 @@ static ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fu
 // NOTE: Before making a request call space_wait for enough space
 
 // Request length (< cap_size) number of bytes. Bytes will be copied in from buf_in, and *buf_out will return the buffer
+__attribute__((used))
 ssize_t socket_request_im(requester_t r, uint8_t length, char** buf_out, char* buf_in, uint32_t drb_off) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -288,6 +292,7 @@ static ssize_t socket_internal_request_ind(uni_dir_socket_requester* requester, 
 }
 
 // Requests length bytes, bytes are put in / taken from buf
+__attribute__((used))
 ssize_t socket_request_ind(requester_t r, char* buf, uint64_t length, uint32_t drb_off) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -296,6 +301,7 @@ ssize_t socket_request_ind(requester_t r, char* buf, uint64_t length, uint32_t d
 }
 
 // Requests length bytes to be proxied as fulfillment to fulfiller
+__attribute__((used))
 ssize_t socket_request_proxy(requester_t r, fulfiller_t f, uint64_t length, uint32_t drb_off) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
@@ -329,6 +335,7 @@ ssize_t socket_request_proxy(requester_t r, fulfiller_t f, uint64_t length, uint
 
 // Requests length bytes be fulfilled by a puller, and then pushed into a push request
 // A drb is provided, but either party may substitute their own (TODO: Only the writer currently can do this)
+__attribute__((used))
 ssize_t socket_request_join(requester_t pull_req, requester_t push_req, data_ring_buffer* drb, uint64_t length, uint32_t drb_off) {
 
     uni_dir_socket_requester* pull = UNSEAL_CHECK_REQUESTER(pull_req);
@@ -362,6 +369,7 @@ ssize_t socket_request_join(requester_t pull_req, requester_t push_req, data_rin
 // It IS (somewhat) safe to use the same proxy queue for the same pull/push pair even if the first proxy_join has not finished
 // You could also use some barriers (if implemented) to queue up more uses of the same proxy without a wait
 
+__attribute__((used))
 ssize_t socket_request_proxy_join(requester_t pull, requester_t proxy_req,
                                            data_ring_buffer* drb, uint64_t length, uint32_t drb_off_pull,
                                            requester_t push, fulfiller_t proxy_full, uint32_t drb_off_push) {
@@ -378,6 +386,7 @@ ssize_t socket_request_proxy_join(requester_t pull, requester_t proxy_req,
     return socket_request_proxy(push, proxy_full, length, drb_off_push);
 }
 
+__attribute__((used))
 ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t align, uint64_t size, int dont_wait,
                                         char** c1, char**c2, size_t* part1_out, uni_dir_socket_requester* requester) {
 
@@ -456,6 +465,7 @@ ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t 
     return extra_to_align;
 }
 
+__attribute__((used))
 ssize_t socket_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t align, uint64_t size, int dont_wait,
                                char** c1, char**c2, size_t* part1_out, requester_t r){
     uni_dir_socket_requester* requester = NULL;
@@ -468,16 +478,19 @@ ssize_t socket_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t align, ui
     return socket_internal_drb_space_alloc(data_buffer, align,size, dont_wait, c1, c2, part1_out, requester);
 }
 
+__attribute__((used))
 uint8_t socket_requester_get_type(requester_t requester) {
     uni_dir_socket_requester* r = UNSEAL_CHECK_REQUESTER(requester);
     return r ? r->socket_type : SOCK_TYPE_ER;
 }
 
+__attribute__((used))
 uint8_t socket_fulfiller_get_type(fulfiller_t fulfiller) {
     uni_dir_socket_fulfiller* f = UNSEAL_CHECK_FULFILLER(fulfiller);
     return f ? f->socket_type : SOCK_TYPE_ER;
 }
 
+__attribute__((used))
 ssize_t socket_request_ind_db(requester_t r, const char* buf, uint32_t size,
                                        data_ring_buffer* data_buffer,
                                        int dont_wait, register_t perms) {
@@ -529,6 +542,7 @@ ssize_t socket_request_ind_db(requester_t r, const char* buf, uint32_t size,
     return size;
 }
 
+__attribute__((used))
 ssize_t socket_request_oob(requester_t r, request_type_e r_type, intptr_t oob_val, uint64_t length, uint32_t drb_off) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
 
@@ -566,6 +580,7 @@ static void socket_internal_dump_requests(uni_dir_socket_requester* requester) {
     }
 }
 
+__attribute__((used))
 void socket_dump_requests(requester_t requester) {
     uni_dir_socket_requester* r = UNSEAL_CHECK_REQUESTER(requester);
     if(!r) {
@@ -587,6 +602,7 @@ static void socket_internal_dump_fulfiller(uni_dir_socket_fulfiller* f) {
     socket_internal_dump_requests(f->requester);
 }
 
+__attribute__((used))
 void socket_dump_fulfiller(fulfiller_t fulfiller) {
     uni_dir_socket_fulfiller* f = UNSEAL_CHECK_FULFILLER(fulfiller);
 
@@ -892,6 +908,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
     return (actually_fulfill == 0) ? ret : actually_fulfill;
 }
 
+__attribute__((used))
 ssize_t socket_fulfill_progress_bytes_authorised(fulfiller_t fulfiller, size_t bytes,
                                                     enum FULFILL_FLAGS flags,
                                                     cert_t cert, capability arg, uint64_t offset) {
@@ -904,6 +921,7 @@ ssize_t socket_fulfill_progress_bytes_authorised(fulfiller_t fulfiller, size_t b
     return socket_internal_fulfill_progress_bytes_impl(f, bytes, flags, pack->ful, arg, offset, pack->ful_oob, pack->sub, pack->data_arg, pack->oob_data_arg, id);
 }
 
+__attribute__((used))
 ssize_t socket_fulfill_progress_bytes_unauthorised(fulfiller_t fulfiller, size_t bytes,
                                                     enum FULFILL_FLAGS flags,
                                                     ful_func* visit, capability arg, uint64_t offset,
@@ -914,6 +932,7 @@ ssize_t socket_fulfill_progress_bytes_unauthorised(fulfiller_t fulfiller, size_t
     return socket_internal_fulfill_progress_bytes_impl(f, bytes, flags, visit, arg, offset, oob_visit, sub_visit, data_arg, oob_data_arg, NULL);
 }
 
+__attribute__((used))
 int socket_fulfiller_reset_check(fulfiller_t f) {
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
     if(!fulfiller) return E_BAD_SEAL;
@@ -923,11 +942,13 @@ int socket_fulfiller_reset_check(fulfiller_t f) {
     return 0;
 }
 
+__attribute__((used))
 uint64_t socket_requester_bytes_requested(requester_t r) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     return requester->requested_bytes - requester->fulfiller_component.fulfilled_bytes;
 }
 
+__attribute__((used))
 uint64_t socket_fulfiller_bytes_requested(fulfiller_t f) {
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
     return (fulfiller->requester->requested_bytes - fulfiller->requester->fulfiller_component.fulfilled_bytes);
@@ -956,6 +977,7 @@ static int socket_internal_requester_init(uni_dir_socket_requester* requester, u
     return 0;
 }
 
+__attribute__((used))
 int socket_requester_set_drb_ptr(requester_t r, uint64_t* drb_ptr) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -965,6 +987,7 @@ int socket_requester_set_drb_ptr(requester_t r, uint64_t* drb_ptr) {
     return 0;
 }
 
+__attribute__((used))
 int socket_requester_set_drb(requester_t r, struct data_ring_buffer* drb) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -974,6 +997,7 @@ int socket_requester_set_drb(requester_t r, struct data_ring_buffer* drb) {
     return 0;
 }
 
+__attribute__((used))
 ERROR_T(requester_t) socket_new_requester(res_t res, uint16_t buffer_size, uint8_t socket_type, data_ring_buffer* paired_drb) {
     cap_pair pair;
 
@@ -991,6 +1015,7 @@ ERROR_T(requester_t) socket_new_requester(res_t res, uint16_t buffer_size, uint8
 
 }
 
+__attribute__((used))
 ERROR_T(fulfiller_t) socket_new_fulfiller(res_t res, uint8_t socket_type) {
     cap_pair pair;
 
@@ -1007,7 +1032,7 @@ ERROR_T(fulfiller_t) socket_new_fulfiller(res_t res, uint8_t socket_type) {
 }
 
 // FIXME: stuff to with making sure its not in use etc.
-
+__attribute__((used))
 int socket_reuse_requester(requester_t r, uint16_t buffer_size, uint8_t socket_type, data_ring_buffer* paired_drb) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -1020,7 +1045,7 @@ int socket_reuse_requester(requester_t r, uint16_t buffer_size, uint8_t socket_t
 
     return socket_internal_requester_init(requester, buffer_size, socket_type, paired_drb);
 }
-
+__attribute__((used))
 int socket_reuse_fulfiller(fulfiller_t f, uint8_t socket_type) {
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
     if(!fulfiller) return E_BAD_SEAL;
@@ -1039,12 +1064,14 @@ static uni_dir_socket_requester*  socket_internal_make_read_only(uni_dir_socket_
     return (uni_dir_socket_requester*)cheri_andperm(requester, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
 }
 
+__attribute__((used))
 requester_t socket_make_ref_for_fulfill(requester_t r) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     requester = socket_internal_make_read_only(requester);
     return (requester_t)cheri_seal(requester, get_cds());
 }
 
+__attribute__((used))
 int socket_fulfiller_connect(fulfiller_t f, requester_t r) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
@@ -1060,6 +1087,7 @@ int socket_fulfiller_connect(fulfiller_t f, requester_t r) {
     return 0;
 }
 
+__attribute__((used))
 int socket_requester_connect(requester_t r) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -1106,6 +1134,7 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
     return 0;
 }
 
+__attribute__((used))
 ssize_t socket_close_requester(requester_t r, int wait_finish, int dont_wait) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -1120,6 +1149,7 @@ ssize_t socket_close_requester(requester_t r, int wait_finish, int dont_wait) {
                                       &requester->fulfiller_component.fulfiller_waiting);
 }
 
+__attribute__((used))
 ssize_t socket_close_fulfiller(fulfiller_t f, int wait_finish, int dont_wait) {
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
     if(!fulfiller) return E_BAD_SEAL;
@@ -1199,6 +1229,7 @@ static enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* f
     return ret;
 }
 
+__attribute__((used))
 enum poll_events socket_fulfill_poll(fulfiller_t f, enum poll_events io, int set_waiting, int from_check, int in_proxy) {
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
     if(!fulfiller) return POLL_NVAL;
@@ -1206,6 +1237,7 @@ enum poll_events socket_fulfill_poll(fulfiller_t f, enum poll_events io, int set
     return socket_internal_fulfill_poll(fulfiller, io, set_waiting, from_check, in_proxy);
 }
 
+__attribute__((used))
 enum poll_events socket_request_poll(requester_t r, enum poll_events io, int set_waiting, uint16_t space) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
 
@@ -1234,6 +1266,7 @@ enum poll_events socket_request_poll(requester_t r, enum poll_events io, int set
     return ret;
 }
 
+__attribute__((used))
 int in_proxy(fulfiller_t f) {
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
     if(!fulfiller) return E_BAD_SEAL;
@@ -1243,16 +1276,19 @@ int in_proxy(fulfiller_t f) {
 // Some useful fulfillment functions
 
 ssize_t TRUSTED_CROSS_DOMAIN(copy_in)(capability user_buf, char* req_buf, uint64_t offset, uint64_t length);
+__attribute__((used))
 ssize_t copy_in(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
     memcpy(req_buf,(char*)user_buf+offset, length);
     return (ssize_t)length;
 }
 
+__attribute__((used))
 ssize_t copy_out(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
     memcpy((char*)user_buf+offset, req_buf, length);
     return (ssize_t)length;
 }
 
+__attribute__((used))
 ssize_t copy_out_no_caps(capability user_buf, char* req_buf, uint64_t offset, uint64_t length) {
     req_buf = (char*)cheri_andperm(req_buf, CHERI_PERM_LOAD);
     memcpy((char*)user_buf+offset, req_buf, length);
@@ -1265,6 +1301,7 @@ struct fwf_args {
 };
 
 ssize_t TRUSTED_CROSS_DOMAIN(socket_fulfill_with_fulfill)(capability arg, char* buf, uint64_t offset, uint64_t length);
+__attribute__((used))
 ssize_t socket_fulfill_with_fulfill(capability arg, char* buf, uint64_t offset, uint64_t length) {
     struct fwf_args* args = (struct fwf_args*)arg;
     // TODO: We can probably avoid a copy for join requests here
@@ -1272,6 +1309,7 @@ ssize_t socket_fulfill_with_fulfill(capability arg, char* buf, uint64_t offset, 
     return socket_internal_fulfill_progress_bytes_impl(args->writer, length, F_CHECK | F_PROGRESS | args->dont_wait, ff, (capability)buf, 0, NULL, NULL, get_ctl(), NULL, NULL);
 }
 
+__attribute__((used))
 ssize_t socket_fulfill_progress_bytes_soft_join(fulfiller_t push_read, fulfiller_t pull_write, size_t bytes, enum FULFILL_FLAGS flags) {
     uni_dir_socket_fulfiller* push = UNSEAL_CHECK_FULFILLER(push_read);
     uni_dir_socket_fulfiller* pull = UNSEAL_CHECK_FULFILLER(pull_write);
@@ -1288,11 +1326,13 @@ ssize_t socket_fulfill_progress_bytes_soft_join(fulfiller_t push_read, fulfiller
 
 }
 
+__attribute__((used))
 uint8_t socket_requester_is_fulfill_closed(requester_t r) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     return requester->fulfiller_component.fulfiller_closed;
 }
 
+__attribute__((used))
 int socket_requester_restrict_auth(requester_t r, found_id_t* id) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
@@ -1300,6 +1340,7 @@ int socket_requester_restrict_auth(requester_t r, found_id_t* id) {
     return 0;
 }
 
+__attribute__((used))
 int socket_requester_restrict_seal(requester_t r, sealing_cap sc) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
