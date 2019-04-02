@@ -9,4 +9,3 @@ set(X_SRCS
 )
 
 add_cherios_executable_light(${ACT_NAME} ADD_TO_FILESYSTEM TEMPORAL_A LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
-target_compile_definitions(${ACT_NAME} PUBLIC -DLIGHTWEIGHT_OBJECT=1)

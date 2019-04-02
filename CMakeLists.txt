@@ -302,6 +302,7 @@ endfunction()
 function(add_cherios_executable_light _target)
     add_cherios_module(${_target} ${ARGN})
     target_link_libraries(${_target} CheriOS::LibUserLight)
+    target_compile_definitions(${_target} PUBLIC -DLIGHTWEIGHT_OBJECT=1)
 endfunction()
 
 
