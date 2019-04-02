@@ -115,6 +115,22 @@ capability deduplicate_cap_precise(capability cap, int allow_create, register_t 
     return deduplicate_cap(cap, allow_create, perms, length, offset);
 }
 
+capability deduplicate_cap_unaligned(capability cap, int allow_create, register_t perms) {
+    capability bounce[0x100];
+
+    capability precise = cap;
+
+    if(cheri_getbase(cap) & 0x7) {
+        assert(cheri_getlen(cap) <= sizeof(bounce));
+        memcpy(bounce, cheri_setoffset(cap, 0), cheri_getlen(cap));
+        precise = cheri_incoffset(cheri_setbounds_exact(bounce, cheri_getlen(cap)), cheri_getoffset(cap));
+    }
+
+    capability result = deduplicate_cap_precise(precise, allow_create, perms);
+
+    return result == precise ? cap : result;
+}
+
 // TODO we should do a similar thing as compact and detect when relocations target the same object and re-derive
 
 dedup_stats deduplicate_all_target(int allow_create, size_t ndx, capability* segment_table, struct capreloc* start, struct capreloc* end) {
@@ -285,6 +301,7 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
     // Problems:
     //  We overwrite the current function (solved by assert that this function has already been deduplicated)
     //  We overwrite the return function (we save it first to the stack, then make a new return function)
+    //  We will move our cap relocs. When we notice doing this, update the start / end / loop variable appropriately
 
     size_t ret_base = cheri_getbase(ret);
 
@@ -330,6 +347,7 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
         uint64_t ob_off = reloc->offset;
         uint64_t ob_size = reloc->size;
 
+        capability new_object;
         // We might generate the same object at different locations. Only need to compact once.
         if((last_compact == NULL) || ob_loc >= (last_loc+last_size)) {
 
@@ -367,7 +385,7 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
             new_size += ob_size;
             code_seg_exe +=ob_size;
 
-            *loc = cheri_incoffset(last_compact, ob_off);
+            new_object = cheri_incoffset(last_compact, ob_off);
 
         } else {
             // what we found can be derived from the last compact
@@ -378,7 +396,15 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
 
             capability sub_ob = cheri_incoffset(cheri_setbounds(cheri_incoffset(last_compact, base_off), ob_size), ob_off);
 
-            *loc = sub_ob;
+            new_object = sub_ob;
+        }
+
+        *loc = new_object;
+        // We just moved the relocation table.
+        if ((size_t)found == (size_t)start) {
+            size_t tbl_size = (size_t)(end - start);
+            start = new_object;
+            end = start + tbl_size;
         }
 
     }

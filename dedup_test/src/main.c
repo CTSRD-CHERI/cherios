@@ -49,11 +49,11 @@ int main(register_t arg, capability carg) {
 
     capability a = (capability)&non_deduped;
 
-    capability b = deduplicate_cap_precise(a, 1, cheri_getperm(a));
+    capability b = deduplicate_cap_unaligned(a, 1, cheri_getperm(a));
 
     assert(a != b);
 
-    capability c = deduplicate_cap_precise(a, 1, cheri_getperm(a));
+    capability c = deduplicate_cap_unaligned(a, 1, cheri_getperm(a));
 
     assert(b == c);
 
