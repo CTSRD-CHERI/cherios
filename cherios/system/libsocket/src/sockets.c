@@ -673,7 +673,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & mask;
 
 
-    int can_fulfill = !requester->data_for_foundation || (requester->data_for_foundation == for_auth);
+    if(requester->data_for_foundation && (requester->data_for_foundation != for_auth)) return E_AUTH_TOKEN_ERROR;
 
     sealing_cap fulfill_sealer = requester->data_seal;
 #define COND_SEAL(X, Y) (Y ? cheri_seal(X,Y) : X)
@@ -717,11 +717,6 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
         // Bytes to progress can be 0, this might very well be the case for an oob request
         ret = bytes_to_process;
-
-
-        if(!can_fulfill) {
-            if(req->type != REQUEST_PROXY) return E_AUTH_TOKEN_ERROR;
-        }
 
         // Try process this many bytes
         if(req->type & REQUEST_BARRIER) {
