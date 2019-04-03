@@ -71,7 +71,7 @@ cert_t get_if_cert(void) {
 // Should copy data segment. Ive just moved some globals this library uses into locals.
 
 single_use_cert create_new_external_thread(res_t locals_res, res_t stack_res, res_t ustack_res, res_t sign_res) {
-    cap_pair pair;
+    _safe cap_pair pair;
 
     rescap_take(locals_res, &pair);
 
@@ -142,7 +142,7 @@ int server_start(void) {
 
     rescap_split(if_res, size_needed);
 
-    cap_pair pair;
+    _safe cap_pair pair;
 
     if_cert = rescap_take_authed(if_res, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, AUTH_CERT, own_auth, NULL, NULL).cert;
 

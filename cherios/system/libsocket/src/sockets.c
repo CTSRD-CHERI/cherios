@@ -673,7 +673,8 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & mask;
 
 
-    if(requester->data_for_foundation && (requester->data_for_foundation != for_auth)) return E_AUTH_TOKEN_ERROR;
+    int un_authed = (requester->data_for_foundation && (requester->data_for_foundation != for_auth));
+    int oob_un_authed = (requester->oob_for_foundation && (requester->oob_for_foundation != for_auth));
 
     sealing_cap fulfill_sealer = requester->data_seal;
 #define COND_SEAL(X, Y) (Y ? cheri_seal(X,Y) : X)
@@ -690,6 +691,11 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
         }
 
         request_t* req = &requester->request_ring_buffer[(fptr)&mask];
+
+        // Check auth
+
+        if((req->type >= REQUEST_OUT_BAND && oob_un_authed) || (req->type && un_authed))
+            return E_AUTH_TOKEN_ERROR;
 
         // Work out how much we should process
 
@@ -910,7 +916,7 @@ ssize_t socket_fulfill_progress_bytes_authorised(fulfiller_t fulfiller, size_t b
     uni_dir_socket_fulfiller* f = UNSEAL_CHECK_FULFILLER(fulfiller);
     if(!f) return E_BAD_SEAL;
 
-    cap_pair pair;
+    _safe cap_pair pair;
     found_id_t* id = rescap_check_cert(cert, &pair);
     ful_pack* pack = (ful_pack*)pair.data;
     return socket_internal_fulfill_progress_bytes_impl(f, bytes, flags, pack->ful, arg, offset, pack->ful_oob, pack->sub, pack->data_arg, pack->oob_data_arg, id);
@@ -994,7 +1000,7 @@ int socket_requester_set_drb(requester_t r, struct data_ring_buffer* drb) {
 
 __attribute__((used))
 ERROR_T(requester_t) socket_new_requester(res_t res, uint16_t buffer_size, uint8_t socket_type, data_ring_buffer* paired_drb) {
-    cap_pair pair;
+    _safe cap_pair pair;
 
     rescap_take(res, &pair);
 
@@ -1012,7 +1018,7 @@ ERROR_T(requester_t) socket_new_requester(res_t res, uint16_t buffer_size, uint8
 
 __attribute__((used))
 ERROR_T(fulfiller_t) socket_new_fulfiller(res_t res, uint8_t socket_type) {
-    cap_pair pair;
+    _safe cap_pair pair;
 
     rescap_take(res, &pair);
 
@@ -1328,12 +1334,21 @@ uint8_t socket_requester_is_fulfill_closed(requester_t r) {
 }
 
 __attribute__((used))
-int socket_requester_restrict_auth(requester_t r, found_id_t* id) {
+int socket_requester_restrict_auth(requester_t r, found_id_t* data_auth, found_id_t* oob_auth) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
-    requester->data_for_foundation = id;
+    requester->data_for_foundation = data_auth;
+    requester->oob_for_foundation = oob_auth;
     return 0;
 }
+__attribute__((used))
+int socket_requester_set_extra_data(requester_t r, capability extra) {
+    uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
+    if(!requester) return E_BAD_SEAL;
+    requester->extra_data_arg = extra;
+    return  0;
+}
+
 
 __attribute__((used))
 int socket_requester_restrict_seal(requester_t r, sealing_cap sc) {

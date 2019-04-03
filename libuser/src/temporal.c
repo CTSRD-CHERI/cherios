@@ -64,7 +64,7 @@ capability new_stack(capability old_c10) {
     if(own_stats) own_stats->temporal_reqs++;
 #endif
 
-    cap_pair pair;
+    _safe cap_pair pair;
     rescap_take(stack_res.val, &pair);
 
     capability new_c10 = pair.data;

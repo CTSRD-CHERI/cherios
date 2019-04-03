@@ -136,7 +136,7 @@ void * new_session(void * mmio_cap) {
     // These are allocated in a way such that the structs will never cross a physical page boundry
     session->reqs = (req_t*)malloc(req_size);
 
-    cap_pair pair;
+    _safe cap_pair pair;
 #define GET_A_PAGE (rescap_take(mem_request(0, MEM_REQUEST_MIN_REQUEST, NONE, own_mop).val, &pair), pair.data)
 
     session->outhdrs = (struct virtio_blk_outhdr*)GET_A_PAGE;

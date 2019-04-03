@@ -111,8 +111,9 @@
     ITEM(copy_out_no_caps, ssize_t, (capability user_buf, char* req_buf, uint64_t offset, uint64_t length), __VA_ARGS__)\
     ITEM(socket_fulfill_with_fulfill, ssize_t, (capability arg, char* buf, uint64_t offset, uint64_t length), __VA_ARGS__)\
     ITEM(socket_fulfill_progress_bytes_soft_join, ssize_t, (fulfiller_t push_read, fulfiller_t pull_write, size_t bytes, enum FULFILL_FLAGS flags), __VA_ARGS__)\
-    ITEM(socket_requester_restrict_auth, int, (requester_t r, found_id_t* id), __VA_ARGS__)\
-    ITEM(socket_requester_restrict_seal, int, (requester_t r, sealing_cap sc), __VA_ARGS__)
+    ITEM(socket_requester_restrict_auth, int, (requester_t r, found_id_t* data_auth, found_id_t* oob_auth), __VA_ARGS__)\
+    ITEM(socket_requester_restrict_seal, int, (requester_t r, sealing_cap sc), __VA_ARGS__)\
+    ITEM(socket_requester_set_extra_data, int, (requester_t r, capability extra), __VA_ARGS__)
 
 // Currently dont_wait and recv with a pull socket interact badly. This ignores the don't wait flag.
 #define FORCE_WAIT_SOCKET_RECV 1
@@ -282,7 +283,9 @@ typedef struct uni_dir_socket_requester {
     volatile uint16_t requeste_ptr;
     volatile uint64_t requested_bytes;
     volatile uint64_t* drb_fulfill_ptr;      // a pointer to a fulfilment pointer for a data buffer
-    found_id_t* data_for_foundation; // If not null then fulfillment functions must be signed with this id. TODO
+    capability  extra_data_arg;
+    found_id_t* data_for_foundation; // If not null then fulfillment functions must be signed with this id.
+    found_id_t* oob_for_foundation; // If not null OOBs must
     sealing_cap data_seal;           // If not null then everything we pass to fulfillment functions must be signed with this TODO
     uni_dir_socket_requester_fulfiller_component* access;
     struct data_ring_buffer* drb_for_join;

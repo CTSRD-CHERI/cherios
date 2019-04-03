@@ -96,7 +96,7 @@ static void free_send(net_session* session) {
 
 int lwip_driver_init(net_session* session) {
 
-    cap_pair pair;
+    _safe cap_pair pair;
 
     // Get MMIO
     get_physical_capability(VIRTIO_MMIO_NET_BASE, VIRTIO_MMIO_SIZE, 1, 0, own_mop, &pair);
