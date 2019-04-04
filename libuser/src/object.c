@@ -233,6 +233,8 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 #endif
 
 #endif // !LIGHTWEIGHT
+
+    get_ctl()->cdl = &entry_stub;
 }
 
 void object_init_post_compact(startup_flags_e startup_flags, int first_thread) {
