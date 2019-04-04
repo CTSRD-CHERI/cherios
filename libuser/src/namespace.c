@@ -34,6 +34,7 @@
 #include "cheric.h"
 #include "assert.h"
 #include "stdio.h"
+#include "capmalloc.h"
 
 act_kt namespace_ref = NULL;
 
@@ -51,6 +52,14 @@ int namespace_register(int nb, act_kt ref) {
 
 act_kt namespace_get_ref(int nb) {
 	return message_send_c(nb, 0, 0, 0, NULL, NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 1);
+}
+
+int namespace_register_found_id(cert_t cert) {
+	return (int)message_send(0, 0, 0, 0, cert, NULL, NULL, NULL, namespace_ref, SYNC_CALL, 4);
+}
+
+found_id_t* namespace_get_found_id(int nb) {
+	return message_send_c(nb, 0, 0, 0, NULL, NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 3);
 }
 
 int namespace_get_num_services(void) {

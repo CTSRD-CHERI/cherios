@@ -28,8 +28,12 @@
  * SUCH DAMAGE.
  */
 
+#include "nano/nanotypes.h"
+
 void	ns_init(void);
 
 int	ns_register(int nb, void * act_reference);
 void *	ns_get_reference(int nb);
 int	ns_get_num_services(void);
+int ns_register_found_id(cert_t cert);
+found_id_t* ns_get_found_id(int nb);

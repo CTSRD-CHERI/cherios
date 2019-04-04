@@ -33,12 +33,15 @@
 #define CHERIOS_NAMESPACE_H
 
 #include "types.h"
+#include "nano/nanotypes.h"
 
 int     namespace_rdy(void);
 void	namespace_init(act_kt ns_ref);
 int	namespace_register(int nb, act_kt ref);
 act_kt	namespace_get_ref(int nb);
 int	namespace_get_num_services(void);
+int namespace_register_found_id(cert_t cert);
+found_id_t* namespace_get_found_id(int nb);
 
 extern act_kt namespace_ref;
 
@@ -51,6 +54,7 @@ static const int namespace_num_memmgt = 4;
 static const int namespace_num_tman = 5;
 
 static const int namespace_num_lib_socket = 0x20;
+static const int namespace_num_lib_aes = 0x21;
 
 static const int namespace_num_uart = 0x40;
 static const int namespace_num_zlib = 0x41;
@@ -64,4 +68,9 @@ static const int namespace_num_event_service = 0x61;
 static const int namespace_num_dedup_service = 0x62;
 
 static const int namespace_num_webserver = 0x70;
+
+
+static const int namespace_id_num_blockcache = 0x10;
+
+
 #endif

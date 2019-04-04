@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2019 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -27,26 +27,15 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_IDNAMESPACE_H
+#define CHERIOS_IDNAMESPACE_H
 
-#include "lib.h"
-#include "cheric.h"
-#include "misc.h"
-#include "object.h"
+#include "namespace.h"
 
-void (*msg_methods[]) = {ns_register, ns_get_reference, ns_get_num_services, ns_get_found_id, ns_register_found_id};
-size_t msg_methods_nb = countof(msg_methods);
-void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
-size_t ctrl_methods_nb = countof(ctrl_methods);
-
-int main(void)
-{
-	syscall_puts("Namespace: Hello world\n");
-
-	ns_init();
-
-	msg_enable = 1; /* Go in waiting state instead of exiting */
-
-	syscall_puts("Namespace: Going into daemon mode\n");
-
-	return 0;
+static int namespace_register_found_id_authed(int nb) {
+    res_t res_for_cert = cap_malloc(RES_CERT_META_SIZE);
+    cert_t cert = rescap_take_authed(res_for_cert, NULL, CHERI_PERM_ALL, AUTH_CERT, own_auth, (intptr_t)nb, NULL).cert;
+    return namespace_register_found_id(cert);
 }
+
+#endif //CHERIOS_IDNAMESPACE_H

@@ -42,6 +42,7 @@ typedef struct {
 
 #define BIND_LEN 0x80
 bind_t bind[BIND_LEN];
+found_id_t* ids[BIND_LEN];
 int count;
 
 void ns_init(void) {
@@ -109,4 +110,20 @@ int ns_register(int nb, void * act_reference) {
 
 int ns_get_num_services(void) {
 	return count;
+}
+
+int ns_register_found_id(cert_t cert) {
+    _safe cap_pair pair;
+    found_id_t* id = rescap_check_cert(cert, &pair);
+    int nb = (int)pair.code;
+
+    if(!id || validate_idx(nb)) return -1;
+
+    ids[nb] = id;
+
+    return 0;
+}
+
+found_id_t* ns_get_found_id(int nb) {
+    return validate_idx(nb) ? NULL : ids[nb];
 }
