@@ -38,6 +38,9 @@
 #include "stdlib.h"
 #include "ringbuffers.h"
 #include "lists.h"
+#include "aes.h"
+#include "idnamespace.h"
+
 // TODO currently this never flushes blocks back =(
 
 #define BLOCK_BITS  20
@@ -48,6 +51,9 @@
 #define SECTOR_SIZE 512
 #define MAX_SOCKS 4
 
+// FIXME: I have not done a good job of tracking who has references to the cache. This matters for flushing
+// FIXME: and for security when we encrpt / decrypt. This should suffice for a demo however
+// FIXME: The idea would eventually be that we would track exactly which block are encrypted, who has reference to what etc
 typedef struct block_cache_ent_t {
     char data[BLOCK_SIZE];
     int is_complete;
@@ -67,6 +73,7 @@ typedef struct session_sock {
     size_t addr;
     uint8_t sock_type;
     block_cache_ent_t* blocked;
+    block_aes_data_t* aes_data;
 } session_sock;
 
 typedef struct {
@@ -286,8 +293,39 @@ static int rw_sector(session_t* session, size_t sector, char* buf, int is_write)
     return 0;
 }
 
-ssize_t TRUSTED_CROSS_DOMAIN(ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+
+
+static void unlock(session_sock* ss, locked_t locked_data) {
+
+    if(!locked_data) {
+        ss->aes_data = NULL;
+        return;
+    }
+
+    // cache the unlocked data
+    _safe cap_pair pair;
+
+    rescap_unlock((auth_result_t)locked_data, &pair, own_auth, AUTH_PUBLIC_LOCKED);
+
+    block_aes_data_t* aes_data = pair.data;
+
+    if(!aes_data) {
+        CHERI_PRINT_CAP(locked_data);
+        CHERI_PRINT_CAP(own_auth);
+        sleep(MS_TO_CLOCK(1000));
+        assert(0);
+    }
+
+    if(!aes_data->innited) {
+        AES_init_ctx_iv(&aes_data->ctx, aes_data->key, &aes_data->iv);
+        aes_data->innited = 1;
+    }
+
+    ss->aes_data = aes_data;
+}
+
+ssize_t CROSS_DOMAIN(ff)(capability arg, char* buf, uint64_t offset, uint64_t length, capability extra_arg);
+ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length, capability extra_arg) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -295,6 +333,11 @@ ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
 
     size_t map_index;
     size_t map_offset;
+
+    block_aes_data_t* aes_data = ss->aes_data;
+
+    // FIXME: get socket to pass this
+    //assert((!aes_data && !extra_arg) || (aes_data && aes_data->check_arg == extra_arg));
 
     while(length != 0) {
         map_index = (addr) >> BLOCK_BITS;
@@ -310,7 +353,20 @@ ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
 
         char* block_buf = ss->session->block_cache[map_index]->data + map_offset;
 
-        cpy(buf,block_buf,ss->sock_type == SOCK_TYPE_PUSH, to_copy);
+        int is_user_write = ss->sock_type == SOCK_TYPE_PUSH;
+
+        cpy(buf,block_buf, is_user_write, to_copy);
+
+        if(aes_data) {
+            assert_int_ex(to_copy & (AES_BLOCKLEN-1), ==, 0);
+
+            if(is_user_write) {
+                // FIXME: Technically insecure you have intermediate states in the block_buf, but I dont really care. Its a demo.
+                AES_CBC_encrypt_buffer(&aes_data->ctx, block_buf, (uint32_t)to_copy);
+            } else {
+                AES_CBC_decrypt_buffer(&aes_data->ctx, buf, (uint32_t)to_copy);
+            }
+        }
 
         copied +=to_copy;
         addr +=to_copy;
@@ -322,8 +378,8 @@ ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
     return copied;
 }
 
-ssize_t TRUSTED_CROSS_DOMAIN(ff_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf);
-ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
+ssize_t CROSS_DOMAIN(ff_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf, capability extra_arg);
+ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf, capability extra_arg) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -337,10 +393,22 @@ ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf)
         return 0;
     }
 
+    block_aes_data_t* aes_data = ss->aes_data;
+
+    // FIXME: get socket to pass this
+    // assert((!aes_data && !extra_arg) || (aes_data && aes_data->check_arg == extra_arg));
+
     char* block_buf = ss->session->block_cache[map_index]->data + map_offset;
 
     size_t biggest_copy = BLOCK_SIZE - map_offset;
     size_t to_copy = length > biggest_copy ? biggest_copy : length;
+
+    // TODO we also need to know whether the cache is in a encrypted / decrypted state. Maybe 2 copies?
+    // TODO currently this will leave the cache in an un-encrypted state which is bad for both security and correctness
+    if(aes_data) {
+        assert_int_ex(to_copy & (AES_BLOCKLEN-1), ==, 0);
+        AES_CBC_decrypt_buffer(&aes_data->ctx, block_buf, (uint32_t)to_copy);
+    }
 
     // TODO at this point we have to somehow track when the resulting request is fulfilled. Then we know we can release the buffer
 
@@ -351,7 +419,7 @@ ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf)
     return to_copy;
 }
 
-ssize_t TRUSTED_CROSS_DOMAIN(oobff)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+ssize_t CROSS_DOMAIN(oobff)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
 ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
@@ -381,6 +449,9 @@ ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64_t part
         return length;
     } else if(req == REQUEST_FLUSH) {
         assert(0 && "TODO");
+    } else if ((request_type_oob_bc_e)req == REQUEST_SET_KEY) {
+        unlock(ss, (locked_t)request->request.oob);
+        return length;
     }
 
     return E_OOB;
@@ -388,9 +459,26 @@ ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64_t part
 
 
 static void handle_sock_session(session_sock* ss) {
-    ssize_t res = socket_fulfill_progress_bytes_unauthorised(ss->ff, SOCK_INF, F_CHECK | F_DONT_WAIT | F_PROGRESS,
-                                                         &TRUSTED_CROSS_DOMAIN(ff), (capability)ss, 0, &TRUSTED_CROSS_DOMAIN(oobff), TRUSTED_CROSS_DOMAIN(ff_sub),
-                                                         TRUSTED_DATA, TRUSTED_DATA);
+
+    static cert_t cert = NULL;
+
+    if(!cert) {
+        // Create a certificate for our interface
+        res_t reser = cap_malloc(RES_CERT_META_SIZE + sizeof(ful_pack));
+        _safe cap_pair pair;
+        cert = rescap_take_authed(reser, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, AUTH_CERT, own_auth, NULL, NULL).cert;
+        ful_pack* pack = (ful_pack*)pair.data;
+
+        pack->data_arg = pack->oob_data_arg = UNTRUSTED_DATA;
+        pack->ful = &CROSS_DOMAIN(ff);
+        pack->ful_oob = &CROSS_DOMAIN(oobff);
+        pack->sub = &CROSS_DOMAIN(ff_sub);
+    }
+
+    ssize_t res = socket_fulfill_progress_bytes_authorised(ss->ff, SOCK_INF,
+            F_CHECK | F_DONT_WAIT | F_PROGRESS,
+            cert, (capability)ss, 0);
+
     if(res == E_AGAIN) return;
 
     assert_int_ex(res, >=, 0);
@@ -451,6 +539,10 @@ int main(register_t arg, capability carg) {
     sealer = get_type_owned_by_process();
 
     int res = namespace_register(namespace_num_blockcache,act_self_ref);
+
+    assert(res == 0);
+
+    res = namespace_register_found_id_authed(namespace_id_num_blockcache);
 
     assert(res == 0);
 

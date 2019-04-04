@@ -122,6 +122,7 @@ typedef struct unix_like_socket {
     uint64_t write_behind;
     socket_reader_t read;
     socket_writer_t write;
+    locked_t encrypt_lock;
 } unix_like_socket;
 
 

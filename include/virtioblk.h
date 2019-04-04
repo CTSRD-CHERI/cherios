@@ -37,6 +37,19 @@
 #include "assert.h"
 #include "cheric.h"
 #include "sockets.h"
+#include "aes.h"
+
+typedef struct block_aes_data_s {
+	struct AES_ctx ctx;
+	const uint8_t* key;
+	uint8_t iv[AES_BLOCKLEN];
+	capability check_arg;
+	int innited;
+} block_aes_data_t;
+
+typedef enum {
+	REQUEST_SET_KEY = REQUEST_OUT_USER_START,
+} request_type_oob_bc_e;
 
 extern void * vblk_ref;
 capability virt_session;

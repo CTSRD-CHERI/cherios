@@ -3512,6 +3512,7 @@ FRESULT f_read (
 #else
 		/* Pick partial sector */
         flush_proxy(&sr_read, fulfill);
+        assert(!sr_read.encrypt_lock); // We are not authorised to read this data and will read rubbish
         sret = socket_fulfill_progress_bytes_unauthorised(fulfill, rcnt, F_PROGRESS,
 													  OTHER_DOMAIN_FP(copy_in), (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL,
 													  LIB_SOCKET_DATA, NULL);
@@ -3647,6 +3648,7 @@ FRESULT f_write (
 #else
 		/* Pick partial sector */
         flush_proxy(&sr_write, fulfill);
+		assert(!sr_write.encrypt_lock); // We are not authorised to read this data and will read rubbish
 		sret = socket_fulfill_progress_bytes_unauthorised(fulfill, wcnt, F_PROGRESS,
 													  OTHER_DOMAIN_FP(copy_out), (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL,
 													  LIB_SOCKET_DATA, NULL);

@@ -45,9 +45,13 @@ typedef capability dir_token_t;
 
 DEC_ERROR_T(FILE_t);
 
-ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags);
+ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, const uint8_t* key, const uint8_t* iv);
 static inline FILE_t open(const char* name, int mode, enum SOCKET_FLAGS flags) {
-    ERROR_T(FILE_t) res = open_er(name, mode, flags);
+    ERROR_T(FILE_t) res = open_er(name, mode, flags, NULL, NULL);
+    return IS_VALID(res) ? res.val : NULL;
+}
+static inline FILE_t open_encrypted(const char* name, int mode, enum SOCKET_FLAGS flags, const uint8_t* key, const uint8_t* iv) {
+    ERROR_T(FILE_t) res = open_er(name, mode, flags, key, iv);
     return IS_VALID(res) ? res.val : NULL;
 }
 

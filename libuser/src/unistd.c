@@ -30,6 +30,7 @@
 
 
 #include <sockets.h>
+#include "virtioblk.h"
 #include "unistd.h"
 #include "stdlib.h"
 #include "namespace.h"
@@ -90,7 +91,7 @@ struct socket_with_file_drb {
     char drb_data[DEFAULT_DRB_SIZE];
 };
 
-ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
+ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, const uint8_t* key, const uint8_t* iv) {
 
     int read = mode & FA_READ;
     int write = mode & FA_WRITE;
@@ -120,7 +121,27 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
 
     ssize_t result;
 
-    if((result = message_send(mode,0,0,0,r32_read, r32_write, name, NULL, dest, SYNC_CALL, 0))) goto er1;
+    locked_t encrypt_lock = NULL;
+
+    if(key) {
+        res_t aes_key_res = cap_malloc(sizeof(block_aes_data_t) + RES_CERT_META_SIZE);
+        _safe cap_pair pair;
+        // TODO we would ask a better authority than namespace manager
+
+        found_id_t* id = namespace_get_found_id(namespace_id_num_blockcache);
+
+        assert(id != NULL);
+
+        encrypt_lock = rescap_take_locked(aes_key_res, &pair, CHERI_PERM_ALL, id, NULL, NULL);
+        block_aes_data_t* data = pair.data;
+
+        data->key = key;
+        memcpy(data->iv, iv, sizeof(data->iv));
+
+        sock->encrypt_lock = encrypt_lock;
+    }
+
+    if((result = message_send(mode,0,0,0,r32_read, r32_write, name, encrypt_lock, dest, SYNC_CALL, 0))) goto er1;
     if(r32_read) socket_requester_connect(r32_read);
     if(r32_write) socket_requester_connect(r32_write);
 
@@ -128,7 +149,7 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags) {
 
 
 
-    flags |= MSG_NO_COPY;
+    flags |= MSG_NO_COPY; // FIXME: The addition of this flag in all cases is questionable
 
     if(read & write) {
         flags |= MSG_EMULATE_SINGLE_PTR;

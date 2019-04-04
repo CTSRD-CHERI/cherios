@@ -144,7 +144,7 @@ init_elem_t init_list[] = {
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	1)
-    B_DENTRY(m_user, "block_cache.elf", 0, 1)
+    B_DENTRY(m_secure | m_user, "block_cache.elf", 0, 1)
     B_WAIT_FOR(namespace_num_blockcache)
     B_PENTRY(m_virtnet, "lwip.elf", 0, 1)
 	B_FENCE
@@ -165,7 +165,7 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user, "unsafe_test.elf", 0, 1)
     B_PENTRY(m_user,    "dedup_test.elf", 0, 1)
     B_PENTRY(m_user,    "socket_test.elf", 0 ,1)
-//    B_PENTRY(m_user, "fs_test.elf", 0, 1)
+    B_PENTRY(m_user, "fs_test.elf", 0, 1)
 //    B_DENTRY(m_user, "server.elf", 0, 1)
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)

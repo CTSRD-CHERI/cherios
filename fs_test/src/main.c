@@ -34,6 +34,7 @@
 #include "assert.h"
 #include "stdio.h"
 #include "string.h"
+#include "aes.h"
 
 #define BIG_SIZE 0x1000
 
@@ -159,6 +160,71 @@ int main(register_t arg, capability carg) {
 
     result = close(file2);
     assert_int_ex(result, ==, 0);
+
+    printf("Normal Fs test success! Trying Encryption\n");
+
+
+    uint8_t key[AES_KEYLEN];
+    uint8_t iv[AES_BLOCKLEN];
+
+    for(uint8_t i = 0; i != AES_KEYLEN; i++) key[i] = i;
+    for(uint8_t i = 0; i != AES_BLOCKLEN; i++) iv[i] = i;
+
+    // Write an encrypted file
+    FILE_t file3 = open_encrypted("enc1", FA_OPEN_ALWAYS | FA_WRITE, MSG_NO_COPY, key, iv);
+    assert(file3 != NULL);
+
+    result = write(file3, LOREM, BIG_SIZE);
+    assert_int_ex(result, ==, BIG_SIZE);
+
+    result = close(file3);
+    assert_int_ex(result, ==, 0);
+
+    FILE_t file4 = open("enc1", FA_OPEN_ALWAYS | FA_READ, MSG_NONE);
+    assert(file4 != NULL);
+
+    bzero(dest, BIG_SIZE);
+    result = read(file4, dest, BIG_SIZE);
+
+    assert_int_ex(result, ==, BIG_SIZE);
+    result = close(file4);
+    assert_int_ex(result, == ,0);
+
+
+    //printf("This should be encrypted: %.*s\n", BIG_SIZE, dest);
+
+    result = 1;
+    for(size_t i = 0; i != BIG_SIZE; i++) {
+        if(dest[i] != LOREM[i]) {
+            result = 0;
+            break;
+        }
+    }
+
+
+    assert(result == 0);
+
+    FILE_t file5 = open_encrypted("enc1", FA_OPEN_ALWAYS | FA_READ, MSG_NONE, key, iv);
+
+    assert(file5 != NULL);
+
+    bzero(dest, BIG_SIZE);
+    result = read(file5, dest, BIG_SIZE);
+    assert_int_ex(result, ==, BIG_SIZE);
+    result = close(file5);
+    assert_int_ex(result, == ,0);
+
+    result = 1;
+    for(size_t i = 0; i != BIG_SIZE; i++) {
+        if(dest[i] != LOREM[i]) {
+            result = 0;
+            break;
+        }
+    }
+
+    assert(result == 1);
+
+    //printf("This should be decrypted: %.*s\n", BIG_SIZE, dest);
 
     printf("Fs test success!\n");
 }

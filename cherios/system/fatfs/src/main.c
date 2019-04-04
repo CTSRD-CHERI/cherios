@@ -47,12 +47,14 @@ FATFS fs;
 struct sessions_t {
     unix_like_socket sock;
     FIL fil;
+    locked_t encrypt_lock;
     size_t ndx;
     uint64_t read_fptr;
     uint64_t write_fptr;
     uint8_t current;
     spinlock_t session_lock;
     uint8_t in_use;
+    uint8_t nice_close;
 } sessions[MAX_HANDLES];
 
 size_t first_free = 0;
@@ -77,14 +79,71 @@ __thread fs_proxy sr_write;
 
 act_notify_kt main_notify;
 
+static void set_encrypt_lock(fs_proxy* proxy, locked_t locked) {
+    if(proxy->encrypt_lock != locked) {
+        int res = socket_requester_space_wait(proxy->requester, 1, 0, 0);
+        assert_int_ex(res, ==, 0);
+        res = socket_request_oob(proxy->requester, REQUEST_SET_KEY, (intptr_t)locked, 0, 0);
+        assert_int_ex(res, ==, 0);
+        proxy->encrypt_lock = locked;
+    }
+}
+
+
+void close_file(size_t sndx, struct sessions_t* session, uint8_t level) {
+    assert_int_ex(session->in_use, ==, 1);
+
+    size_t poll_ndx;
+    size_t poll_to_move;
+
+    if(session->nice_close < level) {
+        if(level > 4) level = 4;
+        switch(session->nice_close) {
+            case 0:
+                // Close the underlying file
+                f_close(&session->fil);
+                if(level == 1) break;
+            case 1:
+                // Close the socket
+                socket_close(&session->sock);
+                if(level == 2) break;
+            case 2:
+                // Then compact poll_socks
+                poll_ndx = session->ndx;
+                poll_to_move = n_files-1;
+
+                if(poll_ndx != poll_to_move) {
+                    size_t session_ndx_to_move = session_ndx[poll_to_move];
+                    spinlock_acquire(&sessions[session_ndx_to_move].session_lock);
+                    poll_socks[poll_ndx] = poll_socks[poll_to_move];
+                    session_ndx[poll_ndx] = session_ndx_to_move;
+                    sessions[session_ndx_to_move].ndx = poll_ndx;
+                    spinlock_release(&sessions[session_ndx_to_move].session_lock);
+                }
+
+                n_files--;
+                if(level == 3) break;
+            case 3:
+                // Then free struct
+                session->in_use = 0;
+                session->ndx = first_free;
+                first_free = sndx;
+
+        }
+        session->nice_close = level;
+    }
+}
+
 ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
 ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     struct sessions_t* fil = (struct sessions_t*)arg;
+    assert(!fil->nice_close);
     request_type_e req = request->type;
     uint64_t* modify;
     ssize_t * size_ptr;
     switch(req) {
         case REQUEST_SEEK:
+            assert(!fil->encrypt_lock); // currently don't support seek here
             modify = fil->current == 0 ? &fil->read_fptr : &fil->write_fptr;
 
             int64_t seek_offset = request->request.seek_desc.v.offset;
@@ -119,7 +178,8 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
             f_truncate(&fil->fil);
             return length;
         case REQUEST_CLOSE:
-            return length; // TODO is is meant to cause a flush and close
+            close_file(fil->ndx, fil, 1);
+            return length;
         case REQUEST_FLUSH:
             assert(0 && "TODO");
         default:
@@ -129,6 +189,8 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
 
 }
 
+
+
 void handle(enum poll_events events, struct sessions_t* session) {
     FRESULT fresult = 0;
     ssize_t res;
@@ -136,6 +198,9 @@ void handle(enum poll_events events, struct sessions_t* session) {
     UINT bytes_to_push;
 
     assert_int_ex(session->in_use, ==, 1);
+
+    assert(!session->nice_close);
+    assert(session->fil.obj.fs);
 
     if(events & POLL_IN) {
         // service write (we read)
@@ -157,6 +222,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
             if(session->fil.fptr != session->write_fptr) {
                 f_lseek(&session->fil, session->write_fptr);
             }
+            set_encrypt_lock(&sr_write, session->encrypt_lock);
             fresult = f_write(&session->fil, read_fulfill, (UINT)bytes_to_push, &bytes_handled);
             btp -= bytes_handled;
             session->write_fptr+=bytes_handled;
@@ -182,11 +248,14 @@ void handle(enum poll_events events, struct sessions_t* session) {
             if(session->fil.fptr != session->read_fptr) {
                 f_lseek(&session->fil, session->read_fptr);
             }
+            set_encrypt_lock(&sr_read, session->encrypt_lock);
             fresult = f_read(&session->fil, write_fulfill, (UINT)bytes_to_push, &bytes_handled);
             btp -= bytes_handled;
             session->read_fptr +=bytes_handled;
         } while(fresult == 0 && btp > 0 && bytes_handled != 0);
     }
+
+    if(session->nice_close) return;
 
     enum poll_events wait_for = POLL_NONE;
     if(session->sock.con_type & CONNECT_PUSH_READ) wait_for |= POLL_IN;
@@ -250,7 +319,7 @@ void spawn_workers(void) {
 }
 
 
-int open_file(int mode, requester_t read_requester, requester_t write_requester, const char* file_name) {
+int open_file(int mode, requester_t read_requester, requester_t write_requester, const char* file_name, locked_t* encrpyt) {
 
     int read = mode & FA_READ;
     int write = mode & FA_WRITE;
@@ -302,12 +371,14 @@ int open_file(int mode, requester_t read_requester, requester_t write_requester,
     session_ndx[n_files] = first_free;
     session->ndx = n_files;
     session->read_fptr = session->write_fptr = 0;
+    session->encrypt_lock = encrpyt;
     spinlock_init(&session->session_lock);
 
     FRESULT fres = FR_INVALID_PARAMETER;
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
         if((fres = f_open(fp, file_name, (BYTE)mode)) == 0) {
             session->in_use = 1;
+            session->nice_close = 0;
             n_files++;
             first_free = next;
             return 0;
@@ -315,36 +386,6 @@ int open_file(int mode, requester_t read_requester, requester_t write_requester,
     }
     session->ndx = next; // If we did not allocate restore free chain
     return fres;
-}
-
-void close_file(size_t sndx, struct sessions_t* session) {
-    assert_int_ex(session->in_use, ==, 1);
-
-    // First close the unix socket
-    socket_close(&session->sock);
-
-    // Then close the file
-    f_close(&session->fil);
-
-    // Then compact poll_socks
-    size_t poll_ndx = session->ndx;
-    size_t poll_to_move = n_files-1;
-
-    if(poll_ndx != poll_to_move) {
-        size_t session_ndx_to_move = session_ndx[poll_to_move];
-        spinlock_acquire(&sessions[session_ndx_to_move].session_lock);
-        poll_socks[poll_ndx] = poll_socks[poll_to_move];
-        session_ndx[poll_ndx] = session_ndx_to_move;
-        sessions[session_ndx_to_move].ndx = poll_ndx;
-        spinlock_release(&sessions[session_ndx_to_move].session_lock);
-    }
-
-    n_files--;
-
-    // Then free struct
-    session->in_use = 0;
-    session->ndx = first_free;
-    first_free = sndx;
 }
 
 int make_dir(const char* name) {
@@ -404,6 +445,12 @@ void request_loop(void) {
             poll_sock_t* poll_sock = poll_socks+i;
             size_t sndx = session_ndx[i];
             struct sessions_t* session = &sessions[sndx];
+
+            if(session->nice_close == 2) {
+                close_file(sndx, session, UINT8_MAX);
+                break;
+            }
+
             assert_int_ex(session->in_use, ==, 1);
             if(poll_sock->revents & (POLL_IN | POLL_OUT)) {
                 assert_int_ex(poll_sock->events, !=, POLL_NONE);
@@ -412,7 +459,7 @@ void request_loop(void) {
             } else {
                 if(poll_sock->revents & POLL_HUP) {
                     // a close happened
-                    close_file(sndx, session);
+                    close_file(sndx, session, UINT8_MAX);
                     break; // closing may move things around. re-poll
                 }
                 if(poll_sock->revents & (POLL_ER | POLL_NVAL)) {

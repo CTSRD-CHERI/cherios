@@ -150,6 +150,6 @@ extern void call_function_pointer_arg_mem(void);
 #define TRUSTED_CROSS_DOMAIN(X) (__cross_domain_trusted_ ## X)
 
 #define TRUSTED_DATA get_ctl()
-#define UNTRUSTED_DATA ({CTL_t* _ctl_tmp = get_ctl(); return cheri_seal(_ctl_tmp,_ctl_tmp->cds);})
+#define UNTRUSTED_DATA ({CTL_t* _ctl_tmp = get_ctl(); cheri_seal(_ctl_tmp,_ctl_tmp->cds);})
 
 #endif //CHERIOS_DYLINK_H

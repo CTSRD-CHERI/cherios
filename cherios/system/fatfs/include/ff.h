@@ -26,6 +26,7 @@ typedef struct fs_proxy {
 	size_t socket_sector;
 	size_t length;
 	requester_t requester;
+	locked_t encrypt_lock;
 } fs_proxy;
 
 #ifdef __cplusplus
