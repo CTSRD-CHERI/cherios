@@ -59,6 +59,12 @@
 #error Unknown capability size
 #endif
 
+#ifdef HARDWARE_qemu
+    #define CAN_SEAL_ANY 0
+#else
+    #define CAN_SEAL_ANY 1
+#endif
+
 #ifndef __ASSEMBLY__
 
 #include "cdefs.h"
@@ -392,6 +398,7 @@ __asm __volatile (                              \
     "daddiu %[res], %[res], %%lo(" #symbol ")\n" \
 : [res]"=r"(result) ::)
 
+#define SET_FUNC(S, F) __asm (".weak " # S"; cscbi %[arg], %%capcall20(" #S ")($c25)" ::[arg]"C"(F):"memory")
 #define SET_SYM(S, V) __asm (".weak " # S"; cscbi %[arg], %%captab20(" #S ")($c25)" ::[arg]"C"(V):"memory")
 #define SET_TLS_SYM(S, V) __asm (".weak " #S "; cscbi %[arg], %%captab_tls20(" #S ")($c26)" ::[arg]"C"(V):"memory")
 

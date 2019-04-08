@@ -678,8 +678,13 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
     sealing_cap fulfill_sealer = requester->data_seal;
 #define COND_SEAL(X, Y) (Y ? cheri_seal(X,Y) : X)
-#define CS(X) COND_SEAL(X, fulfill_sealer)
 
+#if (CAN_SEAL_ANY)
+#define CS(X) COND_SEAL(X, fulfill_sealer)
+#else
+// This is sub-optimal but helps sealing on old qemu
+#define CS(X) COND_SEAL(cheri_setbounds(X, (cheri_getlen(X) - cheri_getoffset(X))), fulfill_sealer)
+#endif
     if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill begin %x \n", fptr);
     while(bytes_remain != 0) {
 
