@@ -85,6 +85,8 @@
 #endif
 
 #include <string.h>
+#include "lightweight_ccall.h"
+#include "lwip/inet_chksum.h"
 
 #define SIZEOF_STRUCT_PBUF        LWIP_MEM_ALIGN_SIZE(sizeof(struct pbuf))
 /* Since the pool is created in memp, PBUF_POOL_BUFSIZE will be automatically
@@ -180,12 +182,14 @@ pbuf_init_alloced_pbuf(struct pbuf *p, void *payload, u16_t tot_len, u16_t len, 
 {
   p->next = NULL;
   p->payload = payload;
+  p->sealed_payload = NULL;
   p->tot_len = tot_len;
   p->len = len;
   p->type_internal = (u8_t)type;
   p->flags = flags;
   p->ref = 1;
   p->if_idx = NETIF_NO_INDEX;
+  p->sp_length = 0;
 }
 
 /**
@@ -522,7 +526,7 @@ pbuf_add_header_impl(struct pbuf *p, size_t header_size_increment, u8_t force)
   p->payload = payload;
   p->len = (u16_t)(p->len + increment_magnitude);
   p->tot_len = (u16_t)(p->tot_len + increment_magnitude);
-
+  p->sp_dst_offset += increment_magnitude;
 
   return 0;
 }
@@ -605,7 +609,7 @@ pbuf_remove_header(struct pbuf *p, size_t header_size_decrement)
   /* modify pbuf length fields */
   p->len = (u16_t)(p->len - increment_magnitude);
   p->tot_len = (u16_t)(p->tot_len - increment_magnitude);
-
+  p->sp_dst_offset -= increment_magnitude;
   LWIP_DEBUGF(PBUF_DEBUG | LWIP_DBG_TRACE, ("pbuf_remove_header: old %p new %p (%"U16_F")\n",
               (void *)payload, (void *)p->payload, increment_magnitude));
 
@@ -760,6 +764,10 @@ pbuf_free(struct pbuf *p)
       q = p->next;
       LWIP_DEBUGF( PBUF_DEBUG | LWIP_DBG_TRACE, ("pbuf_free: deallocating %p\n", (void *)p));
       alloc_src = pbuf_get_allocsrc(p);
+      // de-alloc the hacky extra field here
+      if(p->sp_length) {
+        LIGHTWEIGHT_CCALL_FUNC(v, checksum_extern_free, CHK_DATA, 0, 1, p->sealed_payload);
+      }
 #if LWIP_SUPPORT_CUSTOM_PBUF
       /* is this a custom pbuf? */
       if ((p->flags & PBUF_FLAG_IS_CUSTOM) != 0) {

@@ -145,6 +145,8 @@ _Static_assert(offsetof(custom_for_tcp, as_pbuf) == 0, "We cast between these so
 
 struct custom_for_tcp* alloc_custom(net_session* session);
 
+extern sealing_cap ether_sealer;
+
 // Per driver
 
 int lwip_driver_init(net_session* session);

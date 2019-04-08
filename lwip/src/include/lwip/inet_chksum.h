@@ -97,6 +97,18 @@ u16_t ip_chksum_pseudo(struct pbuf *p, u8_t proto, u16_t proto_len,
 u16_t ip_chksum_pseudo_partial(struct pbuf *p, u8_t proto, u16_t proto_len,
        u16_t chksum_len, const ip_addr_t *src, const ip_addr_t *dest);
 
+
+typedef capability sealed_sum;
+extern __weak_symbol sealed_sum checksum_extern_make_new(uint16_t);
+extern __weak_symbol void checksum_extern_free(sealed_sum sum);
+extern __weak_symbol void checksum_extern_set(sealed_sum sum, uint16_t val);
+extern __weak_symbol void checksum_extern_add_int(sealed_sum acc, uint16_t val);
+extern __weak_symbol void checksum_extern_xor_int(sealed_sum acc, uint16_t val);
+extern __weak_symbol void checksum_extern_swap_bytes(sealed_sum acc);
+extern __weak_symbol void checksum_extern_add_buffer(sealed_sum acc, capability sealed_data, size_t length);
+extern __weak_symbol void checksum_found_data;
+#define CHK_DATA (&checksum_found_data)
+
 #ifdef __cplusplus
 }
 #endif

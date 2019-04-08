@@ -124,6 +124,88 @@
 #endif
 #endif
 
+#include "lightweight_ccall.h"
+
+static void
+tcp_set_pbuf_checksum_zero(struct pbuf *p) {
+  struct tcp_hdr *tcphdr = (struct tcp_hdr *)p->payload;
+  tcphdr->chksum = 0;
+  p->sp_src_offset = 0;
+  p->sp_length = 2;
+  p->sp_dst_offset = (uint16_t)offsetof(struct tcp_hdr, chksum);
+
+  if(p->sealed_payload) {
+    LIGHTWEIGHT_CCALL_FUNC(v, checksum_extern_set, CHK_DATA, 1, 0, 1, p->sealed_payload);
+  } else {
+    p->sealed_payload = LIGHTWEIGHT_CCALL_FUNC(c, checksum_extern_make_new, CHK_DATA, 1, 0, 0);
+  }
+}
+
+static void
+ip_chksum_pseudo_sealed(struct pbuf *p, u8_t proto, u16_t proto_len,
+                        const ip_addr_t *src, const ip_addr_t *dest)
+{
+  sealed_sum sum = p->sealed_payload;
+
+  assert(sum != NULL);
+
+  u64_t acc;
+  u32_t addr;
+
+  addr = ip4_addr_get_u32(src);
+  acc = addr;
+  addr = ip4_addr_get_u32(dest);
+  acc += addr;
+
+  acc += (uint64_t)lwip_htons((u16_t)proto);
+  acc += (uint64_t)lwip_htons(proto_len);
+
+  /* fold down to 16 bits */
+
+  uint64_t tmp = (acc & 0xFFFF);
+  acc = (acc >> 16) + tmp;
+  tmp = acc & 0xFFFF;
+  acc = (acc >> 16) + tmp;
+
+  assert((acc >> 16) == 0); // TODO think a bit more about this. header might
+
+  capability cdta = CHK_DATA;
+
+  LIGHTWEIGHT_CCALL_FUNC(v, checksum_extern_set, cdta, 1, acc, 1, sum);
+
+  struct pbuf *q;
+  int swapped = 0;
+
+  typeof(checksum_extern_add_buffer)* add_f = &checksum_extern_add_buffer;
+  typeof(checksum_extern_swap_bytes)* swap_f = &checksum_extern_swap_bytes;
+
+  for (q = p; q != NULL; q = q->next) {
+    int odd = q->len % 2;
+
+    size_t offset = 0;
+    capability payload = q->payload;
+
+    if(!cheri_gettag(payload)) {
+        offset = (payload - q->sealed_payload);
+        payload = q->sealed_payload;
+    }
+
+    LIGHTWEIGHT_CCALL_FUNC(v, add_f, cdta, 2, q->len, offset, 2, sum, payload);
+    if(odd) {
+      swapped = !swapped;
+      LIGHTWEIGHT_CCALL_FUNC(v, swap_f, cdta, 0, 1, sum);
+    }
+
+  }
+
+  if(swapped) {
+    LIGHTWEIGHT_CCALL_FUNC(v, swap_f, cdta, 0, 1, sum);
+  }
+
+  LIGHTWEIGHT_CCALL_FUNC(v, checksum_extern_xor_int, cdta, 1, ~0, 1, sum);
+}
+
+
 /* Forward declarations.*/
 static err_t tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb, struct netif *netif);
 
@@ -435,6 +517,12 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
     optlen = LWIP_TCP_OPT_LENGTH_SEGMENT(0, pcb);
   }
 
+  capability sealed_arg = NULL;
+
+  if(cheri_getsealed(arg)) {
+      sealed_arg = arg;
+      arg = (NULL + (size_t)arg); // Set arg to a NULL tagged thing
+  }
 
   /*
    * TCP segmentation is done in three phases with increasing complexity:
@@ -542,9 +630,15 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
         /* If the last unsent pbuf is of type PBUF_ROM, try to extend it. */
         struct pbuf *p;
         for (p = last_unsent->p; p->next != NULL; p = p->next);
+
+        capability chk_cap = sealed_arg ? p->sealed_payload : p->payload;
+        size_t chk_len = cheri_getlen(chk_cap) + cheri_getoffset(chk_cap); // space left in cap
+        chk_len -= (size_t)(p->payload - p->sealed_payload); // offset by amount indicated in payload
+
         if (((p->type_internal & (PBUF_TYPE_FLAG_STRUCT_DATA_CONTIGUOUS | PBUF_TYPE_FLAG_DATA_VOLATILE)) == 0) &&
+            p->sealed_payload == sealed_arg &&
             (const u8_t *)p->payload + p->len == (const u8_t *)arg
-                && (cheri_getlen(p->payload) >= p->len + seglen + cheri_getoffset(p->payload))) {
+                && chk_len >= p->len + seglen) {
           LWIP_ASSERT("tcp_write: ROM pbufs cannot be oversized", pos == 0);
           extendlen = seglen;
         } else {
@@ -555,6 +649,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
           }
           /* reference the non-volatile payload data */
           ((struct pbuf_rom *)concat_p)->payload = (const u8_t *)arg + pos;
+          ((struct pbuf_rom *)concat_p)->sealed_payload = sealed_arg;
           queuelen += pbuf_clen(concat_p);
         }
 #if TCP_CHECKSUM_ON_COPY
@@ -625,7 +720,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
 #endif /* TCP_CHECKSUM_ON_COPY */
       /* reference the non-volatile payload data */
       ((struct pbuf_rom *)p2)->payload = (const u8_t *)arg + pos;
-
+        ((struct pbuf_rom *)p2)->sealed_payload = sealed_arg;
       /* Second, allocate a pbuf for the headers. */
       if ((p = pbuf_alloc(PBUF_TRANSPORT, optlen, PBUF_RAM)) == NULL) {
         /* If allocation fails, we have to deallocate the data pbuf as
@@ -1520,7 +1615,7 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb, struct netif *netif
 
   seg->p->payload = seg->tcphdr;
 
-  seg->tcphdr->chksum = 0;
+  tcp_set_pbuf_checksum_zero(seg->p);
 
 #ifdef LWIP_HOOK_TCP_OUT_ADD_TCPOPTS
   opts = LWIP_HOOK_TCP_OUT_ADD_TCPOPTS(seg->p, seg->tcphdr, pcb, opts);
@@ -1560,8 +1655,10 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb, struct netif *netif
     }
 #endif /* TCP_CHECKSUM_ON_COPY_SANITY_CHECK */
 #else /* TCP_CHECKSUM_ON_COPY */
-    seg->tcphdr->chksum = ip_chksum_pseudo(seg->p, IP_PROTO_TCP,
+    ip_chksum_pseudo_sealed(seg->p, IP_PROTO_TCP,
                                            seg->p->tot_len, &pcb->local_ip, &pcb->remote_ip);
+    //seg->tcphdr->chksum = ip_chksum_pseudo(seg->p, IP_PROTO_TCP,
+    //                                       seg->p->tot_len, &pcb->local_ip, &pcb->remote_ip);
 #endif /* TCP_CHECKSUM_ON_COPY */
   }
 #endif /* CHECKSUM_GEN_TCP */
@@ -1785,8 +1882,9 @@ tcp_output_alloc_header_common(u32_t ackno, u16_t optlen, u16_t datalen,
     tcphdr->ackno = lwip_htonl(ackno);
     TCPH_HDRLEN_FLAGS_SET(tcphdr, (5 + optlen / 4), flags);
     tcphdr->wnd = lwip_htons(wnd);
-    tcphdr->chksum = 0;
     tcphdr->urgp = 0;
+
+    tcp_set_pbuf_checksum_zero(p);
   }
   return p;
 }
@@ -1871,8 +1969,10 @@ tcp_output_control_segment(const struct tcp_pcb *pcb, struct pbuf *p,
 #if CHECKSUM_GEN_TCP
     IF__NETIF_CHECKSUM_ENABLED(netif, NETIF_CHECKSUM_GEN_TCP) {
       struct tcp_hdr *tcphdr = (struct tcp_hdr *)p->payload;
-      tcphdr->chksum = ip_chksum_pseudo(p, IP_PROTO_TCP, p->tot_len,
-                                        src, dst);
+      ip_chksum_pseudo_sealed(p, IP_PROTO_TCP, p->tot_len,
+                              src, dst);
+      //tcphdr->chksum = ip_chksum_pseudo(p, IP_PROTO_TCP, p->tot_len,
+      //                                  src, dst);
     }
 #endif
     if (pcb != NULL) {

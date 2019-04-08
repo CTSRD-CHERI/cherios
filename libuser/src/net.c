@@ -46,6 +46,14 @@ act_kt net_try_get_ref(void) {
 
 #define TCP_CALLBACK_PORT 123
 
+sealing_cap get_ethernet_sealing_cap(void) {
+    act_kt act = net_try_get_ref();
+    // TODO we should be getting a certified sealing cap
+    sealing_cap sc = message_send_c(0,0, 0, 0, NULL, NULL, NULL, NULL, act, SYNC_CALL, 5);
+    assert(sc != NULL);
+    return sc;
+}
+
 listening_token_or_er_t netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
                        capability callback_arg) {
     act_kt act = net_try_get_ref();
@@ -137,6 +145,8 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
     assert(requester != NULL);
 
     socket_requester_connect(sock->sock.write.push_writer);
+    sealing_cap sc = get_ethernet_sealing_cap();
+    socket_requester_restrict_seal(sock->sock.write.push_writer, sc);
     socket_fulfiller_connect(sock->sock.read.push_reader, requester);
 
     return sock;

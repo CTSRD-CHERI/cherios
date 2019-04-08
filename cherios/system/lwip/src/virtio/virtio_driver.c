@@ -217,13 +217,46 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
     int first_pbuf = 1;
     do {
         capability payload = (capability)(((char*)p->payload));
+        capability extra_payload = p->sealed_payload;
+
+        if(extra_payload) {
+            extra_payload = cheri_unseal(extra_payload, ether_sealer);
+            if(!cheri_gettag(payload)) {
+                size_t diff = payload - extra_payload;
+                payload = extra_payload + diff;
+            }
+        }
+
         le32 size = (le32)(p->len);
         if(first_pbuf) {
             payload += ETH_PAD_SIZE;
             size -=ETH_PAD_SIZE;
             first_pbuf = 0;
         }
-        int res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, payload, size, VIRTQ_DESC_F_NEXT);
+
+        int res = 0;
+
+        if(p->sp_length == 0) {
+           res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, payload, size, VIRTQ_DESC_F_NEXT);
+        } else {
+
+            uint16_t dst_off = p->sp_dst_offset;
+            uint16_t src_off = p->sp_src_offset;
+            uint16_t extra_len = p->sp_length;
+
+            if(dst_off) {
+                res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, payload, dst_off, VIRTQ_DESC_F_NEXT);
+            }
+            if(res >= 0) {
+                res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, extra_payload + src_off, extra_len, VIRTQ_DESC_F_NEXT);
+
+                uint32_t so_far = dst_off + extra_len;
+                int32_t remain = size - so_far;
+                if(res >= 0 && (so_far < size)) {
+                    res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, payload + so_far, remain, VIRTQ_DESC_F_NEXT);
+                }
+            }
+        }
 
         if(res < 0) {
             // We are out of buffers =(

@@ -75,6 +75,8 @@ typedef struct net_sock* NET_SOCK;
 
 act_kt net_try_get_ref(void);
 
+sealing_cap get_ethernet_sealing_cap(void);
+
 listening_token_or_er_t netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
                        capability callback_arg);
 void netsock_stop_listen(listening_token token);

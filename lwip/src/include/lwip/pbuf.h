@@ -190,6 +190,14 @@ struct pbuf {
   /** pointer to the actual data in the buffer */
   void *payload;
 
+  /** A pointer to sealed data in the buffer. If payload is untagged, offset by  **/
+  capability sealed_payload;
+
+  /** When writing copy the interval [sp + sp_src_offset, sp + sp_src_offset + sp_length] -> [sp_dst_offset, sp_dst_offset + sp_length] **/
+  uint16_t sp_src_offset;
+  uint16_t sp_dst_offset;
+  uint16_t sp_length;
+
   /**
    * total length of this buffer and all next buffers in chain
    * belonging to the same packet.
@@ -232,6 +240,8 @@ struct pbuf_rom {
 
   /** pointer to the actual data in the buffer */
   const void *payload;
+
+  const_capability sealed_payload;
 };
 
 #if LWIP_SUPPORT_CUSTOM_PBUF

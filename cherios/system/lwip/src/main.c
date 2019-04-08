@@ -43,7 +43,7 @@
 #include "lwip_driver.h"
 #include "thread.h"
 #include "deduplicate.h"
-
+#include "lwip/inet_chksum.h"
 
 enum session_close_state {
     SCS_NONE = 0,
@@ -87,6 +87,9 @@ typedef struct tcp_listen_session {
     capability callback_arg;
     register_t callback_port;
 }tcp_listen_session;
+
+sealing_cap sealer;
+sealing_cap ether_sealer; // FIXME: Eventually owned by the ethernet driver. This is for proof of concept
 
 static void user_tcp_close_send(tcp_session* tcp);
 static void user_tcp_close_recv(tcp_session* tcp);
@@ -350,6 +353,8 @@ ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length
 
     uint16_t to_send = (length > (uint64_t)tcp->tcp_pcb->snd_buf) ? tcp->tcp_pcb->snd_buf : (uint16_t)length;
 
+    assert(cheri_getsealed(buf));
+
     // TODO TCP_WRITE_FLAG_MORE may be useful here if we know that there is more coming
     err_t er = tcp_write(tcp->tcp_pcb, buf, (uint16_t)to_send, 0);
 
@@ -520,8 +525,6 @@ static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
     return er;
 }
 
-sealing_cap sealer;
-
 static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
                             act_kt callback, capability callback_arg, register_t callback_port) {
     tcp_listen_session* listen_session = (tcp_listen_session*)(malloc(sizeof(tcp_listen_session)));
@@ -632,9 +635,46 @@ static void user_gethostbyname(const char* name) {
     }
 }
 
+extern char checksum_foundation_data;
+extern char checksum_foundation_data_end;
+extern void checksum_found_enter_offset;
+
+void setup_checksum_found(sealing_cap sc) {
+    capability if_table[7];
+    capability data_arg;
+
+    char* start = &checksum_foundation_data;
+    char* stop = &checksum_foundation_data_end;
+    size_t entry_off = (size_t)&checksum_found_enter_offset;
+
+    size_t length = stop - start;
+
+
+    res_t res = cap_malloc(FOUNDATION_META_SIZE(1,length) + length);
+
+    entry_t entry = foundation_create(res, length, start, entry_off, 1, 0);
+    assert(entry != NULL);
+
+    foundation_enter(if_table, sc, &data_arg, NULL, NULL, entry, NULL);
+
+    SET_SYM(checksum_found_data, data_arg);
+    SET_FUNC(checksum_extern_make_new, if_table[0]);
+    SET_FUNC(checksum_extern_free, if_table[1]);
+    SET_FUNC(checksum_extern_set, if_table[2]);
+    SET_FUNC(checksum_extern_add_int, if_table[3]);
+    SET_FUNC(checksum_extern_xor_int, if_table[4]);
+    SET_FUNC(checksum_extern_swap_bytes, if_table[5]);
+    SET_FUNC(checksum_extern_add_buffer, if_table[6]);
+
+}
+
 int main(register_t arg, capability carg) {
     // Init session
     printf("LWIP Hello World!\n");
+
+    ether_sealer = get_type_owned_by_process();
+
+    setup_checksum_found(ether_sealer);
 
     net_session session;
 
@@ -785,7 +825,11 @@ int main(register_t arg, capability carg) {
     }
 }
 
-void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets, user_gethostbyname, stop_listening};
+static sealing_cap user_get_ether_sealer(void) {
+    return cheri_andperm(ether_sealer, CHERI_PERM_SEAL);
+}
+
+void (*msg_methods[]) = {user_tcp_connect, user_tcp_listen, user_tcp_connect_sockets, user_gethostbyname, stop_listening, user_get_ether_sealer};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, lwip_driver_handle_interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);
