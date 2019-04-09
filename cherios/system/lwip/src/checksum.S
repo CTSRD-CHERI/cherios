@@ -171,16 +171,16 @@ checksum_add_buffer:        # void(sealed_sum acc, capability sealed_data, size_
     clcbi       $c5, SEAL_CAP_OFF($idc)
     cgetsealed  $a2, $c4
     beqz        $a2, no_unseal
-    cgetaddr    $a3, $c4
+    cunseal     $c3, $c3, $c5
     cunseal     $c4, $c4, $c5
 no_unseal:
     cincoffset  $c4, $c4, $a1
-    cunseal     $c3, $c3, $c5
+    cgetaddr    $a3, $c4
     clhu        $a1, $zero, 0($c3)              # a1 is accu
 
     andi        $a2, $a3, 1
     beqz        $a2, 1f
-    neg         $a3, $a3
+    dnegu       $a3, $a3
 
 # In the odd case swap bytes
 
