@@ -149,6 +149,8 @@ extern void call_function_pointer_arg_mem(void);
 #define CROSS_DOMAIN(X) (__cross_domain_ ## X)
 #define TRUSTED_CROSS_DOMAIN(X) (__cross_domain_trusted_ ## X)
 
+#define SEALED_CROSS_DOMAIN(X) cheri_seal(&CROSS_DOMAIN(X), get_ctl()->cds)
+
 #define TRUSTED_DATA get_ctl()
 #define UNTRUSTED_DATA ({CTL_t* _ctl_tmp = get_ctl(); cheri_seal(_ctl_tmp,_ctl_tmp->cds);})
 

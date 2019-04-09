@@ -470,9 +470,9 @@ static void handle_sock_session(session_sock* ss) {
         ful_pack* pack = (ful_pack*)pair.data;
 
         pack->data_arg = pack->oob_data_arg = UNTRUSTED_DATA;
-        pack->ful = &CROSS_DOMAIN(ff);
-        pack->ful_oob = &CROSS_DOMAIN(oobff);
-        pack->sub = &CROSS_DOMAIN(ff_sub);
+        pack->ful = SEALED_CROSS_DOMAIN(ff);
+        pack->ful_oob = SEALED_CROSS_DOMAIN(oobff);
+        pack->sub = SEALED_CROSS_DOMAIN(ff_sub);
     }
 
     ssize_t res = socket_fulfill_progress_bytes_authorised(ss->ff, SOCK_INF,
