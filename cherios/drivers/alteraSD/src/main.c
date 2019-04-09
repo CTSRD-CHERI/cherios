@@ -52,6 +52,7 @@ typedef struct session_sock {
     fulfiller_t ff;
     size_t sector;
     size_t sector_prog;
+    uint8_t socket_type;
 } session_sock;
 
 typedef struct session_t {
@@ -190,6 +191,7 @@ int new_socket(session_t* session, requester_t requester, enum socket_connect_ty
     ssize_t res;
 
     ss->ff = socket_malloc_fulfiller(sock_type);
+    ss->socket_type = sock_type;
 
     if((res = socket_fulfiller_connect(ss->ff, requester)) < 0) return (int)res;
 
@@ -201,7 +203,9 @@ int new_socket(session_t* session, requester_t requester, enum socket_connect_ty
     return 0;
 }
 
-static ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+
+ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
 
@@ -282,10 +286,11 @@ static size_t memcpy_tmp(uint8_t* dst, uint8_t* src, size_t length) {
     return length;
 }
 
-static ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t TRUSTED_CROSS_DOMAIN(ful_ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
     session_sock *ss = (session_sock *) arg;
     altera_sd_mmio* mmio = ss->session->mmio;
-    int push = ss->ff.socket_type == SOCK_TYPE_PUSH;
+    int push = ss->socket_type == SOCK_TYPE_PUSH;
     uint64_t written = 0;
 
     while(length != 0) {
@@ -328,9 +333,10 @@ void vblk_interrupt(void* sealed_session, register_t a0, register_t irq) {
 }
 
 void handle_socket(session_sock* ss) {
-    ssize_t bytes = socket_internal_requester_bytes_requested(ss->ff.requester);
-    ssize_t res = socket_internal_fulfill_progress_bytes(&ss->ff, SOCK_INF, F_CHECK | F_PROGRESS | F_DONT_WAIT,
-                                                         &ful_ff, ss, 0, &full_oob, NULL);
+    ssize_t bytes = socket_fulfiller_bytes_requested(ss->ff);
+    ssize_t res = socket_fulfill_progress_bytes_unauthorised(ss->ff, SOCK_INF, F_CHECK | F_PROGRESS | F_DONT_WAIT,
+                                                         &TRUSTED_CROSS_DOMAIN(ful_ff), ss, 0, &TRUSTED_CROSS_DOMAIN(full_oob), NULL,
+                                                         TRUSTED_DATA, TRUSTED_DATA);
     if(bytes != 0 && res == E_AGAIN) return; // Allow just OOBS
     assert_int_ex(-res, <=, 0);
     assert_int_ex(res & (SECTOR_SIZE-1), ==, 0);
