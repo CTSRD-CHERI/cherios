@@ -31,6 +31,7 @@
 #define __ASSEMBLY__ 1
 .set MIPS_SZCAP, _MIPS_SZCAP
 #include "mips.h"
+#include "cheric.h"
 #include "dylink.h"
 #include "asm.S"
 
@@ -361,12 +362,20 @@ SAVE_R  $s7
 
 cmove           $c12, $c1                                                       # required for ABI
 
+.set N_INC,    16
+#if (!CAN_SEAL_ANY)
+.set N_INC, N_INC + 1
+#endif
+
 cgetpcc         cra
-cincoffset      cra, cra, (4 * 16)
+cincoffset      cra, cra, (4 * N_INC)
 
 clc             cds,    $zero,  CTLP_OFFSET_CDS(ctlp)                                        # seal our return closure
 cincoffset      ctmp,   csp,    CLO_SAFE_SIZE
 cseal           cra,    cra,    cds
+#if (!CAN_SEAL_ANY)
+csetboundsimm   ctmp,   ctmp, CAP_SIZE * 2
+#endif
 cseal           crd,    ctmp,   cds
 
 cld             $at,    $zero,  0(ctlp)
@@ -396,8 +405,17 @@ beqz            $t0,    2b
 daddiu          $at,    (callable_ready - returnable_ready)
 
 # We know this is a legal return closure. We can now load ctlp and check it is in a correct state.
+#if (CAN_SEAL_ANY)
 cmove           cusp, $idc                      # actually our current stack, but will be cusp on return so might as well be in this reg
+#endif
+
 clc             ctlp, $zero, CAP_SIZE($idc)
+
+#if (!CAN_SEAL_ANY)
+# We need to reload a stack with larger bounds because we were forced to set bounds
+clcbi           cusp, CTLP_OFFSET_CSP(ctlp)
+cincoffset      cusp,  cusp, CLO_SAFE_SIZE
+#endif
 
 # We still might be returning too early
 # at contains what we expect to find in our ctlp. Check we have it then mark ourselves as taken

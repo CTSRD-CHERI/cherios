@@ -32,9 +32,11 @@
 
 #include "exceptions.h"
 
-#define MinStackSize    0x2000 // The compiler throws away stacks smaller than this!
-// TODO - make this as large as can be represented exactly, or add logic to align up base/top
-#define Overrequest     (1*UNTRANSLATED_PAGE_SIZE) + MEM_REQUEST_MIN_REQUEST
+#define MinStackSize    0x4000 // The compiler throws away stacks smaller than this!
+
+// TODO this would waste less space with we automatically set up slinky regions
+#define NewTemporalStackSize 0x3FC00
+
 
 int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
 

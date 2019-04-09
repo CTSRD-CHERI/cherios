@@ -74,7 +74,9 @@ typedef enum mem_request_flags {
     ALIGN_TOP = 1,
     COMMIT_NOW = 2,
     COMMIT_DMA = 4,
-    COMMIT_UNCACHED = 8 // Only currently used with commit now as tracking would otherwise need additional plumbing
+    COMMIT_UNCACHED = 8, // Only currently used with commit now as tracking would otherwise need additional plumbing
+    // Make the returned reservation be exactly what was requested
+    EXACT_SIZE = 0x10
 } mem_request_flags;
 
 /* 'You' is defined by a system given token "memory ownership principle" (mop). You must quote this to the system.

@@ -1157,7 +1157,6 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
                 if(flags & COMMIT_DMA) search_page_n--;
                 if(can_use_range || can_use_part_range) {
-                    req_base = (page_n << UNTRANSLATED_BITS) + (2* RES_META_SIZE);
                     index.indexs[0] = NDX(search_page_n,0);
                     index.indexs[1] = NDX(search_page_n,1);
                     index.indexs[2] = NDX(search_page_n,2);
@@ -1241,7 +1240,13 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
                 assert(result != NULL);
             }
         }
+    } else if (flags & EXACT_SIZE) {
+        if(length > req_length) {
+            size_t bytes_too_many = length-req_length;
+            result = rescap_split(result, bytes_too_many-RES_META_SIZE);
+        }
     }
+
     return MAKE_VALID(res_t, result);
 }
 
