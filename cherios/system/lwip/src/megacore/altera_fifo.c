@@ -132,72 +132,106 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
     uint32_t got_bits = 0;
 
     do {
-        uint8_t * payload_8 = (uint8_t*)p->payload;
+        // Pbufs have an extra sealed payload. If sp_length is non zero it is a part of the payload, interted at some offset
+        // Otherwise it authorises the entire payload, and the payload will be untagged
+        uint8_t* buf = p->payload;
+        uint8_t* sbuf = p->sealed_payload;
+        uint16_t bufLen = p->len;
 
-        size_t align_off = (-cheri_getcursor(payload_8)) & 0x3;
+        uint16_t lenA = bufLen;
+        uint16_t lenB, lenC;
+
+        uint8_t* payloadA = buf;
+        uint8_t* payloadB = NULL;
+        uint8_t* payloadC = NULL;
 
         more = p->len != p->tot_len;
-        uint16_t len = p->len;
 
-        // Align source to 4 bytes
+        if(sbuf) {
+            sbuf = cheri_unseal(sbuf, ether_sealer);
+            if(p->sp_length) {
+                lenA = p->sp_dst_offset;
+                lenB = p->sp_length;
+                lenC = bufLen - (lenA + lenB);
+                payloadB = sbuf + p->sp_src_offset;
+                payloadC = buf + (lenA + lenB);
+            } else {
+                payloadA = sbuf + (size_t)(buf - sbuf);
+            }
+        }
 
-        if(align_off & 1) {
-            read_buf = (read_buf << 8) | (*payload_8);
-            got_bits+=8;
-            payload_8+=1;
-            len-=1;
-        }
-        if(len >= 2 && align_off & 2) {
-            read_buf = (read_buf << 16) | (*((uint16_t*)payload_8));
-            got_bits+=16;
-            payload_8+=2;
-            len-=2;
-        }
+        do {
+            uint8_t *payload_8 = payloadA;
+            uint16_t len = lenA;
+            size_t align_off = (-cheri_getcursor(payload_8)) & 0x3;
+
+            uint8_t frag_more = more || (payloadB != NULL);
+            // Align source to 4 bytes
+
+            if (align_off & 1) {
+                read_buf = (read_buf << 8) | (*payload_8);
+                got_bits += 8;
+                payload_8 += 1;
+                len -= 1;
+            }
+            if (len >= 2 && align_off & 2) {
+                read_buf = (read_buf << 16) | (*((uint16_t *) payload_8));
+                got_bits += 16;
+                payload_8 += 2;
+                len -= 2;
+            }
 
 #define WRITE                                                                           \
         word = (uint32_t)((read_buf >> (got_bits)) & 0xFFFFFFFF);                       \
         while(tx_fifo->ctrl_fill_level == AVALON_FIFO_TX_BASIC_OPTS_DEPTH);             \
-        if(len == 0 && (got_bits == 0) && !more) tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP);   \
+        if(len == 0 && (got_bits == 0) && !frag_more) tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP);   \
         tx_fifo->symbols = word;
 
-        uint32_t word;
+            uint32_t word;
 
-        if(got_bits >= 32) {
-            got_bits-=32;
-            WRITE
-        }
+            if (got_bits >= 32) {
+                got_bits -= 32;
+                WRITE
+            }
 
-        // Do fast 4 byte chunks
-        uint32_t* payload_32 = (uint32_t*)payload_8;
+            // Do fast 4 byte chunks
+            uint32_t *payload_32 = (uint32_t *) payload_8;
 
-        while(len >= 4) {
-            read_buf = (read_buf << 32) | (uint64_t)*(payload_32++);
-            len -=4;
-            WRITE
-        }
+            while (len >= 4) {
+                read_buf = (read_buf << 32) | (uint64_t) *(payload_32++);
+                len -= 4;
+                WRITE
+            }
 
-        // Handle (up to) last 3 bytes
-        payload_8 = (uint8_t*)payload_32;
+            // Handle (up to) last 3 bytes
+            payload_8 = (uint8_t *) payload_32;
 
-        if(len & 2) {
-            read_buf = (read_buf << 16) | (*((uint16_t*)payload_8));
-            got_bits+=16;
-            payload_8+=2;
-            len-=2;
-        }
+            if (len & 2) {
+                read_buf = (read_buf << 16) | (*((uint16_t *) payload_8));
+                got_bits += 16;
+                payload_8 += 2;
+                len -= 2;
+            }
 
-        if(len & 1) {
-            read_buf = (read_buf << 8) | (*payload_8);
-            got_bits+=8;
-            len-=1;
-        }
+            if (len & 1) {
+                read_buf = (read_buf << 8) | (*payload_8);
+                got_bits += 8;
+                len -= 1;
+            }
 
-        if(got_bits >= 32) {
-            got_bits-=32;
-            WRITE
-        }
+            if (got_bits >= 32) {
+                got_bits -= 32;
+                WRITE
+            }
 
-        assert_int_ex(len, ==, 0);
+            assert_int_ex(len, ==, 0);
+
+            payloadA = payloadB;
+            payloadB = payloadC;
+            payloadC = NULL;
+            lenA = lenB;
+            lenB = lenC;
+        } while(payloadA);
 
     } while(more && (p = p->next));
 
@@ -225,6 +259,7 @@ err_t lwip_driver_output_aligned(struct netif *netif, struct pbuf *p) {
     int more;
 
     do {
+        // TODO handle sealed payload
         uint32_t* payload = (uint32_t*)p->payload;
         uint32_t* end = (uint32_t*)(p->payload + p->len);
 
