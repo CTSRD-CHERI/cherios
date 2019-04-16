@@ -37,6 +37,6 @@
 	.ent start
 start:
 	j start_common
-    nop
+    cmove $c8, $c16
 
     .end start

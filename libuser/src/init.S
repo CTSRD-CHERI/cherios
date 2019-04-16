@@ -85,11 +85,12 @@ start_common:
 # c21   : self control reference                                                                                        #
 # c23   : namespace reference (may be null for init and namespace)                                                      #
 # c24   : kernel interface table                                                                                        #
+# c8 (moved from c16) : if request auth token                                                                           #
 #########################################################################################################################
 
 	# Save arguments
 
-	cincoffset  $c11, $c11, -(8*CAP_SIZE)
+	cincoffset  $c11, $c11, -(9*CAP_SIZE)
 	move		$s0, $a0
     csc         $c3, $zero, 0($c11)
     csc         $c19, $zero, (CAP_SIZE*1)($c11)
@@ -99,6 +100,7 @@ start_common:
     csc         $c6,  $zero, (CAP_SIZE*5)($c11)
     csc         $c9,  $zero, (CAP_SIZE*6)($c11)
     csc         $c7,  $zero, (CAP_SIZE*7)($c11)
+    csc         $c8,  $zero, (CAP_SIZE*8)($c11)
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
@@ -188,6 +190,10 @@ start_common:
 
     call_func   crt_init_bss
     call_func   crt_call_constructors # FIXME wont work, pcc wont cover enough
+
+    get_sym     $c7, nanoreq_auth
+    clc         $c8,  $zero, (CAP_SIZE*8)($c11)
+    cscbi       $c8, 0($c7)
 
 	# Call object init.
 	clc $c3, $zero, (CAP_SIZE*3)($c11)          # self_ctrl

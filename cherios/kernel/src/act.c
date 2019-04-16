@@ -326,6 +326,9 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	frame->cf_c23	= (capability)ns_ref;
 	frame->cf_c24	= (capability)get_if();
 
+	// Probably a better place to do this than here...
+	frame->cf_c16	= (capability)req_auth_for_activations;
+
 	/* set queue */
 	msg_queue_init(act, queue);
 

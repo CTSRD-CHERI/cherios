@@ -43,6 +43,7 @@ ALLOCATE_PLT_NANO
 static init_info_t init_info;
 capability fpga_cap;
 capability int_cap;
+if_req_auth_t req_auth_for_activations;
 
 capability
 crt_init_globals_kernel()
@@ -89,6 +90,7 @@ int cherios_main(nano_kernel_if_t* interface,
 				 context_t own_context,
 				 capability plt_auth_cap,
                  capability global_pcc,
+                 if_req_auth_t req_auth,
 				 size_t init_base,
                  size_t init_entry,
                  size_t init_tls_base) {
@@ -98,6 +100,7 @@ int cherios_main(nano_kernel_if_t* interface,
     init_nano_kernel_if_t(interface, def_data, &plt_common_complete_trusting);
 
     int_cap = get_integer_space_cap();
+    req_auth_for_activations = if_req_and_mask(req_auth, NANO_KERNEL_USER_ACCESS_MASK);
 
 	/* Get the capability for the uart. We should save this somewhere sensible */
     page_t* book = get_book();

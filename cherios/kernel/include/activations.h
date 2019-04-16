@@ -68,6 +68,8 @@ typedef	uint64_t sync_t;
 #define MAX_OFFSET 0x10000
 #define MAX_SEQ_NS (MAX_OFFSET - MIN_OFFSET)
 
+// A bit too permissive but hey-hoo
+#define NANO_KERNEL_USER_ACCESS_MASK ~0
 
 // We can only store a small constant in a pointer, so we point to one of these to add an extra constant
 // This requires an allocation, but only one every MAX_SEQ_NS. It is up to the user to provide reservations for new

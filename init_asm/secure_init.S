@@ -186,7 +186,7 @@ loop_footer: # with checks inlined at all the ends of the loop
 
 # Now we can go to common code
 	j start_common
-    cnull       $c8                                 # we should no longer need this
+    cmove       $c8, $c16                                 # c16 had what should be in c8 on entry to common
 
 .end start
 

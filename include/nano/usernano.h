@@ -50,7 +50,7 @@ __asm__ (                                           \
 /* Assuming you trust your memory (i.e. are secure loaded) you can call this to populate your nano kernel if and
  * then use the normal interface rather than having to use syscall repeatedly */
 
-static inline void init_nano_if_sys(void) {
+static inline void init_nano_if_sys(if_req_auth_t auth) {
     nano_kernel_if_t interface;
     size_t limit = N_NANO_CALLS;
     capability data;
@@ -59,6 +59,7 @@ static inline void init_nano_if_sys(void) {
             "li $a0, 0                      \n"
             "li $a1, 0                      \n"
             "li $t0, 0                      \n"
+            "cmove  $c3, %[auth]            \n"
             "1:syscall                      \n"
             "csc  $c1, $t0, 0(%[ifc])       \n"
             "daddiu $a1, $a1, 1             \n"
@@ -66,8 +67,8 @@ static inline void init_nano_if_sys(void) {
             "daddiu $t0, $t0, " CAP_SIZE_S "\n"
             "cmove  %[d], $c2               \n"
     : [d]"=C"(data)
-    : [ifc]"C"(&interface),[total]"r"(limit)
-    : "a0", "a1", "t0", "$c1", "$c2"
+    : [ifc]"C"(&interface),[total]"r"(limit), [auth]"C"(auth)
+    : "a0", "a1", "t0", "$c1", "$c2", "$c3"
     );
 
     init_nano_kernel_if_t(&interface, data, NULL);

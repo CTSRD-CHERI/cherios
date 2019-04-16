@@ -51,6 +51,7 @@
 #include "dylink_client.h"
 
 capability int_cap;
+if_req_auth_t nanoreq_auth;
 
 __thread act_control_kt act_self_ctrl = NULL;
 __thread act_kt act_self_ref  = NULL;
@@ -111,7 +112,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 
 	if(first_thread) {
         was_secure_loaded = (own_auth != NULL);
-        init_nano_if_sys(); // <- this allows us to use non sys versions by calling syscall in advance for each function
+        init_nano_if_sys(nanoreq_auth); // <- this allows us to use non sys versions by calling syscall in advance for each function
         if(cds_res) {
             get_ctl()->cds = tres_take(cds_res);
         }

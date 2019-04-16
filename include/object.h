@@ -45,6 +45,8 @@
 #define AUTO_DEDUP_STATS            0
 #define AUTO_COMPACT                0
 
+extern if_req_auth_t nanoreq_auth;
+
 extern __thread act_control_kt act_self_ctrl;
 extern __thread act_kt act_self_ref;
 extern __thread act_notify_kt act_self_notify_ref;

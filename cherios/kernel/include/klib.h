@@ -91,7 +91,7 @@ extern sealing_cap ref_sealer;
 #define FPGA_SHUTDOWN_OFFSET	0x500
 
 extern capability fpga_cap;
-
+extern if_req_auth_t req_auth_for_activations;
 /*
  * Kernel library routines.
  */

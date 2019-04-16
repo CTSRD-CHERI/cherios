@@ -52,6 +52,7 @@
 #define NANO_KERNEL_TYPE   0x0002         // The type of sealed local data
 #define RES_TYPE           0x0003         // The type of a reservation handle
 #define TRES_TYPE          0x0004         // The type of a type reservation
+#define IF_AUTH_TYPE       0x0005         // The type of the capability to request nano kernel capabilities by index using syscall
 #define FOUND_AUTH_TYPE    0x0010         // The type of an auth handle (like a private key)
 #define FOUND_ENTRY_TYPE   0x0011         // The type of a foundation entry handle
 #define FOUND_LOCKED_TYPE  0x0012         // The type of a foundation locked message handle (only unlocked by an auth, made by any)
@@ -304,6 +305,8 @@ typedef capability entry_t;                 // Type of a foundation entry handle
 typedef capability cert_t;                  // A certificate for capability
 typedef capability locked_t;                // A locked capability
 typedef capability auth_t;                  // A authorisation to sign and unlock. Granted by found_enter.
+
+typedef capability if_req_auth_t;
 
 /* Identifying information for a foundation. ALSO the public of a pair. Private half is an auth_t */
 typedef struct found_id_t {

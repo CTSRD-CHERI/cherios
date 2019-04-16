@@ -42,6 +42,7 @@
 start:
     # Save argumments to init
     cmove       $c19, $c3
+    cmove       $c23, $c16
     move		$s0, $a0
 
     # We will not have a stack set up because bootstrapping is hard.
@@ -69,6 +70,10 @@ start:
 
     # Call C constructors.
     call_func crt_call_constructors
+
+
+    get_sym     $c7, nanoreq_auth
+    cscbi       $c23, 0($c7)
 
 	# Call object init.
 	cmove		$c3, $c21 # self_ctrl

@@ -473,8 +473,14 @@ init_table_loop:
     # c1 a read only capability to nano kernel method table
     # c2 a data capability for the nano kernel
     # c3 the first context handle
+    # c4 is the capability to request nano kernel capabilities by index using syscall
+    candperm    $c4, $kdc, $zero
+    cincoffset  $c4, $c4, -1
+    cincoffset  $c6, $kdc, IF_AUTH_TYPE
+    cseal       $c4, $c4, $c6
+
     # a0 is to allow boot to pass an argument to the kernel. Don't want capabilities or they would have to be checked.
-    cclearlo    Reg_Encode_all & ~(EN5(c0, c1, c2, c3, c5))
+    cclearlo    Reg_Encode_all & ~(EN6(c0, c1, c2, c3, c4, c5))
     cclearhi    Reg_Encode_all & ~(EN6(c17, kdc, kcc, epcc, kr1c, kr2c))
 
     cjr         $c17
@@ -670,6 +676,19 @@ get_integer_space_cap:
     candperm    $c3, $kdc, $zero
     CRETURN
 
+####################################### (safe)
+# if_req_auth_t if_req_and_mask(if_req_auth_t req_auth, register_t mask)
+.global if_req_and_mask
+if_req_and_mask:
+#######################################
+    cincoffset  $c4, $kdc, IF_AUTH_TYPE
+    cunseal     $c3, $c3, $c4
+    cgetoffset  $t0, $c3
+    and         $t0, $t0, $a0
+    csetoffset  $c3, $c3, $t0
+    cseal       $c3, $c3, $c4
+    cnull       $c4
+    CRETURN
 
 ####################################### (safe)
 # capability obtain_super_powers(void)
@@ -3556,12 +3575,20 @@ tlb_table_missing: # (safe) (k1 will contain bad entry. 0 = needs mapping. -1 = 
 
 
 get_interface: # (safe)
+    # Check auth token. Return no code capability if not authed, but keep unchanged
+    cincoffset  $c1, $kdc, IF_AUTH_TYPE
+    cunseal     $c1, $c3, $c1
+    cgetoffset  $k0, $c1
+    dsrlv       $k0, $k0, $a1
+    andi        $k0, $k0, 1
+    beqz        $k0, skip_and_return
+    cnull       $c1
+
     dla         $k0, locals_start
     dli         $k1, locals_size
     csetoffset  $kr2c, $kdc, $k0
     csetboundsexact  $kr2c, $kr2c, $k1                        # kr1c will hold a capability to our locals
 
-    # TODO have a per context vector to say which functions are allowed
     dsll        $k1, $a1, CAP_SIZE_BITS
 
     dli         $k0, NANO_KERNEL_TYPE
