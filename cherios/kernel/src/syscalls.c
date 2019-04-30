@@ -40,6 +40,22 @@
 
 #define DECLARE_WITH_CD(A, B) A B; A __cross_domain_## B; A __cross_domain_trusted_## B
 
+DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_start(void));
+uint64_t kernel_syscall_bench_start(void) {
+	// disable all interrupts
+	cp0_status_ie_disable();
+	// start a timer
+	return get_high_res_time(cp0_get_cpuid());
+}
+
+DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_end(void));
+uint64_t kernel_syscall_bench_end(void) {
+	// finish time
+	uint64_t time = get_high_res_time(cp0_get_cpuid());
+	// enable interrupts again
+	cp0_status_ie_enable();
+}
+
 DECLARE_WITH_CD(void, kernel_syscall_info_epoch(void));
 void kernel_syscall_info_epoch(void) {
     // a bit racey but its only for debug
