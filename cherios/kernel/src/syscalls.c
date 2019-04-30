@@ -62,9 +62,11 @@ uint64_t kernel_syscall_bench_end(void) {
 DECLARE_WITH_CD(void, kernel_syscall_info_epoch(void));
 void kernel_syscall_info_epoch(void) {
     // a bit racey but its only for debug
+#if (K_DEBUG)
     FOR_EACH_ACT(act) {
             act->had_time_epoch = 0;
     }}
+#endif
 }
 
 DECLARE_WITH_CD(act_control_kt, kernel_syscall_actlist_first(void));
@@ -79,10 +81,20 @@ act_control_kt kernel_syscall_actlist_next(act_control_kt act) {
 	return next ? (act_control_kt)act_create_sealed_ctrl_ref(next) : NULL;
 }
 
+#if (!K_DEBUG)
+user_stats_t dummy_user_stats;
+#endif
+
 DECLARE_WITH_CD(user_stats_t*, kernel_syscall_act_user_info_ref(act_control_kt act));
 user_stats_t* kernel_syscall_act_user_info_ref(act_control_kt act) {
 	act_control_t* ctrl = act_unseal_ctrl_ref(act);
-	return cheri_setbounds_exact(&(ctrl->user_stats), sizeof(user_stats_t));
+	return cheri_setbounds_exact(
+#if (K_DEBUG)
+	                             &(ctrl->user_stats)
+#else
+	                             &dummy_user_stats
+#endif
+                                 , sizeof(user_stats_t));
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_act_info(act_control_kt act, act_info_t* info));
