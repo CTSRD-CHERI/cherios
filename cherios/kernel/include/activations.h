@@ -153,9 +153,8 @@ typedef struct act_t
 
 	/* Semaphore related */
 	struct act_t * semaphore_next_waiter;
-#ifndef __LITE__
+
 	char name[ACT_NAME_MAX_LEN];	/* Activation name (for debuging) */
-#endif
 
 } act_t;
 

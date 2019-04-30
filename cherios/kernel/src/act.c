@@ -71,38 +71,6 @@ sealing_cap sync_ref_sealer;
 sealing_cap sync_token_sealer;
 sealing_cap notify_ref_sealer;
 
-capability act_seal_for_call(act_t * act, sealing_cap sealer) {
-	return cheri_seal(act, sealer);
-}
-
-act_t* act_unseal_callable(act_t * act, sealing_cap sealer) {
-	return (act_t*)cheri_unseal(act, sealer);
-}
-
-act_t * act_create_sealed_ref(act_t * act) {
-	return (act_t *)act_seal_for_call(act, ref_sealer);
-}
-
-act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
-	return (act_control_t *)act_seal_for_call(act, ctrl_ref_sealer);
-}
-
-act_t * act_unseal_ref(act_t * act) {
-	return  (act_t *)act_unseal_callable(act, ref_sealer);
-}
-
-act_control_t* act_unseal_ctrl_ref(act_t* act) {
-	return (act_control_t*)act_unseal_callable(act, ctrl_ref_sealer);
-}
-
-act_t * act_create_sealed_sync_ref(act_t * act) {
-	return (act_t *)act_seal_for_call(act, sync_ref_sealer);
-}
-
-act_t * act_unseal_sync_ref(act_t * act) {
-	return  (act_t *)act_unseal_callable(act, sync_ref_sealer);
-}
-
 
 void act_set_event_ref(act_t* act) {
 	event_ref = act;
@@ -301,7 +269,7 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 		memgt_ref = act;
 	}
 
-#ifndef __LITE__
+
 	/* set name */
 	kernel_assert(ACT_NAME_MAX_LEN > 0);
 	int name_len = 0;
@@ -313,7 +281,6 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 		act->name[i] = c; /* todo: sanitize the name if we do not trust it */
 	}
 	act->name[name_len] = '\0';
-#endif
 
 	/* set status */
 	act->status = create_in_status;

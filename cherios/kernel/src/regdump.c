@@ -475,4 +475,16 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	backtrace(stack_pointer, return_address, frame->cf_idc, frame->cf_c17, frame->cf_c18);
 }
 
+#else
+
+void regdump(int reg_num, act_t* kernel_curr_act){
+
+}
+void backtrace(char* stack_pointer, capability return_address, capability idc, capability r17, capability c18) {
+
+}
+void kernel_dump_tlb(void) {
+
+}
+
 #endif

@@ -195,8 +195,6 @@ DECLARE_WITH_CD(void, kernel_syscall_puts(char *msg));
 void kernel_syscall_puts(char *msg) {
 	#ifndef __LITE__
 	kernel_printf(KGRN"%s" KREG KRST, msg);
-	#else
-	kernel_puts(msg);
 	#endif
 }
 

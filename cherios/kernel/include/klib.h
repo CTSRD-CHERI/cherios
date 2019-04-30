@@ -60,8 +60,10 @@
 				__FILE__, __LINE__, #e))
 	#define KERNEL_ERROR(...) kernel_error(__FILE__, __func__, __LINE__, __VA_ARGS__)
 #else
+	#define kernel_printf(...)
 	#define	kernel_assert(e)
 	#define KERNEL_ERROR(...)
+	#define kernel_puts(...)
 #endif
 
 // FIXME we need to really think about the types of IDs and REFs
@@ -77,14 +79,43 @@ static const uint64_t act_sync_ref_type = 0x4203;
 /* The type of object activation notification references */
 static const uint64_t act_notify_ref_type = 0x4204;
 
-capability act_seal_for_call(act_t * act, sealing_cap sealer);
-act_t* act_unseal_callable(act_t * act, sealing_cap sealer);
-
 extern sealing_cap sync_token_sealer;
 extern sealing_cap ctrl_ref_sealer;
 extern sealing_cap notify_ref_sealer;
 extern sealing_cap sync_ref_sealer;
 extern sealing_cap ref_sealer;
+
+static capability act_seal_for_call(act_t * act, sealing_cap sealer) {
+	return cheri_seal(act, sealer);
+}
+
+static act_t* act_unseal_callable(act_t * act, sealing_cap sealer) {
+	return (act_t*)cheri_unseal(act, sealer);
+}
+
+static act_t * act_create_sealed_ref(act_t * act) {
+	return (act_t *)act_seal_for_call(act, ref_sealer);
+}
+
+static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
+	return (act_control_t *)act_seal_for_call(act, ctrl_ref_sealer);
+}
+
+static act_t * act_unseal_ref(act_t * act) {
+	return  (act_t *)act_unseal_callable(act, ref_sealer);
+}
+
+static act_control_t* act_unseal_ctrl_ref(act_t* act) {
+	return (act_control_t*)act_unseal_callable(act, ctrl_ref_sealer);
+}
+
+static act_t * act_create_sealed_sync_ref(act_t * act) {
+	return (act_t *)act_seal_for_call(act, sync_ref_sealer);
+}
+
+static act_t * act_unseal_sync_ref(act_t * act) {
+	return  (act_t *)act_unseal_callable(act, sync_ref_sealer);
+}
 
 #define FPGA_BASE   			0x1f000000
 #define FPGA_SIZE   			0x900
@@ -144,13 +175,6 @@ act_control_t * act_register_create(reg_frame_t *frame, queue_t *queue, const ch
 								   status_e create_in_status, act_control_t *parent, res_t res, uint8_t cpu_hint);
 act_t *	act_get_sealed_ref_from_ctrl(act_control_t * ctrl);
 capability act_get_id(act_control_t * ctrl);
-
-act_t * act_create_sealed_ref(act_t * act);
-act_control_t * act_create_sealed_ctrl_ref(act_t * act);
-act_t * act_unseal_ref(act_t * act);
-act_control_t* act_unseal_ctrl_ref(act_t* act);
-act_t * act_create_sealed_sync_ref(act_t * act);
-act_t * act_unseal_sync_ref(act_t * act);
 
 void act_set_event_ref(act_t* act);
 

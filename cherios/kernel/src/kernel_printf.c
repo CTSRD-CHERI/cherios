@@ -32,7 +32,7 @@
 #include "klib.h"
 #ifndef __LITE__
 int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
-#endif
+
 #include "uart.h"
 
 /*
@@ -45,7 +45,6 @@ void kernel_puts(const char *s) {
 	}
 }
 
-#ifndef __LITE__
 static void uart_putchar(int c, void *arg __unused) {
 	uart_putc(c);
 }
@@ -64,6 +63,5 @@ int kernel_printf(const char *fmt, ...) {
 
 	return (retval);
 }
-#else
 
 #endif

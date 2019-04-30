@@ -66,6 +66,10 @@ int main(register_t arg, capability carg) {
         message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, sync_act, SYNC_CALL, 0);
     }
 
+    HW_TRACE_ON;
+    message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, sync_act, SYNC_CALL, 0);
+    HW_TRACE_OFF;
+
     end = syscall_bench_end();
 
     uint64_t diff2 = end - start;
