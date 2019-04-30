@@ -157,7 +157,7 @@ include_directories(cherios/system/fatfs/include)
 include_directories(libcrt/include)
 include_directories(lwip/src/include)
 
-set(O_LVL 1)
+set(O_LVL 3)
 
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
@@ -184,7 +184,6 @@ set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -ftls-model=local-exec
     -nostdinc
-    -fno-builtin
     -fomit-frame-pointer
     -ffreestanding
     -O${O_LVL} # TODO: make this depend on the configuration
@@ -448,6 +447,8 @@ add_subdirectory(client)
 
 add_subdirectory(nginx)
 add_subdirectory(top)
+
+add_subdirectory(benchmarks)
 
 #add_subdirectory(prga)
 #add_subdirectory(sockets)
