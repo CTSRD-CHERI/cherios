@@ -104,6 +104,9 @@ void	kernel_interrupt(register_t cause, uint8_t cpu_id);
 int kernel_interrupt_register(int number, act_control_t *ctrl, register_t v0, register_t arg, capability carg);
 int kernel_interrupt_enable(int number, act_control_t *ctrl);
 
+int kernel_interrupts_on(void);
+int kernel_interrupts_off(void);
+
 void	kernel_timer_init(uint8_t cpu_id);
 void	kernel_timer(uint8_t cpu_id);
 void 	kernel_timer_start_count(act_t* act);

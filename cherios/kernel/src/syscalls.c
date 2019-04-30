@@ -42,18 +42,21 @@
 
 DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_start(void));
 uint64_t kernel_syscall_bench_start(void) {
-	// disable all interrupts
-	cp0_status_ie_disable();
+	kernel_printf("Bench start\n");
+	// disable all interrupts on this core
+	kernel_interrupts_off();
 	// start a timer
 	return get_high_res_time(cp0_get_cpuid());
 }
 
 DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_end(void));
 uint64_t kernel_syscall_bench_end(void) {
+	kernel_printf("Bench end\n");
 	// finish time
 	uint64_t time = get_high_res_time(cp0_get_cpuid());
 	// enable interrupts again
-	cp0_status_ie_enable();
+	kernel_interrupts_on();
+	return time;
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_info_epoch(void));

@@ -44,6 +44,7 @@ typedef struct interrupt_register_t {
 
 static interrupt_register_t int_child[INTERRUPTS_N*SMP_CORES];
 static uint64_t masks[SMP_CORES];
+static uint8_t disabled[SMP_CORES];
 
 #define GET_REG(core,id) int_child[id + (core * INTERRUPTS_N)]
 
@@ -149,6 +150,50 @@ static int validate_number(int number) {
 	return number;
 }
 
+// Interrupts get enabled / disabled
+int kernel_interrupts_off(void) {
+
+	cp0_status_ie_disable();
+	uint8_t cpu_id = cp0_get_cpuid();
+	disabled[cpu_id] = 1;
+
+	register_t shifted = (1 << MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER);
+	modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, 0);
+
+	uint64_t n = 0;
+
+	uint64_t mask = masks[cpu_id];
+
+	while(mask) {
+		if(mask & 1) interrupts_mask(cpu_id, n, 0);
+		mask >>=1;
+		n ++;
+	}
+
+	cp0_status_ie_enable();
+}
+
+int kernel_interrupts_on(void) {
+	cp0_status_ie_disable();
+	uint8_t cpu_id = cp0_get_cpuid();
+	disabled[cpu_id] = 0;
+
+	register_t shifted = (1 << MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER);
+	modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, shifted);
+
+	uint64_t n = 0;
+
+	uint64_t mask = masks[cpu_id];
+
+	while(mask) {
+		if(mask & 1) interrupts_mask(cpu_id, n, 1);
+		mask >>=1;
+		n ++;
+	}
+
+	cp0_status_ie_enable();
+}
+
 int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 	// FIXME races
     KERNEL_TRACE("interrupt enable", "%d", number);
@@ -162,7 +207,8 @@ int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 	}
 
 	masks[cpu_id] |= 1L << number;
-	interrupts_mask(cpu_id, number, 1);
+
+	if(!disabled[cpu_id]) interrupts_mask(cpu_id, number, 1);
 
 	return 0;
 }
