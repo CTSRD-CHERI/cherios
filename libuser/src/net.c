@@ -373,6 +373,8 @@ NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrle
 
     NET_SOCK ns = accept_until_correct(sockfd, (sockfd->sock.flags | flags) & MSG_DONT_WAIT);
 
+    if(!ns) return NULL;
+
     flags |= sockfd->sock.flags;
 
     if((flags ^ ns->sock.flags) & SOCKF_GIVE_SOCK_N) {
