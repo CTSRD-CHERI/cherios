@@ -184,6 +184,7 @@ ccall_slotless  $c17, $c18, 2
 
 // fastpath also needs writing in assembly because it is allowed to return a message in argument registers
 
+#(capability c3, register_t v0 (a0), register_t v1 (a1), act_reply_kt reply_token (c4), int64_t timeout (a2), int notify_is_timeout(a3)
 .global __cross_domain_kernel_fastpath_wait
 //.ent __cross_domain_kernel_fastpath_wait
 __cross_domain_kernel_fastpath_wait:
@@ -198,7 +199,7 @@ cbez                $c4, fastwait_bail  # We require something to switch to for 
 get_sym             $c12, __cross_domain_fastpath_bailout
 bnez                $a2, fastwait_bail # currently if a timeout or notify as timeout is provided, we also bail
 get_sym             $c13, sync_token_sealer
-bnez                $a3, fastwait_bail
+
 get_sym             $c2, nano_kernel_if_t_data_obj
 
 # unseal token
@@ -232,7 +233,8 @@ cscd                $t1, $t1, $c1
 beqz                $t1, 1b
 li                  $t1, (0x10 | 0x400) # hoisted here, need for sched_q_swap_subroutine TODO sched_waiting | sched_wait_fastpath
 
-
+daddiu              $t0, $t1, 0x80 # TODO sched_notify
+movn                $t1, $t0, $a3   # If notify_is_timeout add in sched_wait_notify
 # now locked in to fastpath
 
 
