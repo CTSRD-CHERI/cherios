@@ -1050,7 +1050,7 @@ context_switch_exception_entry_custom_ccause: # (k0: reg_t cause, k1: reg_t ccau
     SYNC_EPCC
     QEMU_BUG_FIX $k1
     cld     $k1, $zero, (-INC_IM_MAX)($kr2c)            # Touch frame to cause TLB fault
-    cld     $k1, $zero, (CONTEXT_OFFSET_STATE)($kr2c)
+    cld     $k1, $zero, (CONTEXT_OFFSET_MAGIC)($kr2c)
                                                         # End restart point. Can't have TLB error here.
 
     cld     $k0, $zero, last_exception_cause($kr1c)           # must be reloaded after restart
