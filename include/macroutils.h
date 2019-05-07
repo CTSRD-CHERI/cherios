@@ -86,5 +86,7 @@
 #define MS_start(type, ...) type DEFER(SELECT_REC_IND)()(MS_base, DEFER(MS_rec_ind)(), __VA_ARGS__)
 #define MS_HELP(...) (EVAL(SELECT_REC(MS_void, MS_start, __VA_ARGS__)))
 
+// Blows up compiler with an integer. Use to get the size / offsets of structs ;)
+#define KABOOM_INT(X) char (*__kaboom)[X] = 1;
 
 #endif //CHERIOS_MACROUTILS_H
