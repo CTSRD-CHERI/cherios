@@ -179,6 +179,7 @@ int main(register_t arg, capability carg) {
                     ADD_F(sched_sem, 'S');
                     ADD_F(sched_wait_notify,'N');
                     ADD_F(sched_wait_commit, 'C');
+                    ADD_F(sched_wait_timeout,'T');
                     status[flags] = '\0';
                     sched_str = status;
             }
