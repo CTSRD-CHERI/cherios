@@ -169,6 +169,8 @@ END_LOCALS
 .set DEF_DATA_PERMS, (Perm_All & ~(Perm_Access_System_Registers | Perm_Seal | Perm_Unseal))
 .set DEF_SEALING_PERMS, (Perm_Seal | Perm_Unseal | Perm_Global)
 
+#define CONTEXT_REG $c8
+
 nano_kernel_start:
 
 # The following is a list of offsets (2 bytes each is sufficient) from the nano kernel start to
@@ -551,7 +553,7 @@ nano_smp_spin:
     and         $t0, $t0, $t1
     dmtc0       $t0, $12
 
-    clc         $c3, $zero, exception_context($kr1c)        # load exception context
+    clc         CONTEXT_REG, $zero, exception_context($kr1c)        # load exception context
 # setting k0 to -1 to make fake exception
     b           switch_restore_final
     dli         $k0, -1
@@ -994,24 +996,39 @@ make_first_er:
     cclearlo    EN2(c4, c5)
     CRETURN
 
+# Argument order is pretty funky. It can be called as context_swtich(v0, restore_from), or even context_switch(restore_from)
+# The arguments are passed to the restored context ONLY if the restored context called context_switch manually. Otherwise they are ignored.
+
 ##################################################################### (TODO unsafe? only when exl = 0)
-# void context_switch(context_t restore_from);
+# void context_switch(a0, a1, a2, a3, v0, v1, c3, c4, c5, c6, c1, restore_from)
 .global context_switch
 context_switch:
 #####################################################################
 
     # Enter an exception level to turn off interrupts. We must at the least switch from restore_from.
     # However we might switch to the exception_context
-    li      $a4, 0                                      # a4 can't get clobbered by an exception
-context_switch_local_entry: # void context_switch_local_entry(a4: reg_t cause)
+
+    dli         $t1, 0                                      # 0 is not a valid cause an indicates we switched manually
+
+# FIXME: We need to check call perms on c17/18
+    cgetsealed  $t2, $c17
+    beqz        $t2, context_switch_local_entry
+
+
+    cgettype    $t2, $c17
+    csetoffset  $c16, $kdc, $t2
+    cunseal     $c17, $c17, $c16
+    cunseal     $c18, $c18, $c16
+    cnull       $c16
+
+context_switch_local_entry: # void context_switch_local_entry(t1: reg_t cause)
 
     SET_EXL $t0
 
-    # TODO unseal these (if sealed)
     # WARN: We have changed idc here. If we ever get to user space this will leak. Must set in_switch before any exceptions
     cmove   $epcc, $c17
     cmove   $idc, $c18
-    move    $k0, $a4
+    move    $k0, $t1
 
 context_switch_exception_entry: # void context_switch_exception_entry(k0: reg_t cause)
     cgetcause   $k1
@@ -1043,13 +1060,15 @@ context_switch_exception_entry_custom_ccause: # (k0: reg_t cause, k1: reg_t ccau
     csc     $idc, $zero, (FRAME_idc_OFFSET-INC_IM_MAX)($kr2c)
     csc     $c1, $zero, (FRAME_pcc_OFFSET-INC_IM_MAX)($kr2c)
 
+    // save the cause a magic value where 0 means voluntary
+    csd     $k0, $zero, (CONTEXT_OFFSET_MAGIC)($kr2c)
     save_reg_frame_no_idc $kr2c, $k1                    # Save state (pcc and idc already saved and c1 already saved)
 
     bnez     $k0, switch_exception                      # set to exception cause if we used the local entry
     cincoffset  $c13 , $kdc, CONTEXT_TYPE
 
     b        switch_restore_final
-    cunseal  $c3, $c3, $c13                             # meant to be in delay
+    cunseal  CONTEXT_REG, CONTEXT_REG, $c13             # meant to be in delay
 
 switch_exception:                                       # void switch_exception(context_t victim, reg_t cause)
 
@@ -1060,8 +1079,8 @@ switch_exception:                                       # void switch_exception(
 
     clc     $c5, $zero, current_context($kr1c)          # Current context is the victim
     cseal   $c4, $c5, $c13                              # Seal c3 to pass to exception handler
-    clc     $c3, $zero, exception_context($kr1c)        # load exception context
-    CEXEQ   $t0, $c3, $c5
+    clc     CONTEXT_REG, $zero, exception_context($kr1c)# load exception context
+    CEXEQ   $t0, CONTEXT_REG, $c5
     bnez    $t0, nano_kernel_die
     csc     $c4, $zero, victim_context($kr1c)           # store victim
 
@@ -1080,29 +1099,64 @@ switch_exception:                                       # void switch_exception(
 switch_restore_final:                                   # void switch_restore(context_t restore_from)
     csd     $zero, $zero, exception_level($kr1c)        # critical_state.level = 0 (should be in delay)
     csd     $zero, $zero, supressed($kr1c)
-    csc     $c3, $zero, current_context($kr1c)          # set c3 it as the current context
+    csc     CONTEXT_REG, $zero, current_context($kr1c)  # set c3 it as the current context
     csd     $k0, $zero, last_exception_cause($kr1c)     # k0 could get clobbered by TLB exception
 
     # Current context has been set. We must restart from here
     li      $t0, 1
     csd     $t0, $zero, in_switch($kr1c)
 
-    # $c3 will be overwritten so use $kr2c.
-    cmove $kr2c, $c3
+    # CONTEXT_REG will be overwritten so use $kr2c.
+    cmove $kr2c, CONTEXT_REG
+
+    cmove       $c1, $c7
+    move        $v0, $a4
+    move        $v1, $a5
 
     cgetpcc $epcc                                       # Restart point
     SYNC_EPCC
-    QEMU_BUG_FIX $a0
+    QEMU_BUG_FIX $t0
 
     # Force exception early
-    cld         $a0, $zero, CONTEXT_OFFSET_STATE($kr2c)
-    bnez        $a0, nano_kernel_die                    # Check this context is still alive
+    cld         $t0, $zero, CONTEXT_OFFSET_STATE($kr2c)
+    bnez        $t0, nano_kernel_die                    # Check this context is still alive
     cld         $k1, $zero, (-INC_IM_MAX)($kr2c)
     # No exceptions from now on
 
-    restore_reg_frame $kr2c, $k1, $epcc
 
-    # From here we can only do a restore, and we are about to overwrite all registers.
+// This value is set if we entered internally when we context switched away
+    cld         $t0, $zero, (CONTEXT_OFFSET_MAGIC)($kr2c)
+    beqz        $t0, restore_half_label
+    grestore    $t0, 29, $kr2c # hoisted from special register restore
+
+    # Got to annyoing to macrofy. Instead writing out by hand.
+
+    crestore    $c1, 1, $kr2c
+    foreachi    crestore, 3, $kr2c, $c3, $c4, $c5, $c6
+    foreachi    grestore, 1, $kr2c, $v0, $v1, $a0, $a1, $a2, $a3
+
+restore_half_label:
+
+# special registers
+
+    grestore    $t1, 30, $kr2c
+    grestore    $t2, 31, $kr2c
+    mthi        $t0
+    mtlo        $t1
+    dmtc0       $t2, $4, 2
+
+    crestore    $c8, 0, $kr2c
+    csetdefault $c8
+
+# other GP
+    grestore    $at, 0, $kr2c
+    foreachi    grestore, 7, $kr2c, $a4, $a5, $a6, $a7, $t0, $t1, $t2, $t3, $s0, $s1, $s2, $s3, $s4, $s5, $s6, $s7, $t8, $t9, $gp, $sp, $fp, $ra
+
+# other Caps
+
+    crestore    $c2, 2, $kr2c
+    foreachi    crestore, 7, $kr2c, $c7, $c8, $c9, $c10, $c11, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c19, $c20, $c21, $c22, $c23, $c24, $c25, $c26, $epcc
+
     # It should be safe to mark this core as having switched for revoke signal
     li          $k1, 1
     csd         $k1, $zero, since_switched($kr1c)
@@ -1247,6 +1301,8 @@ allocated:
     csetboundsexact  $c4, $c4, $t0                               # will fail if we were out of space
     cincoffset  $c4, $c4, (INC_IM_MAX)
     csd         $zero, $zero, CONTEXT_OFFSET_STATE($c4)          # set state to allocated for new context
+    li          $t0, 1
+    csd         $t0, $zero, (CONTEXT_OFFSET_MAGIC)($c4)         # need to set this to a non zero as there has not been a voluntary switch
 
     # memcpy a0 bytes from c3 to c4
     dli         $t0, 0
@@ -1267,39 +1323,39 @@ memcpy_loop:
 
 
 ########################################################################
-# context_t destroy_context(context_t context, context_t restore_from);
+# context_t destroy_context(a0, a1, a2, a4, v0, v1, c3, c4, c5, c6, c3, c4, c5, c6, c1, restore_from(c8), destroy(c9));
 .global destroy_context
 destroy_context:
 ########################################################################
 
-    cincoffset  $c5, $kdc, CONTEXT_TYPE                     # Load sealing capability
-    cunseal     $c3, $c3, $c5                               # unseal context we are destroying
-    clc         $c6, $zero, current_context($kr1c)          # load current context
-    ceq         $t1, $c3, $c6                               # t1 = 1 if we are deleting ourselves
+    cincoffset  $c1, $kdc, CONTEXT_TYPE                     # Load sealing capability
+    cunseal     $c9, $c9, $c1                               # unseal context we are destroying
+    clc         $c2, $zero, current_context($kr1c)          # load current context
+    ceq         $t1, $c9, $c2                               # t1 = 1 if we are deleting ourselves
     dli         $t2, CONTEXT_STATE_DESTROYED
     dli         $t0, CONTEXT_OFFSET_STATE
-    cincoffset  $c6, $c3, $t0
+    cincoffset  $c2, $c9, $t0
 
-1:  clld        $t3, $c6
+1:  clld        $t3, $c2
     bnez        $t3, destroy_context_end                    # must be created
-    cscd        $t3, $t2, $c6
+    cscd        $t3, $t2, $c2
     beqz        $t3, 1b
     nop
 
     beqz        $t1, destroy_context_end                    # if we are not destroying ourselves we can end now
 
     # If we are here we are destroying ourselves, thus we should restore restore_from
-    cunseal     $c3, $c4, $c5
+    cunseal     $c8, $c8, $c1
     SET_EXL     $t1
 
     b           switch_restore_final
     li          $k0, 0
 
 destroy_context_end:
-    cclearlo    EN4(c3,c4,c5,c6)
+    cclearlo    EN4(c1,c2,c8,c9)
     CRETURN
 
-################################# (safe)
+################################# (safe) WARN: DO NOT MODIFY ANYTHING BUT V0. Calling assembly requires this.
 # uint8_t critical_section_enter();
 .global critical_section_enter
 critical_section_enter:
@@ -1927,7 +1983,7 @@ revoke_loop_end:
     cld         $t0, $zero, since_switched($kr1c)
     bnez        $t0, revoke_check_switched
 
-#   Call switch to ourselves.
+#   Call switch to ourselves. // FIXME: Now context switch when called locally does weird things
     clc         $c3, $zero, current_context($idc)
     cincoffset  $c5, $kdc, CONTEXT_TYPE
     cseal       $c3, $c3, $c5

@@ -33,7 +33,32 @@
 #define __ACTIVATIONS_H
 
 #define ACT_NAME_MAX_LEN (0x10)
-#define USER_KERNEL_STACK_SIZE 4096
+#define USER_KERNEL_STACK_SIZE  4096
+
+#define ACT_BIG_BIAS			(270 * 16) // We should really re-order the activation struct
+
+#define ACT_POOL_ID_OFFSET      4349
+#define ACT_SCHED_LOCK_OFFSET   4348
+#define ACT_PRIO_OFFSET         4336
+#define ACT_SCHED_SCHED_STATUS_OFFSET 4340
+#define ACT_Q_NDX_OFFSET        4350
+#define ACT_SYNC_TOKEN_OFFSET   4432
+#define ACT_CONTEXT_OFFSET      4384
+#define ACT_CONTEXT_SYNC_COND_OFFSET 4440
+#define ACT_SYNC_IND_OFFSET		4448
+
+#define ACT_C3_OFFSET 4400
+#define ACT_V0_OFFSET 4416
+#define ACT_V1_OFFSET 4424
+
+// FIXME: I made these numbers up. We should align act so they can be sufficiently large
+#define MIN_OFFSET (-0)
+#define MAX_OFFSET 0x10000
+#define MAX_SEQ_NS (MAX_OFFSET - MIN_OFFSET)
+
+#define FAST_RES_FAST 0
+#define FAST_RES_TIME 1
+#define FAST_RES_POP  2
 
 #ifndef __ASSEMBLY__
 
@@ -62,11 +87,6 @@ typedef	uint64_t sync_t;
 #define F_TOP_BIT (1ULL << 31)
 #define F_INC	  (1 << 16)
 #define HD_INC	  (1 << 32)
-
-// FIXME: I made these numbers up. We should align act so they can be sufficiently large
-#define MIN_OFFSET 0
-#define MAX_OFFSET 0x10000
-#define MAX_SEQ_NS (MAX_OFFSET - MIN_OFFSET)
 
 // A bit too permissive but hey-hoo
 #define NANO_KERNEL_USER_ACCESS_MASK ~0
@@ -126,11 +146,13 @@ typedef struct act_t
 	volatile uint64_t msg_tsx;
 
 	/* Scheduling related */
-	struct spinlock_t sched_access_lock;
 	enum sched_prio priority;
 	sched_status_e sched_status;	/* Current status */
-	uint8_t early_notify;
+	sched_status_e woke_from; /* Last wake caused by */
+	struct spinlock_t sched_access_lock;
 	uint8_t pool_id;
+	uint8_t queue_ndx;
+	uint8_t early_notify;
 	uint8_t is_idle;
 	register_t 	timeout_start;				/* To deal with trap around, store start + length , not end */
 	register_t 	timeout_length;
@@ -138,9 +160,22 @@ typedef struct act_t
 
 	context_t context;	/* Space to put saved context for restore */
 
+	// These are arguments to pass for fastpath. Keep c3/cv0/v1 contiguous
+
+	capability c3;
+	register_t v0;
+	register_t v1;
+	/* Currently only pass these fastpath arguments from assembly
+	register_t a0, a1;
+    capability c4, c5, c6, c1;
+    register_t a2, a3;
+    */
+
+//#define ACT_ARG_LIST(X) (X)->a0, (X)->a1, (X)->a2, (X)->a3, (X)->v0, (X)->v1, (X)->c3, (X)->c4, (X)->c5, (X)->c6, (X)->c1
+#define ACT_ARG_LIST(X) 0, 0, 0, 0, (X)->v0, (X)->v1, (X)->c3, NULL, NULL, NULL, NULL
+#define ACT_ARG_LIST_NULL 0, 0, 0, 0,  0, 0, NULL, NULL, NULL, NULL, NULL
 	/* Message pass related */
 	struct sync_state {
-		ret_t* sync_ret;                /* A pointer a struct to write the return message */
 		volatile sync_t sync_token;		/* The sequence number we expect next */
 		volatile int sync_condition;    /* A synchronisation flag for whether or not we expect a return */
         sync_indirection* current_sync_indir; /* The current indirection we are using to generate tokens */
@@ -159,6 +194,36 @@ typedef struct act_t
 } act_t;
 
 _Static_assert(ACT_REQUIRED_SPACE >= sizeof(act_t) + CONTEXT_SIZE + RES_META_SIZE, "Increase the size of act required space");
+
+#if (KERNEL_FASTPATH)
+
+_Static_assert(ACT_POOL_ID_OFFSET == offsetof(act_t, pool_id), "Used in fastpath assembly");
+_Static_assert(ACT_SCHED_LOCK_OFFSET == offsetof(act_t, sched_access_lock), "Used in fastpath assembly");
+_Static_assert(ACT_PRIO_OFFSET == offsetof(act_t, priority), "Used in fastpath assembly");
+_Static_assert(ACT_SCHED_SCHED_STATUS_OFFSET == offsetof(act_t, sched_status), "Used in fastpath assembly");
+_Static_assert(ACT_Q_NDX_OFFSET == offsetof(act_t, queue_ndx), "Used in fastpath assembly");
+
+_Static_assert(ACT_C3_OFFSET == offsetof(act_t, c3), "Used in fastpath assembly");
+_Static_assert(ACT_V0_OFFSET == offsetof(act_t, v0), "Used in fastpath assembly");
+_Static_assert(ACT_V1_OFFSET == offsetof(act_t, v1), "Used in fastpath assembly");
+_Static_assert(ACT_CONTEXT_OFFSET == offsetof(act_t, context), "Used in fastpath assembly");
+
+/*
+_Static_assert(ACT_C4_OFFSET == offsetof(act_t, c4), "Used in fastpath assembly");
+_Static_assert(ACT_C5_OFFSET == offsetof(act_t, c5), "Used in fastpath assembly");
+_Static_assert(ACT_C6_OFFSET == offsetof(act_t, c6), "Used in fastpath assembly");
+_Static_assert(ACT_C1_OFFSET == offsetof(act_t, c1), "Used in fastpath assembly");
+_Static_assert(ACT_A0_OFFSET == offsetof(act_t, a0), "Used in fastpath assembly");
+_Static_assert(ACT_A1_OFFSET == offsetof(act_t, a1), "Used in fastpath assembly");
+_Static_assert(ACT_A2_OFFSET == offsetof(act_t, a2), "Used in fastpath assembly");
+_Static_assert(ACT_A3_OFFSET == offsetof(act_t, a3), "Used in fastpath assembly");
+*/
+
+_Static_assert(ACT_CONTEXT_SYNC_COND_OFFSET == (offsetof(act_t, sync_state) + offsetof(struct sync_state, sync_condition)), "Used in fastpath assembly");
+_Static_assert(ACT_SYNC_TOKEN_OFFSET == offsetof(act_t, sync_state) + offsetof(struct sync_state, sync_token), "Used in fastpath assembly");
+_Static_assert(ACT_SYNC_IND_OFFSET == (offsetof(act_t, sync_state) + offsetof(struct sync_state, current_sync_indir)), "Used in fastpath assembly");
+
+#endif
 
 #define FOR_EACH_ACT(act) for(act_t* act = act_list_start; act != NULL; act = act->list_next) { if(!act->list_del_prog)
 

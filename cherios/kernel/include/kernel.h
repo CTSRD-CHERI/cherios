@@ -34,9 +34,11 @@
 //#define __TRACE__
 //#define __LITE__
 
-#define K_DEBUG 1
+#define K_DEBUG 0
 
-#define MAX_STATIC_ACTIVATIONS 8 // kernel + init + namespace + proc + memgt + memmgt worker *2. Then we need reservations.
+#define MAX_STATIC_ACTIVATIONS 8 // kernel + init + namespace + proc + memgt + memmgt worker *3. Then we need reservations.
+
+#define KERNEL_FASTPATH 1
 
 #ifdef HARDWARE_qemu
     #define	TIMER_INTERVAL		400000

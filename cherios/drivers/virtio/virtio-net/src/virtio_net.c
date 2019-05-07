@@ -72,10 +72,7 @@ void virtio_daemon_start(void) {
 
     // Handle loop:
     while(1) {
-        if(!msg_queue_empty()) {
-            msg_entry(1);
-        }
-        wait();
+        assert(0); // This seems unmainted
     }
 }
 

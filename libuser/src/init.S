@@ -250,7 +250,8 @@ start_common:
 	beqz    $t0, make_call
     load_func object_destroy
 
-    li      $a0, 0
+    li      $a0, -1
+    li      $a1, 0
     load_func msg_entry
 
 make_call:

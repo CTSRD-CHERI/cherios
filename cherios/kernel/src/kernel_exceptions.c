@@ -131,14 +131,17 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
     // We fire a dummy exception for starting CPUs to give their exception context a chance
     kernel_interrupts_init(1, cpu_id);
-    context_switch(sched_get_current_act_in_pool(cpu_id)->context);
+
+    act_t* kernel_curr_act = sched_get_current_act_in_pool(cpu_id)->context;
+
+    context_switch(ACT_ARG_LIST_NULL, kernel_curr_act);
 
 
     while(1) {
 
         get_last_exception(&ex_info);
 
-        act_t* kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
+        kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
 
         if(ex_info.victim_context != own_context) {
             // We only do this as handles are not guaranteed to stay fresh (although they are currently)
@@ -194,7 +197,7 @@ static void handle_exception_loop(context_t* own_context_ptr) {
         kernel_curr_act = sched_get_current_act_in_pool(cp0_get_cpuid());
 
         KERNEL_TRACE("exception", "restoring %s", kernel_curr_act->name);
-        context_switch(kernel_curr_act->context);
+        context_switch(ACT_ARG_LIST(kernel_curr_act), kernel_curr_act->context);
     }
 }
 

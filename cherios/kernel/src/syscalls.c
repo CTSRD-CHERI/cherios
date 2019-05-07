@@ -307,13 +307,20 @@ void kernel_syscall_cond_notify(act_t* act) {
 DECLARE_WITH_CD (void, kernel_message_send(capability c3, capability c4, capability c5, capability c6,
         register_t a0, register_t a1, register_t a2, register_t a3,
         act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret));
-void kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
+ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
                              register_t a0, register_t a1, register_t a2, register_t a3,
-                             act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret);
+                             act_t* target_activation, ccall_selector_t selector, register_t v0);
 
 
 
-DECLARE_WITH_CD(int, kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token));
+DECLARE_WITH_CD(void, kernel_syscall_hang_debug(void));
+void kernel_syscall_hang_debug(void) {
+	dump_sched();
+
+}
+
+DECLARE_WITH_CD(int, kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token, int hint_switch));
+DECLARE_WITH_CD(void, kernel_fastpath_wait(capability c3, register_t v0, register_t v1, act_reply_kt reply_token, int64_t timeout, int notify_is_timeout));
 
 #define SET_IF(call, ...)\
 kernel_if -> call = cheri_seal((capability)(&(__cross_domain_kernel_ ## call)), ctrl_ref_sealer);

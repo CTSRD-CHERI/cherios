@@ -48,9 +48,10 @@ struct sessions_t {
     unix_like_socket sock;
     FIL fil;
     locked_t encrypt_lock;
-    size_t ndx;
+    size_t next_ndx; // either next free, or next in list of open files
     uint64_t read_fptr;
     uint64_t write_fptr;
+    enum poll_events events;
     uint8_t current;
     spinlock_t session_lock;
     uint8_t in_use;
@@ -58,9 +59,7 @@ struct sessions_t {
 } sessions[MAX_HANDLES];
 
 size_t first_free = 0;
-
-poll_sock_t poll_socks[MAX_HANDLES];
-size_t session_ndx[MAX_HANDLES];
+size_t first_file = MAX_HANDLES;
 size_t n_files = 0;
 
 #define N_WORKERS 1
@@ -90,7 +89,7 @@ static void set_encrypt_lock(fs_proxy* proxy, locked_t locked) {
 }
 
 
-void close_file(size_t sndx, struct sessions_t* session, uint8_t level) {
+void close_file(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
     assert_int_ex(session->in_use, ==, 1);
 
     size_t poll_ndx;
@@ -108,26 +107,16 @@ void close_file(size_t sndx, struct sessions_t* session, uint8_t level) {
                 socket_close(&session->sock);
                 if(level == 2) break;
             case 2:
-                // Then compact poll_socks
-                poll_ndx = session->ndx;
-                poll_to_move = n_files-1;
-
-                if(poll_ndx != poll_to_move) {
-                    size_t session_ndx_to_move = session_ndx[poll_to_move];
-                    spinlock_acquire(&sessions[session_ndx_to_move].session_lock);
-                    poll_socks[poll_ndx] = poll_socks[poll_to_move];
-                    session_ndx[poll_ndx] = session_ndx_to_move;
-                    sessions[session_ndx_to_move].ndx = poll_ndx;
-                    spinlock_release(&sessions[session_ndx_to_move].session_lock);
-                }
-
+                // Used to have a poll socks structure. Now no more!
                 n_files--;
                 if(level == 3) break;
             case 3:
                 // Then free struct
                 session->in_use = 0;
-                session->ndx = first_free;
-                first_free = sndx;
+                size_t this_ndx = *prev_ndx;
+                *prev_ndx = session->next_ndx;
+                session->next_ndx = first_free;
+                first_free = this_ndx;
 
         }
         session->nice_close = level;
@@ -178,7 +167,7 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
             f_truncate(&fil->fil);
             return length;
         case REQUEST_CLOSE:
-            close_file(fil->ndx, fil, 1);
+            close_file(NULL, fil, 1);
             return length;
         case REQUEST_FLUSH:
             assert(0 && "TODO");
@@ -261,10 +250,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
     if(session->sock.con_type & CONNECT_PUSH_READ) wait_for |= POLL_IN;
     if(session->sock.con_type & CONNECT_PULL_WRITE) wait_for |= POLL_OUT;
 
-    // The index might be moved so we must acquire the lock
-    spinlock_acquire(&session->session_lock);
-    poll_socks[session->ndx].events = wait_for;
-    spinlock_release(&session->session_lock);
+    session->events = wait_for;
 }
 
 void worker_loop(register_t r, capability c) {
@@ -330,7 +316,6 @@ int open_file(int mode, requester_t read_requester, requester_t write_requester,
         return FR_TOO_MANY_OPEN_FILES;
     }
 
-    size_t next = sessions[first_free].ndx;
     struct sessions_t* session = &sessions[first_free];
 
     assert_int_ex(session->in_use, ==, 0);
@@ -366,25 +351,24 @@ int open_file(int mode, requester_t read_requester, requester_t write_requester,
         events |= POLL_OUT;
     }
 
-    poll_socks[n_files].events = events;
-    poll_socks[n_files].fd = &session->sock;
-    session_ndx[n_files] = first_free;
-    session->ndx = n_files;
-    session->read_fptr = session->write_fptr = 0;
-    session->encrypt_lock = encrpyt;
-    spinlock_init(&session->session_lock);
-
     FRESULT fres = FR_INVALID_PARAMETER;
     if(socket_init(&session->sock, MSG_DONT_WAIT | MSG_NO_CAPS, NULL, 0, con_type) == 0) {
         if((fres = f_open(fp, file_name, (BYTE)mode)) == 0) {
+            session->read_fptr = session->write_fptr = 0;
+            session->encrypt_lock = encrpyt;
+            spinlock_init(&session->session_lock);
             session->in_use = 1;
             session->nice_close = 0;
+            size_t next = session->next_ndx;
+            session->events = events;
+            session->next_ndx = first_file;
+            first_file = first_free;
             n_files++;
             first_free = next;
             return 0;
         }
     }
-    session->ndx = next; // If we did not allocate restore free chain
+
     return fres;
 }
 
@@ -426,48 +410,55 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 
 void request_loop(void) {
 
-    enum poll_events msg_event;
-
     for(size_t i = 0; i != MAX_HANDLES; i++) {
-        sessions[i].ndx = i+1;
+        sessions[i].next_ndx = i+1;
     }
 
+    POLL_LOOP_START(sock_sleep, sock_event, 1);
 
-    while(1) {
-        size_t poll_to = n_files;
-        socket_poll(poll_socks, poll_to, -1, &msg_event);
+        restart_loop: {}
 
-        if(msg_event) {
-            msg_entry(1);
-        }
-
-        for(size_t i = 0; i < poll_to; i++) {
-            poll_sock_t* poll_sock = poll_socks+i;
-            size_t sndx = session_ndx[i];
-            struct sessions_t* session = &sessions[sndx];
+        size_t * prev_ptr = &first_file;
+        for(size_t i = first_file; i!= MAX_HANDLES; i = sessions[i].next_ndx) {
+            struct sessions_t* session = &sessions[i];
+            assert_int_ex(session->in_use, ==, 1);
 
             if(session->nice_close == 2) {
-                close_file(sndx, session, UINT8_MAX);
-                break;
+                close_file(prev_ptr, session, UINT8_MAX);
+                goto restart_loop;
             }
 
-            assert_int_ex(session->in_use, ==, 1);
-            if(poll_sock->revents & (POLL_IN | POLL_OUT)) {
-                assert_int_ex(poll_sock->events, !=, POLL_NONE);
-                poll_sock->events = POLL_NONE;
-                assign_work(poll_sock->revents, session);
-            } else {
-                if(poll_sock->revents & POLL_HUP) {
-                    // a close happened
-                    close_file(sndx, session, UINT8_MAX);
-                    break; // closing may move things around. re-poll
+            if(session->events != POLL_NONE) {
+
+                enum poll_events event = 0;
+
+                if(session->events & POLL_IN) {
+                    POLL_ITEM_F(event_rd, sock_sleep, sock_event, session->sock.read.push_reader, POLL_IN, 0);
+                    event |= event_rd;
                 }
-                if(poll_sock->revents & (POLL_ER | POLL_NVAL)) {
-                    assert(0 && "TODO");
+                if(session->events & POLL_OUT) {
+                    POLL_ITEM_F(event_wr, sock_sleep, sock_event, session->sock.write.pull_writer, POLL_OUT, 0);
+                    event |= event_wr;
+                }
+
+                if(event & (POLL_IN | POLL_OUT)) {
+                    session->events = POLL_NONE;
+                    assign_work(event, session);
+                } else if(event){
+                    if(event & POLL_HUP) {
+                        close_file(prev_ptr, session, UINT8_MAX);
+                        goto restart_loop;
+                    }
+                    if(event & (POLL_ER | POLL_NVAL)) {
+                        assert(0 && "TODO");
+                    }
                 }
             }
+
+            prev_ptr = &session->next_ndx;
         }
-    }
+
+    POLL_LOOP_END(sock_sleep, sock_event, 1, 0);
 }
 
 int main(capability fs_cap) {

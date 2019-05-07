@@ -136,19 +136,19 @@ int socket_listen_rpc(register_t port,
     }
 
     if(msg.a0 != port) {
-        message_reply((capability)E_CONNECT_FAIL_WRONG_PORT,0,0,msg.c1);
+        message_reply((capability)E_CONNECT_FAIL_WRONG_PORT,0,0,msg.c1, 0);
         return (E_CONNECT_FAIL_WRONG_PORT);
     }
 
     if(msg.a1 != con_type) {
         // Send failure
-        message_reply((capability)E_CONNECT_FAIL_WRONG_TYPE,0,0,msg.c1);
+        message_reply((capability)E_CONNECT_FAIL_WRONG_TYPE,0,0,msg.c1, 0);
         return (E_CONNECT_FAIL_WRONG_TYPE);
     }
 
     if(fulfiller) {
         if(msg.c3 == NULL) {
-            message_reply((capability)E_CONNECT_FAIL,0,0,msg.c1);
+            message_reply((capability)E_CONNECT_FAIL,0,0,msg.c1, 0);
             return (E_CONNECT_FAIL);
         }
         int res = socket_fulfiller_connect(fulfiller, msg.c3);
@@ -156,7 +156,7 @@ int socket_listen_rpc(register_t port,
     }
 
     // ACK receipt
-    message_reply((capability)ro_req,0,0, msg.c1);
+    message_reply((capability)ro_req,0,0, msg.c1, 0);
 
 
     if(requester) {

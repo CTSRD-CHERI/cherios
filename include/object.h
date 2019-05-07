@@ -93,7 +93,12 @@ void next_msg(void);
 msg_t* get_message(void);
 void pop_msg(msg_t * msg);
 int msg_queue_empty(void);
-extern void msg_entry(int return_if_empty);
+// A timeout of < 0 means wait forever. Timeout will return from the routine/
+
+#define MSG_ENTRY_TIMEOUT_ON_NOTIFY 1   // Notify is a timeout
+#define MSG_ENTRY_TIMEOUT_ON_MESSAGE 2  // Messages are timeout
+
+extern void msg_entry(int64_t timeout, int flags);
 void msg_delay_return(sync_state_t* delay_store);
 int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store);
 

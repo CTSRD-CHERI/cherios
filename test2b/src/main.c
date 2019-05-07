@@ -30,7 +30,6 @@
 
 #include "lib.h"
 
-extern void msg_entry;
 void (*msg_methods[]) = {NULL};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};

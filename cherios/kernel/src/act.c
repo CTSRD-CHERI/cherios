@@ -367,7 +367,7 @@ int act_terminate(act_control_t * ctrl) {
 
 	/* If we get here, we terminated another activation and we are in charge of cleanup. If we delete ourselves
 	 * sched will take care of cleanup */
-	destroy_context(ctrl->context, NULL);
+	destroy_context(ACT_ARG_LIST_NULL, NULL, ctrl->context);
 
 	return 0;
 }

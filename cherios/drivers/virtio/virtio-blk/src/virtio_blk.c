@@ -323,38 +323,17 @@ int new_socket(session_t* session, requester_t requester, enum socket_connect_ty
 
 void handle_loop(void) {
 
-    int anything;
-    int set_waiting = 0;
-
-    while(1) {
-
-        if(!msg_queue_empty()) {
-            msg_entry(1);
-        }
-
-        // Try to avoid late notifies from last poll
-        if(set_waiting) syscall_cond_cancel();
-
-        anything = 0;
-
+    POLL_LOOP_START(sock_sleep, sock_event, 1)
         for(size_t i = 0; i < n_socks;i++) {
             if(socks[i].req_head == QUEUE_SIZE) {
-                enum poll_events event = socket_fulfill_poll(socks[i].ff, POLL_IN, set_waiting, 0, 0);
+                POLL_ITEM_F(event, sock_sleep, sock_event, socks[i].ff, POLL_IN, 0);
                 if(event) {
                     if(event & (POLL_HUP | POLL_ER | POLL_NVAL)) assert(0 && "Socket error in block device");
                     translate_sock(socks+i);
-                    anything = 1;
-                    set_waiting = 0;
                 }
             }
         }
-
-        if(!anything) {
-            if(set_waiting) syscall_cond_wait(1, 0);
-            // On the next loop we will set up notifications on the sockets
-            set_waiting = 1;
-        }
-    }
+    POLL_LOOP_END(sock_sleep, sock_event, 1, 0)
 }
 
 int vblk_init(session_t* session) {

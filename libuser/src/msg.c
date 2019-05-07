@@ -72,5 +72,5 @@ void msg_delay_return(sync_state_t* delay_store) {
 }
 
 int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store) {
-    return message_reply(c3, v0, v1, delay_store.sync_caller);
+    return message_reply(c3, v0, v1, delay_store.sync_caller, 1);
 }

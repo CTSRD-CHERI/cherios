@@ -364,6 +364,11 @@ ccall       \code, \data, \select
 nop
 .endm
 
+.macro ccall_link
+    cmove   $c18, $idc
+    ccall_l $c1, $c2, 2, $c17
+.endm
+
 .macro trap
     teqi        $zero, 0
 .endm

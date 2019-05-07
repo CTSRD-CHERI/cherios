@@ -47,9 +47,6 @@ PLT_thr(lib_socket_if_t, SOCKET_LIB_IF_LIST)
     int event_var = 0;                                              \
                                                                     \
     while(1) {                                                      \
-        if(messages && !msg_queue_empty()) {                        \
-        msg_entry(1);                                               \
-        }                                                           \
                                                                     \
         if(sleep_var) syscall_cond_cancel();                        \
         event_var = 0;
@@ -72,10 +69,15 @@ PLT_thr(lib_socket_if_t, SOCKET_LIB_IF_LIST)
 
 #define POLL_LOOP_END(sleep_var, event_var, messages, timeout)      \
     if(!event_var) {                                                \
-        if(sleep_var) syscall_cond_wait(messages, timeout);         \
+        if(sleep_var) {                                             \
+            if(messages) msg_entry(timeout - 1, MSG_ENTRY_TIMEOUT_ON_NOTIFY | MSG_ENTRY_TIMEOUT_ON_MESSAGE);\
+            else syscall_cond_wait(0, timeout);                     \
+        }                                                           \
         sleep_var = 1;                                              \
     }                                                               \
 }
+
+#define POLL_LOOP_CONTINUE continue
 
 enum socket_connect_type {
     CONNECT_NONE = 0,

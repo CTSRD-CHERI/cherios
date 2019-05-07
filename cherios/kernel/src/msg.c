@@ -208,6 +208,8 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
     sync_indirection* si = ccaller->sync_state.current_sync_indir;
 
 
+    if(sn > 0x700) kernel_printf("Sending from %s\n", ccaller->name);
+
     if(sn - si->sync_add == MAX_SEQ_NS) {
         si = alloc_new_indir(ccaller);
     }
@@ -267,9 +269,9 @@ size_t kernel_syscall_provide_sync(res_t res) {
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
-void kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
+ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
 					 register_t a0, register_t a1, register_t a2, register_t a3,
-					 act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret) {
+					 act_t* target_activation, ccall_selector_t selector, register_t v0) {
 
 	target_activation = act_unseal_ref(target_activation);
 	act_t* source_activation = (act_t*) CALLER;
@@ -279,16 +281,15 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 	if(target_activation->status != status_alive) {
 		KERNEL_ERROR("Trying to CCall revoked activation %s from %s",
 					 target_activation->name, source_activation->name);
-		ret->v0 = (register_t)-1;
-		ret->v1 = (register_t)-1;
-		ret->c3 = NULL;
-		return;
+        source_activation->v0 = (register_t)-1;
+        source_activation->v1 = (register_t)-1;
+        source_activation->c3 = NULL;
+		return (ret_t*)&source_activation->c3;
 	}
 
 	// Construct a sync_token if this is a synchronous call
 	capability sync_token = NULL;
 	if(selector == SYNC_CALL) {
-		source_activation->sync_state.sync_ret = ret;
 		sync_token = get_and_set_sealed_sync_token(source_activation);
 	}
 
@@ -308,7 +309,7 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
 		sched_block_until_event(source_activation, target_activation, sched_sync_block, 0, 0);
 
 		KERNEL_TRACE(__func__, "%s has recieved return message from %s", source_activation->name, target_activation->name);
-		return;
+		return (ret_t*)&source_activation->c3;
 	} else if(selector == SEND_SWITCH) {
         // No point trying to send and switch to something scheduled on another core
         if(source_activation->pool_id == target_activation->pool_id)
@@ -317,30 +318,28 @@ void kernel_message_send_ret(capability c3, capability c4, capability c5, capabi
         // Empty
 	}
 
-	ret->v0 = 0;
-	ret->v1 = 0;
-	ret->c3 = NULL;
-	return;
+	source_activation->v0 = 0;
+    source_activation->v1 = 0;
+    source_activation->c3 = NULL;
+    return (ret_t*)&source_activation->c3;
 }
 
-int kernel_message_reply(capability c3, register_t v0, register_t v1, capability sync_token) {
+act_kt set_message_reply(capability c3, register_t v0, register_t v1, capability sync_token) {
 
-    act_t * returned_from = (act_t*) CALLER;
+	act_t * returned_from = (act_t*) CALLER;
 
-    if(sync_token == NULL) {
-        KERNEL_TRACE(__func__, "%s did not provide a sync token", returned_from->name);
-        kernel_freeze();
-    }
+	if(sync_token == NULL) {
+		KERNEL_ERROR("%s did not provide a sync token", returned_from->name);
+		kernel_freeze();
+	}
 
-    // This will handle all races in multiple calls to return
-    act_t * returned_to = token_expected(sync_token);
+	// This will handle all races in multiple calls to return
+	act_t * returned_to = token_expected(sync_token);
 
-    if(!returned_to) {
-        KERNEL_ERROR("wrong sequence token from creturn");
-        kernel_freeze();
-    }
-
-    kernel_assert(returned_to->sync_state.sync_ret != NULL);
+	if(!returned_to) {
+		KERNEL_ERROR("wrong sequence token from creturn");
+		kernel_freeze();
+	}
 
 
 	KERNEL_TRACE(__func__, "%s correctly makes a sync return to %s", returned_from->name, returned_to->name);
@@ -348,15 +347,46 @@ int kernel_message_reply(capability c3, register_t v0, register_t v1, capability
 	/* At any point we might pre-empted, so the order here is important */
 
 	/* First set the message to be picked up when the condition is unset */
-	returned_to->sync_state.sync_ret->c3 = c3;
-	returned_to->sync_state.sync_ret->v0 = v0;
-	returned_to->sync_state.sync_ret->v1 = v1;
+	returned_to->c3 = c3;
+	returned_to->v0 = v0;
+	returned_to->v1 = v1;
 
 	/* Make the caller runnable again */
-    sched_receive_event(returned_to, sched_sync_block);
+	sched_receive_event(returned_to, sched_sync_block);
+
+	return returned_to;
+}
+
+int kernel_message_reply(capability c3, register_t v0, register_t v1, capability sync_token, int hint_switch) {
+
+	act_kt returned_to = set_message_reply(c3, v0, v1, sync_token);
 
 	// TODO have a selector. Do not assume the reply wants to be descheduled
-	sched_reschedule(returned_to, 0);
+	if(hint_switch) sched_reschedule(returned_to, 0);
 
 	return 0;
+}
+
+struct fastpath_return {
+	register_t v0;
+	register_t v1;
+};
+
+struct fastpath_return fastpath_bailout(capability c3, register_t v0, register_t v1, act_reply_kt reply_token, int64_t timeout, int notify_is_timeout) {
+
+	act_t * caller = (act_t*) CALLER;
+	act_kt returned_to = NULL;
+
+	if(reply_token) {
+		returned_to = set_message_reply(c3, v0, v1, reply_token);
+	}
+
+	sched_status_e events = sched_waiting;
+	if(notify_is_timeout) {
+	    events |= sched_wait_notify;
+	}
+
+	register_t time = sched_block_until_event(caller, returned_to, events, (register_t)timeout, 0);
+
+	return (struct fastpath_return){.v0 = 0, .v1 = caller->v1};
 }

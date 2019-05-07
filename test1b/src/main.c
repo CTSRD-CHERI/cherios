@@ -53,7 +53,6 @@ static id_t * setup(register_t * buf) {
 	return object;
 }
 
-extern void msg_entry;
 void (*msg_methods[]) = {setup, sum};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};

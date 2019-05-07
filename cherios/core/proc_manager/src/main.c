@@ -195,7 +195,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
 	frame.mf_s2 = flags;
 
-	act_control_kt ctrl = syscall_act_register(&frame, name, queue, cap_malloc(ACT_REQUIRED_SPACE), cpu_hint);
+	act_control_kt ctrl = syscall_act_register(&frame, name, queue, bootstrapping ? NULL : cap_malloc(ACT_REQUIRED_SPACE), cpu_hint);
 
 	act_kt act = syscall_act_ctrl_get_ref(ctrl);
 
@@ -336,7 +336,7 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 
 cap_pair proc_tmp_alloc(size_t s, Elf_Env* the_env) {
     /* Swaps to using the proper alloc when memmgt is up */
-    if(namespace_get_ref(namespace_num_memmgt) != NULL) {
+    if(!bootstrapping && namespace_get_ref(namespace_num_memmgt) != NULL) {
         the_env->alloc = &mmap_based_alloc;
         the_env->free = &mmap_based_free;
         return mmap_based_alloc(s, the_env);

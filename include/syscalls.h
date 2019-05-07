@@ -45,10 +45,12 @@
                                         const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
                                         act_kt dest, register_t selector, register_t v0), __VA_ARGS__,                          \
                                          ".global message_send_c \n message_send_c: \n", "message_send_c_end: .size message_send_c, message_send_c_end-message_send_c\n") \
-        ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller), __VA_ARGS__)          \
+        ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, int hint_switch), __VA_ARGS__)          \
 /* In mips clock ticks*/\
         ITEM(sleep, void, (register_t timeout), __VA_ARGS__)                                                                           \
-        ITEM(wait, void, (void), __VA_ARGS__)                                                                                \
+        ITEM(wait, void, (void), __VA_ARGS__)\
+/*Fastpath wait should not be called from C. Its API is detailed in msg.S*/\
+        ITEM(fastpath_wait, void, (capability c3, register_t v0, register_t v1, act_reply_kt reply_token, int64_t timeout, int notify_is_timeout), __VA_ARGS__)\
         ITEM(syscall_act_register, act_control_kt, (reg_frame_t * frame, const char * name, queue_t * queue, res_t res, uint8_t cpu_hint), __VA_ARGS__)\
         ITEM(syscall_act_ctrl_get_ref, act_kt, (act_control_kt ctrl), __VA_ARGS__)                                                          \
         ITEM(syscall_act_ctrl_get_status, status_e, (act_control_kt ctrl), __VA_ARGS__)                                      \
@@ -80,7 +82,8 @@
         ITEM(syscall_act_user_info_ref, user_stats_t*, (act_control_kt act), __VA_ARGS__)\
         ITEM(syscall_info_epoch, void, (void), __VA_ARGS__)\
         ITEM(syscall_bench_start, uint64_t, (void), __VA_ARGS__)\
-        ITEM(syscall_bench_end, uint64_t, (void), __VA_ARGS__)
+        ITEM(syscall_bench_end, uint64_t, (void), __VA_ARGS__)\
+        ITEM(syscall_hang_debug, void, (void), __VA_ARGS__)
 
 // Found by trial and error
 #ifdef HARDWARE_qemu

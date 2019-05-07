@@ -695,7 +695,7 @@ int main(register_t arg, capability carg) {
     assert_int_ex(res, ==, 0);
 
     while(try_get_fs() == NULL) {
-        sleep(0);
+        sleep(MS_TO_CLOCK(100));
     }
 
     httpd_init();
@@ -708,15 +708,15 @@ int main(register_t arg, capability carg) {
 
     printf("LWIP Should now be responsive\n");
 
-    int sock_sleep = 0;
-    int sock_event = 0;
+
 
     int ints = 0;
     int fake_ints = 0;
 
     register_t time = syscall_now();
     // Main loop
-    while(1) {
+    POLL_LOOP_START(sock_sleep, sock_event, 1)
+
         register_t now = syscall_now();
         if((now - time) >= MS_TO_CLOCK(10 * 1000)) { // Give a status report every 10 seconds
             time = now;
@@ -728,18 +728,11 @@ int main(register_t arg, capability carg) {
                    now, ints, fake_ints, n_listens, n);
             stats_display();
         }
-        sock_event = 0;
 
         sys_check_timeouts();
 
         netif_poll_all();
         // Wait for a message or socket
-
-        // Respond to messages (may include interrupt getting called or a new socket being created)
-        if(!msg_queue_empty()) {
-            ints++;
-            msg_entry(1);
-        }
 
         // If our interrupt was set after incoming packets we miss them?
         // Someting goes horribly wrong here.
@@ -749,7 +742,7 @@ int main(register_t arg, capability carg) {
         while(lwip_driver_poll(&session)) {
             if(!msg_queue_empty()) {
                 ints++;
-                msg_entry(1);
+                msg_entry(0, 0);
             } else {
                 fake_ints++;
                 lwip_driver_handle_interrupt(&session, 0, session.irq); // Fake an interrupt
@@ -788,13 +781,8 @@ int main(register_t arg, capability carg) {
 
             if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
                 if(tcp_session->tcp_pcb->snd_buf) { // dont even bother if the send window is already full
-                    enum poll_events revents = socket_fulfill_poll(tcp_session->tcp_input_pushee, tcp_session->events, sock_sleep, 1, 0);
-                    if(revents) {
-                        sock_event = 1;
-                        sock_sleep = 0;
-                    }
+                    POLL_ITEM_F(revents, sock_sleep, sock_event, tcp_session->tcp_input_pushee, tcp_session->events, 1);
                     if(revents & POLL_IN) {
-                        sock_event = 1;
                         handle_fulfill(tcp_session);
                     } else if(revents & (POLL_ER | POLL_HUP)) {
                         // The user shouldn't close their requester unless there has been an error, so close everything
@@ -814,15 +802,7 @@ int main(register_t arg, capability carg) {
 
         }
 
-        if(sock_sleep) {
-            // This is poll based but we don't want to delay. If there is loopback skip sleeping to process it
-            if(nif.loop_first == NULL)
-                syscall_cond_wait(1, MS_TO_CLOCK(250)); // Roughly enough for most TCP things
-            //wait();
-        } else if (!sock_event) sock_sleep = 1;
-
-
-    }
+    POLL_LOOP_END(sock_sleep, sock_event, 1, MS_TO_CLOCK(250)); // Roughly enough for most TCP things
 }
 
 static sealing_cap user_get_ether_sealer(void) {

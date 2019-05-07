@@ -45,6 +45,8 @@ typedef enum status_e
 /*
  * Scheduling status for an activation
  */
+// TODO these values are used by fastpath assembly. Macrofy them.
+
 typedef enum sched_status_e
 {
     sched_runnable = 0,
@@ -56,6 +58,7 @@ typedef enum sched_status_e
     sched_wait_notify   = 0x80,      /* Waiting on a notify */
     sched_wait_timeout  = 0x100,     /* Waiting on a timeout */
     sched_wait_commit   = 0x200,     /* Waiting on a vmem commit */
+    sched_wait_fastpath = 0x400,     /* Waiting on a message, fast path supported. WARN: Used by fastpath assembly. */
 } sched_status_e;
 
 /* Scheduling priorities. Higher gets exponentially more time. */

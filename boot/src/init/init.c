@@ -272,6 +272,8 @@ static capability load_check(const char* name) {
     return addr;
 }
 
+#define PAUSE sleep(MS_TO_CLOCK(100))
+
 static void load_modules(init_info_t * init_info) {
     /* This got a little complicated and has been taken out the loop */
 
@@ -416,11 +418,12 @@ static void load_modules(init_info_t * init_info) {
 
 		if(type == m_fence) {
             if(be->arg) {
+                int t = 0;
                 while(namespace_get_ref((int)be->arg) == NULL) {
-                    nssleep(3);
+                    PAUSE;
                 }
             } else {
-                nssleep(1);
+                PAUSE;
             }
 			continue;
 		}

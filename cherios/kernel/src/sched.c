@@ -45,46 +45,35 @@
 
 /* todo: sleep cpu */
 static act_t idle_acts[SMP_CORES];
+sched_pool sched_pools[SMP_CORES];
+
+void dump_sched(void) {
+	for(act_t* act = act_list_start; act != NULL; act = act->list_next) {
+		kernel_printf("%20s : status %x\n", act->name, act->sched_status);
+	}
+
+	for(size_t p = 0; p != SMP_CORES; p++) {
+		sched_pool* pool = &sched_pools[p];
+		kernel_printf("Pool %ld has %ld items:\n", p, pool->in_queues);
+		for(size_t q = 0; q != SCHED_PRIO_LEVELS; q++) {
+			sched_q* qu = &pool->queues[q];
+			kernel_printf("  Queue %ld:\n", q);
+			for(size_t i = 0; i != qu->act_queue_end; i++) {
+				act_t* act = qu->act_queue[i];
+				kernel_printf("    Act: %s\n", act ? act->name : "NULL");
+			}
+		}
+	}
+}
 
 static void sched_nothing_to_run(void) __dead2;
 static void sched_nothing_to_run(void) {
 	KERNEL_ERROR("No activation to schedule");
 
-    for(act_t* act = act_list_start; act != NULL; act = act->list_next) {
-        kernel_printf("%20s : status %x\n", act->name, act->sched_status);
-    }
+	dump_sched();
 
 	kernel_freeze();
 }
-
-#define SCHED_QUEUE_LENGTH 0x10
-#define LEVEL_TO_NDX(level) ((level > PRIO_IO) ? PRIO_IO : level)
-
-
-typedef struct sched_q {
-	act_t* 		act_queue[SCHED_QUEUE_LENGTH];
-	size_t   	act_queue_current; // index round robin. MAY NOT ACTUALLY BE CURRENT;
-	size_t   	act_queue_end;	   // index for end;
-	uint8_t		queue_ctr;		   // a counter for how many tasks at this level have been processed
-} sched_q;
-
-typedef struct sched_pool {
-	/* The currently scheduled activation */
-	act_t*		idle_act;
-	act_t* 		current_act; // DONT use the current index for this. This can be accessed without a lock.
-	sched_q 	queues[SCHED_PRIO_LEVELS];
-	size_t 		in_queues;
-	spinlock_t 	queue_lock;
-    uint8_t     pool_id;
-#if (K_DEBUG)
-    uint32_t    last_time;
-    STAT_DEBUG_LIST(STAT_MEMBER)
-#endif
-} sched_pool;
-
-sched_pool sched_pools[SMP_CORES];
-
-#define FOREACH_POOL(p) for(sched_pool* p = sched_pools; p != (sched_pools + SMP_CORES); p++)
 
 void sched_init(sched_idle_init_t* sched_idle_init) {
     uint8_t i = 0;
@@ -128,44 +117,34 @@ static void add_act_to_queue(sched_pool* pool, act_t * act, sched_status_e set_t
 	kernel_assert(q->act_queue_end != SCHED_QUEUE_LENGTH);
     kernel_assert(!act->is_idle);
 	spinlock_acquire(&pool->queue_lock);
-	q->act_queue[q->act_queue_end++] = act;
+	size_t index = q->act_queue_end++;
+	q->act_queue[index] = act;
+	act->queue_ndx = (uint8_t)index;
 	act->sched_status = set_to;
 	pool->in_queues++;
  	spinlock_release(&pool->queue_lock);
 }
 
-static void delete_act_from_queue(sched_pool* pool, act_t * act, sched_status_e set_to, size_t index_hint) {
+static void delete_act_from_queue(sched_pool* pool, act_t * act, sched_status_e set_to) {
     size_t index;
 
 	kernel_assert(!act->is_idle);
 
-	restart: index = 0;
 	sched_q* q = &pool->queues[LEVEL_TO_NDX(act->priority)];
 
-	if(q->act_queue[index_hint] == act) {
-		index = index_hint;
-	} else if (q->act_queue[q->act_queue_current] == act) {
-		index = q->act_queue_current;
-	} else {
-		size_t i;
-		for(i = 0; i < q->act_queue_end; i++) {
-			if(q->act_queue[i] == act) {
-				index = i;
-				break;
-			}
-		}
-	}
+	index = act->queue_ndx;
 
 	spinlock_acquire(&pool->queue_lock);
-	if(q->act_queue[index] != act) {
-		spinlock_release(&pool->queue_lock);
-		goto restart;
-	}
+
+	kernel_assert(q->act_queue[index] == act);
+
 	q->act_queue_end--;
 	q->act_queue[index] = q->act_queue[q->act_queue_end];
+	q->act_queue[index]->queue_ndx = index;
 	q->act_queue[q->act_queue_end] = NULL;
 
 	act->sched_status = set_to;
+	act->queue_ndx = (uint8_t)-1;
 	pool->in_queues--;
 	spinlock_release(&pool->queue_lock);
 }
@@ -215,7 +194,7 @@ void sched_change_prio(act_t* act, enum sched_prio new_prio) {
 		uint8_t out_pool_id; // This is the pool id of the currently running thing
 		CRITICAL_LOCKED_BEGIN_ID(&act->sched_access_lock, out_pool_id);
 		if(act->sched_status <= sched_running) {
-			delete_act_from_queue(&sched_pools[act->pool_id], act, act->sched_status, 0);
+			delete_act_from_queue(&sched_pools[act->pool_id], act, act->sched_status);
 			act->priority = new_prio;
 			add_act_to_queue(&sched_pools[act->pool_id], act, act->sched_status);
 		} else {
@@ -238,7 +217,7 @@ void sched_delete(act_t * act) {
 	kernel_assert((deleted_from_own_pool || !deleted_running) && "Need to send an interrupt to achieve this");
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
-		delete_act_from_queue(&sched_pools[act->pool_id], act, sched_terminated, 0);
+		delete_act_from_queue(&sched_pools[act->pool_id], act, sched_terminated);
 	}
 
 	act->sched_status = sched_terminated;
@@ -262,7 +241,13 @@ void sched_receive_event(act_t* act, sched_status_e events) {
 		kernel_assert(act->sync_state.sync_condition == 1);
 		act->sync_state.sync_condition = 0;
 	}
-	if(act->sched_status & events) {
+	sched_status_e cause_wake = act->sched_status & events;
+	if(cause_wake) {
+		// Fast path related. Waking something in the fastpath wait needs to set v1.
+		if(cause_wake & (sched_wait_notify | sched_wait_timeout)) act->v1 = FAST_RES_TIME;
+		else if(cause_wake & sched_waiting) act->v1 = FAST_RES_POP;
+
+		act->woke_from = (act->sched_status & events);
 	    // TODO on multicore if we wake up a high priority activation on another core
 	    //  we might want to send an IPI to kick off a low priority activation
 		if(act->sched_status & sched_wait_timeout) {
@@ -287,16 +272,16 @@ register_t sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e 
 	if(timeout > 0) {
 		events |= sched_wait_timeout;
 	}
-    int got_event = 0;
+    sched_status_e got_event = 0;
 
     CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
 
-    if((events & sched_sync_block) && !act->sync_state.sync_condition) got_event = 1;
-    if((events & sched_waiting) && !msg_queue_empty(act)) got_event = 1;
-    if((events & sched_wait_commit) && act->commit_early_notify) got_event = 1;
+    if((events & sched_sync_block) && !act->sync_state.sync_condition) got_event |= sched_sync_block;
+    if((events & sched_waiting) && !msg_queue_empty(act)) got_event |= sched_waiting;
+    if((events & sched_wait_commit) && act->commit_early_notify) got_event |= sched_wait_commit;
     if((events & sched_wait_notify) && act->early_notify) {
         act->early_notify = 0;
-        got_event = 1;
+        got_event |= sched_wait_notify;
     }
     if(events & sched_sem) kernel_panic("Not implemented");
 
@@ -314,6 +299,10 @@ register_t sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e 
 		return (get_high_res_time(cp0_get_cpuid()) - act->timeout_start);
 	}
 
+	// Fast path related. Waking something in the fastpath wait needs to set v1.
+	if(got_event & (sched_wait_notify | sched_wait_timeout)) act->v1 = FAST_RES_TIME;
+	else if (got_event & sched_waiting) act->v1 = FAST_RES_POP;
+
 	return 0;
 }
 
@@ -322,7 +311,7 @@ void sched_block(act_t *act, sched_status_e status) {
 	kernel_assert(status >= sched_waiting);
 
 	if(act->sched_status == sched_runnable || act->sched_status == sched_running) {
-		delete_act_from_queue(&sched_pools[act->pool_id], act, status, 0);
+		delete_act_from_queue(&sched_pools[act->pool_id], act, status);
 	} else {
 		act->sched_status = status;
 	}
@@ -384,7 +373,7 @@ static act_t * sched_picknext(sched_pool* pool) {
 
 	if(next->priority & PRIO_IO) {
 		// IO priority gets scheduled once then set back to normal priority
-		delete_act_from_queue(pool, next, next->sched_status, q->act_queue_current);
+		delete_act_from_queue(pool, next, next->sched_status);
 		next->priority &= ~PRIO_IO;
 		add_act_to_queue(pool, next, next->sched_status);
 	}
@@ -480,11 +469,11 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
             if(!in_exception_handler) {
                 if (from->status == status_terminated) {
                     KERNEL_TRACE("sched", "now destroying %s", from->name);
-                    destroy_context(from->context, to->context); // This will never return
+                    destroy_context(ACT_ARG_LIST(to), to->context, from->context); // This will never return
                 }
                 /* We are here on the users behalf, so our context will not be restored from the exception_frame_ptr */
                 /* swap state will exit ALL the critical sections and will seem like a no-op from the users perspective */
-                context_switch(to->context);
+                context_switch(ACT_ARG_LIST(to), to->context);
             }
 		} else {
 			spinlock_release(&hint->sched_access_lock);

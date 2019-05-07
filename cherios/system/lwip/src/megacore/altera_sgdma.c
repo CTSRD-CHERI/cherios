@@ -33,6 +33,8 @@
 #include "mman.h"
 #include "endian.h"
 
+
+//FIXME don't use hit WB it doesn't work on cheri. use index WB
 static void wb_cache(size_t addr, size_t length) {
     size_t end = addr + length;
     size_t base = (addr) & ~(L2_LINE_SIZE-1);
@@ -289,7 +291,7 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
         uint16_t length = p->len;
 
         // Force writeback before any DMA
-        wb_cache((size_t)payload, length);
+        // wb_cache((size_t)payload, length);
 
         if(!more) flags |= PHY_HANDLE_EOP;
 

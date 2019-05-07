@@ -49,9 +49,9 @@
  * in a limited static region */\
     ITEM(create_context, context_t, (reg_frame_t*, initial_state, res_t res), __VA_ARGS__)  \
 /* Deletes a context, restore_from is ONLY used if a context is destroying itself */\
-    ITEM(destroy_context, context_t, (context_t, context, context_t, restore_from), __VA_ARGS__) \
+    ITEM(destroy_context, context_t, (register_t, a0, register_t, a1, register_t, a2, register_t, a3, register_t, v0, register_t, v1, capability, c3, capability, c4, capability, c5, capability, c6, capability, c1, context_t, restore_from, context_t, destroy), __VA_ARGS__) \
 /* Switch to a handle, and store a handle for the suspended context to the location pointed to by store_to */\
-    ITEM(context_switch, void, (context_t, restore_from), __VA_ARGS__) \
+    ITEM(context_switch, void, (register_t, a0, register_t, a1, register_t, a2, register_t, a3, register_t, v0, register_t, v1, capability, c3, capability, c4, capability, c5, capability, c6, capability, c1, context_t, restore_from), __VA_ARGS__) \
 /* Delays interrupts until exit is called the same number of times OR context_switch is called */\
     ITEM(critical_section_enter, uint8_t, (void), __VA_ARGS__) \
     ITEM(critical_section_exit, void, (void), __VA_ARGS__) \
