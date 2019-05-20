@@ -118,6 +118,8 @@ static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
 
     kernel_curr_act->last_vaddr_fault = badvaddr;
 }
+
+extern int in_bench;
 /*
  * Exception handler demux to various more specific exception
  * implementations.
@@ -141,6 +143,10 @@ static void handle_exception_loop(context_t* own_context_ptr) {
 
         get_last_exception(&ex_info);
 
+        if(in_bench == 0) {
+
+        }
+        kernel_assert(in_bench == 0);
         kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
 
         if(ex_info.victim_context != own_context) {

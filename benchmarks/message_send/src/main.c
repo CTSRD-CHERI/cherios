@@ -33,8 +33,10 @@
 #include "syscalls.h"
 #include "msg.h"
 #include "stdio.h"
+#include "capmalloc.h"
 
 #define SYNC_SAMPLES 0x1000
+#define SYNC_TIMES 0x10
 
 void null_func(void) {}
 
@@ -43,38 +45,75 @@ void send_rec(register_t reg, capability cap) {
     msg_entry(-1, 0);
 }
 
-int main(register_t arg, capability carg) {
-    // Test sync send
-    thread t = thread_new("sync_send_rec", 0, NULL, &send_rec);
+void become_untrust(capability sealer) {
+    get_ctl()->cds = sealer;
+    get_ctl()->cdl = &entry_stub;
+    init_kernel_if_t_change_mode(&plt_common_untrusting);
+}
 
-    act_kt sync_act = syscall_act_ctrl_get_ref(get_control_for_thread(t));
-
-    // warm up
-
-    for(int i = 0; i != 32; i++) {
-        message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, sync_act, SYNC_CALL, 0);
-    }
-
+void nothing() {
     uint64_t start = syscall_bench_start();
     uint64_t end = syscall_bench_end();
 
     uint64_t diff1 = end - start;
 
-    start = syscall_bench_start();
-
-    for(int i = 0; i != SYNC_SAMPLES; i++) {
-        message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, sync_act, SYNC_CALL, 0);
-    }
-
-    end = syscall_bench_end();
-
-    uint64_t diff2 = end - start;
-
     printf("******BENCH: Nothing: %lx\n", diff1);
-    printf("******BENCH: SyncSend %x : %lx\n", SYNC_SAMPLES, diff2);
 }
 
-void (*msg_methods[]) = {null_func};
+void send(act_kt sync_act) {
+
+    nothing();
+
+    for(int tms = 0; tms != SYNC_TIMES; tms++) {
+
+        // Make sure we have enough tokens
+
+        syscall_next_sync();
+
+        // warm up
+
+        for(int i = 0; i != 32; i++) {
+            message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, sync_act, SYNC_CALL, 0);
+        }
+
+        uint64_t start = syscall_bench_start();
+
+        for(int i = 0; i != SYNC_SAMPLES; i++) {
+            message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, sync_act, SYNC_CALL, 0);
+        }
+
+        size_t end = syscall_bench_end();
+
+        uint64_t diff2 = end - start;
+
+        printf("******BENCH: SyncSend %x of %x (x%x) : %lx\n", tms+1, SYNC_TIMES, SYNC_SAMPLES, diff2);
+    }
+
+    return;
+}
+
+int main(register_t arg, capability carg) {
+    // Test sync send
+
+
+    thread t = thread_new("sync_send_rec", 0, NULL, &send_rec);
+
+    act_kt sync_act = syscall_act_ctrl_get_ref(get_control_for_thread(t));
+
+    syscall_provide_sync(cap_malloc(0x1000));
+
+    // Test sending
+    send(sync_act);
+
+    // become distrusting
+    become_untrust(get_type_owned_by_process());
+
+    message_send(0, 0, 0, 0, get_ctl()->cds, NULL,NULL, NULL, sync_act, SYNC_CALL, 1);
+
+    send(sync_act);
+}
+
+void (*msg_methods[]) = {null_func, become_untrust};
 
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
