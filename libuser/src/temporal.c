@@ -51,7 +51,7 @@ capability new_stack(capability old_c10) {
 
     // FIXME: mem_request will consume some of the temporal unsafe stack
     // FIXME: we should give ourselves a new one if it looks like its running out
-    ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, EXACT_SIZE, own_mop);
+    ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, EXACT_SIZE | COMMIT_NOW, own_mop);
     // if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
 
     if(!IS_VALID(stack_res)) {

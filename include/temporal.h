@@ -35,8 +35,8 @@
 #define MinStackSize    0x4000 // The compiler throws away stacks smaller than this!
 
 // TODO this would waste less space with we automatically set up slinky regions
-#define NewTemporalStackSize 0x3FC00
-
+//#define NewTemporalStackSize 0x3FC00
+#define NewTemporalStackSize 0xff000
 
 int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
 
