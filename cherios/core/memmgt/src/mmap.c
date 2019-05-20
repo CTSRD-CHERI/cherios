@@ -1191,7 +1191,8 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         // must commit before we size node as sizing the node needs access to the reservation
         // TODO think of a good default for how pages to allocate contiguously for commit now
         if(npages > 1) {
-            size_t contig_base = vmem_commit_vmem_range(page_n << UNTRANSLATED_BITS, npages,
+            size_t commit_off = (flags & COMMIT_DMA) ? 0 : 1;
+            size_t contig_base = vmem_commit_vmem_range((page_n+commit_off) << UNTRANSLATED_BITS, npages - commit_off,
                                                         (flags & COMMIT_DMA) ? npages : 0x10, flags);
             if (phy_base) *phy_base = contig_base;
         } else if(phy_base) {
