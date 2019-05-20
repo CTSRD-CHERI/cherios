@@ -190,6 +190,7 @@ sync_indirection* alloc_new_indir(act_t* ccaller) {
 
     sync_indirection* si = cheri_setbounds_exact(pair.data, SI_SIZE);
 
+    ccaller->sync_state.current_sync_indir = si;
     si->act = ccaller;
     si->sync_add = ccaller->sync_state.sync_token;
 

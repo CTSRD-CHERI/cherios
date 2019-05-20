@@ -75,6 +75,7 @@
         ITEM(syscall_change_priority, void, (act_control_kt ctrl, enum sched_prio priority), __VA_ARGS__)\
         ITEM(syscall_dump_tlb, void, (void), __VA_ARGS__)\
         ITEM(syscall_provide_sync, size_t, (res_t res), __VA_ARGS__)\
+        ITEM(syscall_next_sync, void, (void), __VA_ARGS__)\
 /* Some quesitonable syscalls i'm using for debugging */\
         ITEM(syscall_actlist_first, act_control_kt, (void), __VA_ARGS__)\
         ITEM(syscall_actlist_next, act_control_kt, (act_control_kt act), __VA_ARGS__)\

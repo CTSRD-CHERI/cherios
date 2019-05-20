@@ -40,21 +40,24 @@
 
 #define DECLARE_WITH_CD(A, B) A B; A __cross_domain_## B; A __cross_domain_trusted_## B
 
+int in_bench = 0;
+
 DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_start(void));
 uint64_t kernel_syscall_bench_start(void) {
-	kernel_printf("Bench start\n");
 	// disable all interrupts on this core
 	kernel_interrupts_off();
 	// start a timer
+	in_bench = 1;
 	return get_high_res_time(cp0_get_cpuid());
 }
 
 DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_end(void));
 uint64_t kernel_syscall_bench_end(void) {
-	kernel_printf("Bench end\n");
 	// finish time
 	uint64_t time = get_high_res_time(cp0_get_cpuid());
 	// enable interrupts again
+
+	in_bench = 0;
 	kernel_interrupts_on();
 	return time;
 }
@@ -128,6 +131,11 @@ void kernel_syscall_dump_tlb(void) {
 }
 
 DECLARE_WITH_CD(size_t, kernel_syscall_provide_sync(res_t res));
+
+DECLARE_WITH_CD(void, kernel_syscall_next_sync(void));
+void kernel_syscall_next_sync(void) {
+	alloc_new_indir(CALLER);
+}
 
 DECLARE_WITH_CD(void, kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority));
 void kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority) {

@@ -166,6 +166,8 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 void	msg_queue_init(act_t* act, queue_t * queue);
 int	msg_queue_empty(act_t* act);
 
+sync_indirection* alloc_new_indir(act_t* ccaller);
+
 context_t	act_init(context_t own_context, init_info_t* info, size_t init_base, size_t init_entry, size_t init_tls_base,
 					capability global_pcc);
 void	act_wait(act_t* act, act_t* next_hint);
