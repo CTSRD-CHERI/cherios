@@ -55,7 +55,10 @@
 #define B_T2 0
 #define B_T3 0
 
-#define B_BENCH 1
+#define B_BENCH 0
+
+#define B_BENCH_MS      0
+#define B_BENCH_CALLS   0
 
 char* nginx_args[] = {"nginx",NULL};
 #define NGINX_ARGS_L 1
@@ -155,7 +158,8 @@ init_elem_t init_list[] = {
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
 	B_WAIT_FOR(namespace_num_fs)
     B_WAIT_FOR(namespace_num_tcp)
-    B_DENTRY(m_user, "message_send.elf", 0, B_BENCH)
+    B_DENTRY(m_user, "message_send.elf", 0, B_BENCH && B_BENCH_MS)
+    B_DENTRY(m_user, "calls.elf", 0, B_BENCH && B_BENCH_CALLS)
     B_DENTRY(m_user,    "nginx.elf", 0, 0)
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
@@ -164,17 +168,17 @@ init_elem_t init_list[] = {
 	B_PENTRY(m_user,	"test1a.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"test2a.elf",		0,	B_T2)
 	B_PENTRY(m_user,	"test2b.elf",		0,	B_T2)
-    B_PENTRY(m_user,    "exception_test.elf", 0, 1)
-    B_PENTRY(m_user, "unsafe_test.elf", 0, 1)
-    B_PENTRY(m_user,    "dedup_test.elf", 0, 1)
-    B_PENTRY(m_user,    "socket_test.elf", 0 ,1)
-    B_PENTRY(m_user, "fs_test.elf", 0, 1)
+    B_PENTRY(m_user,    "exception_test.elf", 0, !B_BENCH)
+    B_PENTRY(m_user, "unsafe_test.elf", 0, !B_BENCH)
+    B_PENTRY(m_user,    "dedup_test.elf", 0, !B_BENCH)
+    B_PENTRY(m_user,    "socket_test.elf", 0 ,!B_BENCH)
+    B_PENTRY(m_user, "fs_test.elf", 0, !B_BENCH)
 //    B_DENTRY(m_user, "server.elf", 0, 1)
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
-    B_PENTRY(m_secure,    "foundation_test.elf", 0, 1)
+    B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH)
     B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1)
-    B_PENTRY(m_user, "top.elf", 0, 1)
+    B_PENTRY(m_user, "top.elf", 0, !B_BENCH)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
