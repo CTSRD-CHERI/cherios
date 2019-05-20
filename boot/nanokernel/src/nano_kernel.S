@@ -960,6 +960,10 @@ get_top_level_table:
     clearlo     EN1(c4)
     CRETURN
 
+.global nano_dummy
+nano_dummy:
+    CRETURN
+
 ##################################### (safe)
 # res_t make_first_reservation(void)
 .global make_first_reservation

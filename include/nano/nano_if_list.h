@@ -174,7 +174,8 @@
 /* Perform an address translation (sadly not hardware accelerated). Will touch the address if need be unless dont_commit */\
     ITEM(translate_address, uint64_t, (uint64_t, virt_addr, int, dont_commit), __VA_ARGS__)\
 /* Remove the right to request certain functions by anding the bitvector with a given mask */\
-    ITEM(if_req_and_mask, if_req_auth_t, (if_req_auth_t, req_auth, register_t, mask), __VA_ARGS__)
+    ITEM(if_req_and_mask, if_req_auth_t, (if_req_auth_t, req_auth, register_t, mask), __VA_ARGS__)\
+    ITEM(nano_dummy, void, (void), __VA_ARGS__)
 /* TODO We need a method to convert something certified and encrypt it for remote attestation */
 
 #define RAW_TO_NORMAL(name, ret, raw_sig, X, ...) X(name, ret, MAKE_SIG(raw_sig), __VA_ARGS__)
