@@ -48,6 +48,8 @@
 #define CTR(NAME)       (__COUNTER__  - sizeof(struct _CTR_TYPE_ ## NAME ## _start))
 
 #define STRINGIFY(X) #X
+#define X_STRINGIFY(X) STRINGIFY(X)
+
 #define EVAL(...)  EVAL1(EVAL1(EVAL1(__VA_ARGS__)))
 #define EVAL1(...) EVAL2(EVAL2(EVAL2(__VA_ARGS__)))
 #define EVAL2(...) EVAL3(EVAL3(EVAL3(__VA_ARGS__)))
