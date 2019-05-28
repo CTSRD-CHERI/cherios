@@ -147,6 +147,20 @@ else()
     )
 endif()
 
+# Configure net
+
+option(BUILD_WITH_NET "build with a network stack" ON)
+
+if(BUILD_WITH_NET)
+    set(BNET_FLAGS
+            -DBUILD_WITH_NET=1)
+else()
+    set(BNET_FLAGS
+            -DBUILD_WITH_NET=0)
+endif()
+
+set("${NET_DEVICE} "ON)
+
 include_directories(include)
 include_directories(include/sys)
 include_directories(elf/include)
@@ -163,6 +177,7 @@ set(O_LVL 3)
 set(ASMC_COMPILER_FLAGS
     -DHARDWARE_${HARDWARE}
     ${SMP_FLAGS}
+    ${BNET_FLAGS}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -march=${CHERI_CPU}

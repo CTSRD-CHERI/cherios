@@ -155,14 +155,15 @@ init_elem_t init_list[] = {
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	1)
     B_DENTRY(m_secure | m_user, "block_cache.elf", 0, 1)
     B_WAIT_FOR(namespace_num_blockcache)
-    B_PENTRY(m_virtnet, "lwip.elf", 0, 1)
+    B_PENTRY(m_virtnet, "lwip.elf", 0, 1 && BUILD_WITH_NET)
 	B_FENCE
 	B_DENTRY(m_fs,	FS_ELF	,		0,	1)
 	B_FENCE
 	B_PENTRY(m_user,	"hello.elf",		0,	1)
 	B_WAIT_FOR(namespace_num_fs)
+#if(BUILD_WITH_NET)
     B_WAIT_FOR(namespace_num_tcp)
-    B_DENTRY(m_user,    "nginx.elf", 0, 0)
+#endif
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
 	B_PENTRY(m_user,	"prga.elf",		2,	B_SO)
@@ -179,7 +180,7 @@ init_elem_t init_list[] = {
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH)
-    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1)
+    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH)
 #if 0
 	#define T3(_arg) \
