@@ -55,7 +55,7 @@ void nothing() {
     printf("******BENCH: Nothing: %lx, %lx\n", diff1, diff2);
 }
 
-void lib_calls(void_f* f) {
+__attribute__((noinline)) void lib_calls(void_f* f) {
 
     for(int tms = 0; tms != SYNC_TIMES; tms++) {
 
@@ -113,6 +113,9 @@ int main(register_t arg, capability carg) {
     // Test nano call
 
     printf("Nano:");
+
+    syscall_printf("BP should be : %lx\n", (size_t)&lib_calls);
+
     lib_calls(&nano_dummy); // nano
 
     // Test lib trusting
