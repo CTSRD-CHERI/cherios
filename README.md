@@ -71,10 +71,10 @@ Reservations are a very heavily used feature, and many interfaces require a res_
 
 CheriOS-microkernel is still in a early state. It is liable to crash on startup on occasion. Some annoyances you might hit:
 
-*There is currently no distinction as to which programs are cruical to system operation. A crashing program (on in fact any user assert) will print a backtrace, and then just panic the kernel.
-*There is currently no dynamic-linker, all dynamic linking is performed by hand written / macro generated code. See cheriplt.h for helpful macros.
-*The block cache does not write back. If you want a persistant file store, remove the cache.
-*There is no interpreter. If you want input use the filesystem and/or TCP.
+* There is currently no distinction as to which programs are cruical to system operation. A crashing program (on in fact any user assert) will print a backtrace, and then just panic the kernel.
+* There is currently no dynamic-linker, all dynamic linking is performed by hand written / macro generated code. See cheriplt.h for helpful macros.
+* The block cache does not write back. If you want a persistant file store, remove the cache.
+* There is no interpreter. If you want input use the filesystem and/or TCP.
 
 ### Tips and tricks
 
