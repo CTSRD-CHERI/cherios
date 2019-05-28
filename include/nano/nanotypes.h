@@ -74,7 +74,7 @@
 
 
 #define RES_LENGTH_OFFSET               16
-#define RES_PID_OFFSET                  24
+#define RES_PID_OFFSET                  24 // PID wastes a stupid amount of bits (64), it could use 2 XY. Where X = is first, Y = is last
 #define RES_STATE_OFFSET                0           // Keep zero for link/conditional
 #define STORE_RES_STATE                 csb
 #define LOAD_RES_STATE                  clb

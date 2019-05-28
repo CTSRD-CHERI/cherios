@@ -72,15 +72,15 @@ static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env) {
     capability alloc;
 
     if(alloc_direct) {
-        if(_size > nano_size + MIPS_KSEG0) {
-            boot_printf(KRED"nano kernel too large. %lx vs %lx\n"KRST, _size  - MIPS_KSEG0, nano_size);
+        if(_size > nano_size + NANO_KSEG) {
+            boot_printf(KRED"nano kernel too large. %lx vs %lx\n"KRST, _size  - NANO_KSEG, nano_size);
             hw_reboot();
         }
-        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, nano_size);
-        phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + nano_size);
+        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - NANO_KSEG, nano_size);
+        phy_mem =     cheri_setoffset(cheri_getdefault(), NANO_KSEG + nano_size);
         BOOT_PRINT_CAP(phy_mem);
         alloc = cheri_getdefault();
-		bzero(alloc + MIPS_KSEG0, nano_size);
+		bzero(alloc + NANO_KSEG, nano_size);
         alloc_direct = 0;
     } else {
         alloc = phy_mem;
@@ -89,7 +89,7 @@ static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env) {
         phy_mem += _size + align_off;
     }
 
-    size_t largest = cheri_getoffset(phy_mem) - MIPS_KSEG0;
+    size_t largest = cheri_getoffset(phy_mem) - NANO_KSEG;
     if(largest > boot_load_physaddr) {
 		boot_printf(KRED"boot loader overwriting itself. Ooops. Allocated up to address %lx, beri_load at %lx\n"KRST,
         largest, boot_load_physaddr);
@@ -176,8 +176,8 @@ size_t load_kernel() {
 		goto err;
 	}
 
-    bi.kernel_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
-    bi.kernel_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
+    bi.kernel_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - NANO_KSEG;
+    bi.kernel_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - NANO_KSEG;
 
 	boot_printf("Loaded kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
 		    minaddr, maxaddr, entry);
@@ -213,8 +213,8 @@ boot_info_t *load_init() {
 	boot_printf("Loaded init: minaddr=%lx maxaddr=%lx entry=%lx tls_base:%lx\n",
 		    minaddr, maxaddr, entry, im.tls_base);
 
-    bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
-    bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
+    bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - NANO_KSEG;
+    bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - NANO_KSEG;
     bi.init_entry = entry;
     bi.init_tls_base = im.tls_base;
 

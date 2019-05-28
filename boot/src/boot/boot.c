@@ -134,7 +134,7 @@ void bootloader_main(capability global_pcc) {
     boot_info_t *bi = load_init();
 
     size_t invalid_length = bi->init_end;
-    capability phy_start = cheri_setbounds(cheri_setoffset(cheri_getdefault(), MIPS_KSEG0), invalid_length);
+    capability phy_start = cheri_setbounds(cheri_setoffset(cheri_getdefault(), NANO_KSEG), invalid_length);
 
     /* Do we actually need this? */
     //boot_printf("Invalidating %p length %lx:\n", phy_start, invalid_length);

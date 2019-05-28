@@ -112,7 +112,7 @@ static act_t* get_act_for_pcc(capability pcc) {
 static inline void print_frame(int num, capability ra) {
     if(cheri_getoffset(ra) > cheri_getlen(ra)) ra = cheri_setoffset(ra, 0);
     act_t* act = get_act_for_pcc(ra);
-    size_t base = MIPS_KSEG0;
+    size_t base = NANO_KSEG;
     char* name = "nano";
     if(act) {
         base = act->image_base;
@@ -467,7 +467,7 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 	FOR_EACH_ACT(act) {
 		printf("%16s: %lx\n", act->name, act->image_base);
 	}}
-    printf("%16s: %lx\n", "nano", MIPS_KSEG0);
+    printf("%16s: %lx\n", "nano", NANO_KSEG);
 
 	printf("\nAttempting backtrace:\n\n");
 	char * stack_pointer = (char*)frame->cf_c11;
