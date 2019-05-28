@@ -10,7 +10,7 @@ You need a Cheri SDK to build CheriOS.
 
 The easiest way to get a CheriOS to work is by using [cheribuild], which will automically fetch all dependencies:
 ```sh
-$ cheribuild.py cherios
+$ cheribuild.py cherios -d
 ```
 This will, by default, build for QEMU 128, single core, without networking. Use the --cherios/smp-cores=X option to control the number of cores (1 and 2 have both been tested, but more should work). Use --cherios/build-net to enable networking.
 
@@ -22,7 +22,7 @@ CheriOS can be run on QEMU or FPGA.
 
 The following snipset shows how to use CheriBuild to run CheriOS on [cheri-qemu]:
 ```sh
-$ cheribuild.py run-cherios
+$ cheribuild.py run-cherios -d
 ```
 
 The command line options are currently based on the default cherios target.
@@ -69,7 +69,12 @@ Reservations are a very heavily used feature, and many interfaces require a res_
 
 ### Notes
 
-CheriOS-microkernel is still in a early state. A crashing propogram will print a backtrace and then panic the kernel. There is currently no dynamic-linker, all dynamic linker is performed by hand written code.
+CheriOS-microkernel is still in a early state. It is liable to crash on startup on occasion. Some annoyances you might hit:
+
+*There is currently no distinction as to which programs are cruical to system operation. A crashing program (on in fact any user assert) will print a backtrace, and then just panic the kernel.
+*There is currently no dynamic-linker, all dynamic linking is performed by hand written / macro generated code. See cheriplt.h for helpful macros.
+*The block cache does not write back. If you want a persistant file store, remove the cache.
+*There is no interpreter. If you want input use the filesystem and/or TCP.
 
 ### Tips and tricks
 
@@ -77,9 +82,7 @@ There is a HW_TRACE_ON and HW_TRACE_OFF macro to turn instruction level tracing 
 
 As debugging tools are limited, it is often useful to break all sandboxing. The obtain_super_powers nanokernel function will unbound the program counter to the entire address space, allow access to system registers, and also return a read/write capabilities to the entire address sace.
 
-If you want the kernel to go faster you can turn off a lot of debugging, or enable a LITE version in cherios/kernel/include/kernel.h. 
-
-
+If you want the kernel to go faster you can turn off a lot of debugging, or enable a LITE version in cherios/kernel/include/kernel.h.
 
    [cheri-qemu]: <https://github.com/CTSRD-CHERI/qemu>
    [LLVM]: <http://github.com/CTSRD-CHERI/llvm-project>
