@@ -139,6 +139,12 @@ static int vblk_init(session_t* session) {
     session = unseal_session(session);
 
     assert(session != NULL);
+
+    if(session->state == initted) {
+        // TODO reset
+        return 0;
+    }
+
     assert(session->state == created);
 
     // init
