@@ -56,7 +56,7 @@ typedef struct notification_list {
     struct notification_list* next;
 } notification_list;
 
-static void dump_subs(notification_list* list) {
+__unused static void dump_subs(notification_list* list) {
     while(list != NULL) {
         notification_item* item = list->head;
         CHERI_PRINT_CAP(list->target);
@@ -208,8 +208,9 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     syscall_register_act_event_registrar(act_self_ref);
     namespace_register(namespace_num_event_service, act_self_ref);
     msg_enable = 1;
+    return 0;
 }

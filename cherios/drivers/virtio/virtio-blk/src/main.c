@@ -46,7 +46,7 @@ size_t ctrl_methods_nb = countof(ctrl_methods);
 
 
 
-void init_net_device(void* mmio_cap) {
+__unused void init_net_device(__unused void* mmio_cap) {
 
 }
 

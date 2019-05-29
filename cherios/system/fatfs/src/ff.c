@@ -3391,6 +3391,8 @@ static ssize_t flush_proxy(fs_proxy* proxy, fulfiller_t fulfill) {
 		(*ss) += length / SS(NULL);
 		proxy->length = 0;
 	}
+
+	return 0;
 }
 
 static ssize_t proxy_amount(fs_proxy* proxy, fulfiller_t fulfill, DWORD sect, uint64_t length) {

@@ -75,7 +75,7 @@ int send_response_initial(struct session* s, int code, const char* reason, size_
 
     ret = socket_send(s->sock, reason, reason_len, MSG_NONE);
 
-    if(ret != reason_len) return -1;
+    if((size_t)ret != reason_len) return -1;
 
     s->sent_initial = 1;
 
@@ -86,11 +86,11 @@ int send_ok(struct session* s) {
     return send_response_initial(s, 200, "OK" "\n", 3);
 }
 
-int send_header(struct session*s, char* header, size_t hdr_len, char* value, size_t value_len) {
+int send_header(struct session*s, const char* header, size_t hdr_len, char* value, size_t value_len) {
     ssize_t ret = socket_send(s->sock, header, hdr_len, MSG_NONE);
-    if(ret != hdr_len) return -1;
+    if((size_t)ret != hdr_len) return -1;
     ret = socket_send(s->sock, value, value_len, MSG_NONE);
-    if(ret != value_len) return -1;
+    if((size_t)ret != value_len) return -1;
     ret = socket_send(s->sock, "\n", 1, MSG_NONE);
     if(ret != 1) return -1;
     return 0;
@@ -163,7 +163,7 @@ int handle_get_post(struct session* s, struct initial* ini) {
 
     close(f);
 
-    if(result < 0 || result != file_size){
+    if(result < 0 || (size_t)result != file_size){
         if(ini->method == POST) {
             send_response_initial(s, 500, WE_SUCK "\n", sizeof(WE_SUCK));
             finish_headers(s);
@@ -244,7 +244,7 @@ void handle_loop(void) {
             finish_headers(&s);
         }
 
-        res = close(netsock);
+        res = close((FILE_t)netsock);
 
         assert_int_ex(res, ==, 0);
 

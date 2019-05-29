@@ -43,6 +43,7 @@ typedef unix_like_socket FILE;
 extern __thread FILE * stderr;
 extern __thread FILE * stdout;
 
+typedef void kvprintf_putc_f (int,void*);
 int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
 int	vsprintf(char *buf, const char *cfmt, va_list ap);
 int	vsnprintf(char *str, size_t size, const char *format, va_list ap);

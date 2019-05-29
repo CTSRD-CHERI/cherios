@@ -241,7 +241,7 @@ static context_t make_exception_context(uint8_t cpu_id) {
     return create_context(&frame, NULL);
 }
 
-void kernel_exception(context_t swap_to, context_t own_context) {
+void kernel_exception(__unused context_t swap_to, context_t own_context) {
 
     // Create an exception context for every core. The current context is re-used for core0
     for(uint8_t cpu_id = 0; cpu_id != SMP_CORES; cpu_id++ ) {

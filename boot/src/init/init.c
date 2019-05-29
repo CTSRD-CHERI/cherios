@@ -61,7 +61,7 @@
 #define B_BENCH_CALLS   0
 #define B_BENCH_EXPS    0
 
-char* nginx_args[] = {"nginx",NULL};
+const char* nginx_args[] = {"nginx",NULL};
 #define NGINX_ARGS_L 1
 
 #ifdef HARDWARE_qemu
@@ -394,7 +394,7 @@ static void load_modules(init_info_t * init_info) {
 
     printf("Core load finished. Loading other processes\n");
     env.alloc = &mmap_based_alloc;
-    env.free = &mmap_based_free;
+    env.free = (typeof(env.free))&mmap_based_free;
     env.handle = mop;
 
     /* Now load an idle activation for each core */
@@ -409,13 +409,12 @@ static void load_modules(init_info_t * init_info) {
         desc.stack_args = NULL;
         desc.stack_args_size = 0;
         desc.flags = STARTUP_BASIC;
-        act_control_kt ctrl = thread_start_process(thread_create_process(idle_name,idle_addr,0), &desc);
+        __unused act_control_kt ctrl = thread_start_process(thread_create_process(idle_name,idle_addr,0), &desc);
     }
 
     /* Now load the rest (for fun on a different CPU) */
 
 	for(; i<init_list_len; i++) {
-		int cnt;
         init_elem_t * be = init_list + i;
 
 		if(be->cond == 0)
@@ -426,7 +425,6 @@ static void load_modules(init_info_t * init_info) {
 
 		if(type == m_fence) {
             if(be->arg) {
-                int t = 0;
                 while(namespace_get_ref((int)be->arg) == NULL) {
                     PAUSE;
                 }
@@ -478,16 +476,16 @@ crt_init_globals_init()
     cheri_dla(__cap_table_local_start, data_start); // This seems to come data now
     cheri_dla(__cap_table_local_start, tls_start); // A guess that this comes before tbss and tdata
 
-    capability text_segment = pcc + text_start;
-    capability data_segment = gdc + data_start;
+    __unused capability text_segment = (char*)pcc + text_start;
+    __unused capability data_segment = (char*)gdc + data_start;
 
     capability segment_table[5];
 
     // These are all set up by the linker script
     segment_table[0] = NULL;
-    segment_table[2] = pcc + text_start;
-    segment_table[3] = gdc + data_start;
-    segment_table[4] = gdc + tls_start;
+    segment_table[2] = (char*)pcc + text_start;
+    segment_table[3] = (char*)gdc + data_start;
+    segment_table[4] = (char*)gdc + tls_start;
 
     // Get something usable
     uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;
@@ -498,7 +496,10 @@ crt_init_globals_init()
     capability cgp = cheri_setoffset(gdc, table_start);
     cheri_setreg(25, cgp);
 
-    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, RELOC_FLAGS_TLS);
+    crt_init_common(segment_table,
+            (struct capreloc *)((char*)gdc + reloc_start),
+                    (struct capreloc *)((char*)gdc + reloc_end),
+                            RELOC_FLAGS_TLS);
 
     cheri_setreg(25, &__cap_table_start);
 
@@ -509,7 +510,8 @@ crt_init_globals_init()
 
     cheri_setreg(26, local_captab);
 
-    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, 0);
+    crt_init_common(segment_table, (struct capreloc *)((char*)gdc + reloc_start),
+                    (struct capreloc *)((char*)gdc + reloc_end), 0);
 
     // We return a capability to our tls_segment. Other threads will have this provided by the linker
     return local_captab;
@@ -544,4 +546,6 @@ int main(init_info_t * init_info, capability pool_auth_cap) {
 	printf(KBLD"Only daemons are alive. System shutown."KRST"\n");
 
     syscall_shutdown(REBOOT);
+
+    assert(0 && "Should not get past reboot");
 }

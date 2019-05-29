@@ -224,7 +224,7 @@ static void finish_closing_user_requester(tcp_session* tcp) {
     }
 }
 // Application (ack) -> TCP
-err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
+err_t tcp_sent_callback (void *arg, __unused struct tcp_pcb *tpcb,
                              u16_t len) {
     if(arg == NULL) return ERR_OK;
 
@@ -250,7 +250,7 @@ err_t tcp_sent_callback (void *arg, struct tcp_pcb *tpcb,
 // Otherwise, it must not free the pbuf so that lwIP core code can store it.
 
 // TCP -> Application
-err_t tcp_recv_callback(void * arg, struct tcp_pcb * tpcb,
+err_t tcp_recv_callback(void * arg, __unused struct tcp_pcb * tpcb,
                         struct pbuf * p, err_t err) {
     if(arg == NULL) return err;
 
@@ -346,7 +346,7 @@ static void tcp_application_ack(tcp_session* tcp) {
 
 // Application -> TCP
 ssize_t TRUSTED_CROSS_DOMAIN(tcp_ful_func)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t tcp_ful_func(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
     // Make a pbuf to send, linked to a byte range
@@ -364,7 +364,7 @@ ssize_t tcp_ful_func(capability arg, char* buf, uint64_t offset, uint64_t length
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(tcp_ful_oob_func)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t tcp_ful_oob_func(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+ssize_t tcp_ful_oob_func(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
     switch(request->type) {
@@ -388,7 +388,7 @@ void handle_fulfill(tcp_session* tcp) {
     assert(!(tcp->close_state & (SCS_FULFILL_CLOSED | SCS_USER_CLOSING_REQUESTER)));
 
     // We expect only data
-    ssize_t bytes_translated = socket_fulfill_progress_bytes_unauthorised(tcp->tcp_input_pushee, SOCK_INF,
+    __unused ssize_t bytes_translated = socket_fulfill_progress_bytes_unauthorised(tcp->tcp_input_pushee, SOCK_INF,
                                                                       F_CHECK | F_START_FROM_LAST_MARK | F_SET_MARK | F_DONT_WAIT,
                                                                       &TRUSTED_CROSS_DOMAIN(tcp_ful_func), tcp, 0, &TRUSTED_CROSS_DOMAIN(tcp_ful_oob_func),
                                                                       NULL, TRUSTED_DATA, TRUSTED_DATA);
@@ -431,7 +431,7 @@ static void send_connect_callback(tcp_session* tcp, err_t err) {
     socket_requester_connect(tcp->tcp_output_pusher);
 }
 
-static void tcp_er(void *arg, err_t err) {
+static void tcp_er(void *arg, __unused err_t err) {
     tcp_session* tcp = (tcp_session*)arg;
 
     // This session may have already been freed
@@ -509,6 +509,8 @@ static int user_tcp_connect_sockets(capability sealed_session,
         // We got the connect AFTER we tried to close! We have to close again to signal the pusher that we closed.
         socket_close_fulfiller(tcp->tcp_input_pushee, 0, 1);
     }
+
+    return 0;
 }
 
 static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
@@ -546,7 +548,7 @@ static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
 
     n_listens++;
 
-    return cheri_seal(listen_session, sealer);
+    return (uintptr_t)cheri_seal(listen_session, sealer);
 }
 
 static void stop_listening(capability sealed) {
@@ -612,7 +614,7 @@ static void user_tcp_close(tcp_session* tcp) {
     return;
 }
 
-static void dns_lookup_callback(const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
+static void dns_lookup_callback(__unused const char *name, const ip_addr_t *ipaddr, void *callback_arg) {
     sync_state_t ss;
     ss.sync_caller = callback_arg;
     msg_resume_return(NULL, ipaddr->addr, 0, ss);
@@ -668,7 +670,7 @@ void setup_checksum_found(sealing_cap sc) {
 
 }
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     // Init session
     printf("LWIP Hello World!\n");
 

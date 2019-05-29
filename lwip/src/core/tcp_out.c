@@ -186,7 +186,7 @@ ip_chksum_pseudo_sealed(struct pbuf *p, u8_t proto, u16_t proto_len,
     capability payload = q->payload;
 
     if(!cheri_gettag(payload)) {
-        offset = (payload - q->sealed_payload);
+        offset = ((char*)payload - (char*)q->sealed_payload);
         payload = q->sealed_payload;
     }
 
@@ -517,11 +517,11 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
     optlen = LWIP_TCP_OPT_LENGTH_SEGMENT(0, pcb);
   }
 
-  capability sealed_arg = NULL;
+  const_capability sealed_arg = NULL;
 
   if(cheri_getsealed(arg)) {
       sealed_arg = arg;
-      arg = (NULL + (size_t)arg); // Set arg to a NULL tagged thing
+      arg = cheri_setoffset(NULL, (size_t)arg); // Set arg to a NULL tagged thing
   }
 
   /*
@@ -633,7 +633,7 @@ tcp_write(struct tcp_pcb *pcb, const void *arg, u16_t len, u8_t apiflags)
 
         capability chk_cap = sealed_arg ? p->sealed_payload : p->payload;
         size_t chk_len = cheri_getlen(chk_cap) + cheri_getoffset(chk_cap); // space left in cap
-        chk_len -= (size_t)(p->payload - p->sealed_payload); // offset by amount indicated in payload
+        chk_len -= (size_t)((char*)p->payload - (char*)p->sealed_payload); // offset by amount indicated in payload
 
         if (((p->type_internal & (PBUF_TYPE_FLAG_STRUCT_DATA_CONTIGUOUS | PBUF_TYPE_FLAG_DATA_VOLATILE)) == 0) &&
             p->sealed_payload == sealed_arg &&
@@ -1968,7 +1968,6 @@ tcp_output_control_segment(const struct tcp_pcb *pcb, struct pbuf *p,
     u8_t ttl, tos;
 #if CHECKSUM_GEN_TCP
     IF__NETIF_CHECKSUM_ENABLED(netif, NETIF_CHECKSUM_GEN_TCP) {
-      struct tcp_hdr *tcphdr = (struct tcp_hdr *)p->payload;
       ip_chksum_pseudo_sealed(p, IP_PROTO_TCP, p->tot_len,
                               src, dst);
       //tcphdr->chksum = ip_chksum_pseudo(p, IP_PROTO_TCP, p->tot_len,

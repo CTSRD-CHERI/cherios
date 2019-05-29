@@ -84,7 +84,7 @@ static void free_send(net_session* session) {
         struct virtq_used_elem used = sendq->used->ring[used_idx];
 
         struct pbuf* pb = session->pbuf_send_map[used.id];
-        struct virtio_net_hdr* net_hdr = &session->net_hdrs[SEND_HDR_START + (used.id)];
+        //struct virtio_net_hdr* net_hdr = &session->net_hdrs[SEND_HDR_START + (used.id)];
 
         pbuf_free(pb);
 
@@ -136,7 +136,7 @@ int lwip_driver_init(net_session* session) {
     virtio_q_init_free(&session->virtq_send, &session->free_head_send, 0);
     session->recvs_free = QUEUE_SIZE;
 
-    session->config = *(struct virtio_net_config*)session->mmio->config;
+    session->config = *(volatile struct virtio_net_config*)session->mmio->config;
 
     alloc_recv(session);
 
@@ -152,7 +152,7 @@ int lwip_driver_init_postup(net_session* session) {
     return 0;
 }
 
-void lwip_driver_handle_interrupt(net_session* session, register_t arg, register_t irq) {
+void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg, register_t irq) {
     free_send(session);
 
     // Then process incoming packets and pass them up to lwip
@@ -222,14 +222,14 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
         if(extra_payload) {
             extra_payload = cheri_unseal(extra_payload, ether_sealer);
             if(!cheri_gettag(payload)) {
-                size_t diff = payload - extra_payload;
-                payload = extra_payload + diff;
+                size_t diff = (char*)payload - (char*)extra_payload;
+                payload = (char*)extra_payload + diff;
             }
         }
 
         le32 size = (le32)(p->len);
         if(first_pbuf) {
-            payload += ETH_PAD_SIZE;
+            payload = (char*)payload + ETH_PAD_SIZE;
             size -=ETH_PAD_SIZE;
             first_pbuf = 0;
         }
@@ -248,12 +248,12 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
                 res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, payload, dst_off, VIRTQ_DESC_F_NEXT);
             }
             if(res >= 0) {
-                res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, extra_payload + src_off, extra_len, VIRTQ_DESC_F_NEXT);
+                res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, (char*)extra_payload + src_off, extra_len, VIRTQ_DESC_F_NEXT);
 
                 uint32_t so_far = dst_off + extra_len;
                 int32_t remain = size - so_far;
                 if(res >= 0 && (so_far < size)) {
-                    res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, payload + so_far, remain, VIRTQ_DESC_F_NEXT);
+                    res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, (char*)payload + so_far, remain, VIRTQ_DESC_F_NEXT);
                 }
             }
         }

@@ -113,7 +113,7 @@ static inline void print_frame(int num, capability ra) {
     if(cheri_getoffset(ra) > cheri_getlen(ra)) ra = cheri_setoffset(ra, 0);
     act_t* act = get_act_for_pcc(ra);
     size_t base = NANO_KSEG;
-    char* name = "nano";
+    const char* name = "nano";
     if(act) {
         base = act->image_base;
         name = act->name;
@@ -359,7 +359,7 @@ static inline void dump_tlb() {
     printf("|        |  PAGE START  | ASID |      PFN0     |C|D|V|G|      PFN1     |C|D|V|G|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|\n");
     printf("|--------|--------------|------|---------------|-|-|-|-|---------------|-|-|-|-|%s\n", wired == 0 ? "<-wired" : "");
-    for(int i = 0; i < N_TLB_ENTS; i++) {
+    for(unsigned i = 0; i < N_TLB_ENTS; i++) {
         __asm__ __volatile__(
             ASM_MTCO(ndx, MIPS_CP0_REG_INDEX)
             "tlbr  \n"
@@ -402,7 +402,7 @@ static inline void dump_tlb() {
 }
 
 void kernel_dump_tlb(void) {
-	capability all_powerfull = obtain_super_powers(); // Super magic wow!
+	__unused capability all_powerfull = obtain_super_powers(); // Super magic wow!
 	dump_tlb();
 }
 

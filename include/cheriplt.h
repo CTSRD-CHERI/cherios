@@ -145,7 +145,7 @@ typedef void common_t(void);
     DEFINE_DUMMYS(LIST) \
     __attribute__((weak)) extern void type ## _data_obj_dummy(void);
 
-    #define DUMMY_HELP(name,...) __attribute__((weak)) extern void name ## _dummy(void);
+    #define DUMMY_HELP(name, ret, ty, ...) __attribute__((weak)) extern ret name ## _dummy ty;
 
     // TODO could achieve lazy link by putting a suitable stub here. Otherwise these must be replaced before use
     #define DEFINE_DUMMYS(LIST) LIST(DUMMY_HELP)

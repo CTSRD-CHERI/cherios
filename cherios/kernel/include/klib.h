@@ -85,35 +85,35 @@ extern sealing_cap notify_ref_sealer;
 extern sealing_cap sync_ref_sealer;
 extern sealing_cap ref_sealer;
 
-static capability act_seal_for_call(act_t * act, sealing_cap sealer) {
+static inline capability act_seal_for_call(act_t * act, sealing_cap sealer) {
 	return cheri_seal(act, sealer);
 }
 
-static act_t* act_unseal_callable(act_t * act, sealing_cap sealer) {
+static inline act_t* act_unseal_callable(act_t * act, sealing_cap sealer) {
 	return (act_t*)cheri_unseal(act, sealer);
 }
 
-static act_t * act_create_sealed_ref(act_t * act) {
+static inline act_t * act_create_sealed_ref(act_t * act) {
 	return (act_t *)act_seal_for_call(act, ref_sealer);
 }
 
-static act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
+static inline act_control_t * act_create_sealed_ctrl_ref(act_t * act) {
 	return (act_control_t *)act_seal_for_call(act, ctrl_ref_sealer);
 }
 
-static act_t * act_unseal_ref(act_t * act) {
+static inline act_t * act_unseal_ref(act_t * act) {
 	return  (act_t *)act_unseal_callable(act, ref_sealer);
 }
 
-static act_control_t* act_unseal_ctrl_ref(act_t* act) {
+static inline act_control_t* act_unseal_ctrl_ref(act_t* act) {
 	return (act_control_t*)act_unseal_callable(act, ctrl_ref_sealer);
 }
 
-static act_t * act_create_sealed_sync_ref(act_t * act) {
+static inline act_t * act_create_sealed_sync_ref(act_t * act) {
 	return (act_t *)act_seal_for_call(act, sync_ref_sealer);
 }
 
-static act_t * act_unseal_sync_ref(act_t * act) {
+static inline act_t * act_unseal_sync_ref(act_t * act) {
 	return  (act_t *)act_unseal_callable(act, sync_ref_sealer);
 }
 

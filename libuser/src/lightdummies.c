@@ -30,8 +30,9 @@
 
 #include "syscalls.h"
 
-capability compact_code(capability segment_table, capability start, capability end,
-                        capability code_seg_write, register_t code_seg_offset, register_t flags, capability ret) {
+capability compact_code(__unused capability segment_table, __unused capability start, __unused capability end,
+                        __unused capability code_seg_write, __unused register_t code_seg_offset, __unused register_t flags,
+                        capability ret) {
     return ret;
 }
 
@@ -41,13 +42,13 @@ void lw_panic(void) {
     for(;;);
 }
 
-void __assert(const char *assert_function, const char *assert_file,
-              int assert_lineno, const char *assert_message) {
+void __assert(__unused const char *assert_function, __unused const char *assert_file,
+              __unused int assert_lineno, __unused const char *assert_message) {
     lw_panic();
 }
 
-void __assert_int_ex(const char *assert_function, const char *assert_file,
-                     int assert_lineno, const char *am, const char *opm,const char *bm,
-                     unsigned long long int a, unsigned long long int b) {
+void __assert_int_ex(__unused const char *assert_function, __unused const char *assert_file,
+                     __unused int assert_lineno, __unused const char *am, __unused const char *opm, __unused const char *bm,
+                     __unused unsigned long long int a, __unused unsigned long long int b) {
     lw_panic();
 }

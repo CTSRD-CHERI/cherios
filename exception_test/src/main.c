@@ -33,7 +33,7 @@
 #include "stdio.h"
 #include "exception_cause.h"
 
-int exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
+int exception_handle(__unused register_t cause, __unused register_t ccause, __unused exception_restore_frame* restore_frame) {
     CTL_t* ctl = get_ctl();
     ex_pcc_t* error_pcc = ctl->ex_pcc;
 
@@ -44,7 +44,7 @@ int exception_handle(register_t cause, register_t ccause, exception_restore_fram
     return 0;
 }
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     printf("Exception test hello world!\n");
 
     register_vectored_cap_exception(&exception_handle, Tag_Violation);

@@ -39,7 +39,7 @@
 
 #include "manual_dylink_server.c"
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     int ret = server_start();
 
     if(!ret) {

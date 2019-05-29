@@ -238,10 +238,12 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     get_ctl()->cdl = &entry_stub;
 }
 
-void object_init_post_compact(startup_flags_e startup_flags, int first_thread) {
+void object_init_post_compact(startup_flags_e startup_flags, __unused int first_thread) {
 #if !(LIGHTWEIGHT_OBJECT)
     setup_temporal_handle(startup_flags);
     init_kernel_if_t_change_mode(was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
+#else
+    (void)startup_flags;
 #endif // !LIGHTWEIGHT
 }
 
@@ -256,6 +258,8 @@ void object_destroy() {
     process_async_closes(1);
 #endif // !LIGHTWEIGHT
     syscall_act_terminate(act_self_ctrl);
+
+    assert(0 && "SHOULD NOT RETURN AFTER DESTROY");
 }
 
 void ctor_null(void) {

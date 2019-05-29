@@ -83,7 +83,7 @@ ssize_t truncate(FILE_t file) {
     assert(file->con_type & CONNECT_PUSH_WRITE);
     ssize_t space = socket_requester_space_wait(file->write.push_writer, 1, file->flags & MSG_DONT_WAIT, 0);
     if(space < 0) return space;
-    return socket_request_oob(file->write.push_writer, REQUEST_TRUNCATE, NULL, 0, 0);
+    return socket_request_oob(file->write.push_writer, REQUEST_TRUNCATE, (intptr_t)NULL, 0, 0);
 }
 
 struct socket_with_file_drb {
@@ -192,7 +192,7 @@ asyn_close_state_e try_close(FILE_t file) {
                 res = socket_requester_space_wait(file->write.push_writer, 1, dont_wait, 0);
                 if(res == E_SOCKET_CLOSED) res = 0;
                 if(res < 0) break;
-                socket_request_oob(file->write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
+                socket_request_oob(file->write.push_writer, REQUEST_CLOSE, (intptr_t)NULL, 0, 0);
             }
 
             new_state = ASYNC_NEED_REQS_WRITE;
@@ -306,7 +306,7 @@ ssize_t lseek(FILE_t file, int64_t offset, int whence) {
     return 0;
 }
 
-ssize_t soft_flush(FILE_t file) {
+__unused ssize_t soft_flush(__unused FILE_t file) {
     // TODO send a flush on the socket.
     return 0;
 }
@@ -355,13 +355,13 @@ dir_token_t opendir(const char* name) {
 
     if(dest == NULL) return NULL;
 
-    return message_send_c(0,0,0,0,name,NULL,NULL,NULL,dest,SYNC_CALL,5);
+    return message_send_c(0,0,0,0,__DECONST(capability, name),NULL,NULL,NULL,dest,SYNC_CALL,5);
 }
 
 FRESULT readdir(dir_token_t dir, FILINFO* fno) {
     act_kt dest = try_get_fs();
 
-    if(dest == NULL) return NULL;
+    if(dest == NULL) return FR_NOT_READY;
 
     return (FRESULT)message_send(0,0,0,0,dir,fno,NULL,NULL,dest,SYNC_CALL,6);
 }
@@ -369,7 +369,7 @@ FRESULT readdir(dir_token_t dir, FILINFO* fno) {
 FRESULT closedir(dir_token_t dir) {
     act_kt dest = try_get_fs();
 
-    if(dest == NULL) return NULL;
+    if(dest == NULL) return FR_NOT_READY;
 
     return (FRESULT)message_send(0,0,0,0,dir,NULL,NULL,NULL,dest,SYNC_CALL,7);
 }

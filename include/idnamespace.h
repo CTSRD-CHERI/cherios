@@ -34,7 +34,7 @@
 
 static int namespace_register_found_id_authed(int nb) {
     res_t res_for_cert = cap_malloc(RES_CERT_META_SIZE);
-    cert_t cert = rescap_take_authed(res_for_cert, NULL, CHERI_PERM_ALL, AUTH_CERT, own_auth, (intptr_t)nb, NULL).cert;
+    cert_t cert = rescap_take_authed(res_for_cert, NULL, CHERI_PERM_ALL, AUTH_CERT, own_auth, (capability)(intptr_t)nb, NULL).cert;
     return namespace_register_found_id(cert);
 }
 

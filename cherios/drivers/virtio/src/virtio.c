@@ -196,11 +196,11 @@ struct virtq_arg {
     le16 flags;
 };
 
-int virtio_phy_handle_func(capability arg, phy_handle_flags flags, size_t phy_addr, size_t length) {
+int virtio_phy_handle_func(capability arg, __unused phy_handle_flags flags, size_t phy_addr, size_t length) {
     struct virtq_arg* virtq_args = (struct virtq_arg*)arg;
     assert_int_ex(phy_addr, >=, 0x1000);
     int res = virtio_q_chain_add(virtq_args->queue, virtq_args->free_head, virtq_args->tail, phy_addr, (le16)length, virtq_args->flags);
-    if(res != 0) return res; // Failed to add a link
+    return res;
 }
 
 int virtio_q_chain_add_virtual(struct virtq *queue, le16* free_head, le16 *tail, capability addr, le32 length, le16 flags) {

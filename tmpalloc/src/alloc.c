@@ -37,16 +37,6 @@
 
 #define TMP_ALLOC_ALIGN 0x1000
 
-static inline void *align_upwards(void *p, uintptr_t align)
-{
-    size_t rounded;
-
-    rounded = roundup2((size_t)p, align);
-    p += (rounded - (size_t)p);
-
-    return (p);
-}
-
 static char * pool_end = NULL;
 static char * pool_next = NULL;
 

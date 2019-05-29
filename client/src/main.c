@@ -45,12 +45,12 @@
                 "\n" \
 
 ssize_t TRUSTED_CROSS_DOMAIN(ful_print)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ful_print(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t ful_print(__unused capability arg, char* buf, uint64_t __unused offset, uint64_t length) {
     printf("%.*s",(int)length, buf);
     return length;
 }
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     // Connect to server
     struct tcp_bind bind;
@@ -84,7 +84,7 @@ int main(register_t arg, capability carg) {
     res = socket_fulfill_progress_bytes_unauthorised(netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS,
             TRUSTED_CROSS_DOMAIN(ful_print), NULL, 0, NULL, NULL, TRUSTED_DATA, NULL);
 
-    close(netsock);
+    close((FILE_t)netsock);
 
     bind.port = 1235;
     do {
@@ -105,4 +105,6 @@ int main(register_t arg, capability carg) {
             TRUSTED_CROSS_DOMAIN(ful_print), NULL, 0, NULL, NULL, TRUSTED_DATA, NULL);
 
     assert_int_ex(res, > , 0);
+
+    return 0;
 }

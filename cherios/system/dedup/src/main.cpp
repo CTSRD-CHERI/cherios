@@ -58,7 +58,6 @@ public:
         size_t h1 = hash1(hash);
         size_t h2 = hash2(hash);
 
-        size_t knocks = 0;
         out_lost = nullptr;
 
         if(chash(table[h1].hash, hash)) return &table[h1];
@@ -236,7 +235,7 @@ extern "C" {
         return 0;
     }
 
-    int main(register_t arg, capability carg) {
+    int main(__unused register_t arg, __unused capability carg) {
         printf("Deduplicate Hello World!\n");
 
         hash_test();

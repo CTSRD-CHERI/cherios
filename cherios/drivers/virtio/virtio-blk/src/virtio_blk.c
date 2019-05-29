@@ -70,11 +70,11 @@ static u32 mmio_read32(session_t* session, size_t offset) {
 	return mips_cap_ioread_uint32(session->mmio_cap, offset);
 }
 
-static void mmio_write32(session_t* session, size_t offset, u32 value) {
+__unused static void mmio_write32(session_t* session, size_t offset, u32 value) {
 	mips_cap_iowrite_uint32(session->mmio_cap, offset, value);
 }
 
-static void mmio_set32(session_t* session, size_t offset, u32 value) {
+__unused static void mmio_set32(session_t* session, size_t offset, u32 value) {
 	value |= mmio_read32(session, offset);
 	mips_cap_iowrite_uint32(session->mmio_cap, offset, value);
 }
@@ -184,7 +184,7 @@ static void add_desc(session_t* session, le16 desc_no) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
     request_type_e req = request->type;
 
@@ -219,7 +219,7 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(ful_ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ful_ff(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t ful_ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
 
     assert(length <= SECTOR_SIZE);
@@ -243,7 +243,7 @@ static void translate_sock(struct session_sock* ss) {
 
     if(bytes == 0) {
         // Just an oob
-        ssize_t ret = socket_fulfill_progress_bytes_unauthorised(ss->ff, SOCK_INF,
+        socket_fulfill_progress_bytes_unauthorised(ss->ff, SOCK_INF,
                                                              F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB,
                                                              NULL, (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
                                                                  NULL, TRUSTED_DATA);
@@ -432,7 +432,7 @@ static void vblk_rw_ret(session_t* session) {
     virtio_device_ack_used((virtio_mmio_map*)session->mmio_cap);
 }
 
-void vblk_interrupt(void* sealed_session, register_t a0, register_t irq) {
+void vblk_interrupt(void* sealed_session, __unused register_t a0, register_t irq) {
     vblk_rw_ret(unseal_session(sealed_session));
 	syscall_interrupt_enable((int)irq, act_self_ctrl);
 }

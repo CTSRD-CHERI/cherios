@@ -51,7 +51,7 @@ void nothing() {
     uint64_t start2 = syscall_bench_start();
     uint64_t end2 = syscall_bench_end();
     uint64_t diff1 = end - start;
-    uint64_t diff2 = end - start;
+    uint64_t diff2 = end2 - start2;
     printf("******BENCH: Nothing: %lx, %lx\n", diff1, diff2);
 }
 
@@ -79,8 +79,8 @@ __attribute__((noinline)) void lib_calls(void_f* f) {
     return;
 }
 
-extern CROSS_DOMAIN(dummy_lib_f);
-extern TRUSTED_CROSS_DOMAIN(dummy_lib_f);
+extern void CROSS_DOMAIN(dummy_lib_f)(void);
+extern void TRUSTED_CROSS_DOMAIN(dummy_lib_f)(void);
 void dummy_lib_f(void) {
     return;;
 }
@@ -93,7 +93,7 @@ void dummy_lib_f(void) {
 PLT(bench_t, BENCH_EXT_LIST)
 PLT_ALLOCATE(bench_t, BENCH_EXT_LIST)
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     get_ctl()->cds = get_type_owned_by_process();
     get_ctl()->cdl = &entry_stub;
@@ -131,6 +131,8 @@ int main(register_t arg, capability carg) {
     lib_calls(&f1); // untrusting, trusted
     printf("Untrusting, untrusted:");
     lib_calls(&f2); // untrusting, untrusted
+
+    return 0;
 }
 
 void (*msg_methods[]) = {};

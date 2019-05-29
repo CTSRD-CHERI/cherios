@@ -58,7 +58,7 @@ char LOREM[BIG_SIZE] = "\n"
 
 char dest[BIG_SIZE];
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     while(try_get_fs() == NULL) {
         sleep(0);
@@ -96,8 +96,6 @@ int main(register_t arg, capability carg) {
     result = close(file);
 
     assert_int_ex(result, ==, 0);
-
-    char chars[] = {'0','1','2'};
 
     file = open("bigtest", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
@@ -227,4 +225,6 @@ int main(register_t arg, capability carg) {
     //printf("This should be decrypted: %.*s\n", BIG_SIZE, dest);
 
     printf("Fs test success!\n");
+
+    return 0;
 }

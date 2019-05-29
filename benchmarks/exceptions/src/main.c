@@ -57,7 +57,7 @@ __asm__ (
 
 extern void bench_exp_handle(void);
 
-int chandleint(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
+int chandleint(__unused register_t cause, __unused register_t ccause, exception_restore_frame* restore_frame) {
     restore_frame->mf_a0++;
     return 0;
 }
@@ -96,7 +96,7 @@ void do_test() {
 }
 
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     register_exception_raw(&bench_exp_handle, get_ctl());
 
@@ -105,6 +105,8 @@ int main(register_t arg, capability carg) {
     register_vectored_exception(&chandleint, MIPS_CP0_EXCODE_TRAP);
 
     do_test();
+
+    return 0;
 }
 
 void (*msg_methods[]) = {};

@@ -67,7 +67,7 @@ size_t itoa_div( int value, char * str, int base ) {
     } while(value != 0);
 
     str[ptr] = '\0';
-    n;
+    return n;
 }
 
 char*  itoa ( int value, char * str, int base ) {

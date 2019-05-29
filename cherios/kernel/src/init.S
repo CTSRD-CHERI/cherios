@@ -41,7 +41,6 @@
 # to various startup functions to initialise the C runtime, and then call
 # cherios_main().
 
-	.text
 	.section .init
 	.global start
 	.ent start

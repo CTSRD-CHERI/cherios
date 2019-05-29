@@ -76,7 +76,7 @@ static top_t seal_top(top_internal_t* top) {
     return cheri_seal(top, top_sealing_cap);
 }
 
-static int is_taken(stype type) {
+__unused static int is_taken(stype type) {
     type = type - NANO_TYPES;
     char c = bitfield->bitfield[type >> 3];
     stype sub_index = 1U << (type & 0x7);
@@ -253,7 +253,7 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     bitfield = (type_res_bitfield_t*)tres_get_ro_bitfield();
     top_sealing_cap = get_sealing_cap_from_nano(TOP_SEALING_TYPE);
 

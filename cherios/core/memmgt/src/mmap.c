@@ -143,11 +143,11 @@ static void fixup_desc_chain(vpage_range_desc_t* desc) {
     }
 }
 
-static vpage_range_desc_t* remove_from_pool_head(size_t pool) {
+__unused static vpage_range_desc_t* remove_from_pool_head(size_t pool) {
     return remove_from_pool(pool_heads[pool]);
 }
 
-static void check_pool(size_t pool) {
+__unused static void check_pool(size_t pool) {
     vpage_range_desc_t* desc = pool_heads[pool];
     vpage_range_desc_t* prev = NULL;
     while(desc) {
@@ -240,7 +240,7 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
     }
 }
 
-static size_t check_desc_correctness(vpage_range_desc_t* desc, size_t expected_prev) {
+__unused static inline size_t check_desc_correctness(vpage_range_desc_t* desc, size_t expected_prev) {
     if(desc->allocation_type != internal_node) {
         if(expected_prev != desc->prev) {
             printf("This is wrong:\n");
@@ -489,7 +489,7 @@ static void soft_index(size_t page_n, struct index_result* result) {
 
 /* Visitor functions for request/claim/free */
 
-static int visit_claim_check(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
+static int visit_claim_check(vpage_range_desc_t *desc, __unused size_t base, mop_internal_t* owner, __unused size_t length, size_t times) {
     if(desc->allocation_type == open_node) {
         return MEM_CLAIM_NOT_IN_USE;
     } else if(desc->allocation_type == tomb_node) {
@@ -506,7 +506,7 @@ static int visit_claim_check(vpage_range_desc_t *desc, size_t base, mop_internal
     return CHECK_PASS;
 }
 
-static int visit_request_check(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length) {
+static int visit_request_check(vpage_range_desc_t *desc, size_t base, __unused mop_internal_t* owner, size_t length) {
     if(desc->allocation_type != open_node) {
         // Can only request open nodes. This is not an error however, if we are searching.
         if(base == 0 && desc->start + desc->length != MAX_VIRTUAL_PAGES) return VISIT_CONT;
@@ -519,7 +519,7 @@ static int visit_request_check(vpage_range_desc_t *desc, size_t base, mop_intern
     return CHECK_PASS;
 }
 
-static int visit_free_check(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
+static int visit_free_check(vpage_range_desc_t *desc, __unused size_t base, mop_internal_t* owner, __unused size_t length, __unused size_t times) {
     if(desc->allocation_type != allocation_node) {
         // Won't be claimed anyway
         return VISIT_CONT;
@@ -538,7 +538,7 @@ static int visit_free_check(vpage_range_desc_t *desc, size_t base, mop_internal_
 }
 
 static vpage_range_desc_t *
-visit_claim(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
+visit_claim(vpage_range_desc_t *desc, __unused size_t base, mop_internal_t* owner, __unused size_t length, size_t times) {
 
     size_t index = find_free_claim_index(desc, owner);
 
@@ -693,7 +693,7 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 #define MIN_REVOKE (0x200)
 #define REVOKE_SANITY 0
 
-static void revoke_sanity(capability arg, ptable_t table, readable_table_t* RO, size_t index, size_t rep_pages) {
+static void revoke_sanity(__unused capability arg, __unused ptable_t table, readable_table_t* RO, size_t index, __unused size_t rep_pages) {
     register_t state = RO->entries[index];
 
     assert_int_ex(state, == , VTABLE_ENTRY_USED);
@@ -772,7 +772,7 @@ static vpage_range_desc_t * free_desc(vpage_range_desc_t *desc) {
 }
 
 static vpage_range_desc_t *
-visit_free(vpage_range_desc_t *desc, size_t base, mop_internal_t* owner, size_t length, size_t times) {
+visit_free(vpage_range_desc_t *desc, __unused size_t base, mop_internal_t* owner, __unused size_t length, size_t times) {
 
     size_t index = find_free_claim_index(desc, owner);
     size_t rem_claims =  desc->tracking.claimers[index].n_claims;
@@ -930,10 +930,6 @@ static void split_index(size_t page_n, struct index_result* containing_index,
         }
 
         if(!out_of_parent) {
-            // need middle node at this level
-            vpage_range_desc_t* mid_desc = & tbl->descs[middle];
-
-            size_t right = NDX(right_pagen, lvl);
 
             if(right_pagen != MAX_VIRTUAL_PAGES) {
                 vpage_range_desc_t* right_desc = hard_index(right_pagen);
@@ -1116,9 +1112,6 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
     } else {
         // Search. // TODO we may wish to allocate better than "first fit". Probably better to have many pools.
-
-        size_t lvl = 0;
-        vpage_range_desc_table_t* tbl = &desc_table_root;
 
         size_t search_page_n = 0;
 #ifdef MAX_POOLS
@@ -1306,6 +1299,8 @@ int reclaim(mop_internal_t* mop, int remove_from_chain) {
     /* Then release our claim on the mop. WE MUST NOT ACCESS IT AFTER THIS */
 
     release_mop(mop);
+
+    return 0;
 }
 
 int __mem_reclaim_mop(mop_t mop_sealed) {

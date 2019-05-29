@@ -92,7 +92,7 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 set(CMAKE_ASM_FLAGS_INIT "-mcpu=${CHERI_CPU}")
 set(CMAKE_C_FLAGS_INIT "-mcpu=${CHERI_CPU}")
 set(CMAKE_CXX_FLAGS_INIT "-mcpu=${CHERI_CPU}")
-set(CMAKE_EXE_LINKER_FLAGS "-mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -v -fuse-ld=lld -static"
+set(CMAKE_EXE_LINKER_FLAGS "-mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld -static"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 
@@ -159,8 +159,6 @@ else()
             -DBUILD_WITH_NET=0)
 endif()
 
-set("${NET_DEVICE} "ON)
-
 include_directories(include)
 include_directories(include/sys)
 include_directories(elf/include)
@@ -181,14 +179,11 @@ set(ASMC_COMPILER_FLAGS
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -march=${CHERI_CPU}
-    -cheri-cap-table
     -cheri-cap-table-abi=plt
-    -cheri-linker
     -integrated-as
     -msoft-float
     -fcolor-diagnostics
     -fno-pic
-    -v
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
 set(ASM_COMPILER_FLAGS
@@ -216,7 +211,7 @@ set(C_WARNING_FLAGS
     -Werror=implicit-function-declaration
     -Werror=format
     -Werror=undefined-internal
-
+    -Werror
     -Wcast-qual
     -Wdisabled-optimization
     -Winit-self
@@ -237,8 +232,12 @@ set(C_WARNING_FLAGS
     -Wno-padded
     -Wno-switch-enum
     # So sue me
+    -Wno-undef
+    -Wno-gnu-variable-sized-type-not-at-end
     -Wno-gnu-zero-variadic-macro-arguments
-
+    -Wno-char-subscripts
+    -Wno-error=comment
+    -Wno-unused-function
     -Wno-error=cast-align
     -Wno-error=cast-qual
     -Wno-error=comma
@@ -250,7 +249,6 @@ set(C_WARNING_FLAGS
     -Wno-error=missing-prototypes
     -Wno-error=missing-variable-declarations
     -Wno-error=pedantic
-    -Wno-error=return-type
     -Wno-error=sign-conversion
     -Wno-error=unreachable-code
     -Wno-error=unreachable-code-break
@@ -395,7 +393,6 @@ function(add_cherios_module _target)
     "-Wl,-T,${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}"
     )
   target_link_libraries(${_target}
-    -cheri-linker
     -G0
     -nostartfiles
     -nodefaultlibs
@@ -446,8 +443,8 @@ add_subdirectory(cherios)
 
 
 add_subdirectory(hello)
-add_subdirectory(zlib)
-add_subdirectory(zlib_test)
+#add_subdirectory(zlib)
+#add_subdirectory(zlib_test)
 
 add_subdirectory(churn)
 add_subdirectory(foundation_test)
@@ -461,6 +458,17 @@ add_subdirectory(server)
 add_subdirectory(client)
 
 add_subdirectory(nginx)
+#nginx has too many
+target_compile_options(nginx PRIVATE
+        -Wno-cast-qual
+        -Wno-incompatible-pointer-types-discards-qualifiers
+        -Wno-unused-parameter
+        -Wno-pointer-sign
+        -Wno-cheri-bitwise-operations
+        -Wno-unused-variable
+        -Wno-sign-compare
+        -Wno-incompatible-pointer-types)
+
 add_subdirectory(top)
 add_subdirectory(nc_shell)
 

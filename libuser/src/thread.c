@@ -231,7 +231,7 @@ process_kt thread_create_process(const char* name, capability file, int secure_l
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }
     assert(proc_man_ref != NULL);
-    return message_send_c(secure_load, 0, 0, 0, name, file, NULL, NULL, proc_man_ref, SYNC_CALL, 0);
+    return message_send_c(secure_load, 0, 0, 0, __DECONST(capability,name), file, NULL, NULL, proc_man_ref, SYNC_CALL, 0);
 }
 thread thread_start_process(process_kt proc, startup_desc_t* desc) {
     if(proc_man_ref == NULL) {
@@ -245,7 +245,7 @@ thread thread_create_thread(process_kt proc, const char* name, startup_desc_t* d
         proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
     }
     assert(proc_man_ref != NULL);
-    return message_send_c(0, 0, 0, 0, proc, name, desc, NULL, proc_man_ref, SYNC_CALL, 2);
+    return message_send_c(0, 0, 0, 0, proc, __DECONST(char*,name), desc, NULL, proc_man_ref, SYNC_CALL, 2);
 }
 
 top_t own_top;
@@ -325,7 +325,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         size_t locals_len = cheri_getlen(get_idc());
         size_t locals_off = crt_cap_tab_local_addr;
 
-        start_message->idc = cheri_setbounds(tls_seg+locals_off, locals_len);
+        start_message->idc = cheri_setbounds((char*)tls_seg+locals_off, locals_len);
 
         memcpy(start_message->segment_table, crt_segment_table, sizeof(crt_segment_table));
         start_message->segment_table[crt_tls_seg_off/sizeof(capability)] = tls_seg;

@@ -167,11 +167,6 @@ struct virtio_net_ctrl_mq {
 #define VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MAX 0x8000
 
 le64 offloads;
-#define VIRTIO_NET_F_GUEST_CSUM         1
-#define VIRTIO_NET_F_GUEST_TSO4         7
-#define VIRTIO_NET_F_GUEST_TSO6         8
-#define VIRTIO_NET_F_GUEST_ECN          9
-#define VIRTIO_NET_F_GUEST_UFO          10
 #define VIRTIO_NET_CTRL_GUEST_OFFLOADS          5
 #define VIRTIO_NET_CTRL_GUEST_OFFLOADS_SET      0
 

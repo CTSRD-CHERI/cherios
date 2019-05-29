@@ -45,8 +45,8 @@ enum {
     })
 
 #define UNSEAL_CHECK_FULFILLER(F)     ({ \
-    uni_dir_socket_requester* _requester_tmp = cheri_unseal(F, get_cds()); \
-    (_requester_tmp->fulfiller_component.guard.guard == MAKE_USER_GUARD_TYPE(fulfiller_guard_type)) ? _requester_tmp : NULL;\
+    uni_dir_socket_fulfiller* _requester_tmp = cheri_unseal(F, get_cds()); \
+    (_requester_tmp->guard.guard == MAKE_USER_GUARD_TYPE(fulfiller_guard_type)) ? _requester_tmp : NULL;\
     })
 
 #endif //CHERIOS_SOCKETS_H

@@ -74,7 +74,7 @@ capability new_stack(capability old_c10) {
     return new_c10;
 }
 
-int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame) {
+int temporal_exception_handle(__unused register_t cause, __unused register_t ccause, exception_restore_frame* restore_frame) {
 // Looking for: cgetoffset $X, $c10; tltiu $X, Y
 
 #define REG_MASK            0b11111
@@ -107,7 +107,7 @@ int temporal_exception_handle(register_t cause, register_t ccause, exception_res
         return 1;
 
     // Get the immediate
-    uint16_t user_wants_size = (uint16_t)(fault_instr & TLTIU_IM_MASK);
+    // uint16_t user_wants_size = (uint16_t)(fault_instr & TLTIU_IM_MASK);
 
     // TODO We really should provide a stack with max(Y,MinStackSize) + extra. But for now just give MinStackSize + Extra
 

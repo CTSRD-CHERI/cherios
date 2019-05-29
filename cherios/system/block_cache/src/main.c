@@ -323,7 +323,7 @@ static void unlock(session_sock* ss, locked_t locked_data) {
     }
 
     if(!aes_data->innited) {
-        AES_init_ctx_iv(&aes_data->ctx, aes_data->key, &aes_data->iv);
+        AES_init_ctx_iv(&aes_data->ctx, aes_data->key, (const uint8_t *)&aes_data->iv);
         aes_data->innited = 1;
     }
 
@@ -331,7 +331,7 @@ static void unlock(session_sock* ss, locked_t locked_data) {
 }
 
 ssize_t CROSS_DOMAIN(ff)(capability arg, char* buf, uint64_t offset, uint64_t length, capability extra_arg);
-ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length, capability extra_arg) {
+ssize_t ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length, __unused capability extra_arg) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -368,9 +368,9 @@ ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length, capabili
 
             if(is_user_write) {
                 // FIXME: Technically insecure you have intermediate states in the block_buf, but I dont really care. Its a demo.
-                AES_CBC_encrypt_buffer(&aes_data->ctx, block_buf, (uint32_t)to_copy);
+                AES_CBC_encrypt_buffer(&aes_data->ctx, (uint8_t*)block_buf, (uint32_t)to_copy);
             } else {
-                AES_CBC_decrypt_buffer(&aes_data->ctx, buf, (uint32_t)to_copy);
+                AES_CBC_decrypt_buffer(&aes_data->ctx, (uint8_t*)buf, (uint32_t)to_copy);
             }
         }
 
@@ -385,7 +385,7 @@ ssize_t ff(capability arg, char* buf, uint64_t offset, uint64_t length, capabili
 }
 
 ssize_t CROSS_DOMAIN(ff_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf, capability extra_arg);
-ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf, capability extra_arg) {
+ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length, char** out_buf, __unused capability extra_arg) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -413,7 +413,7 @@ ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf,
     // TODO currently this will leave the cache in an un-encrypted state which is bad for both security and correctness
     if(aes_data) {
         assert_int_ex(to_copy & (AES_BLOCKLEN-1), ==, 0);
-        AES_CBC_decrypt_buffer(&aes_data->ctx, block_buf, (uint32_t)to_copy);
+        AES_CBC_decrypt_buffer(&aes_data->ctx, (uint8_t *)block_buf, (uint32_t)to_copy);
     }
 
     // TODO at this point we have to somehow track when the resulting request is fulfilled. Then we know we can release the buffer
@@ -426,7 +426,7 @@ ssize_t ff_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf,
 }
 
 ssize_t CROSS_DOMAIN(oobff)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t oobff(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+ssize_t oobff(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
 
@@ -538,7 +538,7 @@ static void main_loop(void) {
     POLL_LOOP_END(sleep, any_event, 1, 0);
 }
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     while((vblk_ref = namespace_get_ref(namespace_num_virtio)) == NULL) {
         sleep(0);
     }
@@ -553,6 +553,8 @@ int main(register_t arg, capability carg) {
     assert(res == 0);
 
     main_loop();
+
+    assert(0);
 }
 
 void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size, new_socket};

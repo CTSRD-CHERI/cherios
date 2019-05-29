@@ -30,7 +30,9 @@
 
 #include "cheric.h"
 #include "webserver.h"
+#include "assert.h"
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     handle_loop();
+    assert(0);
 }

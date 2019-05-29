@@ -32,12 +32,17 @@
 #include "stdio.h"
 #include "assert.h"
 
-int* unsafe_useage(int x) {
-    _unsafe volatile int u = x;
-    return &u;
+
+__attribute__((noinline)) int* hide_return(int* x) {
+    return x;
 }
 
-int main(register_t arg, capability carg) {
+int* unsafe_useage(int x) {
+    _unsafe volatile int u = x;
+    return hide_return(__DEVOLATILE(int*, &u));
+}
+
+int main(__unused register_t arg, __unused capability carg) {
     printf("Unsafe Test Hello World\n");
 
     CHERI_PRINT_CAP(cheri_getreg(10));
@@ -50,4 +55,6 @@ int main(register_t arg, capability carg) {
     assert(*x != *y);
 
     printf("Unsafe Test Complete!");
+
+    return 0;
 }

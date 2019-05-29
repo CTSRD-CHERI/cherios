@@ -78,7 +78,7 @@ typedef struct {
     size_t mask;
 } precision_rounded_length;
 
-static precision_rounded_length round_cheri_length(size_t length) {
+static inline precision_rounded_length round_cheri_length(size_t length) {
     if(length < SMALL_OBJECT_THRESHOLD) return (precision_rounded_length){.length = length, .mask = 0};
     size_t mask = length >> (LARGE_PRECISION-1);
     mask++; // to avoid edge case where rounding length would actually change exponent
@@ -204,12 +204,11 @@ typedef unsigned int stype;
 
 #define cheri_getcursor(x) (__builtin_cheri_address_get(x))
 
-#define cheri_get_low_ptr_bits(X,M) (__builtin_cheri_address_get(X) & (M))
+#define cheri_get_low_ptr_bits(X,M) (__builtin_cheri_address_get((capability)X) & (M))
 #define cheri_clear_low_ptr_bits(X,M) ((X) &~((M)))
 
 // TODO: When we update the compiler use following instead
 
-/*
 /*
  * Get the low bits defined in @p mask from the capability/pointer @p ptr.
  * @p mask must be a compile-time constant less than 31.
@@ -537,7 +536,7 @@ typedef struct reg_frame {
 	register_t	mf_hi, mf_lo;
 
 	/* Program counter. */
-	/* register_t	mf_pc; <-- this really isn't needed, and its nice to keep to 32 regs
+	/* register_t	mf_pc; <-- this really isn't needed, and its nice to keep to 32 regs */
 
     /* User local kernel register */
     register_t mf_user_loc;

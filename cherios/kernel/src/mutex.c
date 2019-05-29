@@ -89,7 +89,7 @@ void semaphore_wait(semaphore_t* sem, act_t* waiter) {
 
 }
 
-int semaphore_try_wait(semaphore_t* sem, act_t* waiter) {
+int semaphore_try_wait(semaphore_t* sem, __unused act_t* waiter) {
     int result;
 
     critical_section_enter();

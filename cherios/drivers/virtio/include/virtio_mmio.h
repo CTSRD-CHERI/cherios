@@ -113,7 +113,7 @@ typedef struct virtio_mmio_map {
     volatile char config[0x100];
 } virtio_mmio_map;
 
-_Static_assert(sizeof(virtio_mmio_map) == VIRTIO_MMIO_SIZE);
+_Static_assert(sizeof(virtio_mmio_map) == VIRTIO_MMIO_SIZE, "Get the struct size correct");
 
 #endif /* _VIRTIO_MMIO_H */
 

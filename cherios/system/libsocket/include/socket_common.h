@@ -103,7 +103,7 @@
     ITEM(socket_fulfiller_bytes_requested, uint64_t, (fulfiller_t f), __VA_ARGS__)\
 /**/\
     ITEM(socket_requester_set_drb, int, (requester_t requester, struct data_ring_buffer* drb) , __VA_ARGS__)\
-    ITEM(socket_requester_set_drb_ptr, int, (requester_t r, uint64_t* drb_ptr), __VA_ARGS__)\
+    ITEM(socket_requester_set_drb_ptr, int, (requester_t r, volatile uint64_t* drb_ptr), __VA_ARGS__)\
     ITEM(in_proxy, int, (fulfiller_t f), __VA_ARGS__)\
 /*Some Usefull fulfillment functions. These are in the libraries domain so use its */\
     ITEM(copy_in, ssize_t, (capability user_buf, char* req_buf, uint64_t offset, uint64_t length), __VA_ARGS__)\

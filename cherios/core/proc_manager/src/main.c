@@ -303,7 +303,7 @@ static top_t __get_top_for_process(process_t* proc) {
     return top_for_process(proc);
 }
 
-static void handle_termination(register_t thread_num, process_t* proc, act_kt target) {
+static void handle_termination(register_t thread_num, process_t* proc, __unused act_kt target) {
 
     proc = unseal_proc(proc);
 
@@ -338,7 +338,7 @@ cap_pair proc_tmp_alloc(size_t s, Elf_Env* the_env) {
     /* Swaps to using the proper alloc when memmgt is up */
     if(!bootstrapping && namespace_get_ref(namespace_num_memmgt) != NULL) {
         the_env->alloc = &mmap_based_alloc;
-        the_env->free = &mmap_based_free;
+        the_env->free = (typeof(the_env->free))&mmap_based_free;
         return mmap_based_alloc(s, the_env);
     } else {
         return tmp_alloc(s, the_env);
@@ -365,4 +365,6 @@ int main(procman_init_t* init)
 
 	namespace_register(namespace_num_proc_manager, act_self_ref);
     msg_enable = 1;
+
+    return 0;
 }

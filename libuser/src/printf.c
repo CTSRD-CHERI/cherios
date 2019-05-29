@@ -49,14 +49,6 @@
 static size_t syscall_buf_offset = 0;
 static char syscall_buf[BUF_SIZE + 1];
 
-static void buf_puts(char * str) {
-    if(syscall_buf_offset != 0) {
-        syscall_puts(syscall_buf);
-        syscall_buf_offset = 0;
-    }
-    syscall_puts(str);
-}
-
 void buf_putc(char chr) {
     syscall_buf[syscall_buf_offset++] = chr;
 	if((chr == '\n') || (syscall_buf_offset == BUF_SIZE)) {
@@ -113,6 +105,7 @@ int fputc(int character, FILE *f) {
         assert(flush >= 0);
     }
 
+    return character;
 }
 
 int fputs(const char* str, FILE* f) {
@@ -131,7 +124,7 @@ int puts(const char *s) {
 int
 vprintf(const char *fmt, va_list ap)
 {
-	return (kvprintf(fmt, fputc, stdout, 10, ap));
+	return (kvprintf(fmt, (kvprintf_putc_f*)fputc, stdout, 10, ap));
 }
 
 int
@@ -141,7 +134,7 @@ printf(const char *fmt, ...)
 	int retval;
 
 	va_start(ap, fmt);
-	retval = (kvprintf(fmt, fputc, stdout, 10, ap));
+	retval = (kvprintf(fmt, (kvprintf_putc_f*)fputc, stdout, 10, ap));
 	va_end(ap);
 
 	return (retval);
@@ -155,7 +148,7 @@ fprintf(FILE *f, const char *fmt, ...)
 	int retval;
 
 	va_start(ap, fmt);
-	retval = (kvprintf(fmt, fputc, f, 10, ap));
+	retval = (kvprintf(fmt, (kvprintf_putc_f*)fputc, f, 10, ap));
 	va_end(ap);
 
 	return (retval);

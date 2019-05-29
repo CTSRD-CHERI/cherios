@@ -154,7 +154,7 @@ qsort(void *a, size_t n, size_t es, cmp_t *cmp)
     pn = (char *)a + n * es;
     d1 = MIN(pa - (char *)a, pb - pa);
     vecswap(a, pb - d1, d1);
-    d1 = MIN(pd - pc, pn - pd - es);
+    d1 = MIN(pd - pc, pn - pd - (ssize_t)es);
     vecswap(pb, pn - d1, d1);
 
     d1 = pb - pa;

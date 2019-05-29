@@ -80,7 +80,7 @@ static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env) {
         phy_mem =     cheri_setoffset(cheri_getdefault(), NANO_KSEG + nano_size);
         BOOT_PRINT_CAP(phy_mem);
         alloc = cheri_getdefault();
-		bzero(alloc + NANO_KSEG, nano_size);
+		bzero((char*)alloc + NANO_KSEG, nano_size);
         alloc_direct = 0;
     } else {
         alloc = phy_mem;

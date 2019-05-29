@@ -41,10 +41,9 @@
 
 capability naughty[N];
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     printf("Churn Hello World!\n");
-    cap_pair pr;
 
     res_t maps[WINDOW_SIZE];
 

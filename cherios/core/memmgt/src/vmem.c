@@ -39,7 +39,7 @@
 #include "pmem.h"
 #include "object.h"
 
-ptable_t vmem_create_table(ptable_t parent, register_t index, int level) { // FIXME: Races with main thread
+ptable_t vmem_create_table(ptable_t parent, register_t index, __unused int level) { // FIXME: Races with main thread
     //printf("memmgt: creating a l%d table at index %lx\n", level, index);
     size_t page = pmem_find_page_type(1, page_ptable_free, 0);
 
@@ -114,7 +114,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
 
     size_t ndx = L2_INDEX(addr);
 
-    if(ro->entries[ndx] != NULL) {
+    if(ro->entries[ndx] != VTABLE_ENTRY_FREE) {
         if(ro->entries[ndx] == VTABLE_ENTRY_USED) {
             printf("%s used %lx\n", name, addr);
             CHERI_PRINT_CAP(activation);
@@ -291,16 +291,6 @@ size_t memmgt_free_mappings(ptable_t table, size_t l0, size_t l1, size_t l2, siz
         } else {
             int should_free = 1;
 
-            if(lvl == 0) {
-                size_t lowest = ndx << (UNTRANSLATED_BITS + L2_BITS + L1_BITS);
-                size_t highest = (ndx + 1) << (UNTRANSLATED_BITS + L2_BITS + L1_BITS);
-
-            } else if(lvl == 1) {
-                size_t lowest = l0 << (UNTRANSLATED_BITS + L2_BITS + L1_BITS);
-                lowest += ndx << (UNTRANSLATED_BITS + L2_BITS);
-                size_t highest = lowest + (1 << (UNTRANSLATED_BITS + L2_BITS));
-            }
-
             size_t f = memmgt_free_mappings(get_sub_table(table, ndx), ndx, l1, l2, n, lvl+1,
                                             should_free ? &should_free : NULL);
 
@@ -331,7 +321,7 @@ static ptable_t get_l2_for_addr(size_t vaddr) {
     return L2;
 }
 
-static void check_vaddr(size_t vaddr) {
+__unused static inline void check_vaddr(size_t vaddr) {
     ptable_t L2 = get_l2_for_addr(vaddr);
     assert(L2 != NULL);
 }
@@ -353,7 +343,7 @@ void vmem_free_range(size_t vaddr_start, size_t pages) {
                          pages, 0, NULL);
 }
 
-static void dump_res(res_t res) {
+__unused static void dump_res(res_t res) {
     res_nfo_t nfo = rescap_nfo(res);
     printf("Base: %lx. Length %lx\n", nfo.base-RES_META_SIZE, nfo.length+RES_META_SIZE);
 }
@@ -369,7 +359,7 @@ static int mapping_exists(size_t vaddr) {
     return 1;
 }
 
-static void check_range(size_t vaddr, size_t length) {
+__unused static void check_range(size_t vaddr, size_t length) {
     for(size_t page = vaddr; page < vaddr+length; page+=UNTRANSLATED_PAGE_SIZE) {
         if(mapping_exists(vaddr)) {
             printf("vaddr %lx still mapped!\n", vaddr);
@@ -378,7 +368,7 @@ static void check_range(size_t vaddr, size_t length) {
     }
 }
 
-static void dump_table(ptable_t tbl) {
+__unused static void dump_table(ptable_t tbl) {
     readable_table_t* RO = get_read_only_table(tbl);
     for(int i = 0; i < PAGE_TABLE_ENT_PER_TABLE; i++) {
         printf("%x: %lx\n", i, RO->entries[i]);

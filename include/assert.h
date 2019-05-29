@@ -37,4 +37,4 @@ void	__assert_int_ex(const char *, const char *, int, const char *,  const char 
 #define	assert(e)	((e) ? (void)0 : __assert(__func__, __FILE__, \
                                                   __LINE__, #e))
 
-#define assert_int_ex(a, op, b) (((a) op (b)) ? (void)0 : __assert_int_ex(__func__, __FILE__, __LINE__, #a, #op, #b, a, b))
+#define assert_int_ex(a, op, b) (((ssize_t)(a) op (ssize_t)(b)) ? (void)0 : __assert_int_ex(__func__, __FILE__, __LINE__, #a, #op, #b, a, b))

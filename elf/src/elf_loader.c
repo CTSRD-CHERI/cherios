@@ -314,7 +314,7 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 				for(size_t i=0; i<out_im->hdr->e_phnum; i++) {
 					Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
 					if(seg->p_type == PT_LOAD) {
-						memcpy(pair.data + seg->p_vaddr, ((char*)out_im->hdr) + seg->p_offset, seg->p_filesz);
+						memcpy((char*)pair.data + seg->p_vaddr, ((char*)out_im->hdr) + seg->p_offset, seg->p_filesz);
 					}
 				}
 			case storage_process:

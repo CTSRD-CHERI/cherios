@@ -53,7 +53,7 @@ struct capreloc
     uint8_t object_seg_ndx;
 };
 
-#define RELOC_GET_LOC(tbl, rlc) ((capability*)(tbl[(uint8_t)(rlc->location_seg_ndx)] + rlc->capability_location))
+#define RELOC_GET_LOC(tbl, rlc) ((capability*)((char*)tbl[(uint8_t)(rlc->location_seg_ndx)] + rlc->capability_location))
 
 extern void __cap_table_start;
 extern void __cap_table_local_start;
@@ -78,7 +78,7 @@ extern size_t crt_tls_seg_off; // _offset_ (not index)
 
 // Need inlining as calling functions requires globals
 
-static inline capability __attribute__((always_inline)) crt_init_common(capability* segment_table, struct capreloc* start, struct capreloc* end, int globals) {
+static inline void __attribute__((always_inline)) crt_init_common(capability* segment_table, struct capreloc* start, struct capreloc* end, int globals) {
     for(struct capreloc* reloc = start; reloc != end; reloc++) {
         uint8_t loc_seg_ndx = (uint8_t)(reloc->location_seg_ndx);
         uint8_t ob_seg_ndx = (uint8_t)(reloc->object_seg_ndx);
@@ -86,8 +86,8 @@ static inline capability __attribute__((always_inline)) crt_init_common(capabili
         // Skip depending on whether we are processing globals or not
         if((reloc->flags & RELOC_FLAGS_TLS) == globals) continue;
 
-        capability loc_cap = segment_table[loc_seg_ndx] + reloc->capability_location;
-        capability ob_cap = segment_table[ob_seg_ndx] + reloc->object;
+        capability loc_cap = ((char*)segment_table[loc_seg_ndx]) + reloc->capability_location;
+        capability ob_cap = ((char*)segment_table[ob_seg_ndx]) + reloc->object;
 
         size_t size = reloc->size;
         size_t offset = reloc->offset;

@@ -36,6 +36,7 @@
 .text
 
 # This stub is used to call function pointers (paired with a data argument). We short circuit when its in the same doamin #
+.ent call_function_pointer_arg_mem
 .global call_function_pointer_arg_mem
 call_function_pointer_arg_mem:
 .type invoke_c1, "tls_object"
@@ -62,3 +63,4 @@ cincoffset  $c12, $c1, (4 * 4)
 go_via_mode:
 cjr     $c12
 nop
+.end call_function_pointer_arg_mem

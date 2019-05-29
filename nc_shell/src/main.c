@@ -39,22 +39,22 @@ typedef struct {
     NET_SOCK ns;
 } nc_shell_state;
 
-extern TRUSTED_CROSS_DOMAIN(ns_ful) (capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ns_ful(capability arg, char* buf, uint64_t offset, uint64_t length) {
+extern ssize_t TRUSTED_CROSS_DOMAIN(ns_ful) (capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t ns_ful(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     nc_shell_state* shellState = (nc_shell_state*)arg;
 
     // TODO actually write a shell
 
-    fprintf(shellState->ns, "I have not actually written a shell. Heres what you typed: %*.*s\n", (int)length, (int)length, buf);
+    fprintf((FILE*)shellState->ns, "I have not actually written a shell. Heres what you typed: %*.*s\n", (int)length, (int)length, buf);
 
     return length;
 }
 
-int shell_start(register_t reg_arg, NET_SOCK ns) {
+void shell_start(__unused register_t arg, capability carg) {
 
+    NET_SOCK ns = (NET_SOCK)carg;
     // We want direct access to the underlying sockets
 
-    requester_t req = ns->sock.write.push_writer;
     fulfiller_t ful = ns->sock.read.push_reader;
 
     ssize_t res;
@@ -70,12 +70,10 @@ int shell_start(register_t reg_arg, NET_SOCK ns) {
     } while(res > 0);
 
     printf("net shell disconnected with %ld\n", res);
-
-    return (int)res;
 }
 
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     // Set up a TCP server
 
@@ -86,7 +84,7 @@ int main(register_t arg, capability carg) {
 
     assert(IS_VALID(token_or_er));
 
-    listening_token tok = token_or_er.val;
+    __unused listening_token tok = token_or_er.val;
 
     char tn[] = "shell_thread00";
 
@@ -96,7 +94,7 @@ int main(register_t arg, capability carg) {
 
         printf("Someone has connected to the netcat shell!\n");
 
-        thread nt = thread_new(tn, 0, ns, shell_start);
+        thread_new(tn, 0, (capability)ns, &shell_start);
 
         if(tn[13] == '9') {
             tn[12] ++;

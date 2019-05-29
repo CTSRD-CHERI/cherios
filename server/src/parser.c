@@ -77,7 +77,7 @@ ssize_t ful_copy_until(capability arg, char* buf, uint64_t offset, uint64_t leng
 
 #define EXPECT(X) \
     do { \
-        res = socket_fulfill_progress_bytes_unauthorised(push_read, sizeof(X)-1, F_CHECK | F_PROGRESS, TRUSTED_CROSS_DOMAIN(ful_expect), (capability)X, 0, NULL, NULL, TRUSTED_DATA, NULL);\
+        res = socket_fulfill_progress_bytes_unauthorised(push_read, sizeof(X)-1, F_CHECK | F_PROGRESS, TRUSTED_CROSS_DOMAIN(ful_expect), __DECONST(capability,X), 0, NULL, NULL, TRUSTED_DATA, NULL);\
         if(res != sizeof(X) -1) return -1;\
     } while(0)
 

@@ -32,4 +32,4 @@
 
 int server_start(void);
 
-#endif CHERIOS_DYLINK_SERVER_H
+#endif // CHERIOS_DYLINK_SERVER_H

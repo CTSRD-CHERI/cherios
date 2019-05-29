@@ -41,7 +41,7 @@
 act_info_t* info_global;
 
 int cmp(const void* a, const void* b) {
-    int64_t diff = (int64_t)(info_global[*(size_t*)b].had_time - info_global[*(size_t*)a].had_time);
+    int64_t diff = (int64_t)(info_global[*(const size_t*)b].had_time - info_global[*(const size_t*)a].had_time);
     return diff > 0 ? 1 : (int)(diff >> 32);
 }
 
@@ -103,7 +103,7 @@ static n_short make_short(uint64_t large, size_t largest) {
 }
 
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     // This just displays some stats every few seconds
     char table_buffer[LTOTAL];
     act_info_t info[MAX_TRACK];
@@ -160,7 +160,7 @@ int main(register_t arg, capability carg) {
             char status[] = "Block:XXXXXX";
             size_t flags = 6;
 
-            char* sched_str;
+            const char* sched_str;
 
             switch (act_info->sched_status) {
                 case sched_runnable:

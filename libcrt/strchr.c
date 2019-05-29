@@ -29,8 +29,9 @@
  */
 
 #include "string.h"
+#include "cdefs.h"
 
 char *	strchr(const char * s, int c) {
     while(*s != '\0' && *s != c) s++;
-    return *s == '\0' ? NULL : s;
+    return *s == '\0' ? NULL : __DECONST(char*, s);
 }

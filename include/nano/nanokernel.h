@@ -120,11 +120,11 @@ static inline capability get_phy_cap(page_t* book, size_t address, size_t size, 
 
 /* Ask type_manager instead of calling this */
 
-static capability get_sealing_cap_from_nano(register_t type) {
+static inline capability get_sealing_cap_from_nano(register_t type) {
     return tres_take(tres_get(type));
 }
 
-static res_t reservation_precision_align(res_t res, size_t length, size_t mask) {
+static inline res_t reservation_precision_align(res_t res, size_t length, size_t mask) {
     res_nfo_t nfo = rescap_nfo(res);
     size_t rounded_base = (nfo.base + mask) & ~mask;
     size_t skip = rounded_base - nfo.base;

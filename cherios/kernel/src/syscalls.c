@@ -241,7 +241,7 @@ void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
 
 DECLARE_WITH_CD(void, kernel_syscall_panic(void) __dead2);
 void kernel_syscall_panic(void) {
-    return kernel_syscall_panic_proxy(NULL);
+	kernel_syscall_panic_proxy(NULL);
 }
 
 DECLARE_WITH_CD(int, kernel_syscall_interrupt_register(int number, act_control_t* ctrl, register_t v0, register_t arg, capability carg));

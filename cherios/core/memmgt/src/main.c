@@ -53,7 +53,7 @@ act_kt commit_act;  // Only for commit   (worker id 0)
 act_kt revoke_act;  // Only for revoke   (worker if 2)
 act_kt clean_act; 	// Only for clean 	 (worker id 3)
 
-static void worker_start(register_t arg, capability carg) {
+static void worker_start(__unused register_t arg, capability carg) {
 
     general_act = act_self_ref;
 	memmgt_init_t* mem_init = (memmgt_init_t*)carg;
@@ -78,35 +78,6 @@ static void worker_start(register_t arg, capability carg) {
     syscall_change_priority(act_self_ctrl, PRIO_HIGH);
 }
 
-static size_t get_addr_lo(void) {
-    size_t ret;
-    __asm__ ("dmfc0 %[ret], $30, 2\n":[ret]"=r"(ret));
-    return ret;
-};
-static size_t get_addr_hi(void) {
-    size_t ret;
-    __asm__ ("dmfc0 %[ret], $30, 3\n":[ret]"=r"(ret));
-    return ret;
-};
-static void set_addr_lo(size_t val) {
-    __asm__ ("dmtc0 %[val], $30, 2\n"::[val]"r"(val));
-};
-static void set_addr_hi(size_t val) {
-    __asm__ ("dmtc0 %[val], $30, 3\n"::[val]"r"(val));
-};
-
-static void revoke_cap(capability c) {
-	size_t base = cheri_getbase(c);
-	size_t bound = base + cheri_getlen(c);
-	set_addr_lo(base);
-	set_addr_hi(bound);
-}
-
-static void clear_revoke(void) {
-	set_addr_hi(0);
-	set_addr_lo(0);
-}
-
 void revoke(void) {
     message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL, revoke_act, SEND, 10);
 }
@@ -120,7 +91,7 @@ size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_
 	return message_send(addr, pages, block_size, flags, NULL, NULL, NULL, NULL, commit_act, SYNC_CALL, 12);
 }
 
-static void revoke_worker_start(register_t arg, capability carg) {
+static void revoke_worker_start(__unused register_t arg, __unused capability carg) {
 	printf("Revoker hello world!\n");
     worker_id = 2;
     revoke_act = act_self_ref;
@@ -131,7 +102,7 @@ static void revoke_worker_start(register_t arg, capability carg) {
 	syscall_change_priority(act_self_ctrl, PRIO_IDLE);
 }
 
-static void clean_worker_start(register_t arg, capability carg) {
+static void clean_worker_start(__unused register_t arg, __unused capability carg) {
 	worker_id = 3;
 	clean_act = act_self_ref;
 

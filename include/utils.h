@@ -34,7 +34,7 @@
 #include "cheric.h"
 #include "nano/nanotypes.h"
 
-static capability rederive_perms(capability source, capability auth) {
+static inline capability rederive_perms(capability source, capability auth) {
     size_t source_base = cheri_getbase(source);
     size_t source_size = cheri_getlen(source);
     size_t source_offset = cheri_getoffset(source);

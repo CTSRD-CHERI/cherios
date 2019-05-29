@@ -68,6 +68,7 @@ struct in6_addr {
 };
 
 /** 255.255.255.255 */
+#undef INADDR_NONE
 #define INADDR_NONE         IPADDR_NONE
 /** 127.0.0.1 */
 #define INADDR_LOOPBACK     IPADDR_LOOPBACK

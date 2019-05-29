@@ -103,7 +103,6 @@ typedef struct dypool {
 #define BIG_OBJECT_THRESHOLD (1 << 27)
 
 __thread fixed_pool pools[N_FIXED_POOLS];
-__thread dypool dynamic_pool;
 
 act_kt worker_act = NULL;
 
@@ -120,7 +119,7 @@ __thread struct {
     DLL(arena_t);
 } arena_list;
 
-void worker_start(register_t arg, capability carg) {
+void worker_start(__unused register_t arg, __unused capability carg) {
     worker_act = act_self_ref;
 
     /* Simple message read loop that calls mem_release/claim on behalf of cap_free */
@@ -183,7 +182,7 @@ static res_nfo_t memhandle_nfo(capability mem) {
     return (type == RES_TYPE) ? rescap_nfo(mem) : MAKE_NFO(cheri_getlen(mem), cheri_getbase(mem));
 }
 
-static res_t alloc_from_pool(size_t size, size_t pool_n, arena_t* arena, size_t* dma_off) {
+static res_t alloc_from_pool(__unused size_t size, size_t pool_n, arena_t* arena, size_t* dma_off) {
     fixed_pool* p = &arena->pools[pool_n];
 
     if(p->field == NULL) {

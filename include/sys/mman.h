@@ -149,7 +149,7 @@ enum mmap_return
 
 cap_pair mmap_based_alloc(size_t s, Elf_Env* env);
 res_t mmap_based_capmalloc(size_t s, Elf_Env* env);
-void mmap_based_free(capability c, Elf_Env* env);
+int mmap_based_free(capability c, Elf_Env* env);
 
 /* Old mmap for anything that needs it */
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset);

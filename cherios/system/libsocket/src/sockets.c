@@ -40,23 +40,23 @@
 #define printf(...) // Printf now not in the same dynamic library. To get this back finish dynamic linking.
 
 
-static int is_empty(uni_dir_socket_requester* requester) {
+__unused static inline int is_empty(uni_dir_socket_requester* requester) {
     return (requester->fulfiller_component.fulfill_ptr == requester->requeste_ptr);
 }
 
-static int is_full(uni_dir_socket_requester* requester) {
+__unused static inline int is_full(uni_dir_socket_requester* requester) {
     return ((requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr) == requester->buffer_size);
 }
 
-static uint16_t fill_level(uni_dir_socket_requester* requester) {
+static inline uint16_t fill_level(uni_dir_socket_requester* requester) {
     return (requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr);
 }
 
-static uint16_t space(uni_dir_socket_requester* requester) {
+static inline uint16_t space(uni_dir_socket_requester* requester) {
     return (requester->buffer_size - (requester->requeste_ptr - requester->fulfiller_component.fulfill_ptr));
 }
 
-static size_t data_buf_space(data_ring_buffer* data_buffer) {
+static inline size_t data_buf_space(data_ring_buffer* data_buffer) {
     return (data_buffer->buffer_size - (data_buffer->requeste_ptr - data_buffer->fulfill_ptr));
 }
 
@@ -215,7 +215,7 @@ static int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fu
 
 __attribute__((used))
 int socket_fulfiller_outstanding_wait(fulfiller_t fulfiller, uint16_t amount, int dont_wait, int delay_sleep) {
-    uni_dir_socket_requester* f = UNSEAL_CHECK_REQUESTER(fulfiller);
+    uni_dir_socket_fulfiller* f = UNSEAL_CHECK_FULFILLER(fulfiller);
     if(!f) return E_BAD_SEAL;
     return socket_internal_fulfill_outstanding_wait(f, amount, dont_wait, delay_sleep);
 }
@@ -336,7 +336,7 @@ ssize_t socket_request_proxy(requester_t r, fulfiller_t f, uint64_t length, uint
 // Requests length bytes be fulfilled by a puller, and then pushed into a push request
 // A drb is provided, but either party may substitute their own (TODO: Only the writer currently can do this)
 __attribute__((used))
-ssize_t socket_request_join(requester_t pull_req, requester_t push_req, data_ring_buffer* drb, uint64_t length, uint32_t drb_off) {
+ssize_t socket_request_join(requester_t pull_req, requester_t push_req, data_ring_buffer* drb, uint64_t length, __unused uint32_t drb_off) {
 
     uni_dir_socket_requester* pull = UNSEAL_CHECK_REQUESTER(pull_req);
     uni_dir_socket_requester* push = UNSEAL_CHECK_REQUESTER(push_req);
@@ -575,7 +575,7 @@ static void socket_internal_dump_requests(uni_dir_socket_requester* requester) {
         if(req->type == REQUEST_IND) {
             CHERI_PRINT_CAP(req->request.ind);
         }
-
+        (void)type_s;
         printf("Type: %10s(%x). Length %8lx. DB_add %8x\n", type_s, req->type, req->length, req->drb_fullfill_inc);
     }
 }
@@ -734,8 +734,6 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
             assert(0 && "TODO");
         } else if(req->type == REQUEST_BARRIER_TARGET) {
             assert(0 && "TODO");
-            request_t* other_request = req->request.barrier_target;
-            volatile act_notify_kt* to_notify = &other_request->request.barrier_waiting;
         }
         else if(req->type == REQUEST_PROXY) {
             // FIXME: We might need to reset the mark the first time we proxy
@@ -758,7 +756,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 // User can sub their own buffers. Keep getting them and pushing as requests
                 char* user_buf; // FIXME: This is the unsafe thing. It would be preferable to return this.
 
-                while(ret != bytes_to_process) {
+                while((size_t)ret != bytes_to_process) {
 
                     sub_ret = socket_internal_requester_space_wait(push_to, 1, flags & F_DONT_WAIT, 0);
 
@@ -791,7 +789,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                     ret = 0;
                     size_t chunk_size = drb->buffer_size / 2;
 
-                    while(ret != bytes_to_process) {
+                    while((size_t)ret != bytes_to_process) {
                         uint64_t req_size = (chunk_size > (bytes_to_process-ret)) ? (bytes_to_process-ret) : chunk_size;
 
                         char* cap1;
@@ -816,7 +814,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                             visit_gave = (size_t)sub_ret;
                         }
 
-                        if(sub_ret == size1 && cap2) {
+                        if((size_t)sub_ret == size1 && cap2) {
                             sub_ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, CS(cap2), offset + size1 + ret, size2);
 
                             if(sub_ret > 0) {
@@ -866,7 +864,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
         }
 
         // We may fail for some reason, in which case ret is an error, or how many bytes we actually managed
-        if(ret != bytes_to_process) {
+        if((size_t)ret != bytes_to_process) {
             if(ret > 0) {
                 partial_bytes += ret;
                 bytes_remain -= ret;
@@ -984,7 +982,7 @@ static int socket_internal_requester_init(uni_dir_socket_requester* requester, u
 }
 
 __attribute__((used))
-int socket_requester_set_drb_ptr(requester_t r, uint64_t* drb_ptr) {
+int socket_requester_set_drb_ptr(requester_t r, volatile uint64_t* drb_ptr) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
 
@@ -1066,7 +1064,6 @@ int socket_reuse_fulfiller(fulfiller_t f, uint8_t socket_type) {
 
 // Now not only read only but sealed by the type of the domain from which this is run
 static uni_dir_socket_requester*  socket_internal_make_read_only(uni_dir_socket_requester* requester) {
-    size_t size = SIZE_OF_request(requester->buffer_size);
     return (uni_dir_socket_requester*)cheri_andperm(requester, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP);
 }
 
@@ -1308,7 +1305,7 @@ struct fwf_args {
 
 ssize_t TRUSTED_CROSS_DOMAIN(socket_fulfill_with_fulfill)(capability arg, char* buf, uint64_t offset, uint64_t length);
 __attribute__((used))
-ssize_t socket_fulfill_with_fulfill(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t socket_fulfill_with_fulfill(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     struct fwf_args* args = (struct fwf_args*)arg;
     // TODO: We can probably avoid a copy for join requests here
     ful_func * ff = &(TRUSTED_CROSS_DOMAIN(copy_in)); // Will be called only from within library, we pass trusted entry.

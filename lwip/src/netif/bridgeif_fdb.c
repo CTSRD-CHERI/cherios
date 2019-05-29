@@ -82,7 +82,7 @@ bridgeif_fdb_update_src(void *fdb_ptr, struct eth_addr *src_addr, u8_t port_idx)
   for (i = 0; i < fdb->max_fdb_entries; i++) {
     bridgeif_dfdb_entry_t *e = &fdb->fdb[i];
     if (e->used && e->ts) {
-      if (!memcmp(&e->addr, src_addr, sizeof(struct eth_addr))) {
+      if (!memcmp((const char * )&e->addr, (const char * )src_addr, sizeof(struct eth_addr))) {
         LWIP_DEBUGF(BRIDGEIF_FDB_DEBUG, ("br: update src %02x:%02x:%02x:%02x:%02x:%02x (from %d) @ idx %d\n",
                                          src_addr->addr[0], src_addr->addr[1], src_addr->addr[2], src_addr->addr[3], src_addr->addr[4], src_addr->addr[5],
                                          port_idx, i));
@@ -134,7 +134,7 @@ bridgeif_fdb_get_dst_ports(void *fdb_ptr, struct eth_addr *dst_addr)
   for (i = 0; i < fdb->max_fdb_entries; i++) {
     bridgeif_dfdb_entry_t *e = &fdb->fdb[i];
     if (e->used && e->ts) {
-      if (!memcmp(&e->addr, dst_addr, sizeof(struct eth_addr))) {
+      if (!memcmp((const char*)&e->addr, (const char*)dst_addr, sizeof(struct eth_addr))) {
         bridgeif_portmask_t ret = (bridgeif_portmask_t)(1 << e->port);
         BRIDGEIF_READ_UNPROTECT(lev);
         return ret;

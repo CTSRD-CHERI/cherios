@@ -117,7 +117,7 @@ static void big_test_send2(unix_like_socket* sock) {
 }
 
 // This tests sendfile
-void con2_start(register_t arg, capability carg) {
+void con2_start(__unused register_t arg, __unused capability carg) {
 
     // The first send file
 
@@ -183,7 +183,7 @@ void con2_start(register_t arg, capability carg) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(con3_full)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t con3_full(capability arg, char* buf, uint64_t offset, uint64_t length) {
+ssize_t con3_full(__unused capability arg, __unused char* buf, __unused uint64_t offset, __unused uint64_t length) {
     assert(0);
 }
 
@@ -224,17 +224,12 @@ void init_pair(proxy_pair* pp) {
 
 char co3data[BIG_TEST_SIZE * 3];
 
-void con3_start(register_t arg, capability carg) {
+void con3_start(__unused register_t arg, capability carg) {
     fulfiller_t ff = socket_malloc_fulfiller(SOCK_TYPE_PULL);
     assert(ff);
 
-    int res;
-
     int result = socket_connect_via_rpc(carg, PORT + 5, NULL, ff);
     assert_int_ex(result, ==, 0);
-
-    // Do a BIG_TEST send with our own buffers
-    char data[BIG_TEST_SIZE * 3];
 
     for(size_t i = 0; i != BIG_TEST_SIZE; i++) {
         co3data[(3 * i) + 0] = (char)(i & 0xFF);
@@ -268,7 +263,7 @@ void con3_start(register_t arg, capability carg) {
     return;
 }
 
-void connector_start(register_t arg, capability carg) {
+void connector_start(__unused register_t arg, __unused capability carg) {
     capability data_buffer[DATA_SIZE/sizeof(capability)];
 
     unix_like_socket socket;
@@ -282,7 +277,7 @@ void connector_start(register_t arg, capability carg) {
     sock->write.pull_writer = socket_malloc_fulfiller(SOCK_TYPE_PULL);
     assert(sock->write.pull_writer);
 
-    res = socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_READ | CONNECT_PULL_WRITE);
+    res = socket_init(sock, MSG_NONE, (char*)data_buffer, DATA_SIZE, CONNECT_PUSH_READ | CONNECT_PULL_WRITE);
     assert_int_ex(res, ==, 0);
 
 
@@ -315,7 +310,7 @@ void connector_start(register_t arg, capability carg) {
 
     // Test a proxy. Will need own requester
 
-    thread t = thread_new("socket_part3", 0, act_self_ref, &con2_start);
+    thread_new("socket_part3", 0, act_self_ref, &con2_start);
 
     unix_like_socket socket2;
     unix_like_socket* sock2 = &socket2;
@@ -334,7 +329,7 @@ void connector_start(register_t arg, capability carg) {
 
     // Test join. Send to the same file but from our own pull requester
 
-    thread t2 = thread_new("socket_part4", 0, act_self_ref, &con3_start);
+    thread_new("socket_part4", 0, act_self_ref, &con3_start);
 
     unix_like_socket socket4;
     unix_like_socket* sock4 = &socket4;
@@ -355,7 +350,7 @@ void connector_start(register_t arg, capability carg) {
     // Now attach a drb. Must align to a capability.
 
     capability drb_buf[BIG_TEST_SIZE/(8 * sizeof(capability))];
-    init_data_buffer(&sock2->write_copy_buffer,drb_buf,BIG_TEST_SIZE/8);
+    init_data_buffer(&sock2->write_copy_buffer,(char*)drb_buf,BIG_TEST_SIZE/8);
     socket_requester_set_drb(sock2->write.push_writer, &sock2->write_copy_buffer);
 
     // And sendfile agagain
@@ -407,18 +402,18 @@ void connector_start(register_t arg, capability carg) {
 
     capability cap_rec;
 
-    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NONE);
+    rec = socket_recv(sock, (char*)&cap_rec, sizeof(capability), MSG_NONE);
     assert_int_ex(rec, ==, sizeof(capability));
     assert(cheri_gettag(cap_rec));
     rec = socket_recv(sock, buf, 1, MSG_NONE);
     assert(rec == 1);
-    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NONE);
+    rec = socket_recv(sock, (char*)&cap_rec, sizeof(capability), MSG_NONE);
     assert(rec = sizeof(capability));
     assert(cheri_gettag(cap_rec));
-    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NONE);
+    rec = socket_recv(sock, (char*)&cap_rec, sizeof(capability), MSG_NONE);
     assert(rec = sizeof(capability));
     assert(!cheri_gettag(cap_rec));
-    rec = socket_recv(sock, &cap_rec, sizeof(capability), MSG_NO_CAPS);
+    rec = socket_recv(sock, (char*)&cap_rec, sizeof(capability), MSG_NO_CAPS);
     assert(rec = sizeof(capability));
     assert(!cheri_gettag(cap_rec));
 
@@ -453,7 +448,7 @@ void connector_start(register_t arg, capability carg) {
             continue;
         }
 
-        unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
+        // unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
 
         int poll_r = socket_poll(socks, 2, -1, 0);
 
@@ -475,7 +470,7 @@ void connector_start(register_t arg, capability carg) {
     assert_int_ex(rec, ==, 0);
 }
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     printf("Socket test Hello World!\n");
 
@@ -503,7 +498,7 @@ int main(register_t arg, capability carg) {
     assert(sock->write.push_writer != NULL);
     assert(sock->read.pull_reader != NULL);
 
-    int res = socket_init(sock, MSG_NONE, data_buffer, DATA_SIZE, CONNECT_PUSH_WRITE | CONNECT_PULL_READ);
+    int res = socket_init(sock, MSG_NONE, (char*)data_buffer, DATA_SIZE, CONNECT_PUSH_WRITE | CONNECT_PULL_READ);
     assert_int_ex(res, ==, 0);
 
     res = socket_listen_rpc(PORT, sock->write.push_writer,NULL);
@@ -539,15 +534,15 @@ int main(register_t arg, capability carg) {
     // Test copying capabilities
 
     capability cap = act_self_ref;
-    sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
+    sent = socket_send(sock, (char*)&cap, sizeof(capability), MSG_NONE);
     assert(sent == sizeof(capability));
     sent = socket_send(sock, buf, 1, MSG_NONE);
     assert(sent == 1);
-    sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
+    sent = socket_send(sock, (char*)&cap, sizeof(capability), MSG_NONE);
     assert(sent == sizeof(capability));
-    sent = socket_send(sock, &cap, sizeof(capability), MSG_NO_CAPS);
+    sent = socket_send(sock, (char*)&cap, sizeof(capability), MSG_NO_CAPS);
     assert(sent == sizeof(capability));
-    sent = socket_send(sock, &cap, sizeof(capability), MSG_NONE);
+    sent = socket_send(sock, (char*)&cap, sizeof(capability), MSG_NONE);
     assert(sent == sizeof(capability));
 
     // Test polling
@@ -563,7 +558,7 @@ int main(register_t arg, capability carg) {
 
     capability data_buffer2[DATA_SIZE/CAP_SIZE];
 
-    socket_init(sock2, MSG_NONE, data_buffer2, DATA_SIZE, CONNECT_PUSH_WRITE);
+    socket_init(sock2, MSG_NONE, (char*)data_buffer2, DATA_SIZE, CONNECT_PUSH_WRITE);
     assert_int_ex(res, ==, 0);
 
     res = socket_listen_rpc(PORT+4, sock2->write.push_writer,NULL);
@@ -600,4 +595,6 @@ int main(register_t arg, capability carg) {
     assert_int_ex(rec, ==, 0);
 
     printf("Socket test finished\n");
+
+    return 0;
 }

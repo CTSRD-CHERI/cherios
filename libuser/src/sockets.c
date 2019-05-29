@@ -37,7 +37,7 @@
 ALLOCATE_PLT_SOCKETS
 
 // TODO do something similar to sockets.c in libsocket
-#define printf
+#define printf(...)
 
 void dump_socket(unix_like_socket* sock) {
     if(sock->con_type & CONNECT_PUSH_WRITE) {
@@ -175,8 +175,6 @@ int socket_connect_via_rpc(act_kt target, register_t port,
 
     if(requester == NULL && fulfiller == NULL) return E_SOCKET_NO_DIRECTION;
 
-    msg_t msg;
-
     enum socket_connect_type con_type = CONNECT_NONE;
     requester_t ro_req = NULL;
 
@@ -222,7 +220,7 @@ int socket_connect_via_rpc(act_kt target, register_t port,
 
 ssize_t socket_close(unix_like_socket* sock) {
     int dont_wait = sock->flags & MSG_DONT_WAIT;
-    ssize_t ret;
+    ssize_t ret = 0;
 
     if(sock->flags & SOCKF_GIVE_SOCK_N) free_sockn(sock->sockn);
 
@@ -329,12 +327,12 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
         fulfiller_t fulfiller = sock->write.pull_writer;
-        ful_func * ff = OTHER_DOMAIN_FP(copy_in);
+        ful_func * ff = (ful_func*)OTHER_DOMAIN_FP(copy_in);
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
         enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
         ret = socket_fulfill_progress_bytes_unauthorised(fulfiller, length,
                                                      F_CHECK | progress | dont_wait | trace,
-                                                     ff, (capability)buf, 0, NULL, NULL, LIB_SOCKET_DATA, NULL);
+                                                     ff, __DECONST(char*, buf), 0, NULL, NULL, LIB_SOCKET_DATA, NULL);
     }
 
     if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->read_behind+=ret;
@@ -370,7 +368,7 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
 
     } else if(sock->con_type & CONNECT_PUSH_READ) {
         fulfiller_t fulfiller = sock->read.push_reader;
-        ful_func * ff = ((sock->flags | flags) & MSG_NO_CAPS) ? OTHER_DOMAIN_FP(copy_out_no_caps) : OTHER_DOMAIN_FP(copy_out);
+        ful_func * ff = (ful_func *)(((sock->flags | flags) & MSG_NO_CAPS) ? OTHER_DOMAIN_FP(copy_out_no_caps) : OTHER_DOMAIN_FP(copy_out));
         enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
         enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
         ret = socket_fulfill_progress_bytes_unauthorised(fulfiller, length,
@@ -407,9 +405,8 @@ ssize_t socket_sendfile(unix_like_socket* sockout, unix_like_socket* sockin, siz
     else return E_SOCKET_WRONG_TYPE;
 
     int dont_wait = (sockin->flags | sockout->flags) & MSG_DONT_WAIT;
-    int no_caps = (sockin->flags | sockout->flags) & MSG_NO_CAPS;
 
-    ssize_t ret;
+    ssize_t ret = 0;
 
     if(in_type == SOCK_TYPE_PULL && out_type == SOCK_TYPE_PULL) {
         // Proxy
@@ -593,7 +590,7 @@ static int sockets_scan(poll_sock_t* socks, size_t nsocks, enum poll_events* msg
         if(sleep) {
             register_t slept = syscall_cond_wait(msg_queue_poll != 0, sleep < 0 ? 0 : (register_t)sleep);
             if(sleep > 0) {
-                sleep = slept > sleep ? 0 : (int)(sleep-slept);
+                sleep = slept > (register_t)sleep ? 0 : (int)(sleep-slept);
             }
             goto restart;
         }
@@ -622,6 +619,8 @@ int assign_socket_n(unix_like_socket* sock) {
     if(sock->flags & SOCKF_GIVE_SOCK_N) return -1;
     sock->flags |= SOCKF_GIVE_SOCK_N;
     sock->sockn = alloc_sockn();
+
+    return 0;
 }
 
 requester_t socket_malloc_requester_32(uint8_t socket_type, data_ring_buffer *paired_drb) {

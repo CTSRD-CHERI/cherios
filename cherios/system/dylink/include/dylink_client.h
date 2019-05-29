@@ -44,7 +44,8 @@ void dylink(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_f
             init_other_object_func_t * init_other_object);
 
 #define DYLINK_LIB(lib, self_ctrl, queue, flags, first_thread, server) \
-    dylink(self_ctrl, queue, flags, first_thread, server,  PLT_INIT_MAIN_THREAD(lib), PLT_INIT_NEW_THREAD(lib), INIT_OTHER_OBJECT(lib))
+    dylink(self_ctrl, queue, flags, first_thread, server,  (init_if_func_t*)&PLT_INIT_MAIN_THREAD(lib), \
+            (init_if_new_thread_func_t*)&PLT_INIT_NEW_THREAD(lib), (init_other_object_func_t*)&INIT_OTHER_OBJECT(lib))
 
 
 #endif //CHERIOS_DYLINK_CLIENT_H

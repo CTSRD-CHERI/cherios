@@ -32,7 +32,7 @@
 #include "object.h"
 #include "deduplicate.h"
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, capability carg) {
     // This thread causes dedup to deduplicate itself.
     act_kt main_thread = (act_kt)carg;
     set_custom_dedup(main_thread);

@@ -51,6 +51,7 @@ act_kt get_dedup(void) {
 
 act_kt set_custom_dedup(act_kt dedup) {
     dedup_service = dedup;
+    return dedup;
 }
 
 ERROR_T(entry_t)    deduplicate(uint64_t* data, size_t length) {
@@ -75,7 +76,7 @@ capability deduplicate_cap(capability cap, int allow_create, register_t perms, r
         return cap;
     }
 
-    register_t is_func = (perms & CHERI_PERM_EXECUTE);
+    //register_t is_func = (perms & CHERI_PERM_EXECUTE);
 
     capability resolve = cheri_incoffset(cap,-offset);
 
@@ -161,13 +162,10 @@ dedup_stats deduplicate_all_target(int allow_create, size_t ndx, capability* seg
 
         uint64_t ob_size = reloc->size;
         uint64_t ob_off = reloc->offset;
-        uint64_t ob_loc = reloc->offset;
 
         int bad_align = ((ob_size & 0x7) != 0) ||
                 (((cheri_getcursor(to_dedup)-ob_off) &0x7) != 0);
         int isfunc = ((((size_t)to_dedup) & 0x3) == 0) && (ob_off == 0) && ((ob_size & 0x3) == 0);
-
-        capability orig = to_dedup;
 
         uint64_t size_to_dedup = ob_size;
 
@@ -218,18 +216,22 @@ dedup_stats deduplicate_all_target(int allow_create, size_t ndx, capability* seg
 // THIS function itsel.It is highly advised not to call any sub-routines when movement takes place
 // NOTE: We try hard to make sure this function deduplicates, but if it doesn't, some juggling is required
 
+#if (AUTO_DEDUP_ALL_FUNCTIONS && AUTO_COMPACT)
+
 capability* seg_tbl_for_cmp;
 
-static int reloc_cmp(const void* a, const void* b) {
+static inline int reloc_cmp(const void* a, const void* b) {
 
     struct capreloc* start = &__start___cap_relocs;
-    struct capreloc* ra = &start[*((size_t*)a)];
-    struct capreloc* rb = &start[*((size_t*)b)];
+    struct capreloc* ra = &start[*((const size_t*)a)];
+    struct capreloc* rb = &start[*((const size_t*)b)];
 
     int diff = (int)ra->object - (int)rb->object; // lower address first
 
     return diff == 0 ? (int)(rb->size - ra->size) : diff; // larger size first
 }
+
+#endif
 
 #define MAP_SIZE 0x1000 // How many relocations we are willing to re-parse
 #define RET_SIZE 0x200  // The size of the function that called us. We currently take a copy because it makes things easy
@@ -430,7 +432,13 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
     printf("%s's code segment went from %ld bytes to %ld bytes\n", syscall_get_name(act_self_ref), orig_size, new_size);
 #endif
 
-
+#else
+    (void)segment_table;
+    (void)start;
+    (void)end;
+    (void)code_seg_write;
+    (void)code_seg_offset;
+    (void)flags;
 #endif
 
     return ret;

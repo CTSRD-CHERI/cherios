@@ -34,7 +34,7 @@
 #include "mmap.h"
 #include "pmem.h"
 
-static mop_t init_vmem(capability mop_sealing_cap) {
+static mop_t init_vmem(capability a_mop_sealing_cap) {
     /* This creates enough virtual memory to get started */
     ptable_t top_table, L1_0, L2_0;
 
@@ -59,7 +59,6 @@ static mop_t init_vmem(capability mop_sealing_cap) {
     res_nfo_t nfo = rescap_nfo(first);
 
     /* Align the reservation to a page boundry (just throw away forever the first few bytes) */
-    size_t length = nfo.length;
     size_t base = nfo.base;
 
     size_t realigned_base = align_up_to(base - RES_META_SIZE, UNTRANSLATED_PAGE_SIZE) + RES_META_SIZE;
@@ -70,17 +69,17 @@ static mop_t init_vmem(capability mop_sealing_cap) {
     }
 
     /* Intialising memory ownership tracking */
-    return __init_mop(mop_sealing_cap, first);
+    return __init_mop(a_mop_sealing_cap, first);
 }
 
 static void init_book(void) {
     book = get_book();
 }
 
-mop_t mem_minit(capability mop_sealing_cap) {
+mop_t mem_minit(capability a_mop_sealing_cap) {
     printf("Getting book\n");
     init_book();
     pmem_check_book();
     printf("Starting up virtual memory and reservation system\n");
-    return init_vmem(mop_sealing_cap);
+    return init_vmem(a_mop_sealing_cap);
 }

@@ -55,7 +55,7 @@ typedef struct boot_info {
 } boot_info_t;
 
 #define MOP_SEALING_TYPE (0x666)
-#define TOP_SEALING_TYPE (0x777)
+#define PROC_SEALING_TYPE (0x777)
 
 typedef struct memmgt_init_t {
 	nano_kernel_if_t* nano_if;

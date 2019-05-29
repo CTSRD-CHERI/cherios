@@ -43,7 +43,7 @@ strpbrk(const char *s1, const char *s2)
     while ((c = *s1++) != 0) {
         for (scanp = s2; (sc = *scanp++) != '\0';)
             if (sc == c)
-                return ((char *)(s1 - 1));
+                return __DECONST(char *,(s1 - 1));
     }
     return (NULL);
 }

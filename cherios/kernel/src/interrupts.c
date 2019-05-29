@@ -89,7 +89,7 @@ void kernel_interrupts_init(int enable_timer, uint8_t cpu_id) {
 	if(enable_timer) {
 		/* Start timer */
 		kernel_timer_init(cpu_id);
-		register_t shifted = (1 << MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER);
+		register_t shifted = (1 << (MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER));
 		modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, shifted);
 	}
 }
@@ -157,7 +157,7 @@ int kernel_interrupts_off(void) {
 	uint8_t cpu_id = cp0_get_cpuid();
 	disabled[cpu_id] = 1;
 
-	register_t shifted = (1 << MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER);
+	register_t shifted = (1 << (MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER));
 	modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, 0);
 
 	uint64_t n = 0;
@@ -171,6 +171,8 @@ int kernel_interrupts_off(void) {
 	}
 
 	cp0_status_ie_enable();
+
+	return 0;
 }
 
 int kernel_interrupts_on(void) {
@@ -178,7 +180,7 @@ int kernel_interrupts_on(void) {
 	uint8_t cpu_id = cp0_get_cpuid();
 	disabled[cpu_id] = 0;
 
-	register_t shifted = (1 << MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER);
+	register_t shifted = (1 << (MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER));
 	modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, shifted);
 
 	uint64_t n = 0;
@@ -192,6 +194,8 @@ int kernel_interrupts_on(void) {
 	}
 
 	cp0_status_ie_enable();
+
+	return 0;
 }
 
 int kernel_interrupt_enable(int number, act_control_t * ctrl) {

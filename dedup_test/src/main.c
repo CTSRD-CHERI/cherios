@@ -38,7 +38,7 @@ int non_deduped(void) {
     return 0x1331beef;
 };
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     printf("Deduplication Test Hello World!\n");
 
     while(get_dedup() == NULL) {
@@ -58,4 +58,6 @@ int main(register_t arg, capability carg) {
     assert(b == c);
 
     printf("Deduplication Success!\n");
+
+    return 0;
 }

@@ -191,7 +191,7 @@ struct hostent *gethostbyname(const char *name) {
 }
 
 static void sockaddr_to_bind(const struct sockaddr *addr, struct tcp_bind* bind) {
-    struct sockaddr_in* sock_in = (struct sockaddr_in*)addr;
+    const struct sockaddr_in* sock_in = (const struct sockaddr_in*)addr;
     bind->port = sock_in->sin_port;
     bind->addr.addr = sock_in->sin_addr.s_addr;
 }
@@ -229,14 +229,15 @@ unix_net_sock* socket(int domain, int type, int protocol) {
 }
 
 int bind(unix_net_sock* sockfd, const struct sockaddr *addr,
-         socklen_t addrlen) {
+         __unused socklen_t addrlen) {
     sockaddr_to_bind(addr, &sockfd->bind);
     return 0;
 }
 
-static int close_listen(unix_net_sock* sock) {
+static ssize_t close_listen(unix_net_sock* sock) {
     netsock_stop_listen(sock->token);
     free(sock);
+    return 0;
 }
 
 void empty_accept_queue(void) {
@@ -253,7 +254,7 @@ void empty_accept_queue(void) {
     }
 }
 
-static enum poll_events poll_listen(unix_like_socket* sock, enum poll_events asked_events, int set_waiting) {
+static enum poll_events poll_listen(unix_like_socket* sock, enum poll_events asked_events, __unused int set_waiting) {
     unix_net_sock* sockfd = (unix_net_sock*)sock;
 
     if(asked_events & POLL_IN) {
@@ -270,7 +271,7 @@ int listen(unix_net_sock* sockfd, int backlog) {
     listening_token_or_er_t res = netsock_listen_tcp(&sockfd->bind, backlog, sockfd);
     assert(res.val != NULL);
     if(!IS_VALID(res)) return res.er;
-    sockfd->sock.custom_close = &close_listen;
+    sockfd->sock.custom_close = (close_fun*)&close_listen;
     sockfd->sock.custom_poll = &poll_listen;
     sockfd->token =  res.val;
     return 0;
@@ -318,8 +319,8 @@ typedef struct {
     char drb_buf[NET_SOCK_DRB_SIZE];
 } netsock_req;
 
-int connect(unix_net_sock* socket, const struct sockaddr *address,
-            socklen_t address_len) {
+int connect(unix_net_sock* socket, __unused const struct sockaddr *address,
+            __unused socklen_t address_len) {
 
     int found = 0;
 
@@ -332,7 +333,7 @@ int connect(unix_net_sock* socket, const struct sockaddr *address,
         if(msg->v0 != TCP_CALLBACK_PORT) {
             printf("BAD PORT NUMBER IN TCP CALLBACK");
             assert(0);
-            return NULL;
+            return -1;
         }
 
         capability callback = msg->c3;
@@ -369,7 +370,7 @@ NET_SOCK accept(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen
     return accept4(sockfd, addr, addrlen, MSG_NONE);
 }
 
-NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, socklen_t *addrlen, int flags) {
+NET_SOCK accept4(unix_net_sock* sockfd, struct sockaddr *addr, __unused socklen_t *addrlen, int flags) {
 
     NET_SOCK ns = accept_until_correct(sockfd, (sockfd->sock.flags | flags) & MSG_DONT_WAIT);
 
@@ -411,7 +412,7 @@ ssize_t shutdown(NET_SOCK sockfd, int how) {
                     res = socket_requester_space_wait(sockfd->sock.write.push_writer, 1, dont_wait, 0);
                     if (res == E_SOCKET_CLOSED) res = 0;
                     if (res < 0) break;
-                    socket_request_oob(sockfd->sock.write.push_writer, REQUEST_CLOSE, NULL, 0, 0);
+                    socket_request_oob(sockfd->sock.write.push_writer, REQUEST_CLOSE, (intptr_t)NULL, 0, 0);
                 }
 
                 new_state = ASYNC_NEED_REQS_WRITE;
@@ -421,4 +422,6 @@ ssize_t shutdown(NET_SOCK sockfd, int how) {
         sockfd->sock.close_state = new_state;
         return res;
     }
+
+    return -1;
 }

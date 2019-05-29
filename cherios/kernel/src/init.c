@@ -59,8 +59,8 @@ crt_init_globals_kernel()
     cheri_dla(__text_segment_start, text_start);
     cheri_dla(__data_segment_start, data_start);
 
-    capability text_segment = pcc + text_start;
-    capability data_segment = gdc + data_start;
+    capability text_segment = (char*)pcc + text_start;
+    capability data_segment = (char*)gdc + data_start;
 
     capability segment_table[4];
 
@@ -78,7 +78,8 @@ crt_init_globals_kernel()
     capability cgp = cheri_setoffset(gdc, table_start);
     cheri_setreg(25, cgp);
 
-    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, RELOC_FLAGS_TLS);
+    crt_init_common(segment_table, (struct capreloc * )((char*)gdc + reloc_start),
+                    (struct capreloc * )((char*)gdc + reloc_end), RELOC_FLAGS_TLS);
 
     cheri_setreg(25, &__cap_table_start);
 
@@ -88,7 +89,7 @@ crt_init_globals_kernel()
 int cherios_main(nano_kernel_if_t* interface,
 				 capability def_data,
 				 context_t own_context,
-				 capability plt_auth_cap,
+				 __unused capability plt_auth_cap,
                  capability global_pcc,
                  if_req_auth_t req_auth,
 				 size_t init_base,
@@ -143,7 +144,7 @@ int cherios_main(nano_kernel_if_t* interface,
 	init_info.uart_page = uart_base_phy_addr / PAGE_SIZE;
 
 	init_info.mop_sealing_cap = get_sealing_cap_from_nano(MOP_SEALING_TYPE);
-    init_info.top_sealing_cap = get_sealing_cap_from_nano(TOP_SEALING_TYPE);
+    init_info.top_sealing_cap = get_sealing_cap_from_nano(PROC_SEALING_TYPE);
 
     kernel_printf("Initialising Scheduler\n");
 	sched_init(&init_info.idle_init);

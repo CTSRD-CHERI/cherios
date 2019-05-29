@@ -94,7 +94,7 @@ static inline void virtio_async_read(void* buf, size_t sector, register_t async_
 
 static inline int virtio_write(const void * buf, size_t sector) {
 	virtio_check_refs();
-	return message_send(sector, 0, 0, 0, virt_session, (void *)buf, NULL, NULL, vblk_ref, SYNC_CALL, 2);
+	return message_send(sector, 0, 0, 0, virt_session, __DECONST(capability,buf), NULL, NULL, vblk_ref, SYNC_CALL, 2);
 }
 
 

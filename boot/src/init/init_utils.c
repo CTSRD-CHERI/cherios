@@ -45,9 +45,6 @@
 #include "elf.h"
 #include "act_events.h"
 
-static void * ns_ref = NULL;
-static void * ns_id  = NULL;
-
 static int act_alive(capability ctrl) {
 	if(!ctrl) {
 		return 0;

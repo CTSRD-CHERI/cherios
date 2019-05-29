@@ -35,7 +35,7 @@
 int main(register_t arg, capability carg) {
 
     volatile size_t* queue_fill = (size_t*)carg;
-    uint8_t cpu_id = (uint8_t)arg;
+    __unused uint8_t cpu_id = (uint8_t)arg;
 
     while(1) {
         if(*queue_fill != 0) {

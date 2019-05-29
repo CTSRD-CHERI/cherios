@@ -82,7 +82,7 @@ static void set_encrypt_lock(fs_proxy* proxy, locked_t locked) {
     if(proxy->encrypt_lock != locked) {
         int res = socket_requester_space_wait(proxy->requester, 1, 0, 0);
         assert_int_ex(res, ==, 0);
-        res = socket_request_oob(proxy->requester, REQUEST_SET_KEY, (intptr_t)locked, 0, 0);
+        res = socket_request_oob(proxy->requester, (request_type_e)REQUEST_SET_KEY, (intptr_t)locked, 0, 0);
         assert_int_ex(res, ==, 0);
         proxy->encrypt_lock = locked;
     }
@@ -91,9 +91,6 @@ static void set_encrypt_lock(fs_proxy* proxy, locked_t locked) {
 
 void close_file(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
     assert_int_ex(session->in_use, ==, 1);
-
-    size_t poll_ndx;
-    size_t poll_to_move;
 
     if(session->nice_close < level) {
         if(level > 4) level = 4;
@@ -124,7 +121,7 @@ void close_file(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length) {
+ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     struct sessions_t* fil = (struct sessions_t*)arg;
     assert(!fil->nice_close);
     request_type_e req = request->type;
@@ -159,7 +156,7 @@ ssize_t full_oob(capability arg, request_t* request, uint64_t offset, uint64_t p
 
             return length;
         case REQUEST_SIZE:
-            size_ptr = (size_t*)request->request.oob;
+            size_ptr = (ssize_t*)request->request.oob;
             *size_ptr = f_size(&fil->fil);
 
             return length;
@@ -253,7 +250,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
     session->events = wait_for;
 }
 
-void worker_loop(register_t r, capability c) {
+void worker_loop(register_t r, __unused capability c) {
 
     ssize_t ret;
 

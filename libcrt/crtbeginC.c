@@ -62,14 +62,6 @@ static mips_function_ptr __attribute__((used))
     __attribute__((section(".dtors")))
     __DTOR_LIST__[1] = { (mips_function_ptr)(-1) };
 
-static const uint64_t function_reloc_flag = 1ULL<<63;
-static const uint64_t function_pointer_permissions =
-	~0 &
-	~__CHERI_CAP_PERMISSION_PERMIT_STORE_CAPABILITY__ &
-	~__CHERI_CAP_PERMISSION_PERMIT_STORE__;
-static const uint64_t global_pointer_permissions =
-	~0 & ~__CHERI_CAP_PERMISSION_PERMIT_EXECUTE__;
-
 extern void __cap_table_start;
 extern void __cap_table_local_start;
 

@@ -45,9 +45,7 @@ DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
  * Routines to handle the message queue
  */
 
-static msg_nb_t msg_queue_fill(act_t* act) {
-	return ((msg_nb_t)TRANS_HD(act->msg_tsx) - act->msg_queue->header.start);
-}
+#define ACT_QUEUE_FILL(act) ((msg_nb_t)TRANS_HD(act->msg_tsx) - act->msg_queue->header.start)
 
 int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t a0, register_t a1, register_t a2, register_t a3,
@@ -170,7 +168,7 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 
 	act->msg_queue->header.start = 0;
 	// On big endian machine pointer is to MSB, which is our head.
-	msg_nb_t *hd= (msg_nb_t*)&act->msg_tsx;
+	msg_nb_t *hd= __DEVOLATILE(msg_nb_t*,&act->msg_tsx);
 	hd = cheri_setbounds(hd, sizeof(msg_nb_t));
 	hd = cheri_andperm(hd, CHERI_PERM_LOAD);
 	act->msg_queue->header.end = hd;
@@ -387,7 +385,8 @@ struct fastpath_return fastpath_bailout(capability c3, register_t v0, register_t
 	    events |= sched_wait_notify;
 	}
 
-	register_t time = sched_block_until_event(caller, returned_to, events, (register_t)timeout, 0);
+	// TODO something with time
+	__unused register_t time = sched_block_until_event(caller, returned_to, events, (register_t)timeout, 0);
 
 	return (struct fastpath_return){.v0 = 0, .v1 = caller->v1};
 }

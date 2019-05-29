@@ -192,8 +192,16 @@
 
 #define UNTRANSLATED_PAGE_SIZE          (1 << UNTRANSLATED_BITS)
 
-#define VTABLE_ENTRY_USED               (-1)
-#define VTABLE_ENTRY_TRAN               (-2)
+#ifdef __ASSEMBLY__
+#define T_E_CAST
+#else
+#define T_E_CAST (table_entry_t)
+#endif
+#define VTABLE_ENTRY_FREE               (T_E_CAST (0))
+#define VTABLE_ENTRY_USED               (T_E_CAST (-1))
+#define VTABLE_ENTRY_TRAN               (T_E_CAST (-2))
+
+
 #define REVOKE_STATE_AVAIL      0
 #define REVOKE_STATE_STARTED    1
 #define REVOKE_STATE_REVOKING   2
@@ -206,11 +214,11 @@
 #define CHECKED_BITS                    (64 - L0_BITS - L1_BITS - L2_BITS - UNTRANSLATED_BITS)
 
 
-#define L0_INDEX(addr)          ((addr << CHECKED_BITS) >> (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
-#define L1_INDEX(addr)          ((addr << CHECKED_BITS + L0_BITS) >> (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS))
-#define L2_INDEX(addr)          ((addr << CHECKED_BITS + L0_BITS + L1_BITS) >> (CHECKED_BITS + L0_BITS + L1_BITS + UNTRANSLATED_BITS))
-#define PAGE_INDEX(addr)        (addr & (PHY_PAGE_SIZE - 1))
-#define GENERATION_COUNT(addr)  (addr >> (L0_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
+#define L0_INDEX(addr)          (((addr) << CHECKED_BITS) >> (CHECKED_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
+#define L1_INDEX(addr)          (((addr) << (CHECKED_BITS + L0_BITS)) >> (CHECKED_BITS + L0_BITS + L2_BITS + UNTRANSLATED_BITS))
+#define L2_INDEX(addr)          (((addr) << (CHECKED_BITS + L0_BITS + L1_BITS)) >> (CHECKED_BITS + L0_BITS + L1_BITS + UNTRANSLATED_BITS))
+#define PAGE_INDEX(addr)        ((addr) & (PHY_PAGE_SIZE - 1))
+#define GENERATION_COUNT(addr)  ((addr) >> (L0_BITS + L1_BITS + L2_BITS + UNTRANSLATED_BITS))
 
 #define PAGE_SIZE                 (PHY_PAGE_SIZE)
 

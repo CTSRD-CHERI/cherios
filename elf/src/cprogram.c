@@ -40,7 +40,7 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
     reg_frame_t frame;
     bzero(&frame, sizeof(frame));
 
-    int res = elf_loader_mem(env, (Elf64_Ehdr*)file, im, 0);
+    elf_loader_mem(env, (Elf64_Ehdr*)file, im, 0);
 
     void * pcc = make_global_pcc(im);
 
@@ -57,7 +57,6 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     size_t queue_size = sizeof(queue_default_t);
 
     size_t stack_size = im->secure_loaded ?  0 : DEFAULT_STACK_SIZE;
-    size_t stack_align = DEFAULT_STACK_ALIGN;
 
     // Request as much as we can without going over a page boundry
     size_t request_size = align_up_to(queue_size + stack_size + MEM_REQUEST_FAST_OFFSET, UNTRANSLATED_PAGE_SIZE) -
@@ -74,7 +73,7 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     queue = cheri_setbounds_exact(queue, queue_size);
 
     /* now the stack */
-    char* stack = space + queue_size;
+    char* stack = (char*)space + queue_size;
     size_t extra_to_align = (size_t)(-(size_t)stack) & (DEFAULT_STACK_ALIGN-1);
 
     stack = cheri_setbounds_exact(stack + extra_to_align, stack_size);

@@ -49,7 +49,7 @@ static void print_id(found_id_t* id) {
     printf("entry: %lx. size:%lx. nent: %lx\n", id->e0, id->length, id->nentries);
 }
 
-static void secure_thread(register_t arg, capability carg) {
+static void secure_thread(__unused register_t arg, capability carg) {
     locked_t locked = (locked_t)carg;
 
     cap_pair pair4 = NULL_PAIR;
@@ -61,7 +61,7 @@ static void secure_thread(register_t arg, capability carg) {
     printf("Child thread unlocked message: %s\n", (char*)pair4.data);
 }
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
 
     /* First try sign something */
     printf("Foundation test started.\n");
@@ -123,7 +123,7 @@ int main(register_t arg, capability carg) {
     printf("Unlocked message: %s", (char*)pair4.data);
 
     /* Now create a new secure thread. Pass it the locked message for funsies */
-    thread t = thread_new("secure_thr", 0, locked, &secure_thread);
+    thread_new("secure_thr", 0, locked, &secure_thread);
 
 
     /* Now get ourselves a cryptographic key */

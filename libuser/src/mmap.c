@@ -110,7 +110,7 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 }
 
 int munmap(void *addr, size_t length) {
-    mem_release((size_t)addr, length, 1, own_mop);
+    return mem_release((size_t)addr, length, 1, own_mop);
 }
 
 res_t mmap_based_capmalloc(size_t s, Elf_Env* env) {
@@ -147,7 +147,7 @@ cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
 	return p;
 }
 
-void mmap_based_free(capability c, Elf_Env* env) {
+int mmap_based_free(capability c, Elf_Env* env) {
 	return mem_release(cheri_getbase(c), cheri_getlen(c), 1, env->handle);
 }
 
@@ -182,7 +182,7 @@ int mem_release(size_t base, size_t length, size_t times, mop_t mop) {
 ERROR_T(mop_t) mem_makemop_debug(res_t space, mop_t auth_mop, const char* debug_id) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
-	return MAKE_VALID(mop_t, message_send_c(0, 0, 0, 0, space, auth_mop, debug_id, NULL, memmgt, SYNC_CALL, 7));
+	return MAKE_VALID(mop_t, message_send_c(0, 0, 0, 0, space, auth_mop, __DECONST(capability, debug_id), NULL, memmgt, SYNC_CALL, 7));
 }
 ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop) {
 	return mem_makemop_debug(space, auth_mop, NULL);

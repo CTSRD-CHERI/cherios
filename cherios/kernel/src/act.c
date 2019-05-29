@@ -327,6 +327,7 @@ act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const cha
     if(res != NULL) {
         res = rescap_split(res, CONTEXT_SIZE); // split off enough for nano context
         res_nfo_t nfo = rescap_nfo(context_res);
+		(void)nfo;
         KERNEL_TRACE("Program %s has a context at %lx to %lx\n", name, nfo.base, nfo.base+nfo.length);
     }
 

@@ -31,7 +31,7 @@
 #include "stdlib.h"
 #include "ff.h"
 
-int ff_cre_syncobj (BYTE vol, _SYNC_t* sobj) {    /* Create a sync object */
+int ff_cre_syncobj (__unused BYTE vol, _SYNC_t* sobj) {    /* Create a sync object */
     spinlock_t* sync = (spinlock_t*)malloc(sizeof(spinlock_t));
     spinlock_init(sync);
     *sobj = sync;

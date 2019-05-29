@@ -67,16 +67,16 @@ crt_init_globals_boot()
     cheri_dla(__text_segment_start, text_start);
     cheri_dla(__data_segment_start, data_start);
 
-    capability text_segment = pcc + text_start;
-    capability data_segment = gdc + data_start;
+    __unused capability text_segment = (char*)pcc + text_start;
+    __unused capability data_segment = (char*)gdc + data_start;
 
     capability segment_table[5];
 
     // These are all set up by the linker script
     segment_table[0] = NULL;
-    segment_table[2] = pcc + boot_start;
-    segment_table[3] = pcc + text_start;
-    segment_table[4] = gdc + data_start;
+    segment_table[2] = (char*)pcc + boot_start;
+    segment_table[3] = (char*)pcc + text_start;
+    segment_table[4] = (char*)gdc + data_start;
 
     // Get something usable
     uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;
@@ -87,7 +87,8 @@ crt_init_globals_boot()
     capability cgp = cheri_setoffset(gdc, table_start);
     cheri_setreg(25, cgp);
 
-    crt_init_common(segment_table, gdc + reloc_start, gdc + reloc_end, RELOC_FLAGS_TLS);
+    crt_init_common(segment_table, (struct capreloc *)((char*)gdc + reloc_start),
+                    (struct capreloc *)((char*)gdc + reloc_end), RELOC_FLAGS_TLS);
 
     cheri_setreg(25, &__cap_table_start);
 
@@ -134,7 +135,7 @@ void bootloader_main(capability global_pcc) {
     boot_info_t *bi = load_init();
 
     size_t invalid_length = bi->init_end;
-    capability phy_start = cheri_setbounds(cheri_setoffset(cheri_getdefault(), NANO_KSEG), invalid_length);
+    __unused capability phy_start = cheri_setbounds(cheri_setoffset(cheri_getdefault(), NANO_KSEG), invalid_length);
 
     /* Do we actually need this? */
     //boot_printf("Invalidating %p length %lx:\n", phy_start, invalid_length);

@@ -49,6 +49,8 @@ void libuser_init(act_control_kt self_ctrl,
 				  startup_flags_e flags) {
 #if !(LIGHTWEIGHT_OBJECT)
 	proc_handle = proc;
+#else
+	(void)proc;
 #endif
 	mmap_set_mop(mop);
 	namespace_init(ns_ref);

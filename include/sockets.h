@@ -105,6 +105,8 @@ typedef enum {
     ASYNC_DONE
 } asyn_close_state_e;
 
+struct unix_like_socket;
+
 typedef ssize_t close_fun(struct unix_like_socket* sock);
 typedef enum poll_events custom_poll_f(struct unix_like_socket* sock, enum poll_events asked_events, int set_waiting);
 

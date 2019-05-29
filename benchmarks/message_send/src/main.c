@@ -41,7 +41,7 @@
 void null_func(void) {}
 
 
-void send_rec(register_t reg, capability cap) {
+void send_rec(__unused register_t reg, __unused capability cap) {
     msg_entry(-1, 0);
 }
 
@@ -92,7 +92,7 @@ void send(act_kt sync_act) {
     return;
 }
 
-int main(register_t arg, capability carg) {
+int main(__unused register_t arg, __unused capability carg) {
     // Test sync send
 
 
@@ -111,6 +111,8 @@ int main(register_t arg, capability carg) {
     message_send(0, 0, 0, 0, get_ctl()->cds, NULL,NULL, NULL, sync_act, SYNC_CALL, 1);
 
     send(sync_act);
+
+    return 0;
 }
 
 void (*msg_methods[]) = {null_func, become_untrust};

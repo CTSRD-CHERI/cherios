@@ -64,7 +64,7 @@ void pmem_check_book(void) {
 
         assert_int_ex(len, !=, 0);
 
-        if(ppagen != -1) {
+        if(ppagen != (size_t)-1) {
             assert_int_ex(prv, ==, ppagen);
         }
 
@@ -111,15 +111,15 @@ size_t pmem_try_merge(size_t page_n) {
     return page_n;
 }
 
-void pmem_print_book(page_t *book, size_t page_n, size_t times) {
+void pmem_print_book(page_t *a_book, size_t page_n, size_t times) {
     while(times-- > 0) {
         printf("%p addr: page: %lx. state = %d. len = %lx. prev = %lx\n",
-               &book[page_n],
+               &a_book[page_n],
                page_n,
-               book[page_n].status,
-               book[page_n].len,
-               book[page_n].prev);
-        page_n = book[page_n].len + page_n;
+               a_book[page_n].status,
+               a_book[page_n].len,
+               a_book[page_n].prev);
+        page_n = a_book[page_n].len + page_n;
         if(page_n == BOOK_END) break;
     }
 
@@ -227,7 +227,9 @@ void full_dump(void) {
 }
 
 void __get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop_sealed, cap_pair* result) {
-    mop_internal_t* mop = unseal_mop(mop_sealed);
+    __unused mop_internal_t* mop = unseal_mop(mop_sealed);
+
+    // TODO check mop limits
 
     size_t page_n = base >> PHY_PAGE_SIZE_BITS;
 

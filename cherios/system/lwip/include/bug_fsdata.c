@@ -59159,11 +59159,11 @@ static const unsigned char data_index_html[] = {
 	0x79, 0x3e, 0xa, 0x3c, 0x2f, 0x68, 0x74, 0x6d, 0x6c, 0x3e, 
 	0xa, 0xa, };
 
-const struct fsdata_file file_bug_jpg[] = {{NULL, data_bug_jpg, data_bug_jpg + 9, sizeof(data_bug_jpg) - 9}};
+const struct fsdata_file file_bug_jpg[] = {{NULL, data_bug_jpg, data_bug_jpg + 9, sizeof(data_bug_jpg) - 9, 0}};
 
-const struct fsdata_file file_404_html[] = {{file_bug_jpg, data_404_html, data_404_html + 10, sizeof(data_404_html) - 10}};
+const struct fsdata_file file_404_html[] = {{file_bug_jpg, data_404_html, data_404_html + 10, sizeof(data_404_html) - 10, 0}};
 
-const struct fsdata_file file_index_html[] = {{file_404_html, data_index_html, data_index_html + 12, sizeof(data_index_html) - 12}};
+const struct fsdata_file file_index_html[] = {{file_404_html, data_index_html, data_index_html + 12, sizeof(data_index_html) - 12, 0}};
 
 #define FS_ROOT file_index_html
 

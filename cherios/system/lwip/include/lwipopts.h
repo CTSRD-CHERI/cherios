@@ -116,8 +116,6 @@
 #define HTTPD_FSDATA_FILE               "bug_fsdata.c"
 #define LWIP_HTTPD_CUSTOM_FILES         1
 #define LWIP_HTTPD_DYNAMIC_FILE_READ    1
-#define FS_FILE_EXTENSION_T_DEFINED     1
-typedef struct socket_seek_manager      fs_file_extension;
 #define LWIP_HTTPD_MAX_REQUEST_URI_LEN  0
 #define LWIP_HTTPD_SUPPORT_11_KEEPALIVE 1
 

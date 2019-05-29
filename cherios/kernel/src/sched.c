@@ -44,7 +44,6 @@
 #endif
 
 /* todo: sleep cpu */
-static act_t idle_acts[SMP_CORES];
 sched_pool sched_pools[SMP_CORES];
 
 void dump_sched(void) {

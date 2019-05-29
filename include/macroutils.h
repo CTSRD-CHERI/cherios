@@ -45,7 +45,7 @@
 #define LIST_LENGTH(L) (L(LIST_TOTAL_CB) 0)
 
 #define MAKE_CTR(NAME) struct _CTR_TYPE_ ## NAME ## _start {char ofsize[__COUNTER__+1];};
-#define CTR(NAME)       (__COUNTER__  - sizeof(struct _CTR_TYPE_ ## NAME ## _start))
+#define USE_CTR(NAME)       (__COUNTER__  - sizeof(struct _CTR_TYPE_ ## NAME ## _start))
 
 #define STRINGIFY(X) #X
 #define X_STRINGIFY(X) STRINGIFY(X)
