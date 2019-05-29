@@ -462,6 +462,7 @@ add_subdirectory(client)
 
 add_subdirectory(nginx)
 add_subdirectory(top)
+add_subdirectory(nc_shell)
 
 add_subdirectory(benchmarks)
 
