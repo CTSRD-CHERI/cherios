@@ -260,9 +260,9 @@ int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_loa
 
 #endif
 
-#define MAX_THREADS 4 // We no longer over allocate TLS by this much, but this number is still used in proc man
+#define MAX_THREADS_FOR_OLD 1 // We no longer over allocate TLS by this much, but this number is still used for boot
 					  // and for secure loading
-#define MAX_FOUND_ENTRIES (MAX_THREADS + 1) // 1 for new threads, the rest for return invocations for each thread
+#define MAX_FOUND_ENTRIES (4) // Only really use one now
 
 #define PT_NULL 	0
 #define PT_LOAD 	1

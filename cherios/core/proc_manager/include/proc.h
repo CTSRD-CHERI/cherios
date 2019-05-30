@@ -37,6 +37,7 @@
 #include "thread.h"
 
 #define MAX_PROCS 0x20
+#define MAX_THREADS_PER_PROC 0x8
 
 enum process_state {
     proc_created = 0,
@@ -50,8 +51,9 @@ typedef struct process_t {
     image im;
     mop_t mop;
     top_t top;
-    act_control_kt threads[MAX_THREADS];
-    size_t n_threads;
+    act_control_kt threads[MAX_THREADS_PER_PROC];
+    uint8_t n_threads;
+    int8_t free_hd;
     size_t terminated_threads;
     uint64_t load_base;
 } process_t;
