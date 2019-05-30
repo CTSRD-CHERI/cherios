@@ -51,11 +51,11 @@ typedef struct process_t {
     image im;
     mop_t mop;
     top_t top;
-    act_control_kt threads[MAX_THREADS_PER_PROC];
-    uint8_t n_threads;
-    int8_t free_hd;
-    size_t terminated_threads;
+    uint64_t n_threads;
+    uint64_t terminated_threads;
     uint64_t load_base;
+    int8_t free_hd;
+    act_control_kt threads[MAX_THREADS_PER_PROC];
 } process_t;
 
 
