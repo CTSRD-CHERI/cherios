@@ -28,48 +28,90 @@
  * SUCH DAMAGE.
  */
 
+#ifndef _VIRTIO_BLK_H
+#define _VIRTIO_BLK_H
+
 #include "mips.h"
 #include "object.h"
 #include "namespace.h"
 #include "assert.h"
 #include "cheric.h"
+#include "sockets.h"
+#include "aes.h"
+
+typedef struct block_aes_data_s {
+	struct AES_ctx ctx;
+	const uint8_t* key;
+	uint8_t iv[AES_BLOCKLEN];
+	capability check_arg;
+	int innited;
+} block_aes_data_t;
+
+typedef enum {
+	REQUEST_SET_KEY = REQUEST_OUT_USER_START,
+} request_type_oob_bc_e;
 
 extern void * vblk_ref;
 capability virt_session;
 
 static inline void virtio_check_refs(void) {
 	if(vblk_ref == NULL) {
-		vblk_ref = namespace_get_ref(namespace_num_virtio);
+		vblk_ref = namespace_get_ref(namespace_num_blockcache);
 	}
 	assert(vblk_ref != NULL);
 }
 
+static inline int virtio_new_socket(requester_t requester, enum socket_connect_type type) {
+    virtio_check_refs();
+    int res = message_send(type, 0, 0, 0, virt_session, requester, NULL, NULL, vblk_ref, SYNC_CALL, 5);
+
+	if(res == 0) {
+		socket_requester_connect(requester);
+	}
+
+	return res;
+}
+
 static inline void virtio_blk_session(void * mmio_cap) {
 	virtio_check_refs();
-	virt_session = MESSAGE_SYNC_SEND_c(vblk_ref, 0, 0 ,0, mmio_cap, NULL, NULL, -1);
+	virt_session = message_send_c(0, 0 ,0, 0, mmio_cap, NULL, NULL, NULL, vblk_ref, SYNC_CALL, -1);
 }
 
 static inline int virtio_blk_init(void) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 0);
+	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 0);
 }
 
 static inline int virtio_read(void * buf, size_t sector) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, virt_session, buf, NULL, 1);
+	return message_send(sector, 0, 0, 0, virt_session, buf, NULL, NULL, vblk_ref, SYNC_CALL, 1);
+}
+
+static inline void virtio_async_read(void* buf, size_t sector, register_t async_no, register_t async_port) {
+	virtio_check_refs();
+	message_send(sector, async_no, async_port, 0, virt_session, buf, act_self_ref, NULL, vblk_ref, SEND, 1);
 }
 
 static inline int virtio_write(const void * buf, size_t sector) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, sector, 0, 0, virt_session, (void *)buf, NULL, 2);
+	return message_send(sector, 0, 0, 0, virt_session, __DECONST(capability,buf), NULL, NULL, vblk_ref, SYNC_CALL, 2);
+}
+
+
+static inline void virtio_async_write(void* buf, size_t sector, register_t async_no, register_t async_port) {
+	virtio_check_refs();
+	message_send(sector, async_no, async_port, 0, virt_session, buf, act_self_ref, NULL, vblk_ref, SEND, 2);
 }
 
 static inline int virtio_blk_status(void) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 3);
+	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 3);
 }
 
 static inline size_t virtio_blk_size(void) {
 	virtio_check_refs();
-	return MESSAGE_SYNC_SEND_r(vblk_ref, 0, 0, 0, virt_session, NULL, NULL, 4);
+	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 4);
 }
+
+
+#endif // _VIRTIO_BLK_H

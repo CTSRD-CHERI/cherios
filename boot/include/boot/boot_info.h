@@ -31,8 +31,12 @@
 #ifndef _BOOT_INFO_H_
 #define _BOOT_INFO_H_
 
+// FIXME: This header seems to include types needed by the OS and init. Init seems to be in the wrong directory which
+// FIXME: causes all the messyness with directories.
+
 #include "cheric.h"
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
+#include "../../../cherios/kernel/include/sched.h"
 /*
  * Information populated by boot-loader, and given to the kernel via a
  * pointer in cherios main.
@@ -47,16 +51,28 @@ typedef struct boot_info {
 	size_t 		init_end;
 
 	size_t		init_entry;
+	size_t 		init_tls_base;
 } boot_info_t;
 
+#define MOP_SEALING_TYPE (0x666)
+#define PROC_SEALING_TYPE (0x777)
+
 typedef struct memmgt_init_t {
-    // Reservation is for use when we want better security
 	nano_kernel_if_t* nano_if;
 	capability nano_default_cap;
+	capability mop_sealing_cap;
+
+	capability base_mop;
+	size_t 	   mop_signal_flag;
 } memmgt_init_t;
 
-#define FS_PHY_BASE 0x1e400000
-#define FS_PHY_SIZE 0x200
+typedef struct procman_init_t {
+	cap_pair pool_from_init;
+	nano_kernel_if_t* nano_if;
+	capability nano_default_cap;
+	capability sealer;
+} procman_init_t;
+
 /* Information copied from the boot_info by the kernel, and given to
  * the init activation.
  */
@@ -67,6 +83,11 @@ typedef struct init_info {
 
 	capability uart_cap;
     size_t uart_page;
+
+	capability mop_sealing_cap;
+	capability top_sealing_cap;
+
+	sched_idle_init_t idle_init;
 } init_info_t;
 
 #endif /* _BOOT_INFO_H_ */

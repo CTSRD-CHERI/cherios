@@ -45,20 +45,6 @@ cp0_status_bd_get(void)
 	return (cp0_status_get() & MIPS_CP0_CAUSE_BD);
 }
 
-void
-cp0_status_bev_set(int bev)
-{
-	register_t status;
-
-	/* XXXRW: Non-atomic test-and-set. */
-	status = cp0_status_get();
-	if (bev)
-		status |= MIPS_CP0_STATUS_BEV;
-	else
-		status &= ~MIPS_CP0_STATUS_BEV;
-	cp0_status_set(status);
-}
-
 int
 cp0_status_exl_get(void)
 {
@@ -69,23 +55,13 @@ cp0_status_exl_get(void)
 void
 cp0_status_ie_disable(void)
 {
-	register_t status;
-
-	/* XXXRW: Non-atomic test-and-set. */
-	status = cp0_status_get();
-	status &= ~MIPS_CP0_STATUS_IE;
-	cp0_status_set(status);
+    modify_hardware_reg(NANO_REG_SELECT_STATUS, MIPS_CP0_STATUS_IE, 0);
 }
 
 void
 cp0_status_ie_enable(void)
 {
-	register_t status;
-
-	/* XXXRW: Non-atomic test-and-set. */
-	status = cp0_status_get();
-	status |= MIPS_CP0_STATUS_IE;
-	cp0_status_set(status);
+    modify_hardware_reg(NANO_REG_SELECT_STATUS, MIPS_CP0_STATUS_IE, MIPS_CP0_STATUS_IE);
 }
 
 int
@@ -93,28 +69,6 @@ cp0_status_ie_get(void)
 {
 
 	return (cp0_status_get() & MIPS_CP0_STATUS_IE);
-}
-
-void
-cp0_status_im_enable(int mask)
-{
-	register_t status;
-
-	/* XXXRW: Non-atomic modification. */
-	status = cp0_status_get();
-	status |= (mask << MIPS_CP0_STATUS_IM_SHIFT);
-	cp0_status_set(status);
-}
-
-void
-cp0_status_im_disable(int mask)
-{
-	register_t status;
-
-	/* XXXRW: Non-atomic modification. */
-	status = cp0_status_get();
-	status &= ~(mask << MIPS_CP0_STATUS_IM_SHIFT);
-	cp0_status_set(status);
 }
 
 /*
@@ -125,37 +79,30 @@ cp0_status_im_disable(int mask)
 register_t
 cp0_hwrena_get(void)
 {
-	register_t hwrena;
-
-	__asm__ __volatile__ ("dmfc0 %0, $7" : "=r" (hwrena));
-	return (hwrena & 0xFFFFFFFF);
+    return modify_hardware_reg(NANO_REG_SELECT_HWRENA, 0, 0);
 }
 
 void
 cp0_hwrena_set(register_t hwrena)
 {
 
-	__asm__ __volatile__ ("dmtc0 %0, $7" : : "r" (hwrena));
+    modify_hardware_reg(NANO_REG_SELECT_HWRENA, ~0, hwrena);
 }
 
 /*
  * Routines for managing the CP0 count and compare registers, used to
  * implement cycle counting and timers.
  */
-register_t
+uint32_t
 cp0_count_get(void)
 {
-	register_t count;
-
-	__asm__ __volatile__ ("dmfc0 %0, $9" : "=r" (count));
-	return (count & 0xFFFFFFFF);
+    return (uint32_t)modify_hardware_reg(NANO_REG_SELECT_COUNT, 0, 0);
 }
 
 void
-cp0_compare_set(register_t compare)
+cp0_compare_set(uint32_t compare)
 {
-
-	__asm__ __volatile__ ("dmtc0 %0, $11" : : "r" (compare));
+    modify_hardware_reg(NANO_REG_SELECT_COMPARE, ~0, compare);
 }
 
 /*
@@ -176,23 +123,4 @@ cp0_cause_ipending_get(register_t cause)
 
 	return ((cause & MIPS_CP0_CAUSE_IP) >>
 	    MIPS_CP0_CAUSE_IP_SHIFT);
-}
-
-void
-cp0_cause_set(register_t cause)
-{
-
-	__asm__ __volatile__ ("dmtc0 %0, $13" : : "r" (cause));
-}
-
-/*
- * Routines for managing the CP0 BadVAddr register.
- */
-register_t
-cp0_badvaddr_get(void)
-{
-	register_t badvaddr;
-
-	__asm__ __volatile__ ("dmfc0 %0, $8" : "=r" (badvaddr));
-	return (badvaddr);
 }

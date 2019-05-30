@@ -1,26 +1,30 @@
 include_directories(include)
-include_directories(${CMAKE_SOURCE_DIR}/uart/include)
+include_directories(${DRIVERS_DIR}/uart/include)
+include_directories(${DRIVERS_DIR}/virtio/include)
+include_directories(${DRIVERS_DIR}/megacore/include)
+include_directories(${DRIVERS_DIR}/alteraSD/include)
+include_directories(${CMAKE_SOURCE_DIR}/elf/include)
+include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
+include_directories(${UFS_DIR}/include)
 
 set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
     ${CMAKE_SOURCE_DIR}/libcrt/strlen.c
     ${CMAKE_SOURCE_DIR}/libcrt/memset.c
-    ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
     ${CMAKE_SOURCE_DIR}/libcrt/memcpy.S
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
-    ${CMAKE_SOURCE_DIR}/libcrt/cp0.c
 )
 
 set(COMMON_SRCS
-    src/elf_loader.c
+    ${CMAKE_SOURCE_DIR}/elf/src/elf_loader.c
     src/plat.c
     src/caches.c
 )
 
 set(BOOT_SRCS
     src/boot/boot.c
-    ${CMAKE_SOURCE_DIR}/uart/src/uart.c
+    ${DRIVERS_DIR}/uart/src/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
 )
@@ -34,29 +38,29 @@ set(BOOT_ASM_SRCS
 )
 
 set(NANO_ASM_SRCS
-    ${CMAKE_SOURCE_DIR}/libcrt/memcpy_c.S
     nanokernel/src/nano_kernel.S
     nanokernel/src/ccall_soft.S
+    ${CMAKE_SOURCE_DIR}/sha256/src/sha256_k.S
 )
 
 set(INIT_SRCS
     src/init/init.c
     src/init/init_utils.c
-    src/init/alloc.c
-    src/init/stats.c
+    ${CMAKE_SOURCE_DIR}/tmpalloc/src/alloc.c
+    ${CMAKE_SOURCE_DIR}/elf/src/cprogram.c
     src/init/ufs_module.c
-    src/init/ufs_read.c
+    ${UFS_DIR}/src/ufs_read.c
 )
 
 set(INIT_ASM_SRCS
-    src/init/fs.S
     src/init/init.S
+    src/init/fs.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND BOOT_SRCS ${CMAKE_SOURCE_DIR}/uart/src/uart_malta.c)
+    list(APPEND BOOT_SRCS ${DRIVERS_DIR}/uart/src/uart_malta.c)
 elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND BOOT_SRCS ${CMAKE_SOURCE_DIR}/uart/src/uart_altera.c)
+    list(APPEND BOOT_SRCS ${DRIVERS_DIR}/uart/src/uart_altera.c)
 else()
     message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
 endif()
@@ -82,7 +86,6 @@ set_source_files_properties(src/boot/nano_elf.S PROPERTIES
 )
 
 add_cherios_init(init LINKER_SCRIPT init.ld SOURCES
-    ${LIBCRT_SRCS}
     ${COMMON_SRCS}
     ${INIT_SRCS}
     ${INIT_ASM_SRCS}
@@ -103,7 +106,7 @@ add_dependencies(cherios init)
 add_dependencies(cherios kernel)
 add_dependencies(cherios nano)
 
-set_target_properties(cherios PROPERTIES COMPILE_FLAGS -DCHERIOS_BOOT)
+target_compile_definitions(cherios PUBLIC -DCHERIOS_BOOT)
 
 # Create the file system
 # HACK to make sure that file system is rebuilt after one of the targets changes

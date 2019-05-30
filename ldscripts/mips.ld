@@ -29,7 +29,7 @@
  */
 
 __cached_base = 0xffffffff80000000;
-
+__cached_base64 = 0x9800000000000000;
 /*
  * Configure cached (BEV=0) exception vectors at the following addresses.
  */

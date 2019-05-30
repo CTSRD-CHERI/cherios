@@ -33,31 +33,18 @@
 .set nobopt
 .set noat
 
-.ifeq _MIPS_SZCAP-256
-.set CAP_SIZE_BITS, 5
-.set CAP_SIZE,     32
-.set CAP_IN_MESSAGE, 7
-.else
-.ifeq _MIPS_SZCAP-128
-.set CAP_SIZE_BITS, 4
-.set CAP_SIZE,     16
-.set CAP_IN_MESSAGE, 6
-.else
-.error "Unknown cap size"
-.endif
-.endif
-
 #define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+#include "asm.S"
 #include "queue.h"
 #include "syscalls.h"
+#include "mips.h"
 
-# We have so many registers, we may as well use a few rather than using dla all the time
+# We have so many registers, we may as well use a few rather than using get_sym all the time
 
-#define def_cap             $c13
+#define tmp_cap             $c13
 
-#define queue               $c18
-#define kernel_if_cap       $c19
-#define msg_entry_loop_cap  $c20
+#define queue               $c20
 #define self_ctrl_cap       $c21
 #define sync_state_cap      $c22
 #define msg_table           $c23
@@ -67,6 +54,12 @@
 #define ctrl_methods_nb_g   $s1
 
 #define start_g             $s2
+#define timeout             $s3
+#define flags               $s4
+
+#define STACK_LAYOUT 7 \
+    $c17, $c18, queue, self_ctrl_cap, sync_state_cap, msg_table, ctrl_table, \
+    msg_methods_nb_g, ctrl_methods_nb_g, start_g, timeout, flags
 
 # Message read loop
 
@@ -74,130 +67,152 @@
 	.global msg_entry
 	.ent msg_entry
 
-# Load a bunch of symbols using the default capability.
-# If we were doing this robustly we would also set bounds. I can't be bothered.
+# Load a bunch of symbols using the cap_table
 
+.type act_self_queue, "tls_object"
+.type sync_state, "tls_object"
+.type act_self_ctrl, "tls_object"
+
+.weak msg_methods
+.weak ctrl_methods
+.weak msg_methods_nb
+.weak ctrl_methods_nb
+
+.global msg_entry
 msg_entry:
-    cgetdefault	def_cap
-    dla         $t0, act_self_queue
-    clc         queue, $t0, 0(def_cap)
-    dla         $t0, kernel_if
-    csetoffset  kernel_if_cap, def_cap, $t0
-    dla         $t0, sync_state
-    csetoffset  sync_state_cap, def_cap, $t0
-    dla         $t0, msg_methods_nb
-    cld         msg_methods_nb_g, $t0, 0(def_cap)
-    dla         $t0, ctrl_methods_nb
-    cld         ctrl_methods_nb_g, $t0, 0(def_cap)
-    dla		    $t0, msg_methods
-    csetoffset  msg_table, def_cap, $t0
-    dla		    $t0, ctrl_methods
-    csetoffset  ctrl_table, def_cap, $t0
-    dla         $t0, act_self_ctrl
-    clc         self_ctrl_cap, $t0, 0(def_cap)
-    cgetpcc     msg_entry_loop_cap
 
+    FRAME_PUSH  STACK_LAYOUT
+
+    move        timeout, $a0
+    move        flags, $a1
+
+    get_tls_sym_cap queue, act_self_queue
+    get_tls_sym sync_state_cap, sync_state
+
+    get_sym_val msg_methods_nb_g, msg_methods_nb, d, tmp_cap
+    get_sym_val ctrl_methods_nb_g, ctrl_methods_nb, d, tmp_cap
+    get_sym_val ctrl_methods_nb_g, ctrl_methods_nb, d, tmp_cap
+
+    get_sym     msg_table, msg_methods
+    get_sym     ctrl_table, ctrl_methods
+
+    get_tls_sym_val self_ctrl_cap, act_self_ctrl, c, tmp_cap
+
+    li          $a0, 0
+    li          $a1, 1
+    cnull       $c3
+    cnull       $c4
 msg_entry_loop:
 
 # Check for items in queue
-    cld     start_g, $zero, HEADER_START_OFFSET(queue)    # load start
-    cld     $t1, $zero, HEADER_END_OFFSET(queue)          # $t1 = end
+    clw     start_g, $zero, HEADER_START_OFFSET(queue)    # load start
+    clc     tmp_cap, $zero, HEADER_END_OFFSET(queue)
+    clw     $t1, $zero, 0(tmp_cap)                        # $t1 = *end
     bne     start_g, $t1, pop                             # start_g != $t1
+    nop
+
+    beqz    timeout, return_to_caller
+
+
+    andi    $a3, flags, 1                                # MSG_ENTRY_TIMEOUT_ON_NOTIFY
+    daddiu  $a2, timeout, 1                              # kernel thinks 0 is inf, not -1. Just add 1.
 
 # TODO in a multicore world we may wish to spin a few times before resorting to WAIT
-    clc     $c1, $zero, wait_offset(kernel_if_cap)
-    cmove   $c2, self_ctrl_cap
-    li      $t0, 12                                       # to increment pcc just past the ccall
-    cgetpcc $c17
-    cincoffset $c17, $c17, $t0
-    ccall   $c1, $c2
+# fastpath_wait (optionally) combines a return, a queue wait, and a pop
+# a0/a1/c3 are return args. c4 a token (NULL if no return). a4 is timeout. a5 is whether notify counts
+    call_func fastpath_wait
+# v1 will contain an enum:
+    # 0 is fastpath achieved, all registers are already set up
+    # 1 is timeout
+    # 2 is we need to pop our own message, but no timeout occured
+
+    beqz    $v1, handle_message
+    daddiu  $v1, $v1, -1
+    cnull   $c4
+    beqz    $v1, msg_entry_loop
+    movz    timeout, $zero, $v1                          # if a timeout occurs we still might check messages
+    b       pop_2                                        # but set timeout to 0 so when messages are finished we return
+    nop
 
 pop:
-    sll     $t1, start_g, (CAP_SIZE_BITS + 3)                 # 8 capabilities worth of stuff in a message
+    # we might be holding on to a return value. Send it without a switch
+    cbtu    $c4, pop_2
+    li      $a2, 0 # don't hint switch if we are about to pop a message
+    call_func message_reply
+
+pop_2:
+    clw      $t1, $zero, HEADER_LEN_OFFSET(queue)          # load length
+    daddiu   $t1, $t1, -1
+    and      $t1, $t1, start_g
+    dsll     $t1, $t1, (MSG_LEN_SHIFT)                     # t1 has offet of message in queue
 
     # pops message #
     clc     $c3, $t1,  (MSGS_START_OFFSET)(queue)
     clc     $c4, $t1,  (MSGS_START_OFFSET + CAP_SIZE)(queue)
     clc     $c5, $t1,  (MSGS_START_OFFSET + 2 * CAP_SIZE)(queue)
-    clc     $idc, $t1, (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
+    clc     $c6, $t1,  (MSGS_START_OFFSET + 3 * CAP_SIZE)(queue)
     clc     $c1, $t1,  (MSGS_START_OFFSET + 4 * CAP_SIZE)(queue)
-    clc     $c2, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
-    cld     $a0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE)(queue)
-    cld     $a1, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 8)(queue)
-    cld     $a2, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 16)(queue)
-    cld     $v0, $t1,  (MSGS_START_OFFSET + CAP_IN_MESSAGE * CAP_SIZE + 24)(queue)
+    cld     $a0, $t1,  (MSGS_START_OFFSET + 5 * CAP_SIZE)(queue)
+    cld     $a1, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 8)(queue)
+    cld     $a2, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 16)(queue)
+    cld     $a3, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 24)(queue)
+    cld     $v0, $t1,  (MSGS_START_OFFSET + (5 * CAP_SIZE) + 32)(queue)
 
-    cld     $t1, $zero, HEADER_LEN_OFFSET(queue)        # load length
-    addi    start_g, start_g, 1                         #
-    bne     start_g, $t1, update_start                  #
-    nop                                                 #
-    li      start_g, 0                                  # start_g = (start_g + 1) % len
+
+    addi    start_g, start_g, 1                             # increment start
 
 update_start:
-    csd     start_g, $zero, HEADER_START_OFFSET(queue)  # save start
-	bltz	$v0, control
-	nop
+    csw     start_g, $zero, HEADER_START_OFFSET(queue)  # save start
+
+handle_message:
+
+    andi    $t0, flags, 2
+    movn    timeout, $zero, $t0
 
     cmove   $c12, msg_table
-	move    $t1, msg_methods_nb_g
-	b		call
-	nop
+	bgez	$v0, call
+    move    $t1, msg_methods_nb_g
 
 control:
     cmove   $c12, ctrl_table
 	move    $t1, ctrl_methods_nb_g
 	sub		$v0, $0, $v0
 call:
-	sub		$t1, $t1, $v0
-	blez		$t1, overflow
-	nop
+	sltu    $t1, $v0, $t1
+	beqz    $t1, overflow
+	sll		$v0, $v0, CAP_SIZE_BITS
 
 	#Save sync_token
 	csc		$c1, $zero, 0(sync_state_cap)
-    #Save caller
-    csc     $c2, $zero, CAP_SIZE(sync_state_cap)
 
-	sll		$v0, $v0, CAP_SIZE_BITS
 	clc		$c12, $v0, 0($c12)
 	cjalr		$c12, $c17
-	nop
-	b		end
-	nop
+	cmove   $c18, $idc
+
+	#Restore sync_token. Args already set properly
+
+	clc		$c4, $zero, 0(sync_state_cap)
+    move    $a0, $v0
+    b msg_entry_loop
+    move    $a1, $v1
 
 overflow:
+    cmove       $c4, $c1
 	move		$v0, $0
 	move		$v1, $0
-	cfromptr	$c3, $c3, $0
-	b		end
-	nop
-
+	b		    msg_entry_loop
+	cnull       $c3
 end:
 
-	#Restore sync_token
-	clc		$c4, $zero, 0(sync_state_cap)
-	#Restore caller activation reference
-	clc     $c2, $zero, CAP_SIZE(sync_state_cap)
+return_to_caller:
 
-#FIXME this instruction cannot jump backwards due to a QEMU bug
-	cbts    $c4, make_return
-	nop
-    b msg_entry_loop
-	nop
+# must not forget return if we saved it
+    cbtu    $c4, pop_frame
+    li      $a2, 0 # don't hint switch if we are about to pop a message
+    call_func message_reply
 
-make_return:
-    # c3 is both a return register and an arugment register so needs no work.
-    # v0 and v1 need to be arguments.
-    # c4 has the token from above.
-    # c1 needs the return cap, we kept it in a saved register
-    # c2 needs the message reply cap, this is already installed.
-    # c17 needs a good return address. We took the address of the loop symbol which is as good as any
-    move  $a0, $v0
-    move  $a1, $v1
-    clc   $c1, $zero, message_reply_offset(kernel_if_cap)
-    cmove $c17, msg_entry_loop_cap
-	ccall $c1, $c2
-	b msg_entry_loop
-    nop
+pop_frame:
+    POP_AND_RETURN STACK_LAYOUT
 
 msg_entry_end:
 	.end msg_entry

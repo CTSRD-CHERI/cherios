@@ -34,7 +34,6 @@
 static void hello(void) {
 }
 
-extern void msg_entry;
 void (*msg_methods[]) = {hello};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};

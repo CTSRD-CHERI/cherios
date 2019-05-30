@@ -31,6 +31,10 @@
 #include "cdefs.h"
 
 void	__assert(const char *, const char *, int, const char *) __dead2;
+void	__assert_int_ex(const char *, const char *, int, const char *,  const char *,  const char *,
+                        unsigned long long int, unsigned long long int) __dead2;
 
 #define	assert(e)	((e) ? (void)0 : __assert(__func__, __FILE__, \
                                                   __LINE__, #e))
+
+#define assert_int_ex(a, op, b) (((ssize_t)(a) op (ssize_t)(b)) ? (void)0 : __assert_int_ex(__func__, __FILE__, __LINE__, #a, #op, #b, a, b))

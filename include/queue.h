@@ -32,22 +32,30 @@
 #ifndef _CHERIOS_QUEUE_H_
 #define	_CHERIOS_QUEUE_H_
 
+#include "cheric.h"
+
 #define MAX_MSG_B 4
 #define MAX_MSG (1 << MAX_MSG_B)
 
-#define MSG_NB_T_SIZE 8
-#define HEADER_START_OFFSET 0
-#define HEADER_END_OFFSET MSG_NB_T_SIZE
-#define HEADER_LEN_OFFSET (MSG_NB_T_SIZE * 2)
-#define MSGS_START_OFFSET 32
+#define MSG_NB_T_SIZE 4
+#define HEADER_END_OFFSET 	0
+#define HEADER_START_OFFSET (CAP_SIZE)
+#define HEADER_LEN_OFFSET (MSG_NB_T_SIZE + CAP_SIZE)
+#define MSGS_START_OFFSET (2*CAP_SIZE)
+
+// FIXME: adjust padding and this value for 128
+#ifdef  _CHERI256_
+	#define MSG_LEN_SHIFT	8
+#else
+	#define MSG_LEN_SHIFT	7
+#endif
 
 #ifndef __ASSEMBLY__
 
-#include "cheric.h"
 #include "mips.h"
 #include "stddef.h"
 
-typedef size_t msg_nb_t;
+typedef uint32_t msg_nb_t;
 
 /* WARNING
  * The layout of msg_t and queue_t is depended on by libuser/src/msg.S.
@@ -58,27 +66,28 @@ typedef struct
 	capability c3; /* cap arguments */
 	capability c4;
 	capability c5;
+	capability c6;
 
-	/* Deprecated. Nobody should use this */
-	capability idc; /* identifier */
 	capability c1;  /* sync token */
-	capability c2;	/* message sender cap */
-
-	/* This serves to align msg_t to a power of 2 * sizeof(capability). It made my life easier. also */
-	/* at some point we may wan't more argument passing registers, especially if we use another 2 for a continuation */
-#ifdef _CHERI256_
-	capability pad;
-#endif
+//	capability c2;	/* message sender cap */ We now only have a sync token that also identifies the sender
 
 	register_t a0; /* GP arguments */
 	register_t a1;
 	register_t a2;
+	register_t a3;
+
 	register_t v0;  /* method nb */
+
+#ifdef _CHERI256_
+	char pad[40];	/* Makes the size 256 bytes in 256. Steal these bytes if you want larger messages. */
+#else
+	char pad[8]; /* for 128 it would make a lot of sense to have one fewer int args to make this fit in 128 */
+#endif
 }  msg_t;
 
 struct header_t {
+	volatile msg_nb_t* end;
 	volatile msg_nb_t start;
-	volatile msg_nb_t end;
 	msg_nb_t len;
 };
 
@@ -93,6 +102,7 @@ typedef struct {
 	msg_t msgs[MAX_MSG];
 } queue_default_t;
 
+_Static_assert(sizeof(msg_t) == (1 << MSG_LEN_SHIFT), "size used by msg.S");
 _Static_assert(sizeof(msg_nb_t) == MSG_NB_T_SIZE, "size used by msg.S");
 _Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, start)) == HEADER_START_OFFSET, "offset used by msg.S");
 _Static_assert((offsetof(queue_t, header) + offsetof(struct header_t, end)) == HEADER_END_OFFSET, "offset used by msg.S");

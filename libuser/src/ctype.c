@@ -37,6 +37,13 @@ int toupper(int c) {
 	return c;
 }
 
+int tolower(int c) {
+	if(c>='A' && c <= 'Z') {
+		c += 'a'-'A';
+	}
+	return c;
+}
+
 char * strtoupper(char * s) {
 	char* p = s;
 	while (*p != '\0') {

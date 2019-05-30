@@ -1,6 +1,7 @@
 /*-
  * Copyright (c) 2011 Robert N. M. Watson
  * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2018 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -29,68 +30,102 @@
  * SUCH DAMAGE.
  */
 
+#include <sockets.h>
 #include "mips.h"
 #include "stdarg.h"
 #include "stdio.h"
 #include "object.h"
 #include "assert.h"
 #include "namespace.h"
+#include "unistd.h"
+
+// If the uart driver is not up we can't write to stdout
+// Instead we just use a syscall, currently the kernel has its own uart driver
+
+// This will just collect data in a buffer until a \n or the buffer is full, then use syscall puts
+#ifdef USE_SYSCALL_PUTS
 
 #define BUF_SIZE	0x100
-
-static void buf_puts(char * str) {
-    syscall_puts(str);
-}
+static size_t syscall_buf_offset = 0;
+static char syscall_buf[BUF_SIZE + 1];
 
 void buf_putc(char chr) {
-	static size_t offset = 0;
-	static char buf[BUF_SIZE + 1];
-	buf[offset++] = chr;
-	if((chr == '\n') || (offset == BUF_SIZE)) {
-		buf[offset] = '\0';
-		buf_puts(buf);
-		offset = 0;
+    syscall_buf[syscall_buf_offset++] = chr;
+	if((chr == '\n') || (syscall_buf_offset == BUF_SIZE)) {
+        syscall_buf[syscall_buf_offset] = '\0';
+        syscall_puts(syscall_buf);
+        syscall_buf_offset = 0;
 	}
 }
 
+#else
 
-/*
- * Provide a kernel-compatible version of printf, which invokes the UART
- * driver.
- */
-static void
-uart_putchar(int c, void *arg __unused)
+int
+syscall_printf(const char *fmt, ...)
 {
-	buf_putc(c);
+    char buf[0x100];
+    va_list ap;
+    int retval;
+
+    va_start(ap, fmt);
+    retval = (kvprintf(fmt, NULL, buf, 10, ap));
+    va_end(ap);
+
+    syscall_puts(buf);
+
+    return (retval);
+}
+
+#endif
+
+// This is the version we would like to use - it writes the character directly to the drb of a socket
+
+int fputc(int character, FILE *f) {
+#ifdef USE_SYSCALL_PUTS
+    if(f == NULL) {
+        buf_putc((unsigned char)character);
+        return character;
+    }
+#endif
+    // We fill up the drb but we don't create a request. We instead bump 'partial length' in the drb
+    data_ring_buffer* drb = &f->write_copy_buffer;
+
+    if(drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size) {
+        // FIXME: This disrespects the DONT_WAIT flag
+        ssize_t bw = socket_requester_wait_all_finish(f->write.push_writer, 0);
+        assert_int_ex(-bw, ==, 0);
+    }
+
+    assert(drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr != drb->buffer_size);
+
+    drb->buffer[(drb->requeste_ptr + drb->partial_length++) & (drb->buffer_size-1)] = (char)character;
+
+    if(character == '\n' || (drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size)) {
+        ssize_t flush = socket_flush_drb(f);
+        assert(flush >= 0);
+    }
+
+    return character;
+}
+
+int fputs(const char* str, FILE* f) {
+    if(f) (assert(f->con_type & CONNECT_PUSH_WRITE));
+    while(*str) {
+        fputc(*str++, f);
+    }
+    fputc('\n', f);
+    return 0;
+}
+
+int puts(const char *s) {
+    return fputs(s, stdout);
 }
 
 int
 vprintf(const char *fmt, va_list ap)
 {
-	return (kvprintf(fmt, uart_putchar, NULL, 10, ap));
+	return (kvprintf(fmt, (kvprintf_putc_f*)fputc, stdout, 10, ap));
 }
-
-int puts(const char *s) {
-	while(*s) {
-		uart_putchar(*s++, NULL);
-	}
-	uart_putchar('\n', NULL);
-	return 0;
-}
-
-int putc(int character, FILE *f) {
-	return fputc(character, f);
-}
-
-int fputc(int character, FILE *f) {
-	if(f != NULL) {
-		panic("fprintf not implememted");
-	}
-	buf_putc((unsigned char)character);
-	return character;
-}
-
-
 
 int
 printf(const char *fmt, ...)
@@ -99,25 +134,21 @@ printf(const char *fmt, ...)
 	int retval;
 
 	va_start(ap, fmt);
-	retval = vprintf(fmt, ap);
+	retval = (kvprintf(fmt, (kvprintf_putc_f*)fputc, stdout, 10, ap));
 	va_end(ap);
 
 	return (retval);
 }
 
-/* maps to printf */
 int
 fprintf(FILE *f, const char *fmt, ...)
 {
-	if(f != NULL) {
-		panic("fprintf not implememted");
-	}
-
+    assert(f->con_type & CONNECT_PUSH_WRITE);
 	va_list ap;
 	int retval;
 
 	va_start(ap, fmt);
-	retval = vprintf(fmt, ap);
+	retval = (kvprintf(fmt, (kvprintf_putc_f*)fputc, f, 10, ap));
 	va_end(ap);
 
 	return (retval);

@@ -30,8 +30,10 @@
 
 .global __init_elf_start
 .global __init_elf_end
+.p2align 10
 __init_elf_start:
 .incbin "init.elf"
+.p2align 10
 __init_elf_end:
 nop
 .size __init_elf_start, __init_elf_end - __init_elf_start

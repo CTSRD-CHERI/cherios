@@ -72,9 +72,9 @@ int	boot_printf(const char *fmt, ...) __printflike(1, 2);
 int	boot_vprintf(const char *fmt, va_list ap);
 void	boot_printf_syscall_enable(void);
 
-void		init_elf_loader(void);
+void		init_elf_loader(capability pool_code_auth_cap);
 size_t		    load_kernel(void);
-capability 		load_nano(void);
+size_t 		load_nano(void);
 boot_info_t*	load_init(void);
 
 void	hw_init(void);

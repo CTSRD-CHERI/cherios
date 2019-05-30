@@ -28,6 +28,10 @@
 # SUCH DAMAGE.
 #
 
+#define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+#include "asm.S"
+
 .set noreorder
 .set nobopt
 .set noat
@@ -36,18 +40,59 @@
 	.global start
 	.ent start
 start:
+    # Save argumments to init
+    cmove       $c19, $c3
+    cmove       $c23, $c16
+    move		$s0, $a0
+
     # We will not have a stack set up because bootstrapping is hard.
     # Rather than have the kernel do it, its going to be done here
+
     dla         $t0, __start_init_stack
     cgetdefault $c11
     dla         $t1, __size_init_stack
-    csetoffset  $c11, $c11, $t0
-    move        $sp, $t1
-    csetbounds  $c11, $c11, $t1
+    cincoffset  $c11, $c11, $t0
+    csetboundsexact  $c11, $c11, $t1
+    cincoffset  $c11, $c11, $t1
 
-    # Dont use j, linkers suck.
-	dla         $t0, start_common
-	jr          $t0
-    nop
+	# Initialise globals. We need to use dla to call this function. Can only do this because dla was loaded contiguously
+	cgetpcc		$c12
+	dla		$t0, crt_init_globals_init
+	csetoffset	$c12, $c12, $t0
+	csetbounds  $idc, $c11, $zero
+	cjalr		$c12, $c17
+	cmove   $c18, $idc
 
-    .size start, 1
+	cmove   $idc, $c3
+
+    # Zero BSS.
+    call_func crt_init_bss
+
+    # Call C constructors.
+    call_func crt_call_constructors
+
+
+    get_sym     $c7, nanoreq_auth
+    cscbi       $c23, 0($c7)
+
+	# Call object init.
+	cmove		$c3, $c21 # self_ctrl
+	cfromptr	$c4, $c4, $zero # ns_ref (NULL)
+	cmove		$c5, $c24 # kernel_if
+	cmove       $c6, $c20 # queue
+	cmove       $c7, $c4  # process ref (NULL)
+    cmove       $c8, $c4  # MOP         (NULL)
+    cnull       $c9       # cdl tres
+    li          $a0, 0    # flags (NONE)
+    call_func   libuser_init
+
+	# Restore arguments
+	move		$a0, $s0
+    cmove       $c3, $c19
+    cgetpccsetoffset $c4, $zero                     # Need this to operate a tmp alloc pool
+	# Call main().
+	call_func   main
+
+    # Inits main never returns
+
+    .end start

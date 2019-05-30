@@ -65,7 +65,6 @@ void lastr(int a, u64 b, int c __unused,
 	return;
 }
 
-extern void msg_entry;
 void (*msg_methods[]) = {lastr};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};

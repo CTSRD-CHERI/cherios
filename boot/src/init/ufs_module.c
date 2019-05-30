@@ -34,25 +34,12 @@
  * $FreeBSD$
  */
 
+#include <elf.h>
 #include "init.h"
 #include "debug.h"
 #include "stdio.h"
 #include "assert.h"
-
-#ifndef DEV_BSHIFT
-#define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
-#endif
-#define	DEV_BSIZE	(1<<DEV_BSHIFT)
-#define MAXBSIZE	65536	/* must be power of 2 */
-typedef	uint32_t	ufs_ino_t;
-typedef	ufs_ino_t	ino_t;
-
-ufs_ino_t	lookup(const char *path);
-ssize_t
-fsread_size(ufs_ino_t inode, void *buf, size_t nbyte, size_t *fsizep);
-ssize_t
-fsread(ufs_ino_t inode, void *buf, size_t nbyte);
-int dskread(u8 *buf, u_int64_t lba, int nblk);
+#include "ufs_read.h"
 
 extern u8 __fs_start, __fs_end;
 
@@ -88,7 +75,7 @@ load(const char *filepath, int *bufsize)
 		return NULL;
 	}
 
-	void * buf = init_alloc(size).data;
+	void * buf = env.alloc(size, &env).data;
 	if (buf == NULL) {
 		printf("Failed to allocate read buffer %zu for '%s'\n",
 		       size, filepath);
@@ -99,7 +86,7 @@ load(const char *filepath, int *bufsize)
 	if ((size_t)read != size) {
 		printf("Failed to read '%s' (%zd != %zu)\n", filepath, read,
 		       size);
-		init_free(buf);
+		env.free(buf, &env);
 		return NULL;
 	}
 

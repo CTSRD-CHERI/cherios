@@ -29,9 +29,9 @@
  * SUCH DAMAGE.
  */
 
+#include <elf.h>
 #include "mips.h"
 #include "cheric.h"
-#include "cp0.h"
 #include "plat.h"
 #include "boot/boot.h"
 #include "boot/boot_info.h"
@@ -62,7 +62,7 @@ extern char __boot_load_physaddr;
 
 static char* phy_mem;
 
-static cap_pair kernel_alloc_mem(size_t _size) {
+static cap_pair kernel_alloc_mem(size_t _size, Elf_Env* env) {
 	/* We will allocate the first few objects in low physical memory. THe first thing we load is the nano kernel
 	 * and this will be direct mapped.*/
     static int alloc_direct = 1;
@@ -72,31 +72,34 @@ static cap_pair kernel_alloc_mem(size_t _size) {
     capability alloc;
 
     if(alloc_direct) {
-        if(_size > nano_size + MIPS_KSEG0) {
-            boot_printf(KRED"nano kernel too large. %lx vs %lx\n"KRST, _size  - MIPS_KSEG0, nano_size);
+        if(_size > nano_size + NANO_KSEG) {
+            boot_printf(KRED"nano kernel too large. %lx vs %lx\n"KRST, _size  - NANO_KSEG, nano_size);
             hw_reboot();
         }
-        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - MIPS_KSEG0, nano_size);
-        phy_mem =     cheri_setoffset(cheri_getdefault(), MIPS_KSEG0 + nano_size);
+        boot_printf("Nano kernel size: %lx. Reserved: %lx\n", _size - NANO_KSEG, nano_size);
+        phy_mem =     cheri_setoffset(cheri_getdefault(), NANO_KSEG + nano_size);
+        BOOT_PRINT_CAP(phy_mem);
         alloc = cheri_getdefault();
+		bzero((char*)alloc + NANO_KSEG, nano_size);
         alloc_direct = 0;
     } else {
         alloc = phy_mem;
+		bzero(alloc, _size);
         size_t align_off = (K_ALLOC_ALIGN - (_size & (K_ALLOC_ALIGN-1)) & (K_ALLOC_ALIGN-1));
         phy_mem += _size + align_off;
     }
 
-    size_t largest = cheri_getoffset(phy_mem) - MIPS_KSEG0;
+    size_t largest = cheri_getoffset(phy_mem) - NANO_KSEG;
     if(largest > boot_load_physaddr) {
 		boot_printf(KRED"boot loader overwriting itself. Ooops. Allocated up to address %lx, beri_load at %lx\n"KRST,
         largest, boot_load_physaddr);
 		hw_reboot();
 	}
 
-	return (cap_pair){.code = rederive_perms(alloc, cheri_getpcc()), .data = alloc};
+	return (cap_pair){.code = rederive_perms(alloc, env->handle), .data = alloc};
 }
 
-static void kernel_free_mem(void *addr) {
+static void kernel_free_mem(void *addr, Elf_Env* env __unused) {
 	/* no-op */
 	(void)addr;
 }
@@ -106,22 +109,30 @@ static void *boot_memcpy(void *dest, const void *src, size_t n) {
 }
 
 static boot_info_t bi;
-static Elf_Env env;
+Elf_Env env;
 
-void init_elf_loader() {
+void init_elf_loader(capability pool_code_auth_cap) {
   env.alloc   = kernel_alloc_mem;
   env.free    = kernel_free_mem;
   env.printf  = boot_printf;
   env.vprintf = boot_vprintf;
   env.memcpy  = boot_memcpy;
+  env.handle = pool_code_auth_cap;
 }
 
-capability load_nano() {
+size_t load_nano() {
 	extern u8 __nano_elf_start, __nano_elf_end;
 	size_t minaddr, maxaddr, entry;
-	char *prgmp = elf_loader_mem(&env, &__nano_elf_start,
-								 &minaddr, &maxaddr, &entry).data;
-    if(!prgmp) {
+	image_old im;
+
+	char *prgmp = (char*)elf_loader_mem_old(&env, &__nano_elf_start,
+								 &im, 0).data;
+
+	minaddr = im.minaddr;
+	maxaddr = im.maxaddr;
+	entry = im.entry;
+
+	if(!prgmp) {
         boot_printf(KRED"Could not load nano kernel file"KRST"\n");
         goto err;
     }
@@ -135,7 +146,7 @@ capability load_nano() {
     boot_printf("Loaded nano kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
                 minaddr, maxaddr, entry);
 
-    return prgmp + entry;
+    return entry;
 
     err:
     hw_reboot();
@@ -144,8 +155,15 @@ capability load_nano() {
 size_t load_kernel() {
 	extern u8 __kernel_elf_start, __kernel_elf_end;
 	size_t minaddr, maxaddr, entry;
-	char *prgmp = elf_loader_mem(&env, &__kernel_elf_start,
-				     &minaddr, &maxaddr, &entry).data;
+
+	image_old im;
+
+	char *prgmp = (char*)elf_loader_mem_old(&env, &__kernel_elf_start,
+				     &im, 0).data;
+
+	minaddr = im.minaddr;
+	maxaddr = im.maxaddr;
+	entry = im.entry;
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
@@ -158,8 +176,8 @@ size_t load_kernel() {
 		goto err;
 	}
 
-    bi.kernel_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
-    bi.kernel_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
+    bi.kernel_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - NANO_KSEG;
+    bi.kernel_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - NANO_KSEG;
 
 	boot_printf("Loaded kernel: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
 		    minaddr, maxaddr, entry);
@@ -173,9 +191,13 @@ boot_info_t *load_init() {
 	extern u8 __init_elf_start, __init_elf_end;
 	size_t minaddr, maxaddr, entry;
 
+	image_old im;
 	// FIXME: init is direct mapped for now
-	char *prgmp = elf_loader_mem(&env, &__init_elf_start,
-				     &minaddr, &maxaddr, &entry).data;
+	char *prgmp = (char*)elf_loader_mem_old(&env, &__init_elf_start, &im, 0).data;
+
+	minaddr = im.minaddr;
+	maxaddr = im.maxaddr;
+	entry = im.entry;
 
 	if(!prgmp) {
 		boot_printf(KRED"Could not load init file"KRST"\n");
@@ -188,12 +210,13 @@ boot_info_t *load_init() {
 		goto err;
 	}
 
-	boot_printf("Loaded init: minaddr=%lx maxaddr=%lx entry=%lx ""\n",
-		    minaddr, maxaddr, entry);
+	boot_printf("Loaded init: minaddr=%lx maxaddr=%lx entry=%lx tls_base:%lx\n",
+		    minaddr, maxaddr, entry, im.tls_base);
 
-    bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - MIPS_KSEG0;
-    bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - MIPS_KSEG0;
+    bi.init_begin = (cheri_getoffset(prgmp) + cheri_getbase(prgmp)) - NANO_KSEG;
+    bi.init_end = (cheri_getoffset(phy_mem) + cheri_getbase(phy_mem)) - NANO_KSEG;
     bi.init_entry = entry;
+    bi.init_tls_base = im.tls_base;
 
 	return &bi;
 err:
@@ -206,5 +229,12 @@ void hw_init(void) {
     ucap = cheri_setbounds(ucap, uart_base_size);
     set_uart_cap(ucap);
 	uart_init();
-	cp0_hwrena_set(cp0_hwrena_get() | (1<<2));
+	__asm__ (
+		"mfc0	$t0, $7\n"
+		"ori	$t0, $t0, 1 << 2\n"
+		"mtc0	$t0, $7\n"
+		:
+		:
+		: "t0"
+    );
 }

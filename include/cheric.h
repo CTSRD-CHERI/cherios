@@ -31,28 +31,132 @@
 #ifndef _MIPS_INCLUDE_CHERIC_H_
 #define	_MIPS_INCLUDE_CHERIC_H_
 
-#include "cdefs.h"
-#include "cherireg.h"
-#include "mips.h"
-
 /*
  * Derive CHERI-flavor from capability size
  */
 
 #if _MIPS_SZCAP == 256
-	#define _CHERI256_
+#define _CHERI256_
+	#define U_PERM_BITS 4
+    #define CAP_SIZE 0x20
+	#define CAP_SIZE_S "0x20"
+    #define CAP_SIZE_BITS 5
+	#define SMALL_PRECISION 64
+	#define LARGE_PRECISION 64
+    #define CAP_EXTRA_ALIGN 0
+    #define SMALL_OBJECT_THRESHOLD (~0)
 #elif _MIPS_SZCAP == 128
-	#define _CHERI128_
+#define _CHERI128_
+	#define U_PERM_BITS 4
+    #define CAP_SIZE 0x10
+	#define CAP_SIZE_S "0x10"
+    #define CAP_SIZE_BITS 4
+	#define SMALL_PRECISION 13
+	#define LARGE_PRECISION	10
+    #define SMALL_OBJECT_THRESHOLD  (1 << (SMALL_PRECISION)) // Can set bounds with byte align on objects less than this
+
 #else
-	#error Unknown capability size
+#error Unknown capability size
 #endif
 
+#ifdef HARDWARE_qemu
+    #define CAN_SEAL_ANY 0
+#else
+    #define CAN_SEAL_ANY 1
+#endif
+
+#ifndef __ASSEMBLY__
+
+#include "cdefs.h"
+#include "mips.h"
+
+#define _safe __attribute__((temporal_safe))
+#define _unsafe __attribute__((temporal_unsafe))
+
+typedef struct {
+    size_t length;
+    size_t mask;
+} precision_rounded_length;
+
+static inline precision_rounded_length round_cheri_length(size_t length) {
+    if(length < SMALL_OBJECT_THRESHOLD) return (precision_rounded_length){.length = length, .mask = 0};
+    size_t mask = length >> (LARGE_PRECISION-1);
+    mask++; // to avoid edge case where rounding length would actually change exponent
+    mask |= mask >> 1L;
+    mask |= mask >> 2L;
+    mask |= mask >> 4L;
+    mask |= mask >> 8L;
+    mask |= mask >> 16L;
+    mask |= mask >> 32L;
+    size_t rounded_length = (length + mask) & ~mask;
+    return (precision_rounded_length){.length = rounded_length, .mask = mask};
+}
+
+#define SUF_8  "b"
+#define SUF_16 "h"
+#define SUF_32 "w"
+#define SUF_64 "d"
+#define SUF_c  "c"
+#define SUF_256 "c"
+
+#define OUT_8   "r"
+#define OUT_16  "r"
+#define OUT_32  "r"
+#define OUT_64  "r"
+#define OUT_c   "C"
+#define OUT_256 "C"
+
+#define OUT_8i   "i"
+#define OUT_16i  "i"
+#define OUT_32i  "i"
+#define OUT_64i  "i"
+
+#define ADD_8_16i	"daddiu"
+#define ADD_16_16i	"daddiu"
+#define ADD_32_16i	"daddiu"
+#define ADD_64_16i	"daddiu"
+#define ADD_c_16i	"cincoffset"
+
+#define ADD_8_64	"daddu"
+#define ADD_16_64	"daddu"
+#define ADD_32_64	"daddu"
+#define ADD_64_64	"daddu"
+#define ADD_c_64	"cincoffset"
+
+#define CTYPE_8 uint8_t
+#define CTYPE_16	uint16_t
+#define CTYPE_32	uint32_t
+#define CTYPE_64 uint64_t
+#define CTYPE_c	capability
+
+#define BNE_8(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_16(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_32(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_c(a,b,l,t) "cexeq " t ", " a ", " b "; beqz " t ", " l
+
+#define BNE(type, a, b, label,tmp) BNE_ ## type(a,b,label,tmp)
+
+#define ADD(type, val_type) ADD_ ## type ## _ ## val_type
+
+#define LOADL(type)  "cll" SUF_ ## type
+#define LOAD(type) "cl" SUF_ ## type
+#define STOREC(type) "csc" SUF_ ## type
+#define STORE(type) "cs" SUF_ ## type
+#define OUT(type) "=" OUT_ ## type
+#define CLOBOUT(type) "=&" OUT_ ## type
+#define IN(type) OUT_ ## type
+#define INOUT(type) "+" OUT_ ## type
+#define CTYPE(type) CTYPE_ ## type
 /*
  * Canonical C-language representation of a capability.
  */
 typedef __capability void * capability;
 typedef __capability const void *  const_capability;
 typedef capability sealing_cap;
+typedef unsigned int stype;
+
 /*
  * Programmer-friendly macros for CHERI-aware C code -- requires use of
  * CHERI-aware Clang/LLVM, and full CP2 context switching, so not yet usable
@@ -62,6 +166,7 @@ typedef capability sealing_cap;
 				    __DECONST(capability, (x)))
 #define	cheri_getbase(x)	__builtin_mips_cheri_get_cap_base(		\
 				    __DECONST(capability, (x)))
+#define cheri_gettop(x) (cheri_getbase(x) + cheri_getlen(x))
 #define	cheri_getoffset(x)	__builtin_mips_cheri_cap_offset_get(		\
 				    __DECONST(capability, (x)))
 #define	cheri_getperm(x)	__builtin_mips_cheri_get_cap_perms(		\
@@ -97,7 +202,73 @@ typedef capability sealing_cap;
 #define	cheri_cchecktype(c, t)	__builtin_mips_cheri_check_type(		\
 				    __DECONST(capability, (c)), (t))
 
-#define cheri_getcursour(x) (cheri_getbase(x) + cheri_getoffset(x))
+#define cheri_getcursor(x) (__builtin_cheri_address_get(x))
+
+#define cheri_get_low_ptr_bits(X,M) (__builtin_cheri_address_get((capability)X) & (M))
+#define cheri_clear_low_ptr_bits(X,M) ((X) &~((M)))
+
+// TODO: When we update the compiler use following instead
+
+/*
+ * Get the low bits defined in @p mask from the capability/pointer @p ptr.
+ * @p mask must be a compile-time constant less than 31.
+ * TODO: should we allow non-constant masks?
+ *
+ * @param ptr the uintptr_t that may have low bits sets
+ * @param mask the mask for the low pointer bits to retrieve
+ * @return a size_t containing the the low bits from @p ptr
+ *
+ * Rationale: this function is needed because extracting the low bits using a
+ * bitwise-and operation returns a LHS-derived capability with the offset
+ * field set to LHS.offset & mask. This is almost certainly not what the user
+ * wanted since it will always compare not equal to any integer constant.
+ * For example lots of mutex code uses something like `if ((x & 1) == 1)` to
+ * detect if the lock is currently contented. This comparison always returns
+ * false under CHERI the LHS of the == is a valid capability with offset 3 and
+ * the RHS is an untagged intcap_t with offset 3.
+ * See https://github.com/CTSRD-CHERI/clang/issues/189
+ */
+//#define cheri_get_low_ptr_bits(ptr, mask)                                      \
+//  __cheri_get_low_ptr_bits((uintptr_t)(ptr), __static_assert_sensible_low_bits(mask))
+
+/*
+ * Set low bits in a uintptr_t
+ *
+ * @param ptr the uintptr_t that may have low bits sets
+ * @param bits the value to bitwise-or with @p ptr.
+ * @return a uintptr_t that has the low bits defined in @p mask set to @p bits
+ *
+ * @note this function is not strictly required since a plain bitwise or will
+ * generally give the behaviour that is expected from other platforms but.
+ * However, we can't really make the warning "-Wcheri-bitwise-operations"
+ * trigger based on of the right hand side expression since it may not be a
+ * compile-time constant.
+ */
+//#define cheri_set_low_ptr_bits(ptr, bits)                                      \
+//  __cheri_set_low_ptr_bits((uintptr_t)(ptr), __runtime_assert_sensible_low_bits(bits))
+
+/*
+ * Clear the bits in @p mask from the capability/pointer @p ptr. Mask must be
+ * a compile-time constant less than 31
+ *
+ * TODO: should we allow non-constant masks?
+ *
+ * @param ptr the uintptr_t that may have low bits sets
+ * @param mask this is the mask for the low pointer bits, not the mask for
+ * the bits that should remain set.
+ * @return a uintptr_t that has the low bits defined in @p mask set to zeroes
+ *
+ * @note this function is not strictly required since a plain bitwise or will
+ * generally give the behaviour that is expected from other platforms but.
+ * However, we can't really make the warning "-Wcheri-bitwise-operations"
+ * trigger based on of the right hand side expression since it may not be a
+ * compile-time constant.
+ *
+ */
+//#define cheri_clear_low_ptr_bits(ptr, mask)                                    \
+//__cheri_clear_low_ptr_bits((uintptr_t)(ptr), __static_assert_sensible_low_bits(mask))
+
+#define cheri_setcursor(x,y) (cheri_setoffset(x, y - cheri_getbase(x)))
 
 #define	cheri_getdefault()	__builtin_mips_cheri_get_global_data_cap()
 #define	cheri_getidc()		__builtin_mips_cheri_get_invoke_data_cap()
@@ -113,6 +284,15 @@ typedef capability sealing_cap;
 
 #define	cheri_setbounds(x, y)	__builtin_cheri_bounds_set(		\
 				    __DECONST(capability, (x)), (y))
+// TODO find instrinsic
+#define	cheri_setbounds_exact(x, y)	                        \
+({                                                          \
+capability __exact;                                         \
+__asm__ ("csetboundsexact %[out], %[in], %[len]"                 \
+    : [out]"=C"(__exact)                                    \
+    :[in]"C"(x),[len]"r"(y):);                              \
+    __exact; \
+})
 
 /* Names for permission bits */
 #define CHERI_PERM_GLOBAL		(1 <<  0)
@@ -123,12 +303,14 @@ typedef capability sealing_cap;
 #define CHERI_PERM_STORE_CAP		(1 <<  5)
 #define CHERI_PERM_STORE_LOCAL_CAP	(1 <<  6)
 #define CHERI_PERM_SEAL			(1 <<  7)
+#define CHERI_PERM_CCALL		(1 << 8)
+#define CHERI_PERM_UNSEAL		(1 << 9)
 #define CHERI_PERM_ACCESS_SYS_REGS	(1 << 10)
 #define CHERI_PERM_SOFT_1		(1 << 15)
 #define CHERI_PERM_SOFT_2		(1 << 16)
 #define CHERI_PERM_SOFT_3		(1 << 17)
 #define CHERI_PERM_SOFT_4		(1 << 18)
-
+#define CHERI_PERM_ALL		 	((1 << (11 + U_PERM_BITS)) - 1)
 /*
  * Two variations on cheri_ptr() based on whether we are looking for a code or
  * data capability.  The compiler's use of CFromPtr will be with respect to
@@ -142,6 +324,19 @@ typedef capability sealing_cap;
  * appears not currently to be the case, so manually derive using
  * cheri_getpcc() for now.
  */
+
+typedef intptr_t er_t;
+
+#define ERROR_T(T) T ## _or_er_t
+#define DEC_ERROR_T(T) typedef union ERROR_T(T) {T val; er_t er;} ERROR_T(T)
+#define MAKE_ER(T, code) (ERROR_T(T)){.er = (er_t)code}
+#define MAKE_VALID(T, valid) (ERROR_T(T)){.val = (valid)}
+#define IS_VALID(error_or_valid) cheri_gettag(error_or_valid.val)
+#define ER_T_FROM_CAP(T, v) MAKE_VALID(T, v)
+
+#define cheri_unseal_2(cap, sealing_cap) \
+    ((cheri_gettag(cap) == 0 || cheri_gettype(cap) != cheri_getcursor(sealing_cap)) ? NULL : cheri_unseal(cap, sealing_cap))
+
 static __inline capability
 cheri_codeptr(const void *ptr, size_t len)
 {
@@ -195,6 +390,17 @@ cheri_ptrpermoff(const void *ptr, size_t len, register_t perm, off_t off)
  * The caller may wish to assert various properties about the returned
  * capability, including that CHERI_PERM_SEAL is set.
  */
+
+#define cheri_dla(symbol, result)               \
+__asm __volatile (                              \
+    "lui %[res], %%hi(" #symbol ")\n"            \
+    "daddiu %[res], %[res], %%lo(" #symbol ")\n" \
+: [res]"=r"(result) ::)
+
+#define SET_FUNC(S, F) __asm (".weak " # S"; cscbi %[arg], %%capcall20(" #S ")($c25)" ::[arg]"C"(F):"memory")
+#define SET_SYM(S, V) __asm (".weak " # S"; cscbi %[arg], %%captab20(" #S ")($c25)" ::[arg]"C"(V):"memory")
+#define SET_TLS_SYM(S, V) __asm (".weak " #S "; cscbi %[arg], %%captab_tls20(" #S ")($c26)" ::[arg]"C"(V):"memory")
+
 static __inline capability
 cheri_maketype(capability root_type, register_t type)
 {
@@ -249,7 +455,7 @@ static __inline__  void set_idc(capability idc) {
 
 #define CHERI_PRINT_CAP(cap)						\
 	printf("%-20s: %-16s t:%lx s:%lx p:%08jx "			\
-	       "b:%016jx l:%016zx o:%jx type:%lx\n",				\
+	       "b:%016jx l:%016zx o:%jx c:%016jx type:%lx\n",				\
 	   __func__,							\
 	   #cap,							\
 	   cheri_gettag(cap),						\
@@ -258,6 +464,7 @@ static __inline__  void set_idc(capability idc) {
 	   cheri_getbase(cap),						\
 	   cheri_getlen(cap),						\
 	   cheri_getoffset(cap),						\
+		cheri_getcursor(cap),				\
 	   cheri_gettype(cap))
 
 #define CHERI_PRINT_CAP_LITE(cap)					\
@@ -329,13 +536,15 @@ typedef struct reg_frame {
 	register_t	mf_hi, mf_lo;
 
 	/* Program counter. */
-	register_t	mf_pc;
+	/* register_t	mf_pc; <-- this really isn't needed, and its nice to keep to 32 regs */
 
+    /* User local kernel register */
+    register_t mf_user_loc;
 	/*
 	 * Capability registers.
 	 */
 	/* c0 has special properties for MIPS load/store instructions. */
-	capability	cf_c0;
+	capability	cf_default;
 
 	/*
 	 * General purpose capability registers.
@@ -354,8 +563,20 @@ typedef struct reg_frame {
 	capability	cf_idc;
 
 	/* Program counter capability. */
-	capability	cf_pcc;
+	capability	cf_pcc; // WARN: Must be last for restore to work
 
 
 } reg_frame_t;
+
+#endif // ASSEMBLY
+
+#define MIPS_FRAME_SIZE        (32*REG_SIZE)
+#define CHERI_CAP_FRAME_SIZE   (28 * CAP_SIZE)
+#define CHERI_FRAME_SIZE       (MIPS_FRAME_SIZE + CHERI_CAP_FRAME_SIZE)
+#define FRAME_C1_OFFSET         (MIPS_FRAME_SIZE + CAP_SIZE)
+#define FRAME_C3_OFFSET        (MIPS_FRAME_SIZE + (3 * CAP_SIZE))
+#define FRAME_a0_OFFSET        (3 * REG_RIZE)
+#define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
+#define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
+
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

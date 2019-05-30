@@ -39,15 +39,24 @@
 #include "boot/boot_info.h"
 #include "types.h"
 #include "mman.h"
+#include "elf.h"
 
 typedef enum module_type {
+    m_user = 0,
 	m_memmgt,
 	m_namespace,
 	m_uart,
 	m_fs,
+    m_proc,
 	m_core,
-	m_user,
-	m_fence
+	m_dedup,
+	m_dedup_init,
+	m_tman,
+	m_virtblk,
+	m_virtnet,
+	m_nginx,
+	m_fence,
+	m_secure = 0x100
 } module_t;
 
 typedef struct init_elem_s {
@@ -63,16 +72,12 @@ typedef struct init_elem_s {
 /*
  * Memory routines
  */
-void	init_alloc_init(void);
-void	init_alloc_enable_system(void * ctrl);
-cap_pair init_alloc(size_t s);
-void	init_free(void * p);
 
-void	glue_memmgt(void * memmgt_ctrl, void* ns_ctrl);
+extern Elf_Env env;
 
 int	acts_alive(init_elem_t * init_list, size_t  init_list_len);
+void acts_wait_for_finish(init_elem_t * init_list, size_t  init_list_len);
 
-void *	load_module(module_t type, const char * file, register_t arg, capability carg, init_info_t* info);
 int	num_registered_modules(void);
 
 void	stats_init(void);

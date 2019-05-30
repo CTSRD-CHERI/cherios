@@ -29,7 +29,6 @@
  * SUCH DAMAGE.
  */
 
-#include "all.h"
 #include "syscalls.h"
 
 void ssleep(int n) {
@@ -38,6 +37,7 @@ void ssleep(int n) {
 
 void nssleep(int n) {
 	for(int i=0; i<n; i++) {
+		HW_YIELD;
 		ssleep(0);
 	}
 }

@@ -37,3 +37,4 @@ void ssleep(int n);
 void nssleep(int n);
 
 #define countof(a) (sizeof(a) / sizeof(*(a)))
+#define typeof __typeof

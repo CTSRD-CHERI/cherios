@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
+#include "syscalls.h"
 
 #define _MSG 0
 
@@ -37,7 +37,6 @@ static void hello(void) {
 	printf("Hello Hello world\n");
 }
 
-extern void msg_entry;
 void (*msg_methods[]) = {hello};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};

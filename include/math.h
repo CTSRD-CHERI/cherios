@@ -35,6 +35,8 @@
 
 #include "mips.h"
 
+#ifndef __ASSEMBLY__
+
 static inline int imax(int a, int b) {
 	return (a>b ? a : b);
 }
@@ -63,5 +65,33 @@ static inline int slog2(size_t s) {
 static inline int is_power_2(size_t x) {
 	return (x & (x-1)) == 0;
 }
+
+static inline size_t align_up_to(size_t size, size_t align) {
+	size_t mask = align - 1;
+	return (size + mask) & ~mask;
+}
+
+static inline size_t align_down_to(size_t size, size_t align) {
+	return size & ~(align-1);
+}
+
+static inline size_t round_up_to_nearest_power_2(size_t v) {
+	v--;
+	v |= v >> 1L;
+	v |= v >> 2L;
+	v |= v >> 4L;
+	v |= v >> 8L;
+	v |= v >> 16L;
+	v |= v >> 32L;
+	v++;
+	return v;
+}
+
+#else // __ASEEMBLY__
+
+#define ALIGN_UP_2(X, P)   		(((X) + ((1 << (P)) - 1)) &~ ((1 << (P)) - 1))
+#define ALIGN_DOWN_2(X, P)  	((X) &~ ((1 << (P)) - 1))
+
+#endif
 
 #endif

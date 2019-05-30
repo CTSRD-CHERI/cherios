@@ -38,15 +38,39 @@
 
 /* These are used by the runtime to know who to respond to */
 //FIXME should be local to the pop loop, anybody who wants to use creturn should do so to a creturn method
-sync_state_t sync_state = {.sync_caller = NULL, .sync_token = NULL};
+__thread sync_state_t sync_state;
 
-long	msg_enable = 0;
+__thread long msg_enable = 0;
+
+void next_msg(void) {
+    act_self_queue->header.start ++;
+}
 
 void pop_msg(msg_t * msg) {
     // TODO what are the blocking semantics of pop? Fow now just do the safe thing
-    if(act_self_queue->header.start == act_self_queue->header.end) {
+    if(act_self_queue->header.start == *act_self_queue->header.end) {
         wait();
     }
-    *msg = act_self_queue->msg[act_self_queue->header.start];
-    act_self_queue->header.start = (act_self_queue->header.start + 1) % act_self_queue->header.len;
+    *msg = act_self_queue->msg[act_self_queue->header.start & (act_self_queue->header.len-1)];
+    next_msg();
+}
+
+int msg_queue_empty(void) {
+    return (act_self_queue->header.start == *act_self_queue->header.end);
+}
+
+msg_t* get_message(void) {
+    if(msg_queue_empty()) {
+        wait();
+    }
+    return &act_self_queue->msg[act_self_queue->header.start & (act_self_queue->header.len-1)];
+}
+
+void msg_delay_return(sync_state_t* delay_store) {
+    delay_store->sync_caller = sync_state.sync_caller;
+    sync_state.sync_caller = NULL;
+}
+
+int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store) {
+    return message_reply(c3, v0, v1, delay_store.sync_caller, 1);
 }

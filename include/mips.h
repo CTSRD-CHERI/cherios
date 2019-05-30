@@ -32,10 +32,50 @@
 #ifndef _CHERIOS_MIPS_H_
 #define	_CHERIOS_MIPS_H_
 
-#ifdef HARDWARE_qemu
-#define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
-#define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
+#ifndef SMP_ENABLED
+	#define SMP_CORES 1
 #endif
+
+#ifdef HARDWARE_qemu
+	#define N_TLB_ENTS	32
+    #define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
+    #define HW_TRACE_OFF __asm__ __volatile__ ("li $zero, 0xdead");
+	#define ASM_TRACE_ON 	"li $zero, 0xbeef\n"
+	#define ASM_TRACE_OFF 	"li $zero, 0xdead\n"
+
+    #ifdef SMP_ENABLED
+    #define HW_YIELD __asm__ __volatile__ ("nop; li  $zero, 0xea1d")
+    #define YIELD li  $zero, 0xea1d
+    #else
+    #define HW_YIELD
+    #define YIELD
+    #endif
+
+#else //qemu
+    #include "cheri_pic.h"
+
+	#define N_TLB_ENTS	144 // And another 16 low entries ...
+	#define N_TLB_ASSO	16
+	#define N_TLB_DRCT	128
+    #define HW_YIELD
+    #define YIELD
+
+    // Currently turns off revoke registers. Can't turn off call variant 2 or sealing mode 2 requirements
+    #define CHERI_LEGACY_COMPAT // Turn off as many of the CHERI features I added as possible. Security is lost.
+#endif
+
+#define REG_SIZE    8
+#define REG_SIZE_BITS 3
+
+#define SANE_ASM    \
+".set noreorder\n"  \
+".set nobopt\n"     \
+".set noat\n"		\
+".option pic0\n"
+
+#define HW_SYNC __asm__ __volatile__ ("sync")
+
+#ifndef __ASSEMBLY__
 
 /*
  * Provide more convenient names for useful qualifiers from gcc/clang.
@@ -53,7 +93,7 @@ typedef unsigned long	vaddr_t;		/* Virtual address */
 typedef long		ssize_t;
 typedef	unsigned long	size_t;
 
-typedef unsigned long		off_t;
+typedef long		off_t;
 
 /*
  * Useful integer type names that we can't pick up from the compile-time
@@ -93,6 +133,17 @@ typedef uint8_t		u_int8_t;
 typedef uint16_t	u_int16_t;
 typedef uint32_t	u_int32_t;
 typedef uint64_t	u_int64_t;
+
+#define define_intypes(size)                                \
+typedef int ## size ## _t  int_least ## size ## _t;         \
+typedef uint ## size ## _t  uint_least ## size ## _t;       \
+typedef int ## size ## _t  int_fast ## size ## _t;          \
+typedef uint ## size ## _t  uint_fast ## size ## _t;
+
+#define INT_SIZES(ITEM) ITEM(8) ITEM(16) ITEM(32) ITEM(64)
+
+INT_SIZES(define_intypes)
+
 #define ULONG_MAX	4294967295UL
 #define UINT_MAX	ULONG_MAX
 
@@ -106,11 +157,17 @@ typedef uint64_t	u_int64_t;
 #define MIPS_KSEG0 0xffffffff80000000
 #define MIPS_VRT   0
 
+#define MIPS_KSEG0_64 0x9800000000000000
+
+#define NANO_KSEG MIPS_KSEG0
+
 #define	MIPS_BEV0_EXCEPTION_VECTOR	(MIPS_KSEG0 + 0x180)
 #define	MIPS_BEV0_EXCEPTION_VECTOR_PTR	((void *)MIPS_BEV0_EXCEPTION_VECTOR)
 
 #define	MIPS_BEV0_CCALL_VECTOR		(MIPS_KSEG0 + 0x280)
 #define	MIPS_BEV0_CCALL_VECTOR_PTR	((void *)MIPS_BEV0_EXCEPTION_VECTOR)
+
+#endif
 
 /*
  * Hard-coded MIPS interrupt numbers.
@@ -130,10 +187,13 @@ typedef uint64_t	u_int64_t;
 #define	MIPS_CP0_REG_RESERVED7		$7
 #define	MIPS_CP0_REG_BADVADDR		$8
 #define	MIPS_CP0_REG_COUNT		$9
+#define	MIPS_CP0_REG_COUNTX		9
 #define	MIPS_CP0_REG_ENTRYHI		$10
 #define	MIPS_CP0_REG_COMPARE		$11
+#define	MIPS_CP0_REG_COMPAREX		11
 #define	MIPS_CP0_REG_STATUS		$12
 #define	MIPS_CP0_REG_CAUSE		$13
+#define	MIPS_CP0_REG_CAUSEX		13
 #define	MIPS_CP0_REG_EPC		$14
 #define	MIPS_CP0_REG_PRID		$15
 #define	MIPS_CP0_REG_CONFIG		$16
@@ -151,7 +211,51 @@ typedef uint64_t	u_int64_t;
 #define	MIPS_CP0_REG_TAGLO		$28
 #define	MIPS_CP0_REG_TAGHI		$29
 #define	MIPS_CP0_REG_ERROREPC		$30
+#define MIPS_CP0_REG_REVOKE			$30
+#define MIPS_CP0_REG_REVOKE_BASE	2
+#define MIPS_CP0_REG_REVOKE_BOUND	3
+#define MIPS_CP0_REG_REVOKE_PERMS	4
 #define	MIPS_CP0_REG_RESERVED31		$31
+
+#define MIPS_CP0_REG_MVPControl $0, 1
+#define MIPS_CP0_REG_MVPControlX 0, 1
+#define MVPControl_EVP      (1 << 0)        // Enable VPEs. Use EVPE and DVPE.
+#define MVPControl_VPC      (1 << 1)        // Config enable. Must not have VPE set.
+
+#define MIPS_CP0_REG_MVPConf0 $0, 2
+#define MIPS_CP0_REG_MVPConf0X 0, 2
+#define MVPConf0_PTC        (0xFF)          // Total TC's - 1
+
+#define MIPS_CP0_REG_VPEControl $1, 1
+#define MIPS_CP0_REG_VPEControlX 1, 1
+#define VPEControl_TargTC   0xFF            // Target for mtt and mft
+
+#define MIPS_CP0_REG_VPEConf0   $1, 2
+#define MIPS_CP0_REG_VPEConf0X   1, 2
+#define VPEConf0_MVP        (1 << 1)        // Master. can mtt and mft.
+#define VPEConf0_VPA        (1 << 0)        // Active. Runs if EVP.
+
+#define MIPS_CP0_REG_TCHalt $2, 4
+#define MIPS_CP0_REG_TCHaltX 2, 4
+#define TCHalt_H             1
+
+#define MIPS_CP0_REG_TCStatus $2,1
+#define MIPS_CP0_REG_TCStatusX 2,1
+#define TCStatus_A          (1 << 13)
+
+#define MIPS_CP0_REG_TCRestart $2,3
+#define MIPS_CP0_REG_TCRestartX 2,3
+
+#define MIPS_CP0_REG_TCBind $2, 2
+#define MIPS_CP0_REG_TCBindX 2, 2
+#define TCBind_CurVPE 0xF
+#define TCBind_CurTC  (0xF << 21)
+#define TCBind_CurTcShift 21
+
+#define MIPS_ENTRYHI_ASID_SHIFT 	0
+#define MIPS_ENTRYHI_ASID_BITS		8
+#define MIPS_ENTRYHI_VPN_SHIFT		13
+#define MIPS_ENTRYHI_VPN_BITS		51
 
 /*
  * MIPS CP0 status register fields.
@@ -245,22 +349,62 @@ typedef uint64_t	u_int64_t;
 #define	MIPS_CP0_EXCODE_RES13	30	/* Reserved */
 #define	MIPS_CP0_EXCODE_VCED	31	/* Virtual coherency data exception */
 
+#define MIPS_CP0_EXCODE_NUM 32
 /*
  * Hard-coded MIPS interrupt bits from MIPS_CP0_CAUSE_IP.
  */
 #define	MIPS_CP0_CAUSE_IP_TIMER		(1 << MIPS_CP0_INTERRUPT_TIMER)
 
+
+#define L1_LINE_SIZE                128 // Not according to the doc, but according to john. Will be 64 for MEM128
+#define L2_LINE_SIZE                128
+
+#define L1_SIZE						(32 * 1024)
+
+#define CACHE_L1_INDEXS             ((L1_SIZE) / L1_LINE_SIZE)
+
+#define CACHE_L1_INST               0
+#define CACHE_L1_DATA               1
+#define CACHE_L2                    3
+#define CACHE_L3                    2
+
+#define CACHE_OP_INDEX_INVAL(X)         ((0b000 << 2) | X)
+#define CACHE_OP_INDEX_LOAD_TAG(X)      ((0b001 << 2) | X)
+#define CACHE_OP_INDEX_STORE_TAG(X)     ((0b010 << 2) | X)
+#define CACHE_OP_ADDR_HIT_INVAL(X)      ((0b100 << 2) | X)
+#define CACHE_OP_ADDR_FILL(X)           ((0b101 << 2) | X) // Only for L1_INST
+#define CACHE_OP_ADDR_HIT_WB_INVAL(X)   ((0b101 << 2) | X) // Only for others
+#define CACHE_OP_ADDR_HIT_WB(X)         ((0b110 << 2) | X)
+
+#define CACHE_OP(Op, Off, Base) \
+    __asm __volatile__("cache %[op], %[off](%[base])"::[op]"i"(Op),[off]"i"(Off),[base]"r"(Base))
 /*
  * MIPS address space layout.
  */
-#define	MIPS_XKPHYS_UNCACHED_BASE	0x9800000000000000
-#define	MIPS_XKPHYS_CACHED_NC_BASE	0x9000000000000000
+
+/* Some conflict on sources for this */
+
+#define MIPS_XKPHYS                 0x8000000000000000ULL
+#define MIPS_XKPHYS_MODE_SHIFT      59ULL
+#define MIPS_XKPHYS_UNCACHED        0b010ULL       // See mips run disagrees. Mips64 and other sources agree
+#define MIPS_XKPHYS_CACHED_C_EW     0b110ULL       // Other sources say this is better supported
+#define MIPS_XKPHYS_CACHED_NC       0b011ULL       // Mips 64 says this for cached
+#define MIPS_XKPHYS_CACHED_C        0b100ULL
+#define MIPS_XKPHYS_CACHED_C_UW     0b101ULL
+#define MIPS_XKPHYS_UNCACHED_ACCEL  0b111ULL
+
+
+
+#define	MIPS_XKPHYS_UNCACHED_BASE	(MIPS_XKPHYS | (MIPS_XKPHYS_UNCACHED << MIPS_XKPHYS_MODE_SHIFT))
+#define	MIPS_XKPHYS_CACHED_BASE     (MIPS_XKPHYS | (MIPS_XKPHYS_CACHED_NC << MIPS_XKPHYS_MODE_SHIFT))
+
+#ifndef __ASSEMBLY__
 
 static inline vaddr_t
 mips_phys_to_cached(paddr_t phys)
 {
 
-	return (phys | MIPS_XKPHYS_CACHED_NC_BASE);
+	return (phys | MIPS_XKPHYS_CACHED_BASE);
 }
 
 static inline vaddr_t
@@ -421,5 +565,7 @@ struct mips_frame {
 	register_t	mf_pc;
 };
 #endif
+
+#endif // ASSEMBLY
 
 #endif /* _CHERIOS_MIPS_H_ */

@@ -29,4 +29,6 @@
  */
 
 int toupper(int c);
+int tolower(int c);
+
 char * strtoupper(char * s);

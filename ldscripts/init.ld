@@ -38,7 +38,7 @@ OUTPUT_ARCH(mips)
 ENTRY(start)
 SECTIONS
 {
-	. += __init_load_virtaddr;
+    __text_segment_start = .;
 	. += SIZEOF_HEADERS;
 
 	.init : {
@@ -47,61 +47,24 @@ SECTIONS
 	.text ALIGN(CAP_ALIGN): {
 		*(.text)
 	}
-	.fini ALIGN(CAP_ALIGN): {
-		KEEP (*(.fini))
-	} = 0
 
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
 	 * content, it would be much preferable to map into the code segment
 	 * and use $pcc-relative loads, but we are not yet there.
 	 */
-	.MIPS.options ALIGN(PAGE_ALIGN): {
-		*(.MIPS.options)
-	}
-	.ctors ALIGN(CAP_ALIGN) : {
-		KEEP (*/crtbeginC.o(.ctors))
-		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
-		KEEP (*(SORT(.ctors.*)))
-		KEEP (*/crtendC.o(.ctors))
-	}
-	.dtors ALIGN(CAP_ALIGN) : {
-		KEEP (*/crtbeginC.o(.dtors))
-		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
-		KEEP (*(SORT(.dtors.*)))
-		KEEP (*/crtendC.o(.dtors))
-	}
-	.preinit_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__preinit_array_start = .);
-		KEEP (*(.preinit_array))
-		PROVIDE_HIDDEN (__preinit_array_end = .);
-	}
-	.init_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__init_array_start = .);
-		KEEP (*(SORT(.init_array.*)))
-		KEEP (*(.init_array))
-		PROVIDE_HIDDEN (__init_array_end = .);
-	}
-	.fini_array ALIGN(CAP_ALIGN) : {
-		PROVIDE_HIDDEN (__fini_array_start = .);
-		KEEP (*(.fini_array))
-		KEEP (*(SORT(.fini_array.*)))
-		PROVIDE_HIDDEN (__fini_array_end = .);
-	}
-	.data ALIGN(CAP_ALIGN): {
-		*(.data)
-	}
-	_gp = ALIGN(CAP_ALIGN) + 0x7fc0;
-	.got : {
-		*(.got.plt)
-		*(.got)
-	}
+    .data ALIGN(CAP_ALIGN): {
+        __data_segment_start = .;
+        *(.data)
+    }
+
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)
 	}
 
-	__start_bss = ADDR(.bss);
-	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
 
 	/*
 	 * We DO need to include these in so much as they need program headers (even if file size is zero.
@@ -109,7 +72,7 @@ SECTIONS
 	 * This only worked before because we ran with a global C0 / never used this stack
 	 */
 
-	 .heapandstack ALIGN(CAP_ALIGN): {
+	 .heapandstack ALIGN(PAGE_ALIGN): {
 	    __start_init_stack	= .;
 	    . += __size_init_stack;
 	    __stop_init_stack = .;

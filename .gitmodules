@@ -1,0 +1,6 @@
+[submodule "lwip"]
+	path = lwip
+	url = https://git.savannah.nongnu.org/git/lwip.git
+[submodule "nginx"]
+	path = nginx
+	url = https://github.com/CTSRD-CHERI/nginx.git

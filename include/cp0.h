@@ -31,62 +31,40 @@
 #ifndef _CHERI_CP0_H_
 #define	_CHERI_CP0_H_
 
+#include "nano/nanokernel.h"
+
 /*
  * CP0 manipulation routines.
  */
 int	cp0_status_bd_get(void);
-void	cp0_status_bev_set(int bev);
 int	cp0_status_exl_get(void);
 void	cp0_status_ie_disable(void);
 void	cp0_status_ie_enable(void);
 int	cp0_status_ie_get(void);
-void	cp0_status_im_enable(int mask);
-void	cp0_status_im_disable(int mask);
 register_t	cp0_cause_excode_get(register_t cause);
 register_t	cp0_cause_ipending_get(register_t cause);
-void		cp0_cause_set(register_t cause);
-register_t	cp0_count_get(void);
-void	cp0_compare_set(register_t compare);
+uint32_t	cp0_count_get(void);
+void	cp0_compare_set(uint32_t compare);
 register_t cp0_hwrena_get(void);
 void cp0_hwrena_set(register_t hwrena);
-register_t cp0_badvaddr_get(void);
+
+static inline uint8_t cp0_get_cpuid(void) {
+
+	register_t EBase = modify_hardware_reg(NANO_REG_SELECT_EBASE, 0, 0);
+	return (char)EBase;
+}
 
 static inline register_t
 cp0_status_get(void)
 {
-	register_t status;
-
-	__asm__ __volatile__ ("dmfc0 %0, $12" : "=r" (status));
+	register_t status = modify_hardware_reg(NANO_REG_SELECT_STATUS, 0, 0);
 	return (status);
 }
 
 static inline void
 cp0_status_set(register_t status)
 {
-
-	__asm__ __volatile__ ("dmtc0 %0, $12" : : "r" (status));
-}
-
-/*
- * Routines for managing the CP0 BadInstr register.
- */
-
-#ifndef HARDWARE_fpga
-/* A hack to make QEMU work, we expect this to be set in an exception handler if required */
-extern register_t badinstr_glob;
-#endif
-
-static inline register_t
-cp0_badinstr_get(void)
-{
-#ifdef HARDWARE_fpga
-	register_t badinstr;
-
-	__asm__ __volatile__ ("dmfc0 %0, $8, 1" : "=r" (badinstr));
-	return (badinstr);
-#else
-	return badinstr_glob;
-#endif
+    modify_hardware_reg(NANO_REG_SELECT_STATUS, ~0, status);
 }
 
 #endif /* _CHERI_CP0_H_ */

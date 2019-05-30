@@ -31,23 +31,35 @@
 #ifndef __STDIO_H__
 #define __STDIO_H__
 
+#include "sockets.h"
 #include "mips.h"
 #include "cdefs.h"
 #include "stdarg.h"
 #include "colors.h"
+#include "types.h"
 
-typedef void FILE;
-extern FILE * stderr;
+typedef unix_like_socket FILE;
 
+extern __thread FILE * stderr;
+extern __thread FILE * stdout;
+
+typedef void kvprintf_putc_f (int,void*);
 int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
 int	vsprintf(char *buf, const char *cfmt, va_list ap);
 int	vsnprintf(char *str, size_t size, const char *format, va_list ap);
 int	printf(const char *fmt, ...) __printflike(1, 2);
+#ifdef USE_SYSCALL_PUTS
+#define syscall_printf(...) printf(__VA_ARGS__)
+#else
+int	syscall_printf(const char *fmt, ...) __printflike(1, 2);
+#endif
 int	vprintf(const char *fmt, va_list ap);
 int	fprintf(FILE * f, const char *fmt, ...) __printflike(2, 3);
+int sprintf ( char * str, const char * format, ... );
+int snprintf(char *str, size_t size, const char *format, ...);
 int	puts(const char *s);
-int	putc(int character, FILE * stream);
+#define putc(c,s) fputc(c,s)
 int	fputc(int character, FILE * stream);
 void	panic(const char *str) __dead2;
-
+void panic_proxy(const char *str, act_kt act) __dead2;
 #endif /* !__STDIO_H__ */

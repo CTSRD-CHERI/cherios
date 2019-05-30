@@ -38,38 +38,74 @@
 #include "msg.h"
 #include "types.h"
 #include "stddef.h"
+#include "nano/usernano.h"
+#include "thread.h"
 
-extern act_control_kt act_self_ctrl;
-extern act_kt act_self_ref;
-extern capability act_self_cap;
-extern queue_t * act_self_queue;
+#define AUTO_DEDUP_ALL_FUNCTIONS    0
+#define AUTO_DEDUP_STATS            0
+#define AUTO_COMPACT                0
+
+extern if_req_auth_t nanoreq_auth;
+
+extern __thread act_control_kt act_self_ctrl;
+extern __thread act_kt act_self_ref;
+extern __thread act_notify_kt act_self_notify_ref;
+extern __thread queue_t * act_self_queue;
+extern __thread user_stats_t* own_stats;
+
+extern int    was_secure_loaded;
+extern auth_t own_auth; // like a private key for a foundation
+extern found_id_t* own_found_id; // like a public key
+extern startup_flags_e default_flags;
+extern act_kt memmgt_ref;
+
+act_kt try_init_memmgt_ref(void);
+
 //TODO these should be provided by the linker/runtime
-extern void (*msg_methods[]);
-extern size_t msg_methods_nb;
-extern void (*ctrl_methods[]);
-extern size_t ctrl_methods_nb;
 
-void	object_init(act_control_kt self_ctrl, queue_t * queue, kernel_if_t* kernel_if_c);
+extern void __attribute__((weak)) (*msg_methods[]);
+extern size_t __attribute__((weak)) msg_methods_nb;
+extern void __attribute__((weak)) (*ctrl_methods[]);
+extern size_t __attribute__((weak)) ctrl_methods_nb;
+
+void    dylink_sockets(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_flags, int first_thread);
+void	object_init(act_control_kt self_ctrl, queue_t * queue,
+                    kernel_if_t* kernel_if_c, tres_t cds_res,
+                    startup_flags_e startup_flags, int first_thread);
+void    object_destroy();
+
+void object_init_post_compact(startup_flags_e startup_flags, int first_thread);
 
 void	ctor_null(void);
 void	dtor_null(void);
 
-void * get_idc_from_ref(capability act_ref, capability act_id);
-
 typedef struct sync_state_t {
-    capability sync_token;
-    capability sync_caller;
+    act_reply_kt sync_caller;
 } sync_state_t;
 
-_Static_assert(offsetof(sync_state_t, sync_token) == 0, "used by assembly");
-_Static_assert(offsetof(sync_state_t, sync_caller) == sizeof(capability), "used by assembly");
+_Static_assert(offsetof(sync_state_t, sync_caller) == 0, "used by assembly");
 
-extern sync_state_t sync_state;
+extern __thread sync_state_t sync_state;
 
-extern kernel_if_t kernel_if;
+extern __thread long msg_enable;
 
-extern long msg_enable;
-
+void next_msg(void);
+msg_t* get_message(void);
 void pop_msg(msg_t * msg);
+int msg_queue_empty(void);
+// A timeout of < 0 means wait forever. Timeout will return from the routine/
+
+#define MSG_ENTRY_TIMEOUT_ON_NOTIFY 1   // Notify is a timeout
+#define MSG_ENTRY_TIMEOUT_ON_MESSAGE 2  // Messages are timeout
+
+extern void msg_entry(int64_t timeout, int flags);
+void msg_delay_return(sync_state_t* delay_store);
+int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store);
+
+#if (LIGHTWEIGHT_OBJECT)
+#define LW_THR __thread
+#else
+#define LW_THR
+#endif
 
 #endif

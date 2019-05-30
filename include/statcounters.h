@@ -79,10 +79,9 @@ static inline void resetStatCounters (void)
 }
 
 #include <inttypes.h>
-#define DECLARE_GET_STAT_COUNTER(name,X,Y)  \
-inline uint64_t get_##name##_count (void)
-#define DEFINE_GET_STAT_COUNTER(name,X,Y)   \
-inline uint64_t get_##name##_count (void)					\
+
+#define DEFINE_GET_STAT_COUNTER(name,X,Y, ...)   \
+static inline uint64_t get_##name##_count (void)					\
 {										\
 	uint64_t ret;								\
 	__asm __volatile(".word (0x1f << 26) | (0x0 << 21) | (12 << 16) | ("#X" << 11) | ( "#Y"  << 6) | 0x3b\n" \
@@ -97,80 +96,47 @@ inline uint64_t get_##name##_count (void)					\
 
 /* Map to appropriate RDHWR indices */
 
-DECLARE_GET_STAT_COUNTER(cycle,2,0);
-DECLARE_GET_STAT_COUNTER(inst,4,0);
-DECLARE_GET_STAT_COUNTER(itlb_miss,5,0);
-DECLARE_GET_STAT_COUNTER(dtlb_miss,6,0);
-DECLARE_GET_STAT_COUNTER(icache_write_hit,8,0);
-DECLARE_GET_STAT_COUNTER(icache_write_miss,8,1);
-DECLARE_GET_STAT_COUNTER(icache_read_hit,8,2);
-DECLARE_GET_STAT_COUNTER(icache_read_miss,8,3);
-DECLARE_GET_STAT_COUNTER(icache_evict,8,6);
-DECLARE_GET_STAT_COUNTER(dcache_write_hit,9,0);
-DECLARE_GET_STAT_COUNTER(dcache_write_miss,9,1);
-DECLARE_GET_STAT_COUNTER(dcache_read_hit,9,2);
-DECLARE_GET_STAT_COUNTER(dcache_read_miss,9,3);
-DECLARE_GET_STAT_COUNTER(dcache_evict,9,6);
-DECLARE_GET_STAT_COUNTER(dcache_set_tag_write,9,8);
-DECLARE_GET_STAT_COUNTER(dcache_set_tag_read,9,9);
-DECLARE_GET_STAT_COUNTER(l2cache_write_hit,10,0);
-DECLARE_GET_STAT_COUNTER(l2cache_write_miss,10,1);
-DECLARE_GET_STAT_COUNTER(l2cache_read_hit,10,2);
-DECLARE_GET_STAT_COUNTER(l2cache_read_miss,10,3);
-DECLARE_GET_STAT_COUNTER(l2cache_evict,10,6);
-DECLARE_GET_STAT_COUNTER(l2cache_set_tag_write,10,8);
-DECLARE_GET_STAT_COUNTER(l2cache_set_tag_read,10,9);
-DECLARE_GET_STAT_COUNTER(mem_byte_read,11,0);
-DECLARE_GET_STAT_COUNTER(mem_byte_write,11,1);
-DECLARE_GET_STAT_COUNTER(mem_hword_read,11,2);
-DECLARE_GET_STAT_COUNTER(mem_hword_write,11,3);
-DECLARE_GET_STAT_COUNTER(mem_word_read,11,4);
-DECLARE_GET_STAT_COUNTER(mem_word_write,11,5);
-DECLARE_GET_STAT_COUNTER(mem_dword_read,11,6);
-DECLARE_GET_STAT_COUNTER(mem_dword_write,11,7);
-DECLARE_GET_STAT_COUNTER(mem_cap_read,11,8);
-DECLARE_GET_STAT_COUNTER(mem_cap_write,11,9);
-DECLARE_GET_STAT_COUNTER(tagcache_write_hit,12,0);
-DECLARE_GET_STAT_COUNTER(tagcache_write_miss,12,1);
-DECLARE_GET_STAT_COUNTER(tagcache_read_hit,12,2);
-DECLARE_GET_STAT_COUNTER(tagcache_read_miss,12,3);
-DECLARE_GET_STAT_COUNTER(tagcache_evict,12,6);
+#define STAT_ALL_LIST(ITEM, ...)\
+	ITEM(cycle,2,0,__VA_ARGS__)\
+	ITEM(inst,4,0,__VA_ARGS__)\
+	ITEM(itlb_miss,5,0,__VA_ARGS__)\
+	ITEM(dtlb_miss,6,0,__VA_ARGS__)\
+	ITEM(icache_write_hit,8,0,__VA_ARGS__)\
+	ITEM(icache_write_miss,8,1,__VA_ARGS__)\
+	ITEM(icache_read_hit,8,2,__VA_ARGS__)\
+	ITEM(icache_read_miss,8,3,__VA_ARGS__)\
+	ITEM(icache_evict,8,6,__VA_ARGS__)\
+	ITEM(dcache_write_hit,9,0,__VA_ARGS__)\
+	ITEM(dcache_write_miss,9,1,__VA_ARGS__)\
+	ITEM(dcache_read_hit,9,2,__VA_ARGS__)\
+	ITEM(dcache_read_miss,9,3,__VA_ARGS__)\
+	ITEM(dcache_evict,9,6,__VA_ARGS__)\
+	ITEM(dcache_set_tag_write,9,8,__VA_ARGS__)\
+	ITEM(dcache_set_tag_read,9,9,__VA_ARGS__)\
+	ITEM(l2cache_write_hit,10,0,__VA_ARGS__)\
+	ITEM(l2cache_write_miss,10,1,__VA_ARGS__)\
+	ITEM(l2cache_read_hit,10,2,__VA_ARGS__)\
+	ITEM(l2cache_read_miss,10,3,__VA_ARGS__)\
+	ITEM(l2cache_evict,10,6,__VA_ARGS__)\
+	ITEM(l2cache_set_tag_write,10,8,__VA_ARGS__)\
+	ITEM(l2cache_set_tag_read,10,9,__VA_ARGS__)\
+	ITEM(mem_byte_read,11,0,__VA_ARGS__)\
+	ITEM(mem_byte_write,11,1,__VA_ARGS__)\
+	ITEM(mem_hword_read,11,2,__VA_ARGS__)\
+	ITEM(mem_hword_write,11,3,__VA_ARGS__)\
+	ITEM(mem_word_read,11,4,__VA_ARGS__)\
+	ITEM(mem_word_write,11,5,__VA_ARGS__)\
+	ITEM(mem_dword_read,11,6,__VA_ARGS__)\
+	ITEM(mem_dword_write,11,7,__VA_ARGS__)\
+	ITEM(mem_cap_read,11,8,__VA_ARGS__)\
+	ITEM(mem_cap_write,11,9,__VA_ARGS__)\
+	ITEM(tagcache_write_hit,12,0,__VA_ARGS__)\
+	ITEM(tagcache_write_miss,12,1,__VA_ARGS__)\
+	ITEM(tagcache_read_hit,12,2,__VA_ARGS__)\
+	ITEM(tagcache_read_miss,12,3,__VA_ARGS__)\
+	ITEM(tagcache_evict,12,6,__VA_ARGS__)
 
-/* statcounters_bank */
-#define MAX_MOD_CNT 10
-typedef struct statcounters_bank
-{
-    uint64_t itlb_miss;
-    uint64_t dtlb_miss;
-    uint64_t cycle;
-    uint64_t inst;
-    uint64_t icache[MAX_MOD_CNT];
-    uint64_t dcache[MAX_MOD_CNT];
-    uint64_t l2cache[MAX_MOD_CNT];
-    uint64_t mipsmem[MAX_MOD_CNT];
-    uint64_t tagcache[MAX_MOD_CNT];
-} statcounters_bank_t;
 
-// reset statcounters XXX this literally resets the hardware counters (allowed
-// from user space for convenience but need not to be abused to be usefull)
-void reset_statcounters (void);
-// zero a statcounters_bank
-void zero_statcounters (statcounters_bank_t * const cnt_bank);
-// sample hardware counters in a statcounters_bank
-void sample_statcounters (statcounters_bank_t * const cnt_bank);
-// diff two statcounters_banks into a third one
-void diff_statcounters (
-    const statcounters_bank_t * const bs,
-    const statcounters_bank_t * const be,
-    statcounters_bank_t * const bd);
-// dump a statcounters_bank in a file (csv or human readable)
-int dump_statcounters (
-    const statcounters_bank_t * const b,
-    const char * const fname,
-    const char * const fmt);
-
-static inline const char * getprogname(void) {
-	return "progname";
-}
+STAT_ALL_LIST(DEFINE_GET_STAT_COUNTER)
 
 #endif

@@ -45,39 +45,145 @@
 
 #include "cheric.h"
 #include "ccall.h"
+#include "utils.h"
+#include "misc.h"
 
-    //TODO once we have proper linker support, we won't have to manually specify the interface like this
-    #define PLT_UNIQUE_OBJECT(name) name ## _ ## default_obj
+// FIXME: alias needs size too
+#define WEAK_DUMMY(name) ".weak " #name "_dummy \n"
+
+#define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias, alias2) \
+__asm__ (                       \
+    SANE_ASM                    \
+    ".text\n"                   \
+    ".p2align 3\n"              \
+    ".global " #name "\n"       \
+    ".ent " #name "\n"          \
+    "" #name ":\n"              \
+    alias                       \
+    WEAK_DUMMY(name)            \
+    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
+    "ccall       $c1, $c2, 2 \n"\
+    "nop\n"                     \
+    alias2                      \
+    ".end " #name "\n"          \
+);
+
+#define PLT_STUB_CGP_ONLY_MODE_SEL(name, obj, tls, tls_reg, alias, alias2) \
+__asm__ (                       \
+    SANE_ASM                    \
+    ".text\n"                   \
+    ".p2align 3\n"              \
+    ".global " #name "\n"       \
+    ".ent " #name "\n"          \
+    "" #name ":\n"              \
+    alias                       \
+    WEAK_DUMMY(name)            \
+    WEAK_DUMMY(obj)             \
+    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n" \
+    "clcbi       $c12,%capcall20(" EVAL5(STRINGIFY(obj)) "_dummy)($c25)\n"          \
+    "cjr         $c12                                 \n"                           \
+    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
+    alias2                      \
+    ".end " #name "\n"          \
+);
+
+typedef void common_t(void);
 
     #define PLT_GOT_ENTRY(name, ...) capability name;
-    #define CCALL_WRAP(name, ret, sig, ...)                                                     \
-                        __attribute__((cheri_ccall))                                            \
-                        __attribute__((cheri_method_suffix("_inst")))                           \
-                        __attribute__((cheri_method_class(PLT_UNIQUE_OBJECT(name))))            \
-                        ret name sig;
 
-    #define MAKE_DEFAULT(name, ...) extern struct cheri_object PLT_UNIQUE_OBJECT(name);
-    #define ALLOCATE_DEFAULT(name, ...) struct cheri_object PLT_UNIQUE_OBJECT(name);
+    #define PLT_UNIQUE_OBJECT(name) name ## _data_obj
 
-    #define INIT_OBJ(name, ret, sig, data)    \
-        PLT_UNIQUE_OBJECT(name).code = plt_if -> name;  \
-        PLT_UNIQUE_OBJECT(name).data = data;
+    #define DECLARE_STUB(name, ret, sig, ...) extern ret name sig; extern struct pltstub256 name ## _data;
 
-    #define DECLARE_PLT_INIT(type, LIST)                                \
-    static inline void init_ ## type (type* plt_if, capability data) {  \
-        LIST(INIT_OBJ, data)                                            \
+    #define GET_ALIAS(X, ...) X
+    #define GET_ALIAS2(Y,X,...) X
+    #define DEFINE_STUB(name, ret, sig, type, ST, tls, tls_reg, ...) ST(name, PLT_UNIQUE_OBJECT(type), tls, tls_reg, GET_ALIAS(__VA_ARGS__,), GET_ALIAS2(__VA_ARGS__,))
+
+    #define DECLARE_DEFAULT(type, per_thr) extern per_thr capability PLT_UNIQUE_OBJECT(type);
+    #define ALLOCATE_DEFAULT(type, per_thr) per_thr capability PLT_UNIQUE_OBJECT(type);
+
+    #define INIT_OBJ(name, ret, sig, ...)             \
+        __asm__ ("cscbi %[d], %%capcall20(" #name "_dummy)($c25)\n"::[d]"C"(plt_if -> name):);
+
+    #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
+    void init_ ## type (type* plt_if, capability data, capability trust_mode);      \
+    void init_ ## type ##_change_mode(capability trust_mode);                       \
+    void init_ ## type ##_new_thread(capability data);
+
+    #define PLT_INIT_MAIN_THREAD(type)  init_ ## type
+    #define PLT_INIT_NEW_THREAD(type) init_ ## type ##_new_thread
+
+    #define DEFINE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
+    void PLT_INIT_MAIN_THREAD(type)  (type* plt_if, capability data, capability trust_mode) {      \
+        __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
+        __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
+        LIST(INIT_OBJ)                                                                \
+    }\
+    void PLT_INIT_NEW_THREAD(type) (capability data) {      \
+            __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
+    }\
+    void init_ ## type ##_change_mode(capability trust_mode) {\
+    __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
     }
 
-    #define PLT(type, LIST)                 \
+    #define PLT_ty(type, LIST) \
     typedef struct                          \
     {                                       \
         LIST(PLT_GOT_ENTRY,)                \
-    } type;                                 \
-    LIST(MAKE_DEFAULT,)                     \
-    LIST(CCALL_WRAP,)                       \
-    DECLARE_PLT_INIT(type, LIST)
+    } type;
 
-    #define PLT_ALLOCATE(type, LIST) LIST(ALLOCATE_DEFAULT,)
+
+    #define DEFINE_F(name, ret, ty, ...) ret name ty;
+    #define PLT_define(LIST) LIST(DEFINE_F)
+
+    #define PLT_common(type, LIST, per_thr, tls_reg, tls)  \
+    PLT_ty(type, LIST)                      \
+    DECLARE_DEFAULT(type, per_thr)          \
+    LIST(DECLARE_STUB,)                     \
+    DECLARE_PLT_INIT(type, LIST, tls_reg, tls) \
+    DEFINE_DUMMYS(LIST) \
+    __attribute__((weak)) extern void type ## _data_obj_dummy(void);
+
+    #define DUMMY_HELP(name, ret, ty, ...) __attribute__((weak)) extern ret name ## _dummy ty;
+
+    // TODO could achieve lazy link by putting a suitable stub here. Otherwise these must be replaced before use
+    #define DEFINE_DUMMYS(LIST) LIST(DUMMY_HELP)
+    #define MAKE_DUMMYS(LIST)
+
+
+    #define PLT(type, LIST) PLT_common(type, LIST,, "$c25",)
+    #define PLT_thr(type, LIST) PLT_common(type, LIST,__thread,"$c26", "_tls")
+
+    #define PLT_ALLOCATE_common(type, LIST, thread_loc, tls, tls_reg, ST) \
+        ALLOCATE_DEFAULT(type, thread_loc)      \
+        DEFINE_PLT_INIT(type, LIST, tls_reg, tls)   \
+        MAKE_DUMMYS(LIST)                       \
+        LIST(DEFINE_STUB, type, ST, tls, tls_reg)
+
+
+    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_CSD)
+    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_MODE_SEL)
+    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB_CGP_ONLY_MODE_SEL)
+
+    // These are the mode stubs
+    extern void plt_common_single_domain(void);
+    extern void plt_common_complete_trusting(void);
+    extern void plt_common_trusting(void);
+    extern void plt_common_untrusting(void);
+
+    // This is the fully untrusting entry stub
+    extern void entry_stub(void);
+
+    #define OTHER_DOMAIN_FP(X) (&(X ## _dummy))
+    #define OTHER_DOMAIN_DATA(X) (typeof(PLT_UNIQUE_OBJECT(X)))(&(PLT_UNIQUE_OBJECT(X))) // The data is inlined into the table
+
+
+    typedef void init_if_func_t(capability plt_if, capability data, capability trust_mode);
+    typedef void init_if_new_thread_func_t(capability data);
+
+    #define INIT_OTHER_OBJECT(t) __CONCAT(init_other_object_ , t)
+    #define INIT_OTHER_OBJECT_IF_ITEM(ITEM, t, ...) ITEM(init_other_object_ ## t, int, (act_control_kt self_ctrl, mop_t mop, queue_t* queue, startup_flags_e start_flags), __VA_ARGS__)
 
 #else // __ASSEMBLY__
 
@@ -86,6 +192,7 @@
     .set enum_ctr, 0
     #define SET_NAME(NAME, ...) .set NAME ## _offset, (enum_ctr * CAP_SIZE); .set enum_ctr, enum_ctr + 1;
     #define PLT(type, LIST) LIST(SET_NAME,)
+    #define PLT_thr(type, LIST, ...) PLT(type, LIST)
 
 #endif // __ASSEMBLY__
 

@@ -32,12 +32,68 @@
 #define	__STDLIB_H__
 
 #include "cdefs.h"
+#include "capmalloc.h"
+#include "stdio.h"
+#include "assert.h"
 
-void *	malloc(size_t n);
-void *	calloc(size_t n, size_t s);
-void 	free(void * p);
+static inline capability malloc(size_t size) {
+    res_t res = cap_malloc(size);
+    _safe cap_pair pair;
+    rescap_take(res, &pair);
+    capability taken = pair.data;
+    assert_int_ex(cheri_getlen(taken), >=, size);
+    //taken = cheri_setbounds(taken, size); screws with free
+    return taken;
+}
+
+static inline capability malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) {
+    res_t res = cap_malloc_arena_dma(size, arena, dma_off);
+    _safe cap_pair pair;
+    rescap_take(res, &pair);
+    capability taken = pair.data;
+    return taken;
+}
+
+static inline capability malloc_debug(size_t size) {
+    capability r = malloc(size);
+    //printf("Allocated: "); CHERI_PRINT_CAP(r);
+    static int x = 0;
+    printf("Total malloc: %d", x++);
+    return r;
+}
+
+static inline void free(capability cap) {
+    cap_free(cap);
+}
+
+static inline void free_debug(capability cap) {
+    //printf("Freed:      "); CHERI_PRINT_CAP(cap);
+    static int x = 0;
+    printf("Total free: %d", x++);
+    cap_free(cap);
+}
+
+static inline void * calloc(size_t n, size_t s) {
+    return malloc(n * s);
+}
+
+static inline void * calloc_debug(size_t n, size_t s) {
+    return malloc_debug(n * s);
+}
 
 void 	abort(void)      __dead2;
 void	exit(int status) __dead2;
+
+char *  itoa ( int value, char * str, int base );
+int     atoi(const char* str);
+
+int     rand(void);
+
+void  qsort(void	*base, size_t nmemb, size_t size,
+int (*compar)(const void *, const void	*));
+
+//char *getenv(const char *name)
+
+#define getenv(name) NULL
 
 #endif /* !__STDLIB_H__ */

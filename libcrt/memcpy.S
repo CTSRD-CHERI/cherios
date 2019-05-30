@@ -41,7 +41,7 @@
 
 .macro ret
 #ifdef __CHERI_PURE_CAPABILITY__
-	cjr	$c17
+	ccall $c17, $c18, 2
 #else
 	jr	$ra
 #endif

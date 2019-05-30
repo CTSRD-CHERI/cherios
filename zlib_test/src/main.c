@@ -28,8 +28,13 @@
  * SUCH DAMAGE.
  */
 
-#include "lib.h"
+#include <cp0.h>
+#include "stdio.h"
+#include "assert.h"
 #include "zlib.h"
+#include "math.h"
+#include "string.h"
+#include "syscalls.h"
 
 #define MAX_CHUNK 0x4000
 static size_t CHUNK = 0;
@@ -45,7 +50,6 @@ static int fputs ( const char * str, FILE * stream ) {
 }
 
 static FILE * stdin = NULL;
-static FILE * stdout = NULL;
 
 #define BUFINLEN 0x10000
 static size_t bufinlen = BUFINLEN;
@@ -237,15 +241,6 @@ void zerr(int ret)
     }
 }
 
-register_t cp0_count_get(void)
-{
-	register_t count;
-
-	__asm__ __volatile__ ("dmfc0 %0, $9" : "=r" (count));
-	//__asm__ __volatile__ ("rdhwr %0, $2" : "=r" (count));
-	return (count & 0xFFFFFFFF);
-}
-
 void synctest(size_t chunk) {
 	assert(chunk <= MAX_CHUNK);
 	CHUNK = chunk;
@@ -276,7 +271,7 @@ void synctest(size_t chunk) {
 		dispout(stdout);
 	}
 	//__asm("li $0, 0x1337");
-	printf("zlib-test synctest %04lx done in %lx (%lx %lx)\n",
+	printf("zlib-test synctest %04lx done in %lx (%lx %x)\n",
 	       chunk, cp0_count_get()-count, count, cp0_count_get());
 }
 

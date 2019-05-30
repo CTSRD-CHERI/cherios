@@ -28,6 +28,8 @@
  * SUCH DAMAGE.
  */
 
+#include <math.h>
+#include "elf.h"
 #include "mips.h"
 #include "sys/mman.h"
 #include "object.h"
@@ -35,26 +37,70 @@
 #include "stdio.h"
 #include "assert.h"
 
-static act_kt memmgt_ref = NULL;
+act_kt memmgt_ref = NULL;
+LW_THR mop_t own_mop = NULL;
 
-static int _mmap(void *addr, size_t length, int prot, int flags, cap_pair* result) {
+act_kt try_init_memmgt_ref(void) {
+    if(memmgt_ref == NULL) {
+        memmgt_ref = namespace_get_ref(namespace_num_memmgt);
+    }
+    return memmgt_ref;
+}
+
+void commit_vmem(act_kt activation, size_t addr) {
 	if(memmgt_ref == NULL) {
 		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
 		assert(memmgt_ref != NULL);
 	}
-	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, prot, flags, addr, result, NULL, 0);
+	message_send(addr, 0, 0, 0, activation, NULL, NULL, NULL, memmgt_ref, SEND_SWITCH, 2);
 }
+
 
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
 	cap_pair pair;
+
+	assert(addr == NULL && "The old interface only supports an addr of null");
 
 	if((prot & PROT_EXECUTE) && (prot & PROT_WRITE)) {
 		assert(0 && "The old interface cannot return a single capability with both execute and write privs");
 	}
 
-	int res = _mmap(addr, length, prot, flags, &pair);
+	int perms = CHERI_PERM_ALL &
+				~(CHERI_PERM_EXECUTE|CHERI_PERM_LOAD|CHERI_PERM_STORE
+				  |CHERI_PERM_LOAD_CAP|CHERI_PERM_STORE_CAP|CHERI_PERM_STORE_LOCAL_CAP);
 
-	if(res == MAP_SUCCESS_INT) {
+	if(flags & MAP_PRIVATE) {
+		perms &= ~CHERI_PERM_GLOBAL;
+	} else if(flags & MAP_SHARED) {
+
+	} else {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	if(prot & PROT_READ) {
+		perms |= CHERI_PERM_LOAD;
+		if(!(prot & PROT_NO_READ_CAP))
+			perms |= CHERI_PERM_LOAD_CAP;
+	}
+	if(prot & PROT_WRITE) {
+		perms |= CHERI_PERM_STORE;
+		if(!(prot & PROT_NO_WRITE_CAP)) {
+			perms |= CHERI_PERM_STORE_CAP;
+			perms |= CHERI_PERM_STORE_LOCAL_CAP;
+		}
+	}
+
+	if(prot & PROT_EXECUTE) {
+		// Our system won't actually support W^X, we will lose one depending on where we derive from
+		perms |= CHERI_PERM_EXECUTE;
+	}
+
+	size_t req_length = align_up_to(length, RES_META_SIZE);
+	res_t res = mem_request(0, req_length, NONE, own_mop).val;
+
+	if(res != NULL) {
+		rescap_take(res, &pair);
 		if((prot & PROT_EXECUTE) == 0) {
 			return pair.data;
 		} else {
@@ -63,14 +109,119 @@ void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __un
 	} else return NULL;
 }
 
-int mmap_new(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset, cap_pair* result) {
-	return _mmap(addr, length, prot, flags, result);
+int munmap(void *addr, size_t length) {
+    return mem_release((size_t)addr, length, 1, own_mop);
 }
 
-int munmap(void *addr, size_t length) {
-	return MESSAGE_SYNC_SEND_r(memmgt_ref, length, 0, 0, addr, NULL, NULL, 1);
+res_t mmap_based_capmalloc(size_t s, Elf_Env* env) {
+	precision_rounded_length pr = round_cheri_length(s);
+	ERROR_T(res_t) result = mem_request(0, pr.length + pr.mask, NONE, env->handle);
+
+	if(!IS_VALID(result)) return NULL;
+
+	res_t res = reservation_precision_align(result.val, pr.length, pr.mask);
+
+	return res;
+}
+
+cap_pair mmap_based_alloc(size_t s, Elf_Env* env) {
+    assert(env != NULL);
+    assert(env->handle != NULL);
+	cap_pair p;
+
+    precision_rounded_length pr;
+
+    pr.mask = 0;
+
+    pr = round_cheri_length(s);
+
+	ERROR_T(res_t) res = mem_request(0, pr.length + pr.mask, NONE, env->handle);
+
+	if(!IS_VALID(res))  {
+		return NULL_PAIR;
+	}
+
+	res_t reser = reservation_precision_align(res.val, pr.length, pr.mask);
+
+	rescap_take(reser, &p);
+	return p;
+}
+
+int mmap_based_free(capability c, Elf_Env* env) {
+	return mem_release(cheri_getbase(c), cheri_getlen(c), 1, env->handle);
+}
+
+ERROR_T(res_t) mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return MAKE_VALID(res_t, message_send_c(base, length, flags, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 0));
+}
+
+ERROR_T(res_t) mem_request_phy_out(size_t base, size_t length, mem_request_flags flags, mop_t mop, size_t* phy_out) {
+    act_kt memmgt = try_init_memmgt_ref();
+    assert(memmgt != NULL);
+    assert(flags & (COMMIT_DMA | COMMIT_NOW));
+    _unsafe size_t out = (size_t)(-1);
+    ERROR_T(res_t) res = MAKE_VALID(res_t, message_send_c(base, length, flags, 0, mop, &out, NULL, NULL, memmgt, SYNC_CALL, 0));
+    *phy_out = out;
+    return res;
+}
+
+int mem_claim(size_t base, size_t length, size_t times, mop_t mop) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 5);
+}
+
+int mem_release(size_t base, size_t length, size_t times, mop_t mop) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 1);
+}
+
+ERROR_T(mop_t) mem_makemop_debug(res_t space, mop_t auth_mop, const char* debug_id) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return MAKE_VALID(mop_t, message_send_c(0, 0, 0, 0, space, auth_mop, __DECONST(capability, debug_id), NULL, memmgt, SYNC_CALL, 7));
+}
+ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop) {
+	return mem_makemop_debug(space, auth_mop, NULL);
+}
+
+int mem_reclaim_mop(mop_t mop_sealed) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(0, 0, 0, 0, mop_sealed, NULL, NULL, NULL, memmgt, SYNC_CALL, 9);
+}
+mop_t init_mop(capability mop_sealing_cap) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return message_send_c(0, 0, 0, 0, mop_sealing_cap, NULL, NULL, NULL, memmgt, SYNC_CALL, 6);
+}
+
+void get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop, cap_pair* result) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	message_send(base, length, (register_t )IO, (register_t)cached, mop, result, NULL, NULL, memmgt, SYNC_CALL, 8);
+}
+
+size_t mem_paddr_for_vaddr(size_t vaddr) {
+    assert(0 && "Depracated");
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (size_t)message_send(vaddr, 0, 0, 0, NULL, NULL, NULL, NULL, memmgt, SYNC_CALL, 4);
 }
 
 void mmap_set_act(act_kt ref) {
 	memmgt_ref = ref;
+}
+
+void mmap_set_mop(mop_t mop) {
+	own_mop = mop;
+}
+
+void mdump(void) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 3);
 }

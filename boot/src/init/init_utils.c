@@ -43,127 +43,14 @@
 #include "init.h"
 #include "namespace.h"
 #include "elf.h"
-
-/*Some "documentation" for the interface between the kernel and activation start                                        *
-* These fields are setup by the caller of act_register                                                                  *
-*                                                                                                                       *
-* a0    : user GP argument (goes to main)                                                                               *
-* c3    : user Cap argument (goes to main)                                                                              * *
-*                                                                                                                       *
-* These fields are setup by act_register itself. Although the queue is an argument to the function                      *
-*                                                                                                                       *
-* c21   : self control reference                                                 										*
-* c23   : namespace reference (may be null for init and namespace)                                                      *
-* c24   : kernel interface table                                                                                        *
-* c25   : queue                                                                                                        */
-
-
-static void * init_act_create(const char * name, void * c0, void * pcc, void * stack, queue_t * queue,
-							  register_t a0, capability c3) {
-	reg_frame_t frame;
-	memset(&frame, 0, sizeof(reg_frame_t));
-
-	/* set pc */
-	frame.cf_pcc	= pcc;
-	frame.mf_pc	= cheri_getoffset(pcc);
-
-	/* set stack */
-	frame.cf_c11	= stack;
-	frame.mf_sp	= cheri_getlen(stack);
-
-	/* set c12 */
-	frame.cf_c12	= frame.cf_pcc;
-
-	/* set c0 */
-	frame.cf_c0	= c0;
-
-	frame.mf_a0 = a0;
-	frame.cf_c3 = c3;
-
-	return syscall_act_register(&frame, name, queue);
-}
-
-static void * ns_ref = NULL;
-static void * ns_id  = NULL;
-
-static cap_pair elf_loader(Elf_Env *env, const char * file, size_t * entry) {
-	int filelen=0;
-	capability addr = load(file, &filelen);
-	if(!addr) {
-		printf("Could not read file %s", file);
-		return NULL_PAIR;
-	}
-	return elf_loader_mem(env, addr, NULL, NULL, entry);
-}
-
-static void *init_memcpy(void *dest, const void *src, size_t n) {
-	return memcpy(dest, src, n);
-}
-
-void * load_module(module_t type, const char * file, register_t arg, capability carg, init_info_t* info) {
-
-    size_t entry;
-    Elf_Env env = {
-            .alloc   = init_alloc,
-            .free    = init_free,
-            .printf  = printf,
-            .vprintf = vprintf,
-            .memcpy  = init_memcpy,
-    };
-
-	cap_pair prgmp = elf_loader(&env, file, &entry);
-
-	if(!prgmp.data) {
-		assert(0);
-		return NULL;
-	}
-
-	size_t low_bits = cheri_getbase(prgmp.data) & (0x20 - 1);
-
-	if(low_bits != 0) {
-		printf("ERROR: alignment of loaded file %s was %ld\n", file, low_bits);
-		assert(0);
-	}
-
-	size_t allocsize = cheri_getlen(prgmp.data);
-
-	size_t stack_size = 0x10000;
-	size_t stack_align = 0x40;
-	size_t queue_size = ((sizeof(queue_default_t) + stack_align - 1) / stack_align) * stack_align;
-	void * stack = init_alloc(stack_size).data;
-	if(!stack) {
-		assert(0);
-		return NULL;
-	}
-
-	/* Steal a few bytes from the bottom of the stack to use as the message queue */
-	queue_t* queue = (queue_t*)((char*)stack + stack_size - queue_size);
-
-	queue = cheri_setbounds(queue, queue_size);
-	stack = cheri_setbounds(stack, stack_size - queue_size);
-
-	void * pcc = cheri_getpcc();
-	pcc = cheri_setoffset(prgmp.code, entry);
-	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
-                              | CHERI_PERM_LOAD_CAP));
-
-    assert((cheri_getperm(pcc) & CHERI_PERM_EXECUTE) != 0);
-
-	void * ctrl = init_act_create(file, cheri_setoffset(prgmp.data, 0),
-	pcc, stack, queue, arg, carg);
-	if(ctrl == NULL) {
-		return NULL;
-	}
-
-	return ctrl;
-}
+#include "act_events.h"
 
 static int act_alive(capability ctrl) {
 	if(!ctrl) {
 		return 0;
 	}
 
-	status_e ret = SYSCALL_OBJ_void(syscall_act_ctrl_get_status, ctrl);
+	status_e ret = syscall_act_ctrl_get_status(ctrl);
 
 	if(ret == status_terminated) {
 		return 0;
@@ -176,13 +63,39 @@ int acts_alive(init_elem_t * init_list, size_t  init_list_len) {
 	for(size_t i=0; i<init_list_len; i++) {
 		init_elem_t * be = init_list + i;
 		if((!be->daemon) && act_alive(be->ctrl)) {
-            //sched_status_e sched = SYSCALL_OBJ_void(syscall_act_ctrl_get_sched_status, be->ctrl);
-            //printf("%s is alive (%d)\n", be->name, sched);
+            sched_status_e sched = syscall_act_ctrl_get_sched_status(be->ctrl);
+            printf("%s is alive (%x)\n", be->name, sched);
 			nb++;
-            break;
+            // break;
 		}
 	}
 	return nb;
+}
+
+void acts_wait_for_finish(init_elem_t * init_list, size_t  init_list_len) {
+    for (size_t i = 0; i < init_list_len; i++) {
+        init_elem_t * be = init_list + i;
+        if((!be->daemon) && act_alive(be->ctrl)) {
+            printf("%s is alive. Subscribing to its death...\n", be->name);
+            act_kt waiting_for = syscall_act_ctrl_get_ref(be->ctrl);
+            int sub = subscribe_terminate(waiting_for, act_self_ref, NULL, 0, 777);
+            assert_int_ex(-sub, ==, -SUBSCRIBE_OK);
+            if(!act_alive(be->ctrl)) {
+                unsubscribe_terminate(waiting_for, act_self_ref, 777);
+                continue;
+            }
+            msg_t* msg;
+            int now_dead;
+            do {
+                msg = get_message();
+                now_dead = msg->v0 == 777 && msg->c4 == waiting_for;
+                next_msg();
+                if(!now_dead) {
+                    printf("Got a weird event...\n");
+                }
+            } while(!now_dead);
+        }
+    }
 }
 
 int num_registered_modules(void) {

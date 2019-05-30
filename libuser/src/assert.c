@@ -35,7 +35,17 @@
 
 void __assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
-	printf(KRED"assertion failure in %s at %s:%d: %s"KRST"\n", assert_function,
+	char error_buf[200];
+	snprintf(error_buf, 200, KRED"assertion failure in %s at %s:%d: %s"KRST"\n", assert_function,
 			assert_file, assert_lineno, assert_message);
-	panic("assert failed");
+	panic(error_buf);
+}
+
+void __assert_int_ex(const char *assert_function, const char *assert_file,
+			  int assert_lineno, const char *am, const char *opm,const char *bm,
+                     unsigned long long int a, unsigned long long int b) {
+	char error_buf[200];
+	snprintf(error_buf, 200, KRED"assertion failure in %s at %s:%d: Expected %s (%llx) %s %s(%llx)"KRST"\n", assert_function,
+		   assert_file, assert_lineno, am, a, opm, bm, b);
+	panic(error_buf);
 }

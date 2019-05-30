@@ -36,11 +36,23 @@
 #include "queue.h"
 #include "assert.h"
 #include "syscalls.h"
+#include "thread.h"
+#include "mman.h"
 
 void libuser_init(act_control_kt self_ctrl,
 				  act_kt ns_ref,
 				  kernel_if_t* kernel_if_c,
-				  queue_t * queue) {
-	object_init(self_ctrl, queue, kernel_if_c);
+				  queue_t * queue,
+				  capability proc,
+				  mop_t mop,
+				  tres_t cds_res,
+				  startup_flags_e flags) {
+#if !(LIGHTWEIGHT_OBJECT)
+	proc_handle = proc;
+#else
+	(void)proc;
+#endif
+	mmap_set_mop(mop);
 	namespace_init(ns_ref);
+	object_init(self_ctrl, queue, kernel_if_c, cds_res, flags, 1);
 }

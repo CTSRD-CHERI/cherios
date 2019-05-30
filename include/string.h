@@ -38,9 +38,14 @@ void *	memcpy(void *dest, const void *src, size_t n);
 void *	memset(void *, int, size_t);
 char *	strchr(const char * s, int c);
 char *	strcpy(char * dest,const char *src);
+char *  strcat ( char * destination, const char * source );
+void *  memchr( const void * ptr, int value, size_t num );
 int	strcmp(const char *s1, const char *s2);
 size_t	strlen(const char *str);
 int	strncmp(const char * cs,const char * ct,size_t count);
 char *	strncpy(char * dest,const char *src,size_t count);
+char *  strstr(const char *s, const char *find);
+char *strpbrk(const char *str1, const char *str2);
 
+int memcmp ( const char * ptr1, const char * ptr2, size_t num );
 #endif /* !__STRING_H__ */

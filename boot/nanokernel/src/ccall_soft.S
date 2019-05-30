@@ -29,7 +29,7 @@
 #
 
 .set MIPS_SZCAP, _MIPS_SZCAP
-.include "asm.S"
+#include "asm.S"
 
 .section .trampoline_ccall, "ax"
 
@@ -37,69 +37,13 @@
 #include "exception_cause.h"
 
 #
-# Relocatable ccall vector; checks arguments, sets c12 <- pcc <- c1 and idc <- c2
-# This runs with KCC installed in PCC.
-#
+# Relocatable ccall vector; No longer used - now just an error.
 
-# Creturn does IF(unsealed($c17)) pcc <- $c17 ELSE c18 <- unseal(c18) ; pcc <- unseal(c17)
 		.global kernel_ccall_trampoline
 		.ent kernel_ccall_trampoline
 kernel_ccall_trampoline:
-# FIXME remove this when QEMU is fixed
-        dla $k0, 1f
-        csetoffset  $kr1c, $kcc, $k0
-        cjr $kr1c
+        b kernel_exception_trampoline
         nop
-
-        1:
-#demux ccall/return
-
-        cgetcause $k0
-        srl  $k0, $k0, 8
-        andi $k0, 0x1f
-        li   $k1, Return_Trap
-        beq  $k0, $k1, creturn_soft
-        nop
-
-ccall_soft:
-        cchecktype $c1, $c2
-        cgettype   $k0, $c1
-        csetoffset $kr1c, $kdc, $k0
-
-        # unseal c1 and c2
-        cunseal $epcc, $c1, $kr1c
-        cunseal $idc, $c2, $kr1c
-
-        b end
-        nop
-
-creturn_soft:
-		cgetsealed  $k0, $c17
-		beq         $k0, 0, trusting
-        nop
-
-untrusting:
-		cgettype   $k0, $c17
-        csetoffset $kr1c, $kdc, $k0
-
-        cunseal $epcc, $c17, $kr1c
-        cunseal $idc, $c18, $kr1c
-        b end
-        nop
-
-
-trusting:
-		cmove   $epcc, $17
-        cmove   $idc,  $18
-
-end:
-        # Counter eret bug
-        cgetoffset $k0, $epcc
-        dmtc0      $k0, $14
-
-        # return
-        eret
-
 kernel_ccall_trampoline_end:
 		nop
 		.global kernel_ccall_trampoline_end

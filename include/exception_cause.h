@@ -59,14 +59,15 @@
 	ITEM(Permit_Store_Local_Capability_Violation) \
 	ITEM(Permit_Seal_Violation) \
 	ITEM(Access_System_Registers_Violation) \
-	ITEM(reserved6) \
-	ITEM(reserved7) \
-	ITEM(reserved8) \
-	ITEM(reserved9) \
+	ITEM(Permit_CCall_Violation) \
+	ITEM(Access_CCall_IDC_Violation) \
+	ITEM(Permit_Unseal_Violation) \
+	ITEM(Permit_SetCID_Violation) \
 	ITEM(reserved10) \
 	ITEM(reserved11) \
 	ITEM(reserved12)
 
 DECLARE_ENUM(cap_cause_exception_t, CAP_CAUSE_LIST)
 
+#define CAP_CAUSE_NUM 32
 #endif //CHERIOS_EXCEPTION_CAUSE_H

@@ -51,11 +51,13 @@ SECTIONS
 	. += SIZEOF_HEADERS;
 
 	.boot ALIGN(CAP_ALIGN): {
+	    __boot_segment_start = .;
 		*(.boot)
 	} :boot = 0x0
 
 
 	.text ALIGN(CAP_ALIGN): {
+	    __text_segment_start = .;
 		*(.text)
 	} :text
 
@@ -66,6 +68,7 @@ SECTIONS
 	 * and use $pcc-relative loads, but we are not yet there.
 	 */
 	.MIPS.options ALIGN(PAGE_ALIGN): {
+	    __data_segment_start = .;
 		*(.MIPS.options)
 	} : data
 	.ctors ALIGN(CAP_ALIGN) : {
@@ -83,27 +86,18 @@ SECTIONS
 	.data ALIGN(CAP_ALIGN): {
 		*(.data)
 	} : data
-	_gp = ALIGN(CAP_ALIGN) + 0x7fc0;
-	.got : {
-		*(.got.plt)
-		*(.got)
-	} : data
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)
 	} : data
 
-	__start_bss = ADDR(.bss);
-	__stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
 
 	/*
 	 * No need to include anything after the following in the binary --
 	 * we just define symbols, and don't move '.'.
 	 */
-	__start_heap = ALIGN(__stop_bss, PAGE_ALIGN);
-	__stop_heap = ALIGN((__boot_load_virtaddr + __size_memory) - __size_boot_stack, PAGE_ALIGN);
-	__size_heap = __stop_heap - __start_heap;
-
-	__start_boot_stack	= __stop_heap;
-	__stop_boot_stack	= __start_boot_stack + __size_boot_stack;
-	__rest_of_memory	= __stop_boot_stack;
+	 __start_boot_stack = ALIGN(__stop_bss, PAGE_ALIGN);
+     __stop_boot_stack  = __start_boot_stack + __size_boot_stack;
 }

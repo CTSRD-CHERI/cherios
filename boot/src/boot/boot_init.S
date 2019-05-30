@@ -33,6 +33,13 @@
 .set nobopt
 .set noat
 
+#define __ASSEMBLY__ 1
+.set MIPS_SZCAP, _MIPS_SZCAP
+#include "asm.S"
+#include "mips.h"
+#include "assembly_utils.h"
+#include "macroutils.h"
+
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Enable capability coprocessor.  Set up a stack.  Jump
 # to various startup functions to initialise the C runtime, and then call
@@ -64,26 +71,23 @@ start:
     li      $t1, (0b111 << 5)
     or      $t0, $t0, $t1
 
+    # Set user interrupt bits
+    or      $t0, $t0, (0x3 << 8)
+
     mtc0		$t0, $12
-
-    .set N_TLB_ENTS, 32
-    # Setup the TLB so it won't break on first miss
-    dli     $t1, N_TLB_ENTS
-
-1:
-    move    $t0, $t1
-    dmtc0   $t0, $0
-    dmtc0   $t0, $10        # cretae a VPN 0, and a ASID of 77+i so it doesn't match anything else
-    tlbwi
-    bnez    $t1, 1b
-    daddiu  $t1, -1
 
 	# Wait for capability coprocessor to be enabled for real
 	nop; nop; nop; nop; nop; nop; nop; nop;
 
 	# Clear other capability registers to ensure we don't retain any
 	# executable capabilities: everything but $pcc and $c0.
+
+# In the current QEMU register 0 is $ddc, in hardware it is $c0 still
+#ifdef HARDWARE_qemu
 	CClearLo	0xfffe
+#else
+    CClearLo	0xffff
+#endif
 	CClearHi	0xffff
 
 	# W^X for pointers: ensure $c0 is never executable.
@@ -103,59 +107,139 @@ start:
 	csetoffset	$c12, $c12, $t0
 	cjr		$c12
 	nop
+
 cherios_init_jump_target:
 
-    # Nano kernel init will give us a pointer to its plt, and a default data capability
-    cmove       $c18, $c1
-    cmove       $c19, $c2
-    cmove       $c20, $c3
+#ifndef CHERI_LEGACY_COMPAT
+    dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_PERMS
+    dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BASE
+    dmtc0  $zero, MIPS_CP0_REG_REVOKE, MIPS_CP0_REG_REVOKE_BOUND
+#endif
+
+    # For BERI we need to enable the larger TLB first
+
+#ifndef HARDWARE_qemu
+    mfc0    $t0, MIPS_CP0_REG_CONFIG, 6
+    li      $t1, (1 << 2)
+    or      $t0, $t0, $t1
+    mtc0    $t0, MIPS_CP0_REG_CONFIG, 6
+#endif
+
+    # Setup the TLB so it won't break on first miss
+    invalidate_tlb  $t0, $t1
+
+#ifdef SMP_ENABLED
+
+    #FIXME this is for QEMU not FPGA
+	# Send SMP cores other than 0 to trap
+
+    dmfc0   $a0, $15, 1
+    andi    $a0, $a0, 0xff
+    bnez    $a0, bootload_smp_trap
+    nop
+
+    # Enter config mode
+
+    mfc0    $t2, MIPS_CP0_REG_MVPControl
+    ori     $t2, $t2, MVPControl_VPC
+    dli     $t1, ~MVPControl_EVP
+    and     $t2, $t2, $t1
+    mtc0    $t2, MIPS_CP0_REG_MVPControl
+
+    li      $t0, 1
+1:
+    SET_VPE_CONTROL_TargTC $t1, $t0
+
+    # Activate Thread
+    MFTC0(t1, MIPS_CP0_REG_TCStatusX)
+    li      $t3, TCStatus_A
+    or      $t1, $t1, $t3
+    MTTC0(t1, MIPS_CP0_REG_TCStatusX)
+
+    # Unhalt Thread
+    MFTC0(t1, MIPS_CP0_REG_TCHaltX)
+    MTTC0(zero, MIPS_CP0_REG_TCHaltX)
+
+    # Activate VPE
+    MFTC0(t1, MIPS_CP0_REG_VPEConf0X)
+    ori     $t1, $t1, VPEConf0_MVP | VPEConf0_VPA
+    MTTC0(t1, MIPS_CP0_REG_VPEConf0X)
+
+    daddiu  $t0, $t0, -1
+    bnez     $t0, 1b
+    nop
+
+    # Now exit config
+
+    xori     $t2, $t2, MVPControl_VPC | MVPControl_EVP
+    mtc0    $t2, MIPS_CP0_REG_MVPControl
+
+    # And enable things
+
+    EVPE
+#endif
+
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
 	dla		$t0, __start_boot_stack
 	dla		$t1, __size_boot_stack
-	cgetdefault	$c11
-	csetoffset	$c11, $c11, $t0
-	csetbounds	$c11, $c11, $t1
-	move		$sp, $t1
+	cgetdefault	    $c11
+	cincoffset	    $c11, $c11, $t0
+	csetboundsexact	$c11, $c11, $t1
+	cincoffset      $c11, $c11, $t1
 
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
-	# Zero BSS.
+	# Initialise globals. We need to use dla to call this function.
 	cgetpcc		$c12
-	dla		$t0, crt_init_bss
+	dla		$t0, crt_init_globals_boot
 	csetoffset	$c12, $c12, $t0
+    csetbounds  $idc, $c11, $zero # need non null
 	cjalr		$c12, $c17
-	nop
+	cmove   $c18, $idc
 
-	# Initialise globals.
-	cgetpcc		$c12
-	dla		$t0, crt_init_globals
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+    cmove   $idc, $c3
+
+	# Zero BSS.
+	cgetdefault $c3
+	call_func crt_init_boot_bss
 
 	# Call C constructors.
-	cgetpcc		$c12
-	dla		$t0, crt_call_constructors
-	csetoffset	$c12, $c12, $t0
- 	cjalr		$c12, $c17
-	nop
-
-	# We pass the nano kernel if / data cap and handle for the first context
-	dli		$a0, 0
-    cmove   $c3, $c20
-    cmove   $c4, $c18
-    cmove   $c5, $c19
+	call_func crt_call_constructors
 
 	# Call bootloader_main().
-	cgetpcc		$c12
-	dla		$t0, bootloader_main
-	csetoffset	$c12, $c12, $t0
-	cjalr		$c12, $c17
-	nop
+	cgetpccsetoffset $c3, $zero                     # Need this to operate a tmp alloc pool
+	call_func bootloader_main
 
-	# Bootloader done. Go in waiting state. #fixme: revoke object
-	cfromptr $c1, $c1, $0
-	creturn
+#ifdef SMP_ENABLED
+	# Trap for threads other than man
+bootload_smp_trap:
+
+    # a0 contains our CPU ID
+
+    # A vector of characters to signal when to exit this trap. 0 = spin. 1 = try exit. 2 = try exit
+    dla $t0, smp_signal_vector
+    daddu   $t0, $t0, $a0
+
+    # A vector of capabilities for when to go on exit
+    dla $t1, smp_destination_vector
+    dsll $a0, $a0, CAP_SIZE_BITS
+    daddu  $t1, $t1, $a0
+
+
+    # Spin until signal non zero
+bootload_smp_spin:
+    YIELD
+    nop
+    clb $t2, $t0, 0($c3)
+    beqz $t2, bootload_smp_spin
+    nop
+
+    # Load destination, and jump out while setting signal to 2
+    li  $t2, 2
+    clc $c4, $t1, 0($c3)
+    cjr $c4
+    csb $t2, $t0, 0($c3)
+#endif

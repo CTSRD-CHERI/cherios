@@ -18,10 +18,9 @@ set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
 if(NOT CHERI_SDK_DIR)
     # guess the location of CHERI SDK by looking for CheriSDKConfig and checking some guessed locations
     set(GUESSED_CHERISDK_LOCATIONS
-        /local/scratch/cheri/output/sdk256
-        $ENV{HOME}/sdk/sdk
+        /local/scratch/cheri/output/sdk
+        $ENV{HOME}/sdk/
         $ENV{HOME}/cheri/output/sdk
-        $ENV{HOME}/cheri/output/sdk256
     )
     # try to find clang in one of the guessed locations
     foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
@@ -42,7 +41,7 @@ if(CHERI_SDK_DIR)
     if(CheriSDK_FOUND)
         message(STATUS "Found CheriSDKConfig.cmake in ${CheriSDK_DIR}")
     else()
-        # message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
+        message(STATUS "Couldn't find CheriSDKConfig.cmake, setting variables manually")
         set(CheriSDK_SYSROOT_DIR "${CHERI_SDK_DIR}/sysroot")
         set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
         set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
@@ -61,11 +60,11 @@ if(NOT MAKEFS_PROGRAM)
     message(FATAL_ERROR "Could not find makefs program, please install it!")
 endif()
 
-option(BUILD_FOR_CHERI128 "build for cheri128" OFF)
+option(BUILD_FOR_CHERI128 "build for cheri128" ON)
 if(BUILD_FOR_CHERI128)
   set(CHERI_CPU cheri128)
 else()
-  set(CHERI_CPU cheri)
+  set(CHERI_CPU cheri256)
 endif()
 
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
@@ -93,11 +92,12 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 set(CMAKE_ASM_FLAGS_INIT "-mcpu=${CHERI_CPU}")
 set(CMAKE_C_FLAGS_INIT "-mcpu=${CHERI_CPU}")
 set(CMAKE_CXX_FLAGS_INIT "-mcpu=${CHERI_CPU}")
-set(CMAKE_EXE_LINKER_FLAGS "-mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -v -fuse-ld=lld -static"
+set(CMAKE_EXE_LINKER_FLAGS "-mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld -static"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 
 enable_language(C)
+enable_language(CXX)
 enable_language(ASM)
 
 include(CMakeParseArguments)
@@ -127,18 +127,63 @@ else()
     message(FATAL_ERROR "Invalid choice for HARDWARE: ${HARDWARE}")
 endif()
 
+option(MSGDMA "Use altera MSGDMA for the ethernet" OFF)
+
+if("${MSGDMA}")
+    set(MSGDMA_FLAGS -DSGDMA)
+endif()
+
+# Configure Multicore
+
+set(SMP_CORES "1" CACHE STRING "Number of virtual cores for target system")
+
+if("${SMP_CORES}" STREQUAL "1" OR (NOT ${SMP_CORES}))
+    set(SMP_FLAGS
+    )
+else()
+    set(SMP_FLAGS
+            -DSMP_ENABLED
+            -DSMP_CORES=${SMP_CORES}
+    )
+endif()
+
+# Configure net
+
+option(BUILD_WITH_NET "build with a network stack" ON)
+
+if(BUILD_WITH_NET)
+    set(BNET_FLAGS
+            -DBUILD_WITH_NET=1)
+else()
+    set(BNET_FLAGS
+            -DBUILD_WITH_NET=0)
+endif()
+
 include_directories(include)
 include_directories(include/sys)
+include_directories(elf/include)
+include_directories(sha256/include)
+include_directories(cherios/system/dylink/include)
+include_directories(cherios/system/lwip/include)
+include_directories(cherios/system/fatfs/include)
+include_directories(libcrt/include)
+include_directories(lwip/src/include)
+
+set(O_LVL 3)
+
 # set up the right flags for C and ASM sources
 set(ASMC_COMPILER_FLAGS
+    -DHARDWARE_${HARDWARE}
+    ${SMP_FLAGS}
+    ${BNET_FLAGS}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
-    -cheri-linker
+    -march=${CHERI_CPU}
+    -cheri-cap-table-abi=plt
     -integrated-as
     -msoft-float
     -fcolor-diagnostics
     -fno-pic
-    -v
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
 set(ASM_COMPILER_FLAGS
@@ -147,29 +192,26 @@ set(ASM_COMPILER_FLAGS
 )
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
+    -ftls-model=local-exec
     -nostdinc
-    -fno-builtin
+    -fomit-frame-pointer
     -ffreestanding
-    -mllvm
-    -mxmxgot
-    -mxgot
-    -O1 # TODO: make this depend on the configuration
-    -std=c11
-    -DHARDWARE_${HARDWARE}
+    -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
+    ${MSGDMA_FLAGS}
     -fpic
 )
 set(C_WARNING_FLAGS
     -Wall
     -Wextra
-    -Weverything
+    # -Weverything // Clang broken with this
 
     # Explicitly error out on constructs that would always result in a crash.
     -Werror=cheri-capability-misuse
     -Werror=implicit-function-declaration
     -Werror=format
     -Werror=undefined-internal
-
+    -Werror
     -Wcast-qual
     -Wdisabled-optimization
     -Winit-self
@@ -189,7 +231,13 @@ set(C_WARNING_FLAGS
     -Wno-dollar-in-identifier-extension
     -Wno-padded
     -Wno-switch-enum
-
+    # So sue me
+    -Wno-undef
+    -Wno-gnu-variable-sized-type-not-at-end
+    -Wno-gnu-zero-variadic-macro-arguments
+    -Wno-char-subscripts
+    -Wno-error=comment
+    -Wno-unused-function
     -Wno-error=cast-align
     -Wno-error=cast-qual
     -Wno-error=comma
@@ -201,7 +249,6 @@ set(C_WARNING_FLAGS
     -Wno-error=missing-prototypes
     -Wno-error=missing-variable-declarations
     -Wno-error=pedantic
-    -Wno-error=return-type
     -Wno-error=sign-conversion
     -Wno-error=unreachable-code
     -Wno-error=unreachable-code-break
@@ -210,9 +257,19 @@ set(C_WARNING_FLAGS
     -Wno-deprecated-declarations
     -Werror=mips-cheri-prototypes
 )
-set(C_COMPILER_FLAGS ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
+
+set(CXX_WARNING_FLAGS
+        -Wno-c++98-compat-pedantic
+        -Wno-old-style-cast
+        -Wno-c11-extensions
+        )
+
+set(CXX_COMPILER_FLAGS -std=c++14 -fno-rtti -fno-exceptions ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS} ${CXX_WARNING_FLAGS})
+set(C_COMPILER_FLAGS     -std=c11
+        ${C_COMPILER_FLAGS} ${C_WARNING_FLAGS})
 
 # Use the strange CMake generator expressions to set per-language compile flags
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:${CXX_COMPILER_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:C>:${C_COMPILER_FLAGS}>")
 add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 
@@ -228,8 +285,9 @@ function(add_to_filesystem _target)
     # copy the binary to the fs root directory
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
     # remove some sections to save place (TODO: make this depend on the configuration)
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
+    # NOTE: Had to comment these out as lld was not alligning offsets properly causing build failure.
+    # COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
+    # COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
     )
   # Using a CACHE INTERNAL variable ensures that changes are globally visible
   set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
@@ -248,10 +306,22 @@ function(add_cherios_executable _target)
   target_link_libraries(${_target} CheriOS::LibUser)
 endfunction()
 
+function(add_cherios_executable_early _target)
+    add_cherios_module(${_target} ${ARGN})
+    target_link_libraries(${_target} CheriOS::LibUserEarly)
+endfunction()
+
+function(add_cherios_executable_light _target)
+    add_cherios_module(${_target} ${ARGN})
+    target_link_libraries(${_target} CheriOS::LibUserLight)
+    target_compile_definitions(${_target} PUBLIC -DLIGHTWEIGHT_OBJECT=1)
+endfunction()
+
+
 function(add_cherios_kernel _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibCRT)
 endfunction()
 
 function(add_cherios_nano _target)
@@ -267,23 +337,43 @@ endfunction()
 function(add_cherios_init _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
 function(add_cherios_memmgr _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
 function(add_cherios_namespace _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} CheriOS::LibUserEarly)
 endfunction()
 
+function(make_usage _target)
+    add_custom_command( OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/${_target}_usage.S
+                        DEPENDS "${CMAKE_SOURCE_DIR}/generate_captable_usage.py" ${_target}
+                        COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-nm" "$<TARGET_FILE:${_target}>" | python "${CMAKE_SOURCE_DIR}/generate_captable_usage.py" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}_usage.S"
+    )
+endfunction()
+
+set(CLANG_LOAD "SHELL:-Xclang -load")
+set(CLANG_LIB_T "SHELL:-Xclang ${CHERI_SDK_DIR}/lib/libTemporal.so")
+set(CLANG_STATS "-save-stats=obj")
+set(TEMP_A "SHELL:-mllvm -TemporalType=analysis")
+set(TEMP_C "SHELL:-mllvm -TemporalType=capture_track")
+set(TEMP_64 "SHELL:-mllvm -TemporalExpandLimit=64")
+set(TEMP_16 "SHELL:-mllvm -TemporalExpandLimit=16")
+set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
+
 function(add_cherios_module _target)
-  cmake_parse_arguments(add_exe "ADD_TO_FILESYSTEM" "LINKER_SCRIPT" "SOURCES" ${ARGN})
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO)
+  set(oneValueArgs LINKER_SCRIPT)
+  set(multiValueArgs SOURCES)
+  cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
   if(NOT add_exe_LINKER_SCRIPT)
     message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
   elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
@@ -303,14 +393,28 @@ function(add_cherios_module _target)
     "-Wl,-T,${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}"
     )
   target_link_libraries(${_target}
-    -cheri-linker
     -G0
-    -mxgot
     -nostartfiles
     -nodefaultlibs
+    -mabi=purecap
+    -Wl,-z,norelro
     )
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
+  if(${add_exe_USE_LTO} OR ${add_exe_TEMPORAL_A})
+      # In order to do lto we need to pass all these flags
+      target_link_libraries(${_target}
+              -Wl,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+      )
+      target_compile_options(${_target} PUBLIC "-flto")
+  endif()
+
+  if(${add_exe_TEMPORAL_A})
+      target_link_libraries(${_target}
+          -Wl,-mllvm,-TemporalType=analysis,-mllvm,-TemporalExpandLimit=64
+      )
+  endif()
+
 
   # add it to the filesystem dir if requested
   if(add_exe_ADD_TO_FILESYSTEM)
@@ -318,28 +422,64 @@ function(add_cherios_module _target)
   endif()
   # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
   add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objdump" -x -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
     )
 endfunction()
 
+set(CHERIOS_DIR         "${CMAKE_SOURCE_DIR}/cherios")
+set(DRIVERS_DIR         "${CHERIOS_DIR}/drivers")
+set(INIT_ASM_DIR        "${CMAKE_SOURCE_DIR}/init_asm")
+set(UFS_DIR             "${CMAKE_SOURCE_DIR}/ufs")
+set(INIT_ASM            "${INIT_ASM_DIR}/init.S")
+set(PLT_ASM             "${CHERIOS_DIR}/system/dylink/src/stubs.S")
+set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/secure_init.S")
+set (LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lwip)
+include(lwip/src/Filelists.cmake)
+set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
 
 add_subdirectory(libuser)
 
-add_subdirectory(fatfs)
+add_subdirectory(cherios)
+
+
 add_subdirectory(hello)
-add_subdirectory(memmgt)
-add_subdirectory(namespace)
+#add_subdirectory(zlib)
+#add_subdirectory(zlib_test)
+
+add_subdirectory(churn)
+add_subdirectory(foundation_test)
+add_subdirectory(exception_test)
+add_subdirectory(unsafe_test)
+add_subdirectory(dedup_test)
+add_subdirectory(socket_test)
+add_subdirectory(fs_test)
+
+add_subdirectory(server)
+add_subdirectory(client)
+
+add_subdirectory(nginx)
+#nginx has too many
+target_compile_options(nginx PRIVATE
+        -Wno-cast-qual
+        -Wno-incompatible-pointer-types-discards-qualifiers
+        -Wno-unused-parameter
+        -Wno-pointer-sign
+        -Wno-cheri-bitwise-operations
+        -Wno-unused-variable
+        -Wno-sign-compare
+        -Wno-incompatible-pointer-types)
+
+add_subdirectory(top)
+add_subdirectory(nc_shell)
+
+add_subdirectory(benchmarks)
+
 #add_subdirectory(prga)
-add_subdirectory(sockets)
+#add_subdirectory(sockets)
 #add_subdirectory(test1a)
 #add_subdirectory(test1b)
 #add_subdirectory(test2a)
 #add_subdirectory(test2b)
 #add_subdirectory(test3)
-add_subdirectory(uart)
-add_subdirectory(virtio-blk)
-add_subdirectory(zlib)
-add_subdirectory(zlib_test)
 
-add_subdirectory(kernel)
 add_subdirectory(boot)
