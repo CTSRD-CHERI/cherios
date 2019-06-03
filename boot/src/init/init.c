@@ -50,7 +50,7 @@
 
 #define B_FS 0
 #define B_SO 0
-#define B_ZL 1
+#define B_ZL 0
 #define B_T1 0
 #define B_T2 0
 #define B_T3 0
