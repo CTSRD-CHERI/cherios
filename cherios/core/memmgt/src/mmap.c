@@ -222,11 +222,12 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
            (desc->prev) << UNTRANSLATED_BITS,
            desc->allocation_type == open_node ? "open" : (desc->allocation_type == allocation_node ? "allocation" :
                                                           (desc->allocation_type == internal_node ? "internal" : "tomb")));
-    if(desc->allocation_type == open_node) {
+    printf("|---Allocation length %lx\n", desc->allocated_length);
+    if(desc->allocated_length != 0) {
+        printf("|---");
         CHERI_PRINT_CAP(desc->reservation);
     }
     if(desc->allocation_type == allocation_node) {
-        printf("|---Allocation length %lx\n", desc->allocated_length << UNTRANSLATED_BITS);
         printf("|---Claimers: \n");
         FOREACH_CLAIMER(desc, index, claim) {
             if(claim->owner != NULL) {
@@ -643,7 +644,7 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 
 
         int left_alloc_node = left_desc->allocated_length != 0;
-        int right_alloc_node = left_desc->allocated_length != 0;
+        int right_alloc_node = right_desc->allocated_length != 0;
 
 
         if(! right_alloc_node || left_alloc_node) {
@@ -662,7 +663,6 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 
             right_desc->length = 0;
             right_desc->allocation_type = free_node;
-
 
             if(right_alloc_node) {
                 // FIXME
@@ -824,6 +824,7 @@ static vpage_range_desc_t* leaf_to_internal(vpage_range_desc_t* desc, size_t tra
     memcpy(sub_desc, desc, sizeof(vpage_range_desc_t));
     desc->sub_table = tbl;
     desc->reservation = NULL;
+    desc->allocated_length = 0;
     desc->allocation_type = internal_node;
 
     // The allocation pointers now need fixing. They point out correctly but do not point in correctly due to the move
@@ -861,9 +862,9 @@ static void push_in_index(size_t page_n, size_t prev, size_t length,
 
         desc->reservation = split_result->reservation;
         desc->allocation_type = split_result->type;
+        desc->allocated_length = 0;
 
         if(desc->allocation_type == allocation_node) {
-            desc->allocated_length = 0;
             transfer_claims(split_result->transfer_from, desc);
         }
 #ifdef MAX_POOLS
