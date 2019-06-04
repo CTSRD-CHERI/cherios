@@ -50,7 +50,7 @@
 
 #define B_FS 0
 #define B_SO 0
-#define B_ZL 1
+#define B_ZL 0
 #define B_T1 0
 #define B_T2 0
 #define B_T3 0
@@ -180,9 +180,10 @@ init_elem_t init_list[] = {
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH)
-    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
+// B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH)
     B_PENTRY(m_user, "nc_shell.elf", 0, BUILD_WITH_NET)
+    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
