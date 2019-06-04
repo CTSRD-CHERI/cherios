@@ -34,6 +34,7 @@
 #include "sys/types.h"
 #include "stdlib.h"
 #include "macroutils.h"
+#include "ansi_escapes.h"
 
 #define MAX_TRACK 100
 #define MAX_DISPLAY 30
@@ -45,20 +46,7 @@ int cmp(const void* a, const void* b) {
     return diff > 0 ? 1 : (int)(diff >> 32);
 }
 
-#define ANSI_ESC    "\x1B"
-#define ANSI_CURSOR_SAVE ANSI_ESC "7"
-#define ANSI_CURSOR_RESTORE ANSI_ESC "8"
 
-#define ANSI_ESC_C "\x1B["
-#define ANSI_CURSOR_PREV "F"
-#define ANSI_CURSOR_SET_WINDOW "r"
-#define ANSI_CURSOR_HOME "H"
-#define ANSI_SET_CURSOR  "H"
-#define ANSI_CLEAR_UP "1J"
-#define ANSI_CLEAR_ALL "2J"
-
-#define CTRL_START ANSI_CURSOR_SAVE ANSI_ESC_C ANSI_CURSOR_HOME
-#define CTRL_END ANSI_CURSOR_RESTORE
 
 #define STAT_STR_TOP(item, ...) "--------------"
 #define STAT_STR_MID(item, str, ...) "|" str "/ cpX "
