@@ -44,7 +44,7 @@
 #define CSR_STATUS_STOP_EARLY       (1 << 8)
 #define CSR_STATUS_IRQ              (1 << 9)
 
-#define CSR_CONTROL_STOP            (1 << 0)
+// #define CSR_CONTROL_STOP            (1 << 0)
 #define	CSR_CONTROL_RESET		    (1 << 1) /* Reset Dispatcher */
 #define CSR_CONTROL_STOP            (1 << 2)
 #define CSR_CONTROL_STOP_ON_EARLY   (1 << 3)

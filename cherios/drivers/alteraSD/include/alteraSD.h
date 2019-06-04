@@ -132,8 +132,8 @@ typedef struct {
 #define	ALTERA_SDCARD_OFF_ASR		564	/* Auxiliary Status Register */
 #define	ALTERA_SDCARD_OFF_RR1		568	/* Response R1 */
 
-_Static_assert(offsetof(altera_sd_mmio, cmd_arg) == ALTERA_SDCARD_OFF_CMD_ARG);
-_Static_assert(offsetof(altera_sd_mmio, cmd) == ALTERA_SDCARD_OFF_CMD);
+_Static_assert(offsetof(altera_sd_mmio, cmd_arg) == ALTERA_SDCARD_OFF_CMD_ARG, "check offsets");
+_Static_assert(offsetof(altera_sd_mmio, cmd) == ALTERA_SDCARD_OFF_CMD,  "check offsets");
 _Static_assert(offsetof(altera_sd_mmio, asr) == ALTERA_SDCARD_OFF_ASR, "check offsets");
 
 /*
