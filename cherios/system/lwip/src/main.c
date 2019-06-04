@@ -358,6 +358,10 @@ ssize_t tcp_ful_func(capability arg, char* buf, __unused uint64_t offset, uint64
     // TODO TCP_WRITE_FLAG_MORE may be useful here if we know that there is more coming
     err_t er = tcp_write(tcp->tcp_pcb, buf, (uint16_t)to_send, 0);
 
+    if(er == ERR_MEM) {
+        return 0;
+    }
+
     assert_int_ex(er, ==, ERR_OK);
 
     return to_send;
