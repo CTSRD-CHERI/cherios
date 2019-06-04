@@ -670,7 +670,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
     // To account for the fact that we have fast forwarded
     if(flags & F_START_FROM_LAST_MARK)
         required +=
-                (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & mask;
+                (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr);
 
 
     int un_authed = (requester->data_for_foundation && (requester->data_for_foundation != for_auth));
