@@ -102,7 +102,7 @@ int fputc(int character, FILE *f) {
 
     if(character == '\n' || (drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size)) {
         ssize_t flush = socket_flush_drb(f);
-        assert(flush >= 0);
+        assert(flush >= 0 || flush == E_SOCKET_CLOSED);
     }
 
     return character;

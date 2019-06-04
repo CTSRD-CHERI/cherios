@@ -36,10 +36,13 @@ int rand(void) {
 	return (int)syscall_now();
 }
 
+__dead2
 void abort(void) {
-	panic("abort");
+	syscall_act_terminate(act_self_ctrl);
+	for(;;){}
 }
 
+__dead2
 void exit(int status __unused) {
-	panic("exit");
+	object_destroy();
 }

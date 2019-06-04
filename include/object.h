@@ -72,7 +72,7 @@ void    dylink_sockets(act_control_kt self_ctrl, queue_t * queue, startup_flags_
 void	object_init(act_control_kt self_ctrl, queue_t * queue,
                     kernel_if_t* kernel_if_c, tres_t cds_res,
                     startup_flags_e startup_flags, int first_thread);
-void    object_destroy();
+void    object_destroy() __dead2;
 
 void object_init_post_compact(startup_flags_e startup_flags, int first_thread);
 

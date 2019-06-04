@@ -313,8 +313,7 @@ __unused ssize_t soft_flush(__unused FILE_t file) {
 
 ssize_t flush(FILE_t file) {
     if(file->con_type & CONNECT_PUSH_WRITE) {
-        ssize_t flush = socket_flush_drb(file);
-        assert(flush >= 0);
+        socket_flush_drb(file);
         socket_requester_wait_all_finish(file->write.push_writer, 0);
     }
     if(file->con_type & CONNECT_PULL_READ) {
