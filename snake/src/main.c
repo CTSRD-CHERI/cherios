@@ -48,7 +48,7 @@
     #define GAME_SPEED MS_TO_CLOCK(40)
 #endif
 
-
+#define PLAYER_NAME_LEN 16
 
 
 #define BSIZE (BWIDTH * BHEIGHT)
@@ -68,12 +68,22 @@ typedef struct {
     ssize_t dy;
 } diff_t;
 
+typedef enum state {
+    getting_name = 0,
+    need_spawn = 1,
+    playing = 2,
+    need_kill = 3,
+} state_e;
+
 struct player {
     ssize_t head;
     ssize_t tail;
     NET_SOCK ns;
     diff_t diff;
-    int need_kill;
+    state_e state;
+    uint16_t mod;
+    uint16_t name_index;
+    char name[PLAYER_NAME_LEN];
 } players[MAX_PLAYERS];
 size_t free_hd = 0;
 
@@ -81,10 +91,10 @@ size_t free_hd = 0;
 
 
 #define SET_BACK(ns, clr) fprintf((FILE*)ns, ANSI_ESC_C clr);
-void display_c(NET_SOCK ns, ssize_t indx, char c) {
+void display_c(NET_SOCK ns, ssize_t indx, char c1, char c2) {
     unsigned x = (unsigned)((X_I(indx) * 2) + 2);
     unsigned y = (unsigned)(Y_I(indx) + 2);
-    fprintf((FILE*)ns, ANSI_ESC_C "%d;%d" ANSI_SET_CURSOR "%c%c", y, x, c, c);
+    fprintf((FILE*)ns, ANSI_ESC_C "%d;%d" ANSI_SET_CURSOR "%c%c", y, x, c1, c2);
 }
 
 void display_board(NET_SOCK ns, board_t* board, ssize_t food) {
@@ -132,7 +142,7 @@ void display_board(NET_SOCK ns, board_t* board, ssize_t food) {
     fputc('\n', (FILE*)ns);
 
     SET_BACK(ns, ANSI_BACK_BLACK)
-    display_c(ns, food, '@');
+    display_c(ns, food, '@', '@');
 }
 
 extern ssize_t TRUSTED_CROSS_DOMAIN(snake_ful) (capability arg, char* buf, uint64_t offset, uint64_t length);
@@ -163,14 +173,43 @@ ssize_t snake_ful(capability arg, char* buf, __unused uint64_t offset, uint64_t 
     return length;
 }
 
+extern ssize_t TRUSTED_CROSS_DOMAIN(snake_getname) (capability arg, char* buf, uint64_t offset, uint64_t length);
+ssize_t snake_getname(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+    struct player* p = ((struct player*)arg);
+    size_t consumed = 0;
+
+    if(p->state != getting_name) return 0;
+
+    do {
+        char c = buf[consumed++];
+        if(c != '\n' && p->mod != PLAYER_NAME_LEN) {
+            p->name[p->mod++] = c;
+        } else {
+            if(p->mod == 0) {
+                memcpy(p->name, "I CANT TYPE", 11);
+                p->mod = 11;
+            }
+            p->state = need_spawn;
+            break;
+        }
+    } while(consumed != length);
+
+    return consumed;
+}
+
 void send_head(struct player* belongs_to, ssize_t ndx, int is_red) {
+    char c1 = belongs_to->name[belongs_to->name_index++ % belongs_to->mod];
+    //char c2 = belongs_to->name[belongs_to->name_index++ % belongs_to->mod];
+    char c2 = ' ';
+
     FOR_PLAYER(p) {
+        if(p->state != playing) continue;
         if(p == belongs_to) {
             SET_BACK(p->ns, ANSI_BACK_BLUE);
         } else if(!is_red) {
             SET_BACK(p->ns, ANSI_BACK_RED);
         }
-        display_c(p->ns, ndx, ' ');
+        display_c(p->ns, ndx, c1, c2);
         if(p == belongs_to) {
             SET_BACK(p->ns, ANSI_BACK_RED);
         }
@@ -179,17 +218,19 @@ void send_head(struct player* belongs_to, ssize_t ndx, int is_red) {
 
 void send_clear(ssize_t ndx, int is_black) {
     FOR_PLAYER(p) {
+        if(p->state != playing) continue;
         if(!is_black) {
             SET_BACK(p->ns, ANSI_BACK_BLACK);
         }
-        display_c(p->ns, ndx, ' ');
+        display_c(p->ns, ndx, ' ', ' ');
     }
 }
 
 void send_food(ssize_t ndx) {
     FOR_PLAYER(p) {
+        if(p->state != playing) continue;
         SET_BACK(p->ns, ANSI_BACK_BLACK);
-        display_c(p->ns, ndx, '@');
+        display_c(p->ns, ndx, '@', '@');
     }
 }
 
@@ -200,11 +241,10 @@ ssize_t next_head(ssize_t head, ssize_t dx, ssize_t dy) {
     return next;
 }
 
-struct player* alloc_player(NET_SOCK ns, board_t* board, ssize_t food) {
-    struct player* player;
-    player = &players[free_hd++];
 
-    ns->sock.flags &= ~MSG_DONT_WAIT;
+void spawn_player(struct player* player, board_t* board, ssize_t food) {
+
+    assert(player->state == need_spawn);
     ssize_t head, tail;
 
     player->diff = (diff_t){.dx = 1, .dy = 0};
@@ -214,14 +254,12 @@ struct player* alloc_player(NET_SOCK ns, board_t* board, ssize_t food) {
         head = next_head(tail, 1, 0);
     } while (board[head] != EMPTY_SLOT || board[tail] != EMPTY_SLOT);
 
-    player->ns = ns;
     player->head = head;
     player->tail = tail;
     player->diff = (diff_t){.dx = 1, .dy = 0};
-    player->need_kill = 0;
-
+    player->state = playing;
+    player->name_index = 0;
     // draw the board
-    printf("Drawing a board %lx\n", (size_t)ns);
     display_board(player->ns, board, food);
 
     // send the new pieces to everyone
@@ -234,7 +272,22 @@ struct player* alloc_player(NET_SOCK ns, board_t* board, ssize_t food) {
     send_head(player, head, 0);
     send_head(player, tail, 0);
 
+    printf("Spawn player!\n");
+}
+
+struct player* alloc_player(NET_SOCK ns) {
+    struct player* player;
+    player = &players[free_hd++];
+
+    player->ns = ns;
+    ns->sock.flags &= ~MSG_DONT_WAIT;
+    player->state = getting_name;
+    player->mod = 0;
+    player->head = EMPTY_SLOT;
     printf("New player!\n");
+
+
+    fprintf((FILE*)player->ns, "Welcome to CHERI-SNAKE! Type a name and hit enter. Use wasd to control.\n");
 
     return player;
 }
@@ -242,20 +295,21 @@ struct player* alloc_player(NET_SOCK ns, board_t* board, ssize_t food) {
 void kill_players(board_t* board) {
     int is_black = 0;
     for(size_t i = 0; i < free_hd; i++) {
-        if(players[i].need_kill) {
+        if(players[i].state == need_kill) {
             printf("Player died\n");
             fprintf((FILE*)players[i].ns, "DIE!\n");
-            ssize_t tail = players[i].tail;
 
-            do {
-                send_clear(tail, is_black);
-                is_black = 1;
-                ssize_t next_tail = board[tail];
-                board[tail] = EMPTY_SLOT;
-                tail = next_tail;
-            } while(tail != HEAD_SLOT);
+            if(players[i].head != EMPTY_SLOT) {
+                ssize_t tail = players[i].tail;
 
-
+                do {
+                    send_clear(tail, is_black);
+                    is_black = 1;
+                    ssize_t next_tail = board[tail];
+                    board[tail] = EMPTY_SLOT;
+                    tail = next_tail;
+                } while(tail != HEAD_SLOT);
+            }
             close((FILE_t)players[i].ns);
             players[i] = players[free_hd-1];
             free_hd--;
@@ -294,17 +348,31 @@ int main(__unused register_t arg, __unused capability carg) {
         if(free_hd != 0) {
             // Handle inputs
             FOR_PLAYER(p) {
-                ssize_t res = socket_fulfill_progress_bytes_unauthorised(p->ns->sock.read.push_reader, SOCK_INF, F_PROGRESS | F_CHECK | F_DONT_WAIT,
-                                                                         &TRUSTED_CROSS_DOMAIN(snake_ful), p, 0, NULL, NULL, TRUSTED_DATA,
-                                                                         NULL);
-                if(res == E_AGAIN) res = 0;
-                if(res < 0) p->need_kill = 1;
+                ssize_t res = 0;
+                if(p->state == playing || p->state == getting_name) {
+
+                    res = socket_fulfill_progress_bytes_unauthorised(p->ns->sock.read.push_reader, SOCK_INF, F_PROGRESS | F_CHECK | F_DONT_WAIT,
+                                                                             p->state == playing ? &TRUSTED_CROSS_DOMAIN(snake_ful) : &TRUSTED_CROSS_DOMAIN(snake_getname)
+                                                                             , p, 0, NULL, NULL, TRUSTED_DATA,
+                                                                             NULL);
+                    if(res == E_AGAIN) res = 0;
+                    if(res < 0) p->state = need_kill;
+                }
             }
+
+            // Spawn players
+
+            FOR_PLAYER(p) {
+                if(p->state == need_spawn) {
+                    spawn_player(p, board, food);
+                }
+            }
+
 
             // Move snakes (biased but who cares)
             int is_black = 0;
             FOR_PLAYER(p) {
-                if(p->need_kill) continue;
+                if(p->state != playing) continue;
 
                 ssize_t head = p->head;
                 ssize_t tail = p->tail;
@@ -314,7 +382,7 @@ int main(__unused register_t arg, __unused capability carg) {
                 int collide = board[next] != EMPTY_SLOT;
 
                 if(collide) {
-                    p->need_kill = 1;
+                    p->state = need_kill;
                     continue;
                 }
 
@@ -345,6 +413,7 @@ int main(__unused register_t arg, __unused capability carg) {
             // Draw in new heads (moved out of loop for less control characters)
             int is_red = 0;
             FOR_PLAYER(p) {
+                if(p->state != playing) continue;
                 send_head(p, p->head, is_red);
                 is_red = 1;
             }
@@ -360,8 +429,10 @@ int main(__unused register_t arg, __unused capability carg) {
 
             // Flush
             FOR_PLAYER(p) {
-                fprintf((FILE*)p->ns, ANSI_ESC_C "%d;%d" ANSI_SET_CURSOR, BHEIGHT + 3, 1);
-                socket_flush_drb(&p->ns->sock);
+                if(p->state == playing) {
+                    fprintf((FILE*)p->ns, ANSI_ESC_C "%d;%d" ANSI_SET_CURSOR, BHEIGHT + 3, 1);
+                    socket_flush_drb(&p->ns->sock);
+                }
             }
 
             // wait a bit
@@ -373,7 +444,7 @@ int main(__unused register_t arg, __unused capability carg) {
             NET_SOCK ns;
             do {
                 ns = netsock_accept(free_hd == 0 ? 0 : MSG_DONT_WAIT);
-                if(ns) alloc_player(ns, board, food);
+                if(ns) alloc_player(ns);
             } while(ns && free_hd != MAX_PLAYERS);
         }
 
