@@ -331,7 +331,7 @@ static void unlock(session_sock* ss, locked_t locked_data) {
 }
 
 ssize_t CROSS_DOMAIN(ff)(capability arg, char* buf, uint64_t offset, uint64_t length, capability extra_arg);
-ssize_t ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length, __unused capability extra_arg) {
+__used ssize_t ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length, __unused capability extra_arg) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -385,7 +385,7 @@ ssize_t ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length,
 }
 
 ssize_t CROSS_DOMAIN(ff_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf, capability extra_arg);
-ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length, char** out_buf, __unused capability extra_arg) {
+__used ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length, char** out_buf, __unused capability extra_arg) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -426,7 +426,7 @@ ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length, char**
 }
 
 ssize_t CROSS_DOMAIN(oobff)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t oobff(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
+__used ssize_t oobff(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
 
