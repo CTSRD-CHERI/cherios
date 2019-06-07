@@ -86,7 +86,11 @@
 
 # also in header
 
+#ifdef SHA_COPY
+.text # The nano kernel has only got bss and text!
+#else
 .data
+#endif
 
 .align 5
 .global k_words
@@ -471,10 +475,10 @@ ctoint      $s4, $c13
 #else
 
 ctoint      $s4, $c13
-csd         $v0, $zero, 0(OUT_CAP)
-csd         $v1, $zero, 8(OUT_CAP)
-csd         $t0, $zero, 16(OUT_CAP)
-csd         $t1, $zero, 24(OUT_CAP)
+csd         out_h0_1, $zero, 0(OUT_CAP)
+csd         out_h2_3, $zero, 8(OUT_CAP)
+csd         out_h4_5, $zero, 16(OUT_CAP)
+csd         out_h6_7, $zero, 24(OUT_CAP)
 CRETURN
 
 .end sha256
