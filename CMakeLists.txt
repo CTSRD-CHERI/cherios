@@ -493,6 +493,7 @@ add_subdirectory(nc_shell)
 add_subdirectory(snake)
 
 add_subdirectory(benchmarks)
+add_subdirectory(demos)
 
 #add_subdirectory(prga)
 #add_subdirectory(sockets)
