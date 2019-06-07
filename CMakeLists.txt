@@ -63,8 +63,10 @@ endif()
 option(BUILD_FOR_CHERI128 "build for cheri128" ON)
 if(BUILD_FOR_CHERI128)
   set(CHERI_CPU cheri128)
+  set(CAP_BYTES 16)
 else()
   set(CHERI_CPU cheri256)
+  set(CAP_BYTES 32)
 endif()
 
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
@@ -404,7 +406,7 @@ function(add_cherios_module _target)
   if(${add_exe_USE_LTO} OR ${add_exe_TEMPORAL_A})
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
-              -Wl,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+              -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
       )
       target_compile_options(${_target} PUBLIC "-flto")
   endif()
