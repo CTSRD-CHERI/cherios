@@ -32,9 +32,12 @@
 #include "bob_id.h"
 #include "stdio.h"
 #include "nano/foundations.h"
+#include "namespace.h"
+#include "alice_bob.h"
+#include "assert.h"
+#include "capmalloc.h"
+#include "lorem.h"
 
 int main(__unused register_t arg, __unused capability carg) {
-    printf("Alice thinks bob is:\n");
-    print_id(&bob_elf_id);
     return 0;
 }

@@ -31,6 +31,7 @@
 #define CHERIOS_IDNAMESPACE_H
 
 #include "namespace.h"
+#include "capmalloc.h"
 
 static int namespace_register_found_id_authed(int nb) {
     res_t res_for_cert = cap_malloc(RES_CERT_META_SIZE);

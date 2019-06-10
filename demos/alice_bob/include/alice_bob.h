@@ -30,11 +30,28 @@
 #ifndef CHERIOS_ALICE_BOB_H
 #define CHERIOS_ALICE_BOB_H
 
-#define VERY_SECRET_DATA "Hello bob, I am alice\n"
+#define VERY_SECRET_DATA "Hello Bob, I am Alice. What should I do?"
+#define PROPER_RESPONSE "Hello Alice, I am Bob. You should give money to charity."
 
-#define namespace_id_num_bob 0x11
+#define BOB_PORT_INSECURE           0
+#define BOB_PORT_SIGNED             1
 
-#define namespace_num_eve 0x73
-#define namespace_num_bob 0x74
+typedef struct {
+    char* message;
+    char* response;
+} by_ref_type;
+
+#define BOB_PORT_BY_REFERENCE       2
+
+typedef struct {
+    char* message;
+    capability nonce;
+    act_kt reply_to;
+} by_ref_type2;
+
+#define BOB_PORT_ASYNC              3
+
+
+#define BOB_PORT_SOCKET             4
 
 #endif //CHERIOS_ALICE_BOB_H

@@ -55,7 +55,7 @@
 #define B_T2 0
 #define B_T3 0
 
-#define B_DEMO 0
+#define B_DEMO 1
 
 #define B_BENCH 0
 
@@ -201,9 +201,11 @@ init_elem_t init_list[] = {
 
 #else
 // A much smaller set of programs for demo purposes
-    B_PENTRY(m_secure, "alice.elf", 0, 1)
-    B_PENTRY(m_secure, "eve.elf", 0, 1)
     B_PENTRY(m_secure, "bob.elf", 0, 1)
+    B_WAIT_FOR(namespace_num_bob)
+    B_PENTRY(m_secure, "eve.elf", 0, 1)
+    B_WAIT_FOR(namespace_num_eve)
+    B_PENTRY(m_secure, "alice.elf", 0, 1)
 #endif
 
 	{m_fence, 0, NULL, 0, 0, 0, NULL}
