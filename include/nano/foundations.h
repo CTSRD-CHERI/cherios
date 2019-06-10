@@ -52,4 +52,19 @@ static inline int found_id_equal(const found_id_t* id1, const found_id_t* id2) {
     return id1 == id2;
 }
 
+auth_types_t get_authed_typed(capability cap) {
+    uint64_t type = cheri_gettype(cap);
+
+    switch(type) {
+        case AUTH_PUBLIC_LOCKED:
+        case AUTH_CERT:
+        case AUTH_SINGLE_USE_CERT:
+        case AUTH_SYMETRIC:
+        case AUTH_INVOCABLE:
+            return (auth_types_t)type;
+        default:
+            return AUTH_INVALID;
+    }
+}
+
 #endif //CHERIOS_FOUNDATIONS_H
