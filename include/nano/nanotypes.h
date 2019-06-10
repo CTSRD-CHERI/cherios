@@ -360,6 +360,7 @@ typedef enum auth_types_e {
     AUTH_SINGLE_USE_CERT = FOUND_SINGLE_CERT,
     AUTH_SYMETRIC = FOUND_SYM_TYPE,
     AUTH_INVOCABLE = FOUND_INV_TYPE,
+    AUTH_INVALID
 } auth_types_t;
 
 static inline int is_of_authed_type(capability c, auth_types_t type) {

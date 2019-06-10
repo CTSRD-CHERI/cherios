@@ -27,16 +27,33 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_IDNAMESPACE_H
-#define CHERIOS_IDNAMESPACE_H
+#ifndef CHERIOS_ANSI_ESCAPES_H
+#define CHERIOS_ANSI_ESCAPES_H
 
-#include "namespace.h"
-#include "capmalloc.h"
+#define ANSI_ESC    "\x1B"
+#define ANSI_CURSOR_SAVE ANSI_ESC "7"
+#define ANSI_CURSOR_RESTORE ANSI_ESC "8"
 
-static int namespace_register_found_id_authed(int nb) {
-    res_t res_for_cert = cap_malloc(RES_CERT_META_SIZE);
-    cert_t cert = rescap_take_authed(res_for_cert, NULL, CHERI_PERM_ALL, AUTH_CERT, own_auth, (capability)(intptr_t)nb, NULL).cert;
-    return namespace_register_found_id(cert);
-}
+#define ANSI_ESC_C "\x1B["
+#define ANSI_CURSOR_PREV "F"
+#define ANSI_CURSOR_SET_WINDOW "r"
+#define ANSI_CURSOR_HOME "H"
+#define ANSI_SET_CURSOR  "H"
+#define ANSI_CURSOR_FORWARD "C"
+#define ANSI_ERASE "J"
+#define ANSI_CLEAR_UP "1J"
+#define ANSI_CLEAR_ALL "2J"
 
-#endif //CHERIOS_IDNAMESPACE_H
+#define CTRL_START ANSI_CURSOR_SAVE ANSI_ESC_C ANSI_CURSOR_HOME
+#define CTRL_END ANSI_CURSOR_RESTORE
+
+#define ANSI_BACK_BLACK "40m"
+#define ANSI_BACK_RED "41m"
+#define ANSI_BACK_GREEN "42m"
+#define ANSI_BACK_YELLOW "43m"
+#define ANSI_BACK_BLUE "44m"
+#define ANSI_BACK_MAGENTA "45m"
+#define ANSI_BACK_CYAN "46m"
+#define ANSI_BACK_WHITE "47m"
+
+#endif //CHERIOS_ANSI_ESCAPES_H

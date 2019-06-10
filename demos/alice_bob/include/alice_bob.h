@@ -27,16 +27,31 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_IDNAMESPACE_H
-#define CHERIOS_IDNAMESPACE_H
+#ifndef CHERIOS_ALICE_BOB_H
+#define CHERIOS_ALICE_BOB_H
 
-#include "namespace.h"
-#include "capmalloc.h"
+#define VERY_SECRET_DATA "Hello Bob, I am Alice. What should I do?"
+#define PROPER_RESPONSE "Hello Alice, I am Bob. You should give money to charity."
 
-static int namespace_register_found_id_authed(int nb) {
-    res_t res_for_cert = cap_malloc(RES_CERT_META_SIZE);
-    cert_t cert = rescap_take_authed(res_for_cert, NULL, CHERI_PERM_ALL, AUTH_CERT, own_auth, (capability)(intptr_t)nb, NULL).cert;
-    return namespace_register_found_id(cert);
-}
+#define BOB_PORT_INSECURE           0
+#define BOB_PORT_SIGNED             1
 
-#endif //CHERIOS_IDNAMESPACE_H
+typedef struct {
+    char* message;
+    char* response;
+} by_ref_type;
+
+#define BOB_PORT_BY_REFERENCE       2
+
+typedef struct {
+    char* message;
+    capability nonce;
+    act_kt reply_to;
+} by_ref_type2;
+
+#define BOB_PORT_ASYNC              3
+
+
+#define BOB_PORT_SOCKET             4
+
+#endif //CHERIOS_ALICE_BOB_H

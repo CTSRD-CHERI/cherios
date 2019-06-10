@@ -49,7 +49,7 @@ int lwip_driver_init_postup(net_session* session) {
     return 0;
 }
 
-void lwip_driver_handle_interrupt(net_session* session, register_t arg, register_t irq) {
+void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg, register_t irq) {
     // To read: Read data (triggers change of meta), then you can read meta
 
     ALTERA_FIFO* rx_fifo = &session->mmio->recv_fifo;
@@ -261,7 +261,7 @@ err_t lwip_driver_output_aligned(struct netif *netif, struct pbuf *p) {
     do {
         // TODO handle sealed payload
         uint32_t* payload = (uint32_t*)p->payload;
-        uint32_t* end = (uint32_t*)(p->payload + p->len);
+        uint32_t* end = (uint32_t*)((char*)p->payload + p->len);
 
         more = p->len != p->tot_len;
 

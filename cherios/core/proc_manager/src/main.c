@@ -62,6 +62,8 @@ static image* find_process(const char *name) {
 	return NULL;
 }
 
+// TODO now that we have a memory system, we should require the caller to allocate this struct.
+// TODO leaving it as use once for now
 static process_t* alloc_process(const char* name) {
 	assert(processes_end != MAX_PROCS);
 	loaded_processes[processes_end].name = name;
@@ -70,6 +72,26 @@ static process_t* alloc_process(const char* name) {
 
 process_t* seal_proc_for_user(process_t* process) {
 	return cheri_seal(process, sealer);
+}
+
+uint8_t alloc_thread_n(process_t* process) {
+	int8_t hd = process->free_hd;
+	uint8_t res;
+	if(hd >= 0) {
+		res = (uint8_t)hd;
+		hd++;
+	} else {
+		hd = ~hd;
+		res = (uint8_t)hd;
+		hd = *(int8_t*)(&process->threads[res]);
+	}
+	process->free_hd = hd;
+	return res;
+}
+
+void free_thread_n(process_t* process, uint8_t threadn) {
+	*(int8_t*)(&process->threads[threadn]) = process->free_hd;
+	process->free_hd = ~threadn;
 }
 
 process_t* unseal_proc(process_t* process) {
@@ -199,11 +221,19 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
 	act_kt act = syscall_act_ctrl_get_ref(ctrl);
 
+	process->n_threads++;
+
+	uint8_t thread_n = alloc_thread_n(process);
+
+	assert(thread_n != MAX_THREADS_PER_PROC);
+
     if(event_act == NULL) try_set_event_source();
 	if(event_act != NULL) {
-        int status = subscribe_terminate(act, act_self_ref, seal_proc_for_user(process), process->n_threads, 4);
+        int status = subscribe_terminate(act, act_self_ref, seal_proc_for_user(process), thread_n, 4);
         assert_int_ex(status, ==, SUBSCRIBE_OK);
     }
+
+	process->threads[thread_n] = ctrl;
 
 	return ctrl;
 }
@@ -214,7 +244,7 @@ act_control_kt create_thread(process_t * process, const char* name, register_t a
 
 	if(process->state != proc_started) return NULL;
 
-	assert(process->n_threads != MAX_THREADS);
+	assert(process->n_threads != MAX_THREADS_PER_PROC);
 
 	env.handle = process->mop;
 
@@ -223,7 +253,6 @@ act_control_kt create_thread(process_t * process, const char* name, register_t a
 	act_control_kt ctrl = create_activation_for_image(&process->im, name, arg, carg, pcc,
 													  stack_args, stack_args_size, process, cpu_hint, flags, found_cert);
 
-	process->threads[process->n_threads++] = ctrl;
 	return ctrl;
 }
 
@@ -238,8 +267,6 @@ process_t* create_process(const char* name, capability file, int secure_load) {
 	proc = alloc_process(name);
 
 	proc->state = proc_created;
-	proc->n_threads = 0;
-	proc->terminated_threads = 0;
 	proc->mop = make_mop_for_process(proc);
 
 	env.handle = proc->mop;
@@ -266,7 +293,6 @@ act_control_kt start_process(process_t* proc, register_t arg, capability carg, c
 	act_control_kt ctrl = create_activation_for_image(&proc->im, proc->name, arg, carg, pcc,
 													  stack_args, stack_args_size, proc, cpu_hint, flags, found_cert);
 
-	proc->threads[proc->n_threads++] = ctrl;
 	return ctrl;
 }
 
@@ -308,14 +334,16 @@ static void handle_termination(register_t thread_num, process_t* proc, __unused 
     proc = unseal_proc(proc);
 
 	assert(proc->state == proc_started);
-	assert(proc->threads[thread_num] != NULL);
+	assert(cheri_gettag(proc->threads[thread_num]));
 
 	printf("Process %s terminated thread %lx\n", proc->name, thread_num);
 
-	proc->threads[thread_num] = NULL;
-	proc->terminated_threads++;
+	free_thread_n(proc, thread_num);
 
-	if(proc->terminated_threads == proc->n_threads) {
+	proc->terminated_threads++;
+	proc->n_threads--;
+
+	if(proc->n_threads == 0) {
 		printf("Last thread terminated, killing process\n");
 		proc->state = proc_zombie;
 		int status = mem_reclaim_mop(proc->mop);

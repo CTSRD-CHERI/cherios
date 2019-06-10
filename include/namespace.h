@@ -35,13 +35,18 @@
 #include "types.h"
 #include "nano/nanotypes.h"
 
+// Get a reference to an activation by number
+act_kt	namespace_get_ref(int nb);
+
+// Get a foundation ID by number
+found_id_t* namespace_get_found_id(int nb);
+
+
 int     namespace_rdy(void);
 void	namespace_init(act_kt ns_ref);
 int	namespace_register(int nb, act_kt ref);
-act_kt	namespace_get_ref(int nb);
 int	namespace_get_num_services(void);
 int namespace_register_found_id(cert_t cert);
-found_id_t* namespace_get_found_id(int nb);
 
 extern act_kt namespace_ref;
 
@@ -68,9 +73,11 @@ static const int namespace_num_event_service = 0x61;
 static const int namespace_num_dedup_service = 0x62;
 
 static const int namespace_num_webserver = 0x70;
-
+static const int namespace_num_eve  = 0x71;
+static const int namespace_num_bob  = 0x72;
 
 static const int namespace_id_num_blockcache = 0x10;
+static const int namespace_id_num_bob = 0x11;
 
 
 #endif

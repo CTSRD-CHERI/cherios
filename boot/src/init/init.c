@@ -55,6 +55,8 @@
 #define B_T2 0
 #define B_T3 0
 
+#define B_DEMO 1
+
 #define B_BENCH 0
 
 #define B_BENCH_MS      0
@@ -152,8 +154,9 @@ init_elem_t init_list[] = {
     B_DENTRY(m_user, "exceptions.elf", 0, B_BENCH && B_BENCH_EXPS)
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
-	B_DENTRY(m_virtblk,	BLK_ELF,	0,	1)
-    B_DENTRY(m_secure | m_user, "block_cache.elf", 0, 1)
+	B_DENTRY(m_virtblk,	BLK_ELF,	0,	!B_DEMO)
+    B_DENTRY(m_secure | m_user, "block_cache.elf", 0, !B_DEMO)
+#if (B_DEMO == 0)
     B_WAIT_FOR(namespace_num_blockcache)
     B_PENTRY(m_virtnet, "lwip.elf", 0, 1 && BUILD_WITH_NET)
 	B_FENCE
@@ -180,9 +183,10 @@ init_elem_t init_list[] = {
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH)
-    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
+// B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH)
     B_PENTRY(m_user, "nc_shell.elf", 0, BUILD_WITH_NET)
+    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
@@ -193,6 +197,15 @@ init_elem_t init_list[] = {
 	T3(50) T3(51) T3(52) T3(53) T3(54) T3(55) T3(56) T3(57) T3(58) T3(59)
 	T3(60) T3(61) T3(62) T3(63) T3(64) T3(65) T3(66) T3(67) T3(68) T3(69)
 	T3(70) T3(71) T3(72) T3(73) T3(74) T3(75) T3(76) T3(77) T3(78) T3(79)
+#endif
+
+#else
+// A much smaller set of programs for demo purposes
+    B_PENTRY(m_secure, "bob.elf", 0, 1)
+    B_WAIT_FOR(namespace_num_bob)
+    B_PENTRY(m_secure, "eve.elf", 0, 1)
+    B_WAIT_FOR(namespace_num_eve)
+    B_PENTRY(m_secure, "alice.elf", 0, 1)
 #endif
 
 	{m_fence, 0, NULL, 0, 0, 0, NULL}

@@ -35,11 +35,6 @@
 #include "cheriplt.h"
 #include "nano/nanotypes.h"
 
-// FIXME as my understanding of how to use ccall has evolved I realise this has been done incorrectly
-// FIXME the data capability for a ccall should contain c0/a stack/a capability to unseal any arguments
-// FIXME therefore something like message send should have the target activation as an EXPLICIT argument
-// FIXME this will solve many issues. It has been done properly for the nano kernel
-
 #define SYS_CALL_LIST(ITEM, ...)                                                                                   \
         ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
                                         const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
@@ -88,9 +83,9 @@
 
 // Found by trial and error
 #ifdef HARDWARE_qemu
-        #define CLOCK_TO_US(X)  ((uint64_t)((X) >> 4))
-        #define CLOCK_TO_MS(X) (uint64_t)(X >> 14)
-        #define MS_TO_CLOCK(X) (((uint64_t)X) << 14)
+        #define CLOCK_TO_US(X)  ((uint64_t)((X) >> 5))
+        #define CLOCK_TO_MS(X) (uint64_t)(X >> 15)
+        #define MS_TO_CLOCK(X) (((uint64_t)X) << 15)
 #else
         #define CLOCK_TO_US(X)  ((uint64_t)((X) >> 6))
         #define CLOCK_TO_MS(X) (uint32_t)(X >> 16)

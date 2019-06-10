@@ -175,12 +175,30 @@ void hash_test(void) {
              0xa495991b7852b855
     );
 
-    TEST_STR(0x10, "Hello World!----",
+#define HELLO_STR "Hello World!----"
+    TEST_STR(0x10, HELLO_STR,
              0x269e4f72239aee77,
              0xa468234fe51600c1,
              0x75690beee5d8a699,
              0x460365f37df5b9a3
     );
+
+    // Check foundations get the right ID
+    res_t test_res = cap_malloc(FOUNDATION_META_SIZE(4, 0x10));
+
+    entry_t e = foundation_create(test_res, 0x10, (capability)cheri_setbounds_exact(aligned,0x10), 0, 4, 0);
+
+    assert(e != NULL);
+
+    found_id_t* fid = foundation_entry_get_id(e);
+
+    uint64_t* found_hash = (uint64_t *)fid->sha256;
+    assert_int_ex(found_hash[0], ==, 0x269e4f72239aee77);
+    assert_int_ex(found_hash[1], ==, 0xa468234fe51600c1);
+    assert_int_ex(found_hash[2], ==, 0x75690beee5d8a699);
+    assert_int_ex(found_hash[3], ==, 0x460365f37df5b9a3);
+
+    cap_free((test_res));
 }
 
 entry_t create(uint64_t* data, size_t length) {

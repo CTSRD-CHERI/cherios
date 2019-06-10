@@ -31,23 +31,13 @@
 #include <object.h>
 #include "cheric.h"
 #include "nano/usernano.h"
+#include "nano/foundations.h"
 #include "mman.h"
 #include "stdio.h"
 #include "stdlib.h"
 #include "string.h"
 #include "assert.h"
 #include "capmalloc.h"
-
-static void print_id(found_id_t* id) {
-    printf("hash:\n");
-    for(size_t i = 0; i < 32; i++) {
-        printf("%02x", (int)(id->sha256[i] & 0xFF));
-    }
-
-    printf("\n");
-
-    printf("entry: %lx. size:%lx. nent: %lx\n", id->e0, id->length, id->nentries);
-}
 
 static void secure_thread(__unused register_t arg, capability carg) {
     locked_t locked = (locked_t)carg;

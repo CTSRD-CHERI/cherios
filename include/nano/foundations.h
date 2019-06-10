@@ -27,16 +27,44 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_IDNAMESPACE_H
-#define CHERIOS_IDNAMESPACE_H
+#ifndef CHERIOS_FOUNDATIONS_H
+#define CHERIOS_FOUNDATIONS_H
 
-#include "namespace.h"
-#include "capmalloc.h"
+#include "nanotypes.h"
+#include "stdio.h"
 
-static int namespace_register_found_id_authed(int nb) {
-    res_t res_for_cert = cap_malloc(RES_CERT_META_SIZE);
-    cert_t cert = rescap_take_authed(res_for_cert, NULL, CHERI_PERM_ALL, AUTH_CERT, own_auth, (capability)(intptr_t)nb, NULL).cert;
-    return namespace_register_found_id(cert);
+static inline void print_id(const found_id_t* id) {
+    printf("hash:");
+    for(size_t i = 0; i < 32; i++) {
+        printf("%02x", (int)(id->sha256[i] & 0xFF));
+    }
+
+    printf("\n");
+
+    printf("entry: %lx. size:%lx. nent: %lx\n", id->e0, id->length, id->nentries);
 }
 
-#endif //CHERIOS_IDNAMESPACE_H
+static inline int found_id_metadata_equal(const found_id_t* id1, const found_id_t* id2) {
+    return memcmp((const char*)id1, (const char*)id2, sizeof(found_id_t)) == 0;
+}
+
+static inline int found_id_equal(const found_id_t* id1, const found_id_t* id2) {
+    return id1 == id2;
+}
+
+auth_types_t get_authed_typed(capability cap) {
+    uint64_t type = cheri_gettype(cap);
+
+    switch(type) {
+        case AUTH_PUBLIC_LOCKED:
+        case AUTH_CERT:
+        case AUTH_SINGLE_USE_CERT:
+        case AUTH_SYMETRIC:
+        case AUTH_INVOCABLE:
+            return (auth_types_t)type;
+        default:
+            return AUTH_INVALID;
+    }
+}
+
+#endif //CHERIOS_FOUNDATIONS_H

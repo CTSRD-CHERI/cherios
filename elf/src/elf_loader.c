@@ -223,7 +223,7 @@ cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum
 			}
 
         case storage_thread:
-            assert(out_elf->tls_size == 0 || out_elf->tls_num != MAX_THREADS);
+            assert(out_elf->tls_size == 0 || out_elf->tls_num != MAX_THREADS_FOR_OLD);
 			/* If secure loaded we did all TLS upfront */
             if(out_elf->tls_size != 0 && !IS_SECURE(out_elf)) {
 				TLS_copy(out_elf, out_elf->tls_num);
@@ -464,7 +464,7 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
         /* Round allocsize to tls_align */
         allocsize = align_up_to(allocsize, tls_align);
 		out_elf->tls_base = allocsize;
-		allocsize += (MAX_THREADS)*out_elf->tls_size;
+		allocsize += (MAX_THREADS_FOR_OLD)*out_elf->tls_size;
     }
 
 	out_elf->minaddr = lowaddr;

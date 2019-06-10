@@ -311,6 +311,8 @@ __asm__ ("csetboundsexact %[out], %[in], %[len]"                 \
 #define CHERI_PERM_SOFT_3		(1 << 17)
 #define CHERI_PERM_SOFT_4		(1 << 18)
 #define CHERI_PERM_ALL		 	((1 << (11 + U_PERM_BITS)) - 1)
+
+#define READ_ONLY(X) __DECONST(capability, cheri_andperm(X, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP))
 /*
  * Two variations on cheri_ptr() based on whether we are looking for a code or
  * data capability.  The compiler's use of CFromPtr will be with respect to
