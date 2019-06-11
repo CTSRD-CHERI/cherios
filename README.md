@@ -6,15 +6,23 @@ This is Lawrence Esswood's branch, it has now substantially diverged from the or
 
 ### Building CheriOS
 
-You need a Cheri SDK to build CheriOS.
+You need a Cheri SDK to build CheriOS. 
 
 The easiest way to get a CheriOS to work is by using [cheribuild], which will automically fetch all dependencies:
+
 ```sh
 $ cheribuild.py cherios -d
 ```
+
 This will, by default, build for QEMU 128, single core, without networking. Use the --cherios/smp-cores=X option to control the number of cores (1 and 2 have both been tested, but more should work). Use --cherios/build-net to enable networking.
 
 By default this will checkout all the projects to `$HOME/cheri` but this can be changed with `--source-root` or by using a JSON config file (`echo '{ "source-root": "/foo/bar" }' > ~/.config/cheribuild.json`). For more details see [the cheribuild README](https://github.com/CTSRD-CHERI/cheribuild/blob/master/README.md).
+
+Building some CheriOS components requires python3 and some extra python modules listed in requirements.txt in the root cherios directory. Run:
+
+```sh
+$ pip3 pip3 install -r requirements.txt
+```
 
 ### Running CheriOS
 
