@@ -148,7 +148,11 @@ INT_SIZES(define_intypes)
 #define UINT_MAX	ULONG_MAX
 
 #define	NBBY		8	/* Number of bits per byte. */
+#ifdef __cplusplus
+#define	NULL		nullptr
+#else
 #define	NULL		((void *)0)
+#endif
 
 /*
  * Useful addresses on MIPS.

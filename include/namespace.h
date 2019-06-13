@@ -32,15 +32,16 @@
 #ifndef CHERIOS_NAMESPACE_H
 #define CHERIOS_NAMESPACE_H
 
+#include "cdefs.h"
 #include "types.h"
 #include "nano/nanotypes.h"
 
+__BEGIN_DECLS
 // Get a reference to an activation by number
 act_kt	namespace_get_ref(int nb);
 
 // Get a foundation ID by number
 found_id_t* namespace_get_found_id(int nb);
-
 
 int     namespace_rdy(void);
 void	namespace_init(act_kt ns_ref);
@@ -78,6 +79,6 @@ static const int namespace_num_bob  = 0x72;
 
 static const int namespace_id_num_blockcache = 0x10;
 static const int namespace_id_num_bob = 0x11;
-
+__END_DECLS
 
 #endif

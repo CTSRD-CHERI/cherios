@@ -31,8 +31,11 @@
 #ifndef __STRING_H__
 #define	__STRING_H__
 
+#include "cdefs.h"
 #include "mips.h"
 
+
+__BEGIN_DECLS
 void	bzero(void *, size_t);
 void *	memcpy(void *dest, const void *src, size_t n);
 void *	memset(void *, int, size_t);
@@ -48,4 +51,6 @@ char *  strstr(const char *s, const char *find);
 char *strpbrk(const char *str1, const char *str2);
 
 int memcmp ( const char * ptr1, const char * ptr2, size_t num );
+__END_DECLS
+
 #endif /* !__STRING_H__ */

@@ -31,9 +31,12 @@
 #ifndef CHERIOS_SYSCALLS_H
 #define CHERIOS_SYSCALLS_H
 
+#include "cdefs.h"
 #include "string_enums.h"
 #include "cheriplt.h"
 #include "nano/nanotypes.h"
+
+__BEGIN_DECLS
 
 #define SYS_CALL_LIST(ITEM, ...)                                                                                   \
         ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
@@ -114,5 +117,7 @@ DECLARE_ENUM(shutdown_t, SHUTDOWN_TYPES_LIST)
 PLT_thr(kernel_if_t, SYS_CALL_LIST)
 
 #define ALLOCATE_PLT_SYSCALLS PLT_ALLOCATE_tls(kernel_if_t, SYS_CALL_LIST)
+
+__END_DECLS
 
 #endif //CHERIOS_SYSCALLS_H

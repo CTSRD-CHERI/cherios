@@ -40,6 +40,8 @@
 
 typedef unix_like_socket FILE;
 
+__BEGIN_DECLS
+
 extern __thread FILE * stderr;
 extern __thread FILE * stdout;
 
@@ -62,4 +64,6 @@ int	puts(const char *s);
 int	fputc(int character, FILE * stream);
 void	panic(const char *str) __dead2;
 void panic_proxy(const char *str, act_kt act) __dead2;
+
+__END_DECLS
 #endif /* !__STDIO_H__ */
