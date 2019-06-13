@@ -49,6 +49,8 @@ if(CHERI_SDK_DIR)
         set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
         set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
         set(CheriSDK_CXX "${CheriSDK_TOOLCHAIN_DIR}/clang++")
+        set(CheriSDK_AR "${CheriSDK_TOOLCHAIN_DIR}/llvm-ar")
+        set(CheriSDK_RANLIB "${CheriSDK_TOOLCHAIN_DIR}/llvm-ranlib")
     endif()
 endif()
 
@@ -75,6 +77,8 @@ endif()
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
+set(CMAKE_AR ${CheriSDK_AR})
+set(CMAKE_RANLIB ${CheriSDK_RANLIB})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # make sure we compile for cheri:
 set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
