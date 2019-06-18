@@ -324,6 +324,14 @@ int connect(unix_net_sock* socket, __unused const struct sockaddr *address,
 
     int found = 0;
 
+    struct tcp_bind server;
+
+    sockaddr_to_bind(address, &server);
+
+    int res = netsock_connect_tcp(&socket->bind, &server, socket);
+
+    assert(res == 0);
+
     do {
         if(msg_queue_empty()) {
             wait();

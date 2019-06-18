@@ -36,9 +36,13 @@
 #include "stdio.h"
 #include "capmalloc.h"
 #include "dylink.h"
+#include "bench_collect.h"
 
 #define SYNC_SAMPLES 0x1000
 #define SYNC_TIMES 0x3
+#define COLUMNS 2
+
+uint64_t vals[COLUMNS*SYNC_TIMES];
 
 // handler. Bump $a0, then return
 __asm__ (
@@ -62,7 +66,7 @@ int chandleint(__unused register_t cause, __unused register_t ccause, exception_
     return 0;
 }
 
-void do_test() {
+void do_test(uint64_t* column) {
     for(int tms = 0; tms != SYNC_TIMES; tms++) {
 
         // warm up
@@ -89,6 +93,10 @@ void do_test() {
 
         uint64_t diff2 = end - start;
 
+        *column = diff2;
+
+        column += COLUMNS;
+
         printf("******BENCH: call %x of %x (x%x) : %lx\n", tms+1, SYNC_TIMES, SYNC_SAMPLES, diff2);
     }
 
@@ -98,13 +106,23 @@ void do_test() {
 
 int main(__unused register_t arg, __unused capability carg) {
 
+    bench_start();
+
+    const char * hdrs[] = {"ASM("X_STRINGIFY(SYNC_SAMPLES)")", "C("X_STRINGIFY(SYNC_SAMPLES)")"};
+
+    bench_add_file(COLUMNS, "exceptions.csv", hdrs);
+
     register_exception_raw(&bench_exp_handle, get_ctl());
 
-    do_test();
+    do_test(vals + 0);
 
     register_vectored_exception(&chandleint, MIPS_CP0_EXCODE_TRAP);
 
-    do_test();
+    do_test(vals + 1);
+
+    bench_add_csv(vals, COLUMNS * SYNC_TIMES);
+
+    bench_finish();
 
     return 0;
 }

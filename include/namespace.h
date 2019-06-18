@@ -75,6 +75,7 @@ static const int namespace_num_dedup_service = 0x62;
 static const int namespace_num_webserver = 0x70;
 static const int namespace_num_eve  = 0x71;
 static const int namespace_num_bob  = 0x72;
+static const int namespace_num_bench = 0x73;
 
 static const int namespace_id_num_blockcache = 0x10;
 static const int namespace_id_num_bob = 0x11;

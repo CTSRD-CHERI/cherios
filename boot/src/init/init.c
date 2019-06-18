@@ -55,13 +55,13 @@
 #define B_T2 0
 #define B_T3 0
 
-#define B_DEMO 1
+#define B_DEMO 0
 
-#define B_BENCH 0
+#define B_BENCH 1
 
-#define B_BENCH_MS      0
-#define B_BENCH_CALLS   0
-#define B_BENCH_EXPS    0
+#define B_BENCH_MS      1
+#define B_BENCH_CALLS   1
+#define B_BENCH_EXPS    1
 
 const char* nginx_args[] = {"nginx",NULL};
 #define NGINX_ARGS_L 1
@@ -149,9 +149,6 @@ init_elem_t init_list[] = {
     B_WAIT_FOR(namespace_num_dedup_service)
     B_DENTRY(m_tman, "type_manager.elf",0,1)
     B_WAIT_FOR(namespace_num_tman)
-    B_DENTRY(m_user, "calls.elf", 0, B_BENCH && B_BENCH_CALLS)
-    B_DENTRY(m_user, "message_send.elf", 0, B_BENCH && B_BENCH_MS)
-    B_DENTRY(m_user, "exceptions.elf", 0, B_BENCH && B_BENCH_EXPS)
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	!B_DEMO)
@@ -166,6 +163,13 @@ init_elem_t init_list[] = {
 	B_WAIT_FOR(namespace_num_fs)
 #if(BUILD_WITH_NET)
     B_WAIT_FOR(namespace_num_tcp)
+#endif
+#if (B_BENCH)
+    B_DENTRY(m_user, "bench_collect.elf", 0, 1)
+    B_WAIT_FOR(namespace_num_bench)
+    B_DENTRY(m_user, "calls.elf", 0, B_BENCH_CALLS)
+    B_DENTRY(m_user, "message_send.elf", 0, B_BENCH_MS)
+    B_DENTRY(m_user, "exceptions.elf", 0, B_BENCH_EXPS)
 #endif
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)

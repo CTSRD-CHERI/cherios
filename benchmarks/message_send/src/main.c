@@ -34,9 +34,13 @@
 #include "msg.h"
 #include "stdio.h"
 #include "capmalloc.h"
+#include "bench_collect.h"
 
 #define SYNC_SAMPLES 0x1000
-#define SYNC_TIMES 0x10
+#define SYNC_TIMES 4
+#define COLUMNS 2
+
+uint64_t vals[COLUMNS*SYNC_TIMES];
 
 void null_func(void) {}
 
@@ -51,18 +55,7 @@ void become_untrust(capability sealer) {
     init_kernel_if_t_change_mode(&plt_common_untrusting);
 }
 
-void nothing() {
-    uint64_t start = syscall_bench_start();
-    uint64_t end = syscall_bench_end();
-
-    uint64_t diff1 = end - start;
-
-    printf("******BENCH: Nothing: %lx\n", diff1);
-}
-
-void send(act_kt sync_act) {
-
-    nothing();
+void send(act_kt sync_act, uint64_t* column) {
 
     for(int tms = 0; tms != SYNC_TIMES; tms++) {
 
@@ -86,6 +79,9 @@ void send(act_kt sync_act) {
 
         uint64_t diff2 = end - start;
 
+        *column = diff2;
+        column += COLUMNS;
+
         printf("******BENCH: SyncSend %x of %x (x%x) : %lx\n", tms+1, SYNC_TIMES, SYNC_SAMPLES, diff2);
     }
 
@@ -102,15 +98,26 @@ int main(__unused register_t arg, __unused capability carg) {
 
     syscall_provide_sync(cap_malloc(0x1000));
 
+    bench_start();
+
+    const char * hdrs[] = { "Trusting("X_STRINGIFY(SYNC_SAMPLES)")",
+                            "Untrusting("X_STRINGIFY(SYNC_SAMPLES)")"};
+
+    bench_add_file(COLUMNS, "messages.csv", hdrs);
+
     // Test sending
-    send(sync_act);
+    send(sync_act, vals+0);
 
     // become distrusting
     become_untrust(get_type_owned_by_process());
 
     message_send(0, 0, 0, 0, get_ctl()->cds, NULL,NULL, NULL, sync_act, SYNC_CALL, 1);
 
-    send(sync_act);
+    send(sync_act,vals+1);
+
+    bench_add_csv(vals, SYNC_TIMES * COLUMNS);
+
+    bench_finish();
 
     return 0;
 }

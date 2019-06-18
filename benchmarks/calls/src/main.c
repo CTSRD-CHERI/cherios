@@ -34,10 +34,13 @@
 #include "msg.h"
 #include "stdio.h"
 #include "capmalloc.h"
+#include "bench_collect.h"
+#include "macroutils.h"
 
 #define SYNC_SAMPLES 0x1000
 #define DUP         0x10
 #define SYNC_TIMES 0x3
+#define COLUMNS 6
 
 #define DD(X) X X X X X X X X X X X X X X X X
 
@@ -45,7 +48,9 @@ void null_func(void) {}
 
 typedef void void_f(void);
 
-void nothing() {
+uint64_t vals[COLUMNS*SYNC_TIMES];
+
+void nothing(uint64_t* column) {
     uint64_t start = syscall_bench_start();
     uint64_t end = syscall_bench_end();
     uint64_t start2 = syscall_bench_start();
@@ -53,9 +58,11 @@ void nothing() {
     uint64_t diff1 = end - start;
     uint64_t diff2 = end2 - start2;
     printf("******BENCH: Nothing: %lx, %lx\n", diff1, diff2);
+    column[0] = diff1;
+    column[COLUMNS] = diff2;
 }
 
-__attribute__((noinline)) void lib_calls(void_f* f) {
+__attribute__((noinline)) void lib_calls(void_f* f, uint64_t* column) {
 
     for(int tms = 0; tms != SYNC_TIMES; tms++) {
 
@@ -72,6 +79,9 @@ __attribute__((noinline)) void lib_calls(void_f* f) {
         size_t end = syscall_bench_end();
 
         uint64_t diff2 = end - start;
+
+        *column = diff2;
+        column+=COLUMNS;
 
         printf("******BENCH: call %x of %x (x%x) : %lx\n", tms+1, SYNC_TIMES, SYNC_SAMPLES, diff2);
     }
@@ -98,6 +108,18 @@ int main(__unused register_t arg, __unused capability carg) {
     get_ctl()->cds = get_type_owned_by_process();
     get_ctl()->cdl = &entry_stub;
 
+    // Start new benchmark
+    bench_start();
+
+    const char * hdrs[] = {"Nothing",
+              "Nano Calls("X_STRINGIFY(SYNC_SAMPLES)")",
+             "Trusting/Trusted("X_STRINGIFY(SYNC_SAMPLES)")",
+             "Trusting/Untrusted("X_STRINGIFY(SYNC_SAMPLES)")",
+             "Untrusting/Trusted("X_STRINGIFY(SYNC_SAMPLES)")",
+             "Untrusting/Untrusted("X_STRINGIFY(SYNC_SAMPLES)")"};
+
+    bench_add_file(COLUMNS, "calls.csv", hdrs);
+
     bench_t bench;
     bench.f1 = cheri_seal(&dummy_lib_f, get_ctl()->cds);
 
@@ -108,7 +130,7 @@ int main(__unused register_t arg, __unused capability carg) {
 
     init_bench_t(&bench, data_arg, &plt_common_trusting);
 
-    nothing();
+    nothing(vals);
 
     // Test nano call
 
@@ -116,21 +138,25 @@ int main(__unused register_t arg, __unused capability carg) {
 
     syscall_printf("BP should be : %lx\n", (size_t)&lib_calls);
 
-    lib_calls(&nano_dummy); // nano
+    lib_calls(&nano_dummy,vals+1); // nano
 
     // Test lib trusting
 
     printf("Trusting, trusted:");
-    lib_calls(&f1); // trusting, trusted
+    lib_calls(&f1, vals+2); // trusting, trusted
     printf("Trusting, untrusted:");
-    lib_calls(&f2); // trusting, untrusted
+    lib_calls(&f2, vals+3); // trusting, untrusted
 
     init_bench_t_change_mode(&plt_common_untrusting);
 
     printf("Untrusting, trusted:");
-    lib_calls(&f1); // untrusting, trusted
+    lib_calls(&f1, vals + 4); // untrusting, trusted
     printf("Untrusting, untrusted:");
-    lib_calls(&f2); // untrusting, untrusted
+    lib_calls(&f2, vals + 5); // untrusting, untrusted
+
+    bench_add_csv(vals, SYNC_TIMES * COLUMNS);
+
+    bench_finish();
 
     return 0;
 }
