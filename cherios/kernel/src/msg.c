@@ -206,9 +206,6 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 	sync_t sn = ccaller->sync_state.sync_token;
     sync_indirection* si = ccaller->sync_state.current_sync_indir;
 
-
-    if(sn > 0x700) kernel_printf("Sending from %s\n", ccaller->name);
-
     if(sn - si->sync_add == MAX_SEQ_NS) {
         si = alloc_new_indir(ccaller);
     }
