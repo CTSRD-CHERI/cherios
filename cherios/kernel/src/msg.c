@@ -236,7 +236,8 @@ static act_t* token_expected(capability token) {
     got += si->sync_add;
 
     if(ccaller->sync_state.sync_token != got) {
-		printf("got %lx. wanted %lx. (%p)\n", got, ccaller->sync_state.sync_token, &(ccaller->sync_state.sync_token));
+		printf("Returning to %s from %s got %lx. wanted %lx. (%p)\n", ccaller->name, ((act_t*)CALLER)->name,
+		        got, ccaller->sync_state.sync_token, &(ccaller->sync_state.sync_token));
 	}
 
     // We might get a multithreaded return attack, so we have to atomically update the sync token
