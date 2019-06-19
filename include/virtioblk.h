@@ -113,5 +113,10 @@ static inline size_t virtio_blk_size(void) {
 	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 4);
 }
 
+static inline void virtio_writeback_all(void) {
+	virtio_check_refs();
+	message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 6);
+}
+
 
 #endif // _VIRTIO_BLK_H

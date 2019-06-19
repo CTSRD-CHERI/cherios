@@ -98,6 +98,7 @@ typedef struct session_t {
     RINGBUF_DEF_BUF_STATIC(RB_RD);
     volatile uint64_t blockreads_ack;
     requester_t read_req;
+    requester_t write_req;
     // TODO a write requester
     DLL_LINK(session_t);
     block_cache_ent_t** block_cache;
@@ -155,11 +156,18 @@ static int vblk_init(session_t* session) {
     requester_t r = socket_malloc_requester_32(SOCK_TYPE_PULL, NULL);
     session->read_req = r;
 
+    requester_t write_req = socket_malloc_requester_32(SOCK_TYPE_PUSH, NULL);
+    session->write_req = write_req;
+
     socket_requester_set_drb_ptr(r, &session->blockreads_ack);
 
-    ret  = (int)message_send(SOCK_TYPE_PULL, 0, 0, 0, session->block_session, r, NULL, NULL, vblk_ref, SYNC_CALL, 5);
+    ret  = (int)message_send(CONNECT_PULL_READ, 0, 0, 0, session->block_session, r, NULL, NULL, vblk_ref, SYNC_CALL, 5);
     if(ret != 0) return ret;
     socket_requester_connect(r);
+
+    ret  = (int)message_send(CONNECT_PUSH_WRITE, 0, 0, 0, session->block_session, write_req, NULL, NULL, vblk_ref, SYNC_CALL, 5);
+    assert_int_ex(ret, ==, 0);
+    socket_requester_connect(write_req);
 
     // get size and allocate the cache map
     size_t size = (size_t)message_send(0, 0, 0, 0, session->block_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 4) * SECTOR_SIZE;
@@ -538,6 +546,40 @@ static void main_loop(void) {
     POLL_LOOP_END(sleep, any_event, 1, 0);
 }
 
+// Blocking call that writes everything back. Still need a more fine grained flush.
+static void writeback_all(session_t* session) {
+
+    session = unseal_session(session);
+    assert(session != NULL);
+    assert(session->state == initted);
+
+    size_t size = session->size;
+    size_t nblocks = (size + (BLOCK_SIZE-1)) >> BLOCK_BITS;
+    requester_t requester = session->write_req;
+
+    ssize_t res;
+
+    for(size_t i = 0; i != nblocks; i++) {
+        block_cache_ent_t* block_cache_ent = session->block_cache[i];
+        if(block_cache_ent != NULL && block_cache_ent->is_complete) {
+            size_t sector = (i << BLOCK_BITS) / SECTOR_SIZE;
+            res = socket_requester_space_wait(requester, 2, 0, 0);
+            assert(res == 0);
+
+            seek_desc sk;
+
+            sk.v.whence = SEEK_SET;
+            sk.v.offset = sector;
+
+            res = socket_request_oob(requester,REQUEST_SEEK,sk.as_intptr_t,0,0);
+            assert(res == 0);
+            res = socket_request_ind(requester,block_cache_ent->data,BLOCK_SIZE,0);
+            assert(res == 0);
+        }
+    }
+    socket_requester_wait_all_finish(requester, 0);
+}
+
 int main(__unused register_t arg, __unused capability carg) {
     while((vblk_ref = namespace_get_ref(namespace_num_virtio)) == NULL) {
         sleep(0);
@@ -557,7 +599,7 @@ int main(__unused register_t arg, __unused capability carg) {
     assert(0);
 }
 
-void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size, new_socket};
+void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size, new_socket, writeback_all};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, new_session, NULL, NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
