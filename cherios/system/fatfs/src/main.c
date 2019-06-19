@@ -461,6 +461,9 @@ void request_loop(void) {
 int main(capability fs_cap) {
     printf("Fatfs: Hello world\n");
 
+    // Still have to do this manually when we send too much
+    syscall_provide_sync(cap_malloc(0x1000));
+
     /* Init virtio-blk session */
     virtio_blk_session(fs_cap);
 
@@ -480,6 +483,7 @@ int main(capability fs_cap) {
             printf("MK:%d\n", res);
             goto er;
         }
+        virtio_writeback_all(); // Persists the empty FS.
     } else {
         already_existed = 1;
     }
