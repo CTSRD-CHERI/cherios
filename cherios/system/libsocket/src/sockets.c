@@ -754,8 +754,9 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 ret = 0;
                 if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with sub visit\n");
                 // User can sub their own buffers. Keep getting them and pushing as requests
-                char* user_buf; // FIXME: This is the unsafe thing. It would be preferable to return this.
-
+                _safe char* user_buf; // FIXME: This is the unsafe thing. It would be preferable to return this.
+                                // FIXME: It should be perfectly possible to return a pair, but compiler does not support this.
+                                // FIXME: For now just (falsely) mark it as safe
                 while((size_t)ret != bytes_to_process) {
 
                     sub_ret = socket_internal_requester_space_wait(push_to, 1, flags & F_DONT_WAIT, 0);
@@ -1183,6 +1184,32 @@ static void socket_internal_request_cancel_wait(uni_dir_socket_requester* reques
     requester->fulfiller_component.requester_waiting = NULL;
 }
 
+enum poll_events socket_internal_request_poll(struct uni_dir_socket_requester* requester, enum poll_events io, int set_waiting, uint16_t space) {
+    if(!requester) return POLL_NVAL;
+
+    // Wait until there is something to request
+
+    enum poll_events ret = POLL_NONE;
+
+    if(!requester->connected) return POLL_NVAL;
+
+    if(space == SPACE_AMOUNT_ALL) space = requester->buffer_size;
+
+    if(io) {
+        if(!set_waiting) socket_internal_request_cancel_wait(requester);
+
+        int wait_res = socket_internal_requester_space_wait(requester,space, !set_waiting, 1);
+
+        if(wait_res == 0) ret |= io;
+        else if(wait_res == E_AGAIN) return ret;
+        else if(wait_res < 0) ret |= POLL_ER;
+    } else {
+        if(requester->requester_closed || requester->fulfiller_component.fulfiller_closed) ret |= POLL_HUP;
+    }
+
+    return ret;
+}
+
 static enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* fulfiller, enum poll_events io, int set_waiting, int from_check, int in_proxy) {
     // Wait until there is something to fulfill and we are not proxying
     enum poll_events ret = POLL_NONE;
@@ -1216,6 +1243,10 @@ static enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* f
                     uni_dir_socket_fulfiller* proxy = req->request.proxy_for;
                     enum poll_events proxy_events = socket_internal_fulfill_poll(proxy, io, set_waiting, from_check, 1);
                     ret |= proxy_events;
+                } else if(req->type == REQUEST_JOIN) {
+                    struct uni_dir_socket_requester* joined = req->request.push_to;
+                    enum poll_events proxy_events = socket_internal_request_poll(joined, io, set_waiting, 1);
+                    ret |= proxy_events;
                 } else ret |= io;
             }
 
@@ -1244,29 +1275,7 @@ __attribute__((used))
 enum poll_events socket_request_poll(requester_t r, enum poll_events io, int set_waiting, uint16_t space) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
 
-    if(!requester) return POLL_NVAL;
-
-    // Wait until there is something to request
-
-    enum poll_events ret = POLL_NONE;
-
-    if(!requester->connected) return POLL_NVAL;
-
-    if(space == SPACE_AMOUNT_ALL) space = requester->buffer_size;
-
-    if(io) {
-        if(!set_waiting) socket_internal_request_cancel_wait(requester);
-
-        int wait_res = socket_internal_requester_space_wait(requester,space, !set_waiting, 1);
-
-        if(wait_res == 0) ret |= io;
-        else if(wait_res == E_AGAIN) return ret;
-        else if(wait_res < 0) ret |= POLL_ER;
-    } else {
-        if(requester->requester_closed || requester->fulfiller_component.fulfiller_closed) ret |= POLL_HUP;
-    }
-
-    return ret;
+    return socket_internal_request_poll(requester, io, set_waiting, space);
 }
 
 __attribute__((used))
