@@ -288,7 +288,11 @@ end_bytes:
 
 1:
 
-# Finish folding down to 2
+# Finish folding down to 2 (might need to happen twice?)
+    dsrl        $a2, $a1, 16
+    andi        $a1, $a1, 0xFFFF
+    daddu       $a1, $a1, $a2
+
     dsrl        $a2, $a1, 16
     andi        $a1, $a1, 0xFFFF
 
