@@ -472,7 +472,7 @@ __used ssize_t oobff(capability arg, request_t* request, __unused uint64_t offse
 }
 
 
-static void handle_sock_session(session_sock* ss) {
+static int handle_sock_session(session_sock* ss) {
 
     static cert_t cert = NULL;
 
@@ -493,10 +493,11 @@ static void handle_sock_session(session_sock* ss) {
             F_CHECK | F_DONT_WAIT | F_PROGRESS,
             cert, (capability)ss, 0);
 
-    if(res == E_AGAIN) return;
+    if(res == E_AGAIN) return 0;
 
     assert_int_ex(res, >=, 0);
 
+    return res ? 1 : 0;
 }
 
 static int vblk_read(session_t* session, void * buf, size_t sector) {
@@ -539,7 +540,11 @@ static void main_loop(void) {
             if(s->should_poll) {
                 POLL_ITEM_R(event, sleep, any_event, s->read_req, POLL_OUT, 32);
                 if(event) {
-                    handle_callbacks(s);
+                    if(event & POLL_OUT) {
+                        handle_callbacks(s);
+                    } else {
+                        assert(0);
+                    }
                 }
             }
         }
