@@ -44,6 +44,7 @@
 
 /* TODO: Alleviate some burden from the system by caching claims for objects in the same range */
 
+#include <nano/nanokernel.h>
 #include "capmalloc.h"
 #include "math.h"
 #include "nano/nanotypes.h"
@@ -348,15 +349,38 @@ static res_t alloc_from_dynamic(size_t size, arena_t* arena, size_t* dma_off) {
 
 static res_t allocate_with_request(size_t size, size_t* dma_off) {
     if(try_init_memmgt_ref() == NULL) return NULL;
-    size_t aligned_size = align_up_to(size, RES_META_SIZE);
+
+    precision_rounded_length pr = round_cheri_length(align_up_to(size,RES_META_SIZE));
+
+    size_t aligned_size = pr.length;
+
+    res_t res;
+
     if(!dma_off) {
-        res_t res = mem_request(0, aligned_size, COMMIT_NOW, own_mop).val;
-        return res;
+        res = mem_request(0, aligned_size, COMMIT_NOW, own_mop).val;
     } else {
-        res_t res = mem_request_phy_out(0, aligned_size, COMMIT_NOW | COMMIT_DMA, own_mop, dma_off).val;
-        return res;
+        res = mem_request_phy_out(0, aligned_size, COMMIT_NOW | COMMIT_DMA, own_mop, dma_off).val;
     }
 
+    if(pr.mask != 0) {
+
+        res_nfo_t nfo = rescap_nfo(res);
+
+        // Align base
+        size_t drop = (-nfo.base) & pr.mask;
+        nfo.length -= drop;
+
+        if(drop != 0) {
+            res = rescap_split(res, drop-RES_META_SIZE);
+        }
+
+        // Align length
+        if(nfo.length != pr.length) {
+            rescap_split(res, pr.length);
+        }
+    }
+
+    return res;
 }
 
 res_t  cap_malloc(size_t size) {
