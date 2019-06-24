@@ -100,7 +100,7 @@ typedef struct dypool {
 
 #define FIXED_POOL_SIZE   (UNTRANSLATED_PAGE_SIZE -  RES_META_SIZE)
 
-#define BIG_OBJECT_THRESHOLD (1 << 27)
+#define BIG_OBJECT_THRESHOLD (1 << 17)
 
 __thread fixed_pool pools[N_FIXED_POOLS];
 
@@ -350,10 +350,10 @@ static res_t allocate_with_request(size_t size, size_t* dma_off) {
     if(try_init_memmgt_ref() == NULL) return NULL;
     size_t aligned_size = align_up_to(size, RES_META_SIZE);
     if(!dma_off) {
-        res_t res = mem_request(0, aligned_size, NONE, own_mop).val;
+        res_t res = mem_request(0, aligned_size, COMMIT_NOW, own_mop).val;
         return res;
     } else {
-        res_t res = mem_request_phy_out(0, aligned_size, NONE, own_mop, dma_off).val;
+        res_t res = mem_request_phy_out(0, aligned_size, COMMIT_NOW | COMMIT_DMA, own_mop, dma_off).val;
         return res;
     }
 
