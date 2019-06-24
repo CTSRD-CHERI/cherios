@@ -425,8 +425,8 @@ __used ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length,
     }
 
     // TODO at this point we have to somehow track when the resulting request is fulfilled. Then we know we can release the buffer
-
-    *out_buf = cheri_setbounds_exact(block_buf, to_copy);
+    // TODO also made this no exact because I CBA to fragment for alignment (i.e., round down to nearest aligned length)
+    *out_buf = cheri_setbounds(block_buf, to_copy);
 
     ss->addr = addr + to_copy;
 
