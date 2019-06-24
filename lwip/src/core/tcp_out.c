@@ -132,7 +132,8 @@ tcp_set_pbuf_checksum_zero(struct pbuf *p) {
   tcphdr->chksum = 0;
   p->sp_src_offset = 0;
   p->sp_length = 2;
-  p->sp_dst_offset = (uint16_t)14;
+  p->sp_dst_offset = (uint16_t)offsetof(struct tcp_hdr, chksum);
+
   if(p->sealed_payload) {
     LIGHTWEIGHT_CCALL_FUNC(v, checksum_extern_set, CHK_DATA, 1, 0, 1, p->sealed_payload);
   } else {

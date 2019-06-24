@@ -214,7 +214,8 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 
     struct pbuf* p_head = p;
 
-    int first_pbuf = 1;
+    uint16_t adjust = ETH_PAD_SIZE;
+
     do {
         capability payload = (capability)(((char*)p->payload));
         capability extra_payload = p->sealed_payload;
@@ -228,10 +229,9 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
         }
 
         le32 size = (le32)(p->len);
-        if(first_pbuf) {
+        if(adjust) {
             payload = (char*)payload + ETH_PAD_SIZE;
             size -=ETH_PAD_SIZE;
-            first_pbuf = 0;
         }
 
         int res = 0;
@@ -240,7 +240,7 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
            res = virtio_q_chain_add_virtual(sendq, &session->free_head_send, &tail, payload, size, VIRTQ_DESC_F_NEXT);
         } else {
 
-            uint16_t dst_off = p->sp_dst_offset;
+            uint16_t dst_off = p->sp_dst_offset - adjust;
             uint16_t src_off = p->sp_src_offset;
             uint16_t extra_len = p->sp_length;
 
@@ -263,6 +263,8 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
             virtio_q_free(sendq, &session->free_head_send, head, tail);
             return ERR_MEM;
         }
+
+        adjust = 0;
     } while(p->len != p->tot_len && (p = p->next));
 
     sendq->desc[tail].flags = 0;
