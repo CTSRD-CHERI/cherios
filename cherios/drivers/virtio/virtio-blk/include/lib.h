@@ -42,6 +42,15 @@
 
 #define VIRTIO_MAX_SOCKS 8
 
+#define SECTOR_SIZE         512
+#define MAX_REQS            4
+#define DESC_PER_REQ        4
+
+#define FLEX_QUEUE_SIZE     0x100
+#define SIMPLE_QUEUE_SIZE   (MAX_REQS * DESC_PER_REQ)
+#define QUEUE_SIZE          (FLEX_QUEUE_SIZE + SIMPLE_QUEUE_SIZE)
+
+
 // This request structure also needs an inhdr and outhdr, but they are kept seperate for alignment
 typedef struct req_s {
     uint8_t used;
@@ -76,6 +85,8 @@ typedef struct session_s {
 	req_t * 	reqs;
 	struct virtio_blk_outhdr* outhdrs; 		// 16 bytes each
 	struct virtio_blk_inhdr*  inhdrs;		// 1 byte
+
+	uint8_t req_sock_map[QUEUE_SIZE];
 } session_t;
 
 capability session_sealer;

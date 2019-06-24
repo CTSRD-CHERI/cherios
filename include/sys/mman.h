@@ -160,6 +160,8 @@ typedef enum phy_handle_flags_e {
     PHY_HANDLE_NONE = 0,
     PHY_HANDLE_SOP = 1,
     PHY_HANDLE_EOP = 2,
+
+    PHY_DEBUG = 0x10,
 } phy_handle_flags;
 
 typedef int phy_handle_func(capability arg, phy_handle_flags flags, size_t phy_addr, size_t length);

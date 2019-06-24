@@ -199,7 +199,17 @@ struct virtq_arg {
 int virtio_phy_handle_func(capability arg, __unused phy_handle_flags flags, size_t phy_addr, size_t length) {
     struct virtq_arg* virtq_args = (struct virtq_arg*)arg;
     assert_int_ex(phy_addr, >=, 0x1000);
-    int res = virtio_q_chain_add(virtq_args->queue, virtq_args->free_head, virtq_args->tail, phy_addr, (le16)length, virtq_args->flags);
+
+    int res = 0;
+
+    while(length > 0 && res == 0) {
+        uint16_t to_send = length > 0xFE00 ? (uint16_t)0xFE00 : (uint16_t)length;
+        length -= to_send;
+        res = virtio_q_chain_add(virtq_args->queue, virtq_args->free_head, virtq_args->tail, phy_addr, to_send, virtq_args->flags);
+        if(flags & PHY_DEBUG) printf("Virtio phy buf addr %lx len %x. res = %d\n", phy_addr, to_send, res);
+    }
+
+
     return res;
 }
 

@@ -40,30 +40,22 @@
 #include "sockets.h"
 #include "virtio.h"
 
-#define SECTOR_SIZE         512
-#define MAX_REQS            4
-#define DESC_PER_REQ        4
-
-#define FLEX_QUEUE_SIZE     0x100
-#define SIMPLE_QUEUE_SIZE   (MAX_REQS * DESC_PER_REQ)
-#define QUEUE_SIZE          (FLEX_QUEUE_SIZE + SIMPLE_QUEUE_SIZE)
-
 capability session_sealer;
 
 size_t n_socks = 0;
 
+#define DESC_MAX 0xC0
+
 struct session_sock {
     session_t* session;
     fulfiller_t ff;
-    uint16_t in_sector_prog;
-    le16 req_tail;
-    le16 req_head;
+    size_t bytes_translated;
+    size_t bytes_completed;
+    size_t sector;
+    __virtio32 hdr_type;
+    le16 descs_used;
     le16 mid_flag_type;
-    size_t out_paddr;
-    size_t in_paddr;
-    struct virtio_blk_outhdr out;
-    struct virtio_blk_inhdr in;
-
+    le16 tail_tmp;
 } socks[VIRTIO_MAX_SOCKS];
 
 static u32 mmio_read32(session_t* session, size_t offset) {
@@ -189,7 +181,7 @@ ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, _
     request_type_e req = request->type;
 
     if(req == REQUEST_SEEK) {
-        assert(ss->in_sector_prog == 0);
+        assert((ss->bytes_translated & (SECTOR_SIZE-1)) == 0);
         int64_t seek_offset = request->request.seek_desc.v.offset;
         int whence = request->request.seek_desc.v.whence;
 
@@ -197,7 +189,7 @@ ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, _
 
         switch (whence) {
             case SEEK_CUR:
-                target_offset = seek_offset + ss->out.sector;
+                target_offset = seek_offset + ss->sector;
                 break;
             case SEEK_SET:
                 if(seek_offset < 0) return E_OOB;
@@ -208,7 +200,7 @@ ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, _
                 return E_OOB;
         }
 
-        ss->out.sector = target_offset;
+        ss->sector = target_offset;
 
         return length;
     } else if(req == REQUEST_FLUSH) {
@@ -222,24 +214,20 @@ ssize_t TRUSTED_CROSS_DOMAIN(ful_ff)(capability arg, char* buf, uint64_t offset,
 ssize_t ful_ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
 
-    assert(length <= SECTOR_SIZE);
-
-    int res = virtio_q_chain_add_virtual(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
+    int res = virtio_q_chain_add_virtual(&ss->session->queue, &ss->session->free_head, &ss->tail_tmp,
                                (capability)buf, (le32)length, ss->mid_flag_type);
 
     assert(res > 0 && "Out of descriptors");
 
-    ss->in_sector_prog+=length;
-
-    assert(ss->in_sector_prog <= SECTOR_SIZE);
-
+    ss->bytes_translated += length;
+    ss->descs_used += res;
     return length;
 }
 
 static void translate_sock(struct session_sock* ss) {
     uint64_t bytes = socket_fulfiller_bytes_requested(ss->ff);
 
-    ss->in_sector_prog = 0;
+    session_t* session = ss->session;
 
     if(bytes == 0) {
         // Just an oob
@@ -252,30 +240,57 @@ static void translate_sock(struct session_sock* ss) {
 
     assert_int_ex(bytes, >=, SECTOR_SIZE);
 
-    ss->req_head = ss->req_tail = virtio_q_alloc(&ss->session->queue, &ss->session->free_head);
+    ss->descs_used = 0;
 
-    assert(ss->req_head != ss->session->queue.num && "No descriptors");
+    while(bytes > SECTOR_SIZE && ss->descs_used < DESC_MAX) {
+        le16 head, tail;
 
-    struct virtq_desc* desc_head = ss->session->queue.desc + ss->req_head;
-    desc_head->len = sizeof(struct virtio_blk_outhdr);
-    desc_head->addr = ss->out_paddr;
-    desc_head->flags = VIRTQ_DESC_F_NEXT;
+        head = tail = virtio_q_alloc(&ss->session->queue, &ss->session->free_head);
 
-    // TODO can use checkpoint to allow queueing here
-    ssize_t bytes_translated = socket_fulfill_progress_bytes_unauthorised(ss->ff, SECTOR_SIZE,
-                                                                      F_CHECK | F_DONT_WAIT,
-                                                                          TRUSTED_CROSS_DOMAIN(ful_ff), (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
-                                                                          TRUSTED_DATA, TRUSTED_DATA);
-    assert_int_ex(bytes_translated, ==, SECTOR_SIZE);
+        struct virtio_blk_outhdr* outhdr = session->outhdrs + head;
+        __unused struct virtio_blk_inhdr* inhdr = session->inhdrs + head;
+        size_t out_phy = session->outhdrs_phy + (sizeof(struct virtio_blk_outhdr) * head);
+        size_t in_phy = session->inhdrs_phy + (sizeof(struct virtio_blk_inhdr) * head);
 
-    assert_int_ex(-bytes_translated, ==, -SECTOR_SIZE);
-    assert(ss->in_sector_prog == SECTOR_SIZE);
+        assert(head != ss->session->queue.num && "No descriptors");
 
-    int res = virtio_q_chain_add(&ss->session->queue, &ss->session->free_head, &ss->req_tail,
-                                 ss->in_paddr, (le16) sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
-    assert(res == 0 && "Out of descriptors");
+        struct virtq_desc* desc_head = ss->session->queue.desc + head;
+        desc_head->len = sizeof(struct virtio_blk_outhdr);
+        desc_head->addr = out_phy;
+        desc_head->flags = VIRTQ_DESC_F_NEXT;
 
-    add_desc(ss->session, ss->req_head);
+        outhdr->type = ss->hdr_type;
+
+        inhdr->status = VIRTIO_BLK_S_IOERR;
+
+        ss->tail_tmp = tail;
+        ssize_t bytes_translated = socket_fulfill_progress_bytes_unauthorised(ss->ff, SECTOR_SIZE,
+                                                                              F_CHECK | F_DONT_WAIT | F_START_FROM_LAST_MARK | F_SET_MARK,
+                                                                              TRUSTED_CROSS_DOMAIN(ful_ff),
+                                                                              (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
+                                                                              TRUSTED_DATA, TRUSTED_DATA);
+
+        outhdr->sector = ss->sector++;
+
+        tail = ss->tail_tmp;
+
+        assert_int_ex(bytes_translated, ==, SECTOR_SIZE);
+
+        int res = virtio_q_chain_add(&session->queue, &session->free_head, &tail,
+                                     in_phy, (le16) sizeof(struct virtio_blk_inhdr), VIRTQ_DESC_F_WRITE);
+
+        assert(res == 0 && "Out of descriptors");
+
+        uint8_t ndx = (uint8_t)((size_t)(socks - ss) / (size_t)(socks - (socks+1)));
+
+        session->req_sock_map[head] = ndx;
+        virtio_q_add_descs(&session->queue, head);
+
+        bytes -= SECTOR_SIZE;
+        ss->descs_used +=2; // in and out need 2 more
+    }
+
+    virtio_device_notify((virtio_mmio_map*)session->mmio_cap, 0);
 }
 
 int new_socket(session_t* session, requester_t requester, enum socket_connect_type type) {
@@ -304,17 +319,9 @@ int new_socket(session_t* session, requester_t requester, enum socket_connect_ty
     if((res = socket_fulfiller_connect(ff, requester)) < 0) return (int)res;
 
     sock->session = session;
-    sock->out.ioprio = 0;
-    sock->out.sector = 0;
-    sock->out.type = (sock_type == SOCK_TYPE_PUSH) ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
+    sock->sector = 0;
+    sock->hdr_type = (sock_type == SOCK_TYPE_PUSH) ? VIRTIO_BLK_T_OUT : VIRTIO_BLK_T_IN;
     sock->mid_flag_type = (sock_type == SOCK_TYPE_PUSH) ?  VIRTQ_DESC_F_NEXT : (VIRTQ_DESC_F_NEXT |  VIRTQ_DESC_F_WRITE);
-    sock->in_sector_prog = 0;
-    sock->req_head = sock->req_tail = QUEUE_SIZE;
-    sock->out_paddr = translate_address((size_t)&sock->out, 0);
-    size_t diff = sizeof(struct virtio_blk_outhdr) - 1;
-    // Check we don't cross a page boundry. This is just really unlucky.
-    assert(translate_address((size_t)&sock->out + diff, 0) - diff == sock->out_paddr);
-    sock->in_paddr = translate_address((size_t)&sock->in, 0);
 
     n_socks++;
 
@@ -325,7 +332,7 @@ void handle_loop(void) {
 
     POLL_LOOP_START(sock_sleep, sock_event, 1)
         for(size_t i = 0; i < n_socks;i++) {
-            if(socks[i].req_head == QUEUE_SIZE) {
+            if(socks[i].bytes_translated == 0) {
                 POLL_ITEM_F(event, sock_sleep, sock_event, socks[i].ff, POLL_IN, 0);
                 if(event) {
                     if(event & (POLL_HUP | POLL_ER | POLL_NVAL)) assert(0 && "Socket error in block device");
@@ -409,20 +416,27 @@ static void vblk_rw_ret(session_t* session) {
 
             reqs[i].used = 0;
         } else { // more complex - requires us to find out which socket this came from
-            for(size_t i = 0; i < n_socks; i++) {
-                if(socks[i].req_head == used_desc_id) {
-                    // This sockets request has finished
-                    ssize_t ret = socket_fulfill_progress_bytes_unauthorised(socks[i].ff, SECTOR_SIZE, F_PROGRESS | F_DONT_WAIT | F_SKIP_OOB,
+
+            struct session_sock* ss = &socks[session->req_sock_map[used_desc_id]];
+
+            ss->bytes_completed += SECTOR_SIZE;
+
+            assert(ss->bytes_completed <= ss->bytes_translated);
+
+            if(ss->bytes_completed == ss->bytes_translated) {
+                size_t bytes = ss->bytes_completed;
+                ssize_t ret = socket_fulfill_progress_bytes_unauthorised(ss->ff, bytes, F_PROGRESS | F_DONT_WAIT | F_SKIP_OOB,
                                                                          NULL, NULL, 0, NULL, NULL,
                                                                          NULL, NULL);
-                    assert_int_ex(-ret, ==, -SECTOR_SIZE);
-                    assert_int_ex(socks[i].in.status, ==, VIRTIO_BLK_S_OK);
-                    virtio_q_free(&socks[i].session->queue, &session->free_head, socks[i].req_head, socks[i].req_tail);
-                    socks[i].req_head = QUEUE_SIZE;
-                    socks[i].out.sector++;
-                    break;
-                }
+                assert_int_ex(-ret, ==, -bytes);
+
+                assert_int_ex(session->inhdrs[used_desc_id].status, ==, VIRTIO_BLK_S_OK);
+
+                ss->bytes_translated = 0;
+                ss->bytes_completed = 0;
             }
+
+            virtio_q_free_chain(&session->queue, &session->free_head, (le16)used_desc_id);
         }
 
         queue->last_used_idx++;
