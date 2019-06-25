@@ -131,7 +131,7 @@ typedef struct act_t
     uint64_t switches;
     uint64_t had_time;
     uint64_t had_time_epoch;
-
+	uint64_t commit_faults;
 #ifdef HARDWARE_fpga
     // on FPGA we get some hardware counters
 	STAT_DEBUG_LIST(STAT_MEMBER)

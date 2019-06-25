@@ -114,6 +114,7 @@ typedef struct act_info_s {
     uint64_t switches;
     uint64_t sent_n;
     uint64_t received_n;
+    uint64_t commit_faults;
     uint16_t queue_fill;
     status_e status;
     sched_status_e sched_status;

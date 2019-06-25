@@ -109,6 +109,7 @@ void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
     info->cpu = ctrl->pool_id;
 
 #if (K_DEBUG)
+    info->commit_faults = ctrl->commit_faults;
 	info->sent_n = ctrl->sent_n;
 	info->received_n = ctrl->recv_n;
 	info->switches = ctrl->switches;
