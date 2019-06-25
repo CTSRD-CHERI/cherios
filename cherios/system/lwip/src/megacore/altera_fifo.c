@@ -49,6 +49,8 @@ int lwip_driver_init_postup(net_session* session) {
     return 0;
 }
 
+#define NTOH32_SE(X) ({uint32_t _tmp = X; _tmp = NTOH32(_tmp); _tmp;})
+
 void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg, register_t irq) {
     // To read: Read data (triggers change of meta), then you can read meta
 
@@ -59,12 +61,14 @@ void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg,
 
     u16_t len = 0;
 
-    while(rx_fifo->ctrl_fill_level != 0) {
+    MAC_DWORD min_fill = NTOH32_SE(rx_fifo->ctrl_fill_level);
 
-
+    while(min_fill != 0) {
 
         uint32_t data = rx_fifo->symbols;
         uint32_t meta = rx_fifo->metadata;
+
+        min_fill--;
 
         uint32_t sop = meta & (NTOH32(A_ONCHIP_FIFO_MEM_CORE_SOP));
         uint32_t eop = meta & (NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP));
@@ -101,6 +105,8 @@ void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg,
             }
             custom = NULL;
         }
+
+        if(min_fill == 0) min_fill = NTOH32_SE(rx_fifo->ctrl_fill_level);
     }
 
     if(custom != NULL) {
@@ -130,6 +136,8 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 
     uint64_t read_buf = 0; // holds partial words
     uint32_t got_bits = 0;
+
+    MAC_DWORD max_depth = NTOH32_SE(tx_fifo->ctrl_fill_level);
 
     do {
         // Pbufs have an extra sealed payload. If sp_length is non zero it is a part of the payload, interted at some offset
@@ -183,9 +191,10 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 
 #define WRITE                                                                           \
         word = (uint32_t)((read_buf >> (got_bits)) & 0xFFFFFFFF);                       \
-        while(tx_fifo->ctrl_fill_level == AVALON_FIFO_TX_BASIC_OPTS_DEPTH);             \
+        while(max_depth == AVALON_FIFO_TX_BASIC_OPTS_DEPTH) {max_depth = NTOH32_SE(tx_fifo->ctrl_fill_level);} \
         if(len == 0 && (got_bits == 0) && !frag_more) tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP);   \
         tx_fifo->symbols = word;
+        max_depth++;
 
             uint32_t word;
 
@@ -238,7 +247,8 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
     if(got_bits) {
         uint32_t missing = 32 - got_bits;
         got_bits /= 8;
-        while(tx_fifo->ctrl_fill_level == AVALON_FIFO_TX_BASIC_OPTS_DEPTH);
+        if(max_depth == AVALON_FIFO_TX_BASIC_OPTS_DEPTH)
+            while(tx_fifo->ctrl_fill_level == AVALON_FIFO_TX_BASIC_OPTS_DEPTH);
         tx_fifo->metadata = NTOH32(A_ONCHIP_FIFO_MEM_CORE_EOP |
                                    ((4 - (got_bits)) << A_ONCHIP_FIFO_MEM_CORE_EMPTY_SHIFT));
         tx_fifo->symbols = (uint32_t)((read_buf << missing) & 0xFFFFFFFF);
