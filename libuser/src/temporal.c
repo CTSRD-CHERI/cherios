@@ -129,6 +129,18 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     if(!old_c10 && own_stats) own_stats->temporal_depth++;
 #endif
 
+    __thread static int replaced_first_c10 = 0;
+    int swap_back = 0;
+
+    // Performing the check in the untrusting stub leads to a catch 22. This is very much a hack.
+
+    capability mode = init_kernel_if_t_get_mode();
+    if(replaced_first_c10 == 0 && mode == (capability)&plt_common_untrusting) {
+        // stop the second exception from firing due very small stack
+        init_kernel_if_t_change_mode((char*)mode + 8); // skip the 2 check instructions
+        swap_back = 1;
+    }
+
     capability new_c10 = new_stack(old_c10);
 
     if(old_link) {
@@ -139,12 +151,17 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
 #ifdef USE_EXCEPTION_UNSAFE_STACK
     restore_frame->c10 = new_c10;
 
-    __thread static int replaced_first_c10 = 0;
     capability  old_ex_c10 = cheri_getreg(10);
 
     if(replaced_first_c10 == 0 || cheri_getoffset(old_ex_c10) < MinStackSize) {
         capability new_ex_c10 = new_stack(replaced_first_c10 ? old_ex_c10 : NULL);
         cheri_setreg(10, new_ex_c10);
+
+        if(swap_back) {
+            // Exception stack now the right size
+            init_kernel_if_t_change_mode((char*)init_kernel_if_t_get_mode() - 8); // skip the 2 check instructions
+        }
+
         replaced_first_c10 = 1;
     }
 

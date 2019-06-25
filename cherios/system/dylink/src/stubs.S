@@ -316,9 +316,9 @@ STUB_BEGIN plt_common_untrusting
 
 # FIXME: Now out of date since nanokernel introduced constraints on idc for exceptions
 
-# Ensure adequate stack space
+# Ensure adequate stack space.
 cgetoffset      $1, cusp
-tltiu           $1, (0x10 * CAP_SIZE)
+tltiu           $1, 0x4000
 
 csc             csp,    $zero,  (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack

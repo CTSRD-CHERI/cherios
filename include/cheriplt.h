@@ -109,6 +109,7 @@ typedef void common_t(void);
     #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
     void init_ ## type (type* plt_if, capability data, capability trust_mode);      \
     void init_ ## type ##_change_mode(capability trust_mode);                       \
+    capability init_ ## type ##_get_mode(void);                       \
     void init_ ## type ##_new_thread(capability data);
 
     #define PLT_INIT_MAIN_THREAD(type)  init_ ## type
@@ -125,6 +126,11 @@ typedef void common_t(void);
     }\
     void init_ ## type ##_change_mode(capability trust_mode) {\
     __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
+    }\
+    capability init_ ## type ##_get_mode(void) {\
+        capability trust_mode;\
+    __asm__ (".weak " #type "_data_obj_dummy; clcbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n":[d]"=C"(trust_mode)::); \
+        return trust_mode;  \
     }
 
     #define PLT_ty(type, LIST) \
