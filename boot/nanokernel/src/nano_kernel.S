@@ -713,7 +713,8 @@ get_book:
 ###################################
     dli        $t0, phy_page_table
     # We need to give the system a read only table. There is some apdding after it thats ok for the system to read.
-    dli        $t1, ALIGN_UP_2((TOTAL_PHY_PAGES) * PHY_PAGE_ENTRY_SIZE, align_require)
+    # Give system access to terminal page, it is useful for its prev pointer
+    dli        $t1, ALIGN_UP_2((TOTAL_PHY_PAGES+1) * PHY_PAGE_ENTRY_SIZE, align_require)
     cincoffset $c3, $idc, $t0
     dli        $t2, Perm_Load
     csetboundsexact $c3, $c3, $t1
@@ -2497,7 +2498,7 @@ get_read_only_table:
 
 # Notes: Locks the physical page, and atomically updates the vtable entry #
 ######################################################################################### (safe)
-# void create_mapping(register_t page, ptable table, register_t index, register_t flags)
+# void create_mapping(register_t page, ptable table, register_t index_start, register_t index_stop, register_t flags)
 .global create_mapping
 create_mapping:
 #########################################################################################
@@ -2507,7 +2508,9 @@ create_mapping:
     cunseal     $c3, $c3, $c4
 
     sltiu       $t0, $a1, PAGE_TABLE_ENT_PER_TABLE
-    beq         $t0, $zero, create_mapping_er           # $a1 >= $t0
+    beqz        $t0, create_mapping_er                  # index_start < PAGE_TABLE_ENT_PER_TABLE
+    sltiu       $t0, $a2, PAGE_TABLE_ENT_PER_TABLE+1
+    beqz        $t0, create_mapping_er                  # index_end <= PAGE_TABLE_ENT_PER_TABLE
 
     dsll         $t0, $a0, PHY_PAGE_ENTRY_SIZE_BITS
     dli         $t1, phy_page_table
@@ -2517,24 +2520,34 @@ create_mapping:
 
 2:  cllw        $t9, $c6                                # $t9 is the state of this phy page
     bnez        $t9, create_mapping_er                  # must be un-used
-    nop
+    dsll        $t2, $a1, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
     cscw        $t0, $t8, $c6                           # lock phy entry
     beqz        $t0, 2b
+    cincoffset  $c5, $c3, $t2                           # c5 is virtual entry
 
     cld         $t1, $zero, PHY_PAGE_OFFSET_len($c6)    # $t1 = len of record
-    daddiu      $t1, $t1, -2
-    bnez        $t1, create_mapping_er_restore_phy      # $t1 must be 2
-    dsll        $t2, $a1, PAGE_TABLE_ENT_BITS           # t2 is offset of page entry to c3
+    dsubu       $t0, $a2, $a1                           # length required
+    dsll        $t0, $t0, 1                             # need twice as many physical pages as len
+    bne         $t0, $t1, create_mapping_er_restore_phy
 
-    cincoffset  $c5, $c3, $t2                           # c5 is virtual entry
     dsll        $a0, $a0, PFN_SHIFT
-    or          $a0, $a0, $a2
+    or          $a0, $a0, $a3                           # The PFN to use
 
-1:  clld        $t1, $c5                               # check -virtual- mapping is un-used
+    daddiu      $a1, $a1, 1                             # offset to negate other offset
+4:
+    daddiu      $a0, $a0, -(2 << PFN_SHIFT)            # Main loop offsets, undo the work at the start or restart
+    daddiu      $a1, $a1, -1
+1:
+    clld        $t1, $c5                               # check -virtual- mapping is un-used
+    li          $t9, page_screwed_the_pooch            #  FIXME: Leaves half the range mapped
     bnez        $t1, create_mapping_er_restore_phy
-    nop
+    daddiu      $a0, $a0, (2 << PFN_SHIFT)
     cscd        $t1, $a0, $c5                          # store EntryLo
-    beqz        $t1, 1b
+    beqz        $t1, 4b
+
+    daddiu      $a1, $a1, 1                             # in the delay slot, but 4 undoes in the increment
+    bne         $a1, $a2, 1b
+    cincoffset  $c5, $c5, PAGE_TABLE_ENT_SIZE
 
     dli         $t9, page_mapped
 

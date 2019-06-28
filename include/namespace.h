@@ -56,7 +56,8 @@ static const int namespace_num_init = 1;
 static const int namespace_num_namespace = 2;
 static const int namespace_num_proc_manager = 3;
 static const int namespace_num_memmgt = 4;
-static const int namespace_num_tman = 5;
+static const int namespace_num_memmgt_commit = 5;
+static const int namespace_num_tman = 6;
 
 static const int namespace_num_lib_socket = 0x20;
 static const int namespace_num_lib_aes = 0x21;

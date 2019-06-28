@@ -137,7 +137,8 @@
 
 #ifdef HARDWARE_qemu
 
-#define PHY_RAM_SIZE                    (1L << 31)
+// QEMU got their memory map wrong. The top 256MB of RAM alias with the first 256MB. OOPS.
+#define PHY_RAM_SIZE                    ((1L << 31) - 0x10000000)
 #define RAM_PRE_IO_END                  0x10000000
 #define RAM_POST_IO_START               0x20000000
 #define RAM_SPLIT
@@ -234,6 +235,7 @@
     ITEM(page_dirty, 7)                            \
     ITEM(page_transaction, 8)                      \
     ITEM(page_cleaning, 9)                         \
+    ITEM(page_screwed_the_pooch, 10)               \
 
 #define NANO_KERNEL_RES_STATUS_ENUM_LIST(ITEM) \
     ITEM(res_open,          0)                  \

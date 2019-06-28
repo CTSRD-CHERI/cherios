@@ -33,7 +33,15 @@
 
 #include "mman.h"
 
+typedef enum pmem_flags {
+    PMEM_NONE = 0,
+    PMEM_PRECISE = 1,
+    PMEM_ALLOW_GREATER = 2,
+    PMEM_BACKWARDS = 4,
+} pmem_flags_e;
+
 extern page_t* book;
+extern act_kt clean_notify;
 
 /* Sets page_n to cover a range of len (MUST ALREADY BE A VALID RECORD)*/
 void pmem_break_page_to(size_t page_n, size_t len);
@@ -41,22 +49,21 @@ void pmem_break_page_to(size_t page_n, size_t len);
 /* Gets the pagen that can be used to index the book. If in doubt, call this.*/
 size_t pmem_get_valid_page_entry(size_t page_n);
 
-/* One page at a time can be skipped when searching */
-void block_finding_page(size_t pagen);
-void unblock_finding_page(void);
+// If the book becomes fragmented, call this to sort it out. But don't call this, its slow.
+void pmem_condense_book(void);
 
-/* Searches for a range of pages of a particular size and minimum length */
-/* If align_precision is true then a range will be returned that will meet cheri precision requirements */
-size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int precise);
-
-/* Get one free page */
-size_t pmem_get_free_page();
+/* Searches for a range of pages of a particular size and minimum length, starting from search from*/
+/* If PMEM_PRECISE is true then a range will be returned that will meet cheri precision requirements */
+/* If allow greater is specified the range will not be trimmed */
+/* If backwards is specified search will go backwards, and return the upper range when trimming */
+size_t pmem_find_page_type(size_t required_len, e_page_status required_type, pmem_flags_e flags, size_t search_from);
 
 /* Prints out the physical page book for debug */
 void pmem_print_book(page_t *book, size_t page_n, size_t times);
 
 /* Debug check a single page */
-void pmem_check_phy_entry(size_t pagen);
+#define pmem_check_phy_entry(...)
+//void pmem_check_phy_entry(size_t pagen);
 
 /* Debug check the book */
 void pmem_check_book(void);

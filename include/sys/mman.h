@@ -115,6 +115,10 @@ void        get_physical_capability(size_t base, size_t length, int IO, int cach
 /* Gets the paddr for vaddr. DEPRACATED use the nano kernel function its faster*/
 size_t      mem_paddr_for_vaddr(size_t vaddr);
 
+
+/* Commit pages starting from address addr */
+size_t mem_commit_range(size_t addr, size_t pages, mem_request_flags flags);
+
 void commit_vmem(act_kt activation, size_t addr);
 
 void	mmap_set_act(act_kt ref);

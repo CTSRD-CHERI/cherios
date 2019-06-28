@@ -38,6 +38,9 @@
 #include "assert.h"
 
 act_kt memmgt_ref = NULL;
+// FIXME: Probably should not circumvent the main mmap activation.
+// FIXME: Doing this for now to get things to work.
+act_kt commit_ref = NULL;
 LW_THR mop_t own_mop = NULL;
 
 act_kt try_init_memmgt_ref(void) {
@@ -47,14 +50,22 @@ act_kt try_init_memmgt_ref(void) {
     return memmgt_ref;
 }
 
-void commit_vmem(act_kt activation, size_t addr) {
-	if(memmgt_ref == NULL) {
-		memmgt_ref = namespace_get_ref(namespace_num_memmgt);
-		assert(memmgt_ref != NULL);
-	}
-	message_send(addr, 0, 0, 0, activation, NULL, NULL, NULL, memmgt_ref, SEND_SWITCH, 2);
+void commit_vmem(__unused act_kt activation, __unused size_t addr) {
+    assert(0);
 }
 
+
+size_t mem_commit_range(size_t addr, size_t pages, mem_request_flags flags) {
+    if(commit_ref == NULL) {
+        commit_ref = namespace_get_ref(namespace_num_memmgt_commit);
+    }
+
+    assert(commit_ref != NULL);
+
+    message_send(addr, pages, flags, 0, NULL, NULL, NULL, NULL, commit_ref, SYNC_CALL, 12);
+
+    return 0;
+}
 
 void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
 	cap_pair pair;
@@ -203,13 +214,6 @@ void get_physical_capability(size_t base, size_t length, int IO, int cached, mop
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
 	message_send(base, length, (register_t )IO, (register_t)cached, mop, result, NULL, NULL, memmgt, SYNC_CALL, 8);
-}
-
-size_t mem_paddr_for_vaddr(size_t vaddr) {
-    assert(0 && "Depracated");
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return (size_t)message_send(vaddr, 0, 0, 0, NULL, NULL, NULL, NULL, memmgt, SYNC_CALL, 4);
 }
 
 void mmap_set_act(act_kt ref) {

@@ -52,6 +52,7 @@ act_kt general_act; // For anything else (worker id 1)
 act_kt commit_act;  // Only for commit   (worker id 0)
 act_kt revoke_act;  // Only for revoke   (worker if 2)
 act_kt clean_act; 	// Only for clean 	 (worker id 3)
+act_kt clean_notify;
 
 static void worker_start(__unused register_t arg, capability carg) {
 
@@ -86,9 +87,9 @@ void revoke_finish(res_t res) {
     message_send(0, 0, 0, 0, res, NULL, NULL, NULL, general_act, SEND, 11);
 }
 
-size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_request_flags flags) {
+size_t vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags flags) {
 	assert(commit_act != NULL);
-	return message_send(addr, pages, block_size, flags, NULL, NULL, NULL, NULL, commit_act, SYNC_CALL, 12);
+	return message_send(addr, pages, flags, 0, NULL, NULL, NULL, NULL, commit_act, SYNC_CALL, 12);
 }
 
 static void revoke_worker_start(__unused register_t arg, __unused capability carg) {
@@ -111,6 +112,8 @@ static void clean_worker_start(__unused register_t arg, __unused capability carg
 int main(memmgt_init_t* mem_init) {
 
     commit_act = act_self_ref;
+
+    namespace_register(namespace_num_memmgt_commit, act_self_ref);
 
 	printf("spawning worker\n");
 

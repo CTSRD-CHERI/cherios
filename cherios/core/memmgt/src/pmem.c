@@ -42,6 +42,7 @@
 
 page_t* book;
 
+/*
 void pmem_check_phy_entry(size_t pagen) {
     if(pagen != 0) {
         size_t prv = book[pagen].prev;
@@ -53,6 +54,7 @@ void pmem_check_phy_entry(size_t pagen) {
         assert_int_ex(book[nxt].prev, ==, pagen);
     }
 }
+*/
 
 void pmem_check_book(void) {
     size_t pagen = 0;
@@ -136,6 +138,7 @@ void pmem_break_page_to(size_t page_n, size_t len) {
         pmem_check_phy_entry(page_n + len);
     } else {
         printf("len is %lx. Tried to split to %lx\n", book[page_n].len, len);
+        pmem_print_book(book, 0, -1);
         assert(0);
     }
 }
@@ -161,18 +164,34 @@ size_t pmem_get_valid_page_entry(size_t page_n) {
     return page_n;
 }
 
-static size_t blocked;
+void pmem_condense_book(void) {
 
-void block_finding_page(size_t pagen) {
-    blocked = pagen;
+    size_t pagen = book[0].len;
+    size_t prev = 0;
+    e_page_status prev_status = book[0].status;
+
+    while(pagen != BOOK_END) {
+        e_page_status status = book[pagen].status;
+        size_t len = book[pagen].len;
+        if(status == prev_status) {
+            merge_phy_page_range(prev);
+        } else {
+            prev_status = status;
+            prev = pagen;
+        }
+        pagen += len;
+    }
 }
 
-void unblock_finding_page(void) {
-    blocked = 0;
-}
+size_t pmem_find_page_type(size_t required_len, e_page_status required_type, pmem_flags_e flags, size_t search_from) {
 
-size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int precise) {
-    size_t search_index = 0;
+    int precise = flags & PMEM_PRECISE;
+    int allow_greater = flags & PMEM_ALLOW_GREATER;
+    int backwards = flags & PMEM_BACKWARDS;
+
+    assert(!(precise && allow_greater) && "Pick one");
+
+    size_t search_index = search_from;
 
     // Align a bit more than precision requires so carrys that make top differ a lot are uncommon
 
@@ -191,17 +210,23 @@ size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int
     required_len = pr.length >> PHY_PAGE_SIZE_BITS;
 
     size_t rounded_index;
-
-    while((search_index != BOOK_END) &&
-                    (search_index == blocked                                                    ||
-                    book[search_index].status != required_type                                  ||
+    size_t end = backwards ? 0 : BOOK_END;
+    while((search_index != end) &&
+                    ( book[search_index].status != required_type                                  ||
                     ((rounded_index = (search_index + imask) &~ imask),
                         book[search_index].len  < required_len + (rounded_index - search_index))
                     )) {
-        search_index = search_index + book[search_index].len;
+        search_index = backwards ? book[search_index].prev : search_index + book[search_index].len;
     }
 
-    if(search_index == BOOK_END) return BOOK_END;
+    if(search_index == end) return BOOK_END;
+
+    if(allow_greater) return search_index;
+
+    if(backwards) {
+        // When searching backwards use the largest available range
+        rounded_index = ((search_index + book[search_index].len) &~ imask) - required_len;
+    }
 
     // If we need an aligned page number then
 
@@ -215,10 +240,6 @@ size_t pmem_find_page_type(size_t required_len, e_page_status required_type, int
     }
 
     return rounded_index;
-}
-
-size_t pmem_get_free_page() {
-    return pmem_find_page_type(1, page_unused, 0);
 }
 
 void full_dump(void) {
@@ -236,7 +257,7 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
     size_t page_len = align_up_to(length + base - (page_n << PHY_PAGE_SIZE_BITS), PHY_PAGE_SIZE) >> PHY_PAGE_SIZE_BITS;
 
     if(base == 0) {
-        page_n = pmem_find_page_type(page_len, page_unused, 1);
+        page_n = pmem_find_page_type(page_len, page_unused, PMEM_PRECISE, 0);
         if(page_n == BOOK_END) {
             goto er;
         }
@@ -260,6 +281,8 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
 
     get_phy_page(page_n, cached, page_len, &pair, IO);
 
+    pmem_try_merge(page_n);
+
     size_t offset = base - (page_n << PHY_PAGE_SIZE_BITS);
     if(base != 0 && offset != 0) {
         pair.data = cheri_incoffset(pair.data, offset);
@@ -278,18 +301,28 @@ void __get_physical_capability(size_t base, size_t length, int IO, int cached, m
 void clean_loop(void) {
     size_t page_n = 0;
     syscall_change_priority(act_self_ctrl, PRIO_IDLE); // Only do this when idle.
+
+    int cleaned_any = 1;
     sleep(0);
     while(1) {
         // Keep walking through the physical pages, if a dirty one is found, clean it
 
         if(page_n == BOOK_END || book[page_n].len == 0) {
+            if(page_n == BOOK_END && cleaned_any == 0) {
+                // I don't care about the race, pages get unmapped all the time, we can miss some
+                clean_notify = act_self_notify_ref;
+                HW_SYNC;
+                syscall_cond_wait(0, 0);
+            }
             page_n = 0;
+            cleaned_any = 0;
         }
 
         if(book[page_n].status == page_dirty) {
             // We don't try merge afterwards. This would interfere with the main thread.
             // Instead these are merged by subsequent searches
             zero_page_range(page_n);
+            cleaned_any = 1;
         }
 
         page_n +=book[page_n].len;

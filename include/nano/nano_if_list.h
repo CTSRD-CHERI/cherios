@@ -86,7 +86,7 @@
 /* Allocate a physical page to be page table. */\
     ITEM(create_table, ptable_t, (register_t, page_n, ptable_t, parent, register_t, index),  __VA_ARGS__)\
 /* Map an entry in a leaf page table to a physical page. The adjacent physical page will also be mapped */\
-    ITEM(create_mapping, void, (register_t, page_n, ptable_t, table, register_t, index, register_t, flags),  __VA_ARGS__) \
+    ITEM(create_mapping, void, (register_t, page_n, ptable_t, table, register_t, index_start, register_t, index_stop, register_t, flags),  __VA_ARGS__) \
 /* Free a mapping. This will recover the physical page */\
     ITEM(free_mapping, void, (ptable_t, table, register_t, index), __VA_ARGS__)   \
 /* Get a handle for the top level page table*/\

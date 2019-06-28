@@ -204,7 +204,7 @@ extern act_kt commit_act;
 extern act_kt revoke_act;
 extern act_kt clean_act;
 
-size_t vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_request_flags flags);
+size_t vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags flags);
 
 void revoke(void);
 void revoke_finish(res_t res);

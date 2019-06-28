@@ -41,15 +41,20 @@
 
 ptable_t vmem_create_table(ptable_t parent, register_t index, __unused int level) { // FIXME: Races with main thread
     //printf("memmgt: creating a l%d table at index %lx\n", level, index);
-    size_t page = pmem_find_page_type(1, page_ptable_free, 0);
+    size_t page = pmem_find_page_type(1, page_ptable_free, PMEM_BACKWARDS, BOOK_END);
 
-    if(page == BOOK_END) page = pmem_get_free_page();
+    if(page == BOOK_END) page = pmem_find_page_type(1, page_unused, PMEM_BACKWARDS, BOOK_END);
 
     if(page == BOOK_END) return NULL;
 
     assert(book[page].status == page_ptable_free || book[page].status == page_unused);
 
     ptable_t r = create_table(page, parent, index);
+
+    if(book[page].status != page_ptable) {
+        printf("Trying to use %lx as a table %lx %d\n", page, book[page].len, book[page].status);
+        full_dump();
+    }
 
     assert(book[page].status == page_ptable);
 
@@ -63,14 +68,15 @@ ptable_t vmem_create_table(ptable_t parent, register_t index, __unused int level
 }
 
 int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) { // FIXME: Races with other thread
-    size_t page = pmem_find_page_type(2, page_unused, 0);
+
+    size_t page = pmem_find_page_type(2, page_unused, PMEM_NONE, 0);
     if(page == BOOK_END) return -1;
 
     assert(L2_table != NULL);
 
     assert(book[page].status == page_unused);
 
-    create_mapping(page, L2_table, index, flags);
+    create_mapping(page, L2_table, index, index + 1, flags);
 
     assert(book[page].status == page_mapped);
 
@@ -128,98 +134,117 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
     // TODO bump counters on commits for MOPs
 }
 
-size_t __vmem_commit_vmem_range(size_t addr, size_t pages, size_t block_size, mem_request_flags flags) {
+size_t __vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags flags) {
     assert(worker_id == 0);
 
     pages <<=1; // How many physical pages this will be
-    block_size <<=1;
+
+    // DMA wants to have all contiguous physical
+    // Otherwise its fine to skip a page of its already commited
+
+    int is_dma = flags & COMMIT_DMA;
 
     // Get the first vtable entry
 
     ptable_t top_table = get_top_level_table();
+    ptable_t l2, l1;
 
-    size_t l0_index = L0_INDEX(addr);
-
-    ptable_t l1 = get_sub_table(top_table, l0_index);
-
-    if(l1 == NULL) {
-        l1 = vmem_create_table(top_table, l0_index, 1);
-    }
-
-    size_t l1_index = L1_INDEX(addr);
-
-    ptable_t l2 = get_sub_table(l1, l1_index);
-
-    if(l2 == NULL) {
-        l2 = vmem_create_table(l1, l1_index, 2);
-    }
-
-    // TODO check not already commited. We may get a few messages.
-
-    readable_table_t* ro =  get_read_only_table(l2);
-
+    size_t l0_index = L0_INDEX(addr) - 1;
+    size_t l1_index = L1_INDEX(addr) - 1; // offset by 1 as do while increments by 1
     size_t ndx = L2_INDEX(addr);
 
-    // Get a block of physical pages to map to
-    size_t phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused, 0);
-    if(phy_pagen == BOOK_END) {
-        printf("Tried to find a block of %lx for range commit\n", block_size);
-        pmem_print_book(book, 0, -1);
-        assert(phy_pagen != BOOK_END);
-    }
+    size_t phy_pagen = 0;
+    size_t in_block = 0;
+    size_t contig_base = 0;
 
-    size_t in_block = book[phy_pagen].len;
+    int first = 1;
 
-    size_t contig_base = phy_pagen;
-    while(pages > 0) {
-        // If we have exhausted the last block get a new one
+    do {
 
-        if(in_block == 0) {
-            contig_base = (size_t)-1;
-            phy_pagen = pmem_find_page_type(block_size > pages ? pages : block_size, page_unused, 0);
-            in_block = book[phy_pagen].len;
+        l1_index++;
+
+        if(l1_index == PAGE_TABLE_ENT_PER_TABLE || first) {
+            l0_index++;
+            l1 = get_sub_table(top_table, l0_index);
+            if(l1 == NULL) l1 = vmem_create_table(top_table, l0_index, 1);
+            if(!first) l1_index = 0;
+            first = 0;
         }
 
-        // If we have walked over a boundary update
+        assert((pages & 1) == 0);
 
-        if(ndx == PAGE_TABLE_ENT_PER_TABLE) {
-            block_finding_page(phy_pagen);
-            l1_index++;
-            if(l1_index == PAGE_TABLE_ENT_PER_TABLE) {
-                l0_index++;
-                l1 = get_sub_table(top_table, l0_index);
-                if(l1 == NULL) l1 = vmem_create_table(top_table, l0_index, 1);
+        l2 = get_sub_table(l1, l1_index);
+        if(l2 == NULL) {
+            l2 = vmem_create_table(l1, l1_index, 2);
+        }
 
-                l1_index = 0;
+        readable_table_t* ro = get_read_only_table(l2);
+
+        assert(ro);
+
+        // We may have lost a few pages to making tables
+        in_block = book[phy_pagen].status == page_unused ? book[phy_pagen].len : 0;
+
+        size_t end_ndx = ndx + (pages / 2);
+        end_ndx = end_ndx > PAGE_TABLE_ENT_PER_TABLE ? PAGE_TABLE_ENT_PER_TABLE : end_ndx;
+
+        size_t pages_tmp = pages;
+
+        pages -= (end_ndx-ndx) * 2;
+
+        do {
+            // Loop to find unmapped range
+            while(ndx != end_ndx && ro->entries[ndx] != VTABLE_ENTRY_FREE) ndx++;
+
+            size_t end_empty = ndx;
+
+            if(ndx == end_ndx) break;
+
+            while(end_empty != end_ndx && ro->entries[end_empty] == VTABLE_ENTRY_FREE) end_empty++;
+
+            // For DMA must not find any mappings
+            if(is_dma) assert(end_empty == end_ndx);
+
+            while(ndx != end_empty) {
+                // commit  [ndx,end_empty)
+                if(in_block < 2) {
+                    if(is_dma) assert(contig_base == 0);
+                    phy_pagen = pmem_find_page_type(is_dma ? pages_tmp : 2, page_unused, PMEM_ALLOW_GREATER, phy_pagen);
+                    assert(phy_pagen != BOOK_END);
+                    contig_base = contig_base == 0 ? phy_pagen : (size_t)(-1);
+                    in_block = book[phy_pagen].len;
+                }
+
+                size_t phy_len = (end_empty - ndx) * 2;
+
+                if(phy_len > in_block) phy_len = in_block;
+
+                if(in_block != phy_len) {
+                    pmem_break_page_to(phy_pagen, phy_len);
+                }
+
+                size_t block_end_ndx = ndx + (phy_len/2);
+
+                assert(book[phy_pagen].status == page_unused);
+                create_mapping(phy_pagen, l2, ndx, block_end_ndx, (flags & COMMIT_UNCACHED) ? TLB_FLAGS_UNCACHED : TLB_FLAGS_DEFAULT);
+                assert(book[phy_pagen].status == page_mapped);
+
+                size_t prev = book[phy_pagen].prev;
+                if(book[prev].status == page_mapped) merge_phy_page_range(prev);
+
+                in_block -= phy_len;
+                phy_pagen+= phy_len;
+                ndx = block_end_ndx;
             }
-            l2 = get_sub_table(l1, l1_index);
-            if(l2 == NULL) l2 = vmem_create_table(l1, l1_index, 2);
-            ro = get_read_only_table(l2);
-            ndx = 0;
-        }
 
-        // Sanity checks
-        assert(phy_pagen != BOOK_END);
-        assert_int_ex(ro->entries[ndx], ==, 0);
+            ndx = end_empty+1;
 
-        assert(in_block != 1);
+        } while(ndx < end_ndx);
 
-        if(in_block != 2) {
-            // break page
-            pmem_break_page_to(phy_pagen, 2);
-        }
+        ndx = 0;
 
-        assert(book[phy_pagen].status == page_unused);
-        create_mapping(phy_pagen, l2, ndx, (flags & COMMIT_UNCACHED) ? TLB_FLAGS_UNCACHED : TLB_FLAGS_DEFAULT);
-        assert(book[phy_pagen].status == page_mapped);
+    } while(pages);
 
-        in_block-=2;
-        ndx++;
-        phy_pagen+=2;
-        pages-=2;
-    }
-
-    unblock_finding_page();
     return (contig_base << PHY_PAGE_SIZE_BITS) + (RES_META_SIZE);
 }
 
@@ -247,6 +272,14 @@ void memmgt_free_mapping(ptable_t parent_handle, readable_table_t* parent_ro, si
 
     if(page_n != 0) {
         pmem_try_merge(page_n);
+    }
+
+    if(is_last_level) {
+        if(clean_notify != NULL) {
+            act_notify_kt tmp = clean_notify;
+            clean_notify = NULL;
+            syscall_cond_notify(tmp);
+        }
     }
 }
 

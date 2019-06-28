@@ -68,12 +68,13 @@ static vpage_range_desc_table_t* desc_table_alloc(void) {
 
         if(desc_table_pool_alloc_n == DESC_ALLOC_N_PER_POOL) {
             desc_table_pool_alloc_n = 0;
-            size_t pagen = pmem_find_page_type(DESC_ALLOC_CHUNK_PAGES, page_unused, 1);
+            size_t pagen = pmem_find_page_type(DESC_ALLOC_CHUNK_PAGES, page_unused, PMEM_PRECISE | PMEM_BACKWARDS, BOOK_END);
             assert_int_ex(pagen, !=, BOOK_END);
             cap_pair pr;
             pr.data = NULL;
             get_phy_page(pagen, 1, DESC_ALLOC_CHUNK_PAGES, &pr, 0);
             assert(pr.data != NULL);
+            pmem_try_merge(pagen);
             CHERI_PRINT_CAP(pr.data);
             desc_table_pool = pr.data;
         }
@@ -1096,7 +1097,8 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         flags |= COMMIT_NOW;
     }
 
-    // We require an extra page as the first can't be in the contiguous chunk as it is already commited
+    // We require an extra page as the first can't be in the contiguous chunk as it is already committed
+    // We could probably fix this by splitting the reservation later
     if(flags & COMMIT_DMA) npages++;
 
     if(req_base != 0) {
@@ -1186,14 +1188,15 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         // TODO think of a good default for how pages to allocate contiguously for commit now
         if(npages > 1) {
             size_t commit_off = (flags & COMMIT_DMA) ? 0 : 1;
-            size_t contig_base = vmem_commit_vmem_range((page_n+commit_off) << UNTRANSLATED_BITS, npages - commit_off,
-                                                        (flags & COMMIT_DMA) ? npages : 0x10, flags);
+            size_t contig_base = vmem_commit_vmem_range((page_n+commit_off) << UNTRANSLATED_BITS, npages - commit_off, flags);
             if (phy_base) *phy_base = contig_base;
         } else if(phy_base) {
             *phy_base = translate_address(page_n << UNTRANSLATED_BITS, 1) + RES_META_SIZE;
         }
     }
 
+    // TODO this is what will actually crack the reservation in two. We could probably commit contiguous without the first page nonsense
+    // As long as we do it here
     size_node(page_n, npages, &index);
 
 #ifdef MAX_POOLS
