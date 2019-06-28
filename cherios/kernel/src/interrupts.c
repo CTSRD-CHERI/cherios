@@ -132,8 +132,15 @@ void kernel_interrupt(register_t cause, uint8_t cpu_id) {
 
 	KERNEL_TRACE("interrupt", "pending: %lx, to_process: %lx cpu: %d ", ipending, toprocess, cpu_id);
 
-	// FIXME: Sometimes this assert got hit. It matters a lot - we get a interrupt storm.
-    kernel_assert(handle_time || toprocess);
+
+	if(!(handle_time || toprocess)) {
+		// FIXME: This probably happens due to lack of setting interrupts atomically.
+		kernel_printf(KRED"Interrupt not expected. Mask should be %lx"KRST, mask);
+		// Try to set interrupts to what they should be
+		for(register_t i = 0; i < INTERRUPTS_N; i++) {
+			interrupts_mask(cpu_id, i, mask & (1 << i));
+		}
+	}
 
 	if (handle_time) {
 		kernel_timer(cpu_id);
