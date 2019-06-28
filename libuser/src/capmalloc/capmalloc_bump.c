@@ -85,10 +85,15 @@ typedef struct old_claim_t {
     dy_pool_range_t range;
 } old_claim_t;
 
+#define COMMIT_CHUNK_MIN 0x2000
+#define COMMIT_CHUNK_MAX 0x800000
 typedef struct dypool {
     res_t head;
     size_t length;
     size_t res_at_base;
+    size_t commited_to;
+
+    size_t commit_chunk;
 
     dy_pool_range_t range;
     size_t dma_off;
@@ -101,7 +106,8 @@ typedef struct dypool {
 
 #define FIXED_POOL_SIZE   (UNTRANSLATED_PAGE_SIZE -  RES_META_SIZE)
 
-#define BIG_OBJECT_THRESHOLD (1 << 17)
+// Need less faulting for bump the pointer
+#define BIG_OBJECT_THRESHOLD (1 << 27)
 
 __thread fixed_pool pools[N_FIXED_POOLS];
 
@@ -317,22 +323,44 @@ static res_t alloc_from_dynamic(size_t size, arena_t* arena, size_t* dma_off) {
         dynamic_pool->range.outstanding_claims = 0;
 
         dynamic_pool->res_at_base = nfo.base;
+
+        dynamic_pool->commited_to = arena->dma ?
+                                    dynamic_pool->range.end :
+                                    align_up_to(nfo.base, UNTRANSLATED_PAGE_SIZE);
     }
 
     res_t head = dynamic_pool->head;
 
     size_t rounded_base = (dynamic_pool->res_at_base + pr.mask) & ~pr.mask;
     size_t skip = rounded_base - dynamic_pool->res_at_base;
+    size_with_meta +=skip;
+
+    size_t new_at_base = dynamic_pool->res_at_base + size_with_meta;
+    size_t commited_to = dynamic_pool->commited_to;
+    size_t in_chunks = dynamic_pool->commit_chunk;
+
+    if(new_at_base > commited_to) {
+        do {
+            size_t end = commited_to + in_chunks;
+            end = end > dynamic_pool->range.end ? dynamic_pool->range.end : end;
+            mem_commit_range(commited_to, (end - commited_to) >> UNTRANSLATED_BITS, 0);
+            commited_to = end;
+            if(in_chunks < COMMIT_CHUNK_MAX) in_chunks <<=1;
+        } while(new_at_base > commited_to);
+        dynamic_pool->commit_chunk = in_chunks;
+        dynamic_pool->commited_to = commited_to;
+    }
+
+
     if(skip) {
         head = rescap_split(head, skip - RES_META_SIZE);
-        size_with_meta +=skip;
     }
     res_t tail = rescap_split(head, aligned_size);
 
     if(arena->dma && dma_off) *dma_off = dynamic_pool->dma_off;
     dynamic_pool->head = tail;
     dynamic_pool->range.outstanding_claims++;
-    dynamic_pool->res_at_base += size_with_meta;
+    dynamic_pool->res_at_base = new_at_base;
     dynamic_pool->length -=size_with_meta;
 
     // We are tracking over the entire pool range, not on a page bases, so this is not needed
@@ -430,6 +458,8 @@ res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) 
 
 static dy_pool_range_t* find_inuse(size_t base, old_claim_t*** previous_next_link) {
 
+    // FIXME: This is really slow...
+
     DLL_FOREACH(arena_t, arena, &arena_list) {
         for(size_t i = 0; i < N_FIXED_POOLS; i++) {
             fixed_pool* p = &arena->pools[i];
@@ -510,6 +540,7 @@ static void init_arena(arena_t* arena, int dma) {
     /* If we are a process it stands to reason we can create threads. Otherwise we can't use free =( */
 
     arena->dynamic_pool.head = NULL;
+    arena->dynamic_pool.commit_chunk = COMMIT_CHUNK_MIN;
 
     for(size_t i = 0; i < N_FIXED_POOLS; i++) {
         arena->pools[i].field = NULL;
