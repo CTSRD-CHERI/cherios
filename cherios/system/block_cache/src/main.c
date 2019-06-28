@@ -508,9 +508,10 @@ static int vblk_write(session_t* session, void * buf, size_t sector) {
     return rw_sector(session, sector, buf, 1);
 }
 
-static uint8_t vblk_status(session_t* session) {
-    session = unseal_session(session);
-    return (uint8_t)message_send(0, 0, 0, 0, session->block_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 3);
+static uint8_t vblk_status(__unused session_t* session) {
+    // cache always ready. probably want to check device status ourselves at some point.
+    //uint8_t status = message_send(0, 0, 0, 0, session->block_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 3);
+    return 0;
 }
 
 static void main_loop(void) {
