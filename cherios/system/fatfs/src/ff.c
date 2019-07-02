@@ -3369,12 +3369,12 @@ FRESULT f_open (
 	LEAVE_FF(dj.obj.fs, res);
 }
 
-extern __thread fs_proxy sr_read;
-extern __thread fs_proxy sr_write;
+extern fs_proxy sr_read;
+extern fs_proxy sr_write;
 
 static ssize_t flush_proxy(fs_proxy* proxy, fulfiller_t fulfill) {
 	requester_t requester = proxy->requester;
-	size_t* ss = &proxy->socket_sector;
+	size_t* ss = &proxy->offset;
 	size_t length = proxy->length;
 	ssize_t res;
 
@@ -3388,26 +3388,23 @@ static ssize_t flush_proxy(fs_proxy* proxy, fulfiller_t fulfill) {
 		res = socket_request_proxy(requester, fulfill, length, 0);
 		assert_int_ex(-res, ==, 0);
 
-		(*ss) += length / SS(NULL);
+		(*ss) += length;
 		proxy->length = 0;
 	}
 
 	return 0;
 }
 
-static ssize_t proxy_amount(fs_proxy* proxy, fulfiller_t fulfill, DWORD sect, uint64_t length) {
-	// TODO fulfill using a proxy to the block devices sectors [sect,sect+count)
+static ssize_t proxy_amount(fs_proxy* proxy, fulfiller_t fulfill, uint64_t offset, uint64_t length) {
 	ssize_t res;
-
-    assert((length & (SS(NULL)-1)) == 0);
 
 	// 1: Emit seek if not at the correct sector
 
-	if((proxy->socket_sector) + (proxy->length/SS(NULL)) != sect) {
+	if((proxy->offset + proxy->length) != offset) {
 		flush_proxy(proxy, fulfill);
-		res = socket_requester_lseek(proxy->requester, sect, SEEK_SET, 0);
+		res = socket_requester_lseek(proxy->requester, offset, SEEK_SET, 0);
 		assert_int_ex(-res, ==, 0);
-		proxy->socket_sector = sect;
+		proxy->offset = offset;
 	}
 
 	proxy->length += length;
@@ -3431,7 +3428,6 @@ FRESULT f_read (
 	DWORD clst, sect;
 	FSIZE_t remain;
 	UINT rcnt, cc, csect;
-	ssize_t sret;
 
 	*br = 0;	/* Clear read byte counter */
 	res = validate(fp, &fs);
@@ -3469,7 +3465,7 @@ FRESULT f_read (
 				if (csect + cc > fs->csize) {	/* Clip at cluster boundary */
 					cc = fs->csize - csect;
 				}
-				if (proxy_amount(&sr_read, fulfill, sect, cc * SS(fs)) < 0) {
+				if (proxy_amount(&sr_read, fulfill, sect * SS(fs), cc * SS(fs)) < 0) {
 					ABORT(fs, FR_DISK_ERR);
 				}
 #if !_FS_READONLY && _FS_MINIMIZE <= 2			/* Replace one of the read sectors with cached data if it contains a dirty sector */
@@ -3478,47 +3474,26 @@ FRESULT f_read (
 					mem_cpy(rbuff + ((fs->winsect - sect) * SS(fs)), fs->win, SS(fs));
 				}
 #else
-				if ((fp->flag & _FA_DIRTY) && fp->sect - sect < cc) {
-					assert(0 && "TODO");
-					//mem_cpy(rbuff + ((fp->sect - sect) * SS(fs)), fp->buf, SS(fs));
-				}
+
 #endif
 #endif
 				rcnt = SS(fs) * cc;				/* Number of bytes transferred */
 				continue;
 			}
-#if !_FS_TINY
-			if (fp->sect != sect) {			/* Load data sector if not in cache */
-#if !_FS_READONLY
-				if (fp->flag & _FA_DIRTY) {		/* Write-back dirty sector cache */
-					if (disk_write(fs->drv, fp->buf, fp->sect, 1) != RES_OK) {
-						ABORT(fs, FR_DISK_ERR);
-					}
-					fp->flag &= ~_FA_DIRTY;
-				}
-#endif
-				if (disk_read(fs->drv, fp->buf, sect, 1) != RES_OK)	{	/* Fill sector cache */
-					ABORT(fs, FR_DISK_ERR);
-				}
-			}
-#endif
 			fp->sect = sect;
 		}
 		rcnt = SS(fs) - ((UINT)fp->fptr % SS(fs));	/* Get partial sector data from sector buffer */
 		if (rcnt > btr) rcnt = btr;
+
 #if _FS_TINY
 		if (move_window(fs, fp->sect) != FR_OK) {	/* Move sector window */
 			ABORT(fs, FR_DISK_ERR);
 		}
 		mem_cpy(rbuff, &fs->win[fp->fptr % SS(fs)], rcnt);	/* Pick partial sector */
 #else
-		/* Pick partial sector */
-        flush_proxy(&sr_read, fulfill);
-        assert(!sr_read.encrypt_lock); // We are not authorised to read this data and will read rubbish
-        sret = socket_fulfill_progress_bytes_unauthorised(fulfill, rcnt, F_PROGRESS,
-													  OTHER_DOMAIN_FP(copy_in), (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL,
-													  LIB_SOCKET_DATA, NULL);
-		if(sret >=0 ) rcnt = (UINT)sret;
+		if(proxy_amount(&sr_read, fulfill,(fp->sect * SS(fs))  + (fp->fptr % SS(fs)) , rcnt) < 0) {
+			ABORT(fs, FR_DISK_ERR);
+		}
 #endif
 	}
 
@@ -3545,7 +3520,6 @@ FRESULT f_write (
 	FATFS *fs;
 	DWORD clst, sect;
 	UINT wcnt, cc, csect;
-	ssize_t sret;
 
 	*bw = 0;	/* Clear write byte counter */
 	res = validate(fp, &fs);
@@ -3589,12 +3563,6 @@ FRESULT f_write (
 				ABORT(fs, FR_DISK_ERR);
 			}
 #else
-			if (fp->flag & _FA_DIRTY) {		/* Write-back sector cache */
-				if (disk_write(fs->drv, fp->buf, fp->sect, 1) != RES_OK) {
-					ABORT(fs, FR_DISK_ERR);
-				}
-				fp->flag &= ~_FA_DIRTY;
-			}
 #endif
 			sect = clust2sect(fs, fp->clust);	/* Get current sector */
 			if (!sect) ABORT(fs, FR_INT_ERR);
@@ -3604,7 +3572,7 @@ FRESULT f_write (
 				if (csect + cc > fs->csize) {	/* Clip at cluster boundary */
 					cc = fs->csize - csect;
 				}
-				if (proxy_amount(&sr_write, fulfill, sect, cc * SS(fs)) < 0) {
+				if (proxy_amount(&sr_write, fulfill, sect * SS(fs), cc * SS(fs)) < 0) {
 					ABORT(fs, FR_DISK_ERR);
 				}
 #if _FS_MINIMIZE <= 2
@@ -3614,11 +3582,7 @@ FRESULT f_write (
 					fs->wflag = 0;
 				}
 #else
-				if (fp->sect - sect < cc) { /* Refill sector cache if it gets invalidated by the direct write */
-					assert(0 && "TODO");
-					// mem_cpy(fp->buf, wbuff + ((fp->sect - sect) * SS(fs)), SS(fs));
-					fp->flag &= ~_FA_DIRTY;
-				}
+
 #endif
 #endif
 				wcnt = SS(fs) * cc;		/* Number of bytes transferred */
@@ -3630,12 +3594,7 @@ FRESULT f_write (
 				fs->winsect = sect;
 			}
 #else
-			if (fp->sect != sect) {		/* Fill sector cache with file data */
-				if (fp->fptr < fp->obj.objsize &&
-					disk_read(fs->drv, fp->buf, sect, 1) != RES_OK) {
-						ABORT(fs, FR_DISK_ERR);
-				}
-			}
+
 #endif
 			fp->sect = sect;
 		}
@@ -3648,14 +3607,11 @@ FRESULT f_write (
 		mem_cpy(&fs->win[fp->fptr % SS(fs)], wbuff, wcnt);	/* Fit partial sector */
 		fs->wflag = 1;
 #else
-		/* Pick partial sector */
-        flush_proxy(&sr_write, fulfill);
-		assert(!sr_write.encrypt_lock); // We are not authorised to read this data and will read rubbish
-		sret = socket_fulfill_progress_bytes_unauthorised(fulfill, wcnt, F_PROGRESS,
-													  OTHER_DOMAIN_FP(copy_out), (capability)&fp->buf[fp->fptr % SS(fs)], 0, NULL, NULL,
-													  LIB_SOCKET_DATA, NULL);
-		if(sret >=0 ) wcnt = (UINT)sret;
-		fp->flag |= _FA_DIRTY;
+
+		if(proxy_amount(&sr_write, fulfill,(fp->sect * SS(fs))  + (fp->fptr % SS(fs)) , wcnt) < 0) {
+			ABORT(fs, FR_DISK_ERR);
+		}
+
 #endif
 	}
 
@@ -3687,14 +3643,6 @@ FRESULT f_sync (
 	res = validate(fp, &fs);	/* Check validity of the object */
 	if (res == FR_OK) {
 		if (fp->flag & _FA_MODIFIED) {	/* Is there any change to the file? */
-#if !_FS_TINY
-			if (fp->flag & _FA_DIRTY) {	/* Write-back cached data if needed */
-				if (disk_write(fs->drv, fp->buf, fp->sect, 1) != RES_OK) {
-					LEAVE_FF(fs, FR_DISK_ERR);
-				}
-				fp->flag &= ~_FA_DIRTY;
-			}
-#endif
 			/* Update the directory entry */
 			tm = GET_FATTIME();				/* Modified time */
 #if _FS_EXFAT
@@ -4067,19 +4015,6 @@ FRESULT f_lseek (
 			}
 		}
 		if (fp->fptr % SS(fs) && nsect != fp->sect) {	/* Fill sector cache if needed */
-#if !_FS_TINY
-#if !_FS_READONLY
-			if (fp->flag & _FA_DIRTY) {			/* Write-back dirty sector cache */
-				if (disk_write(fs->drv, fp->buf, fp->sect, 1) != RES_OK) {
-					ABORT(fs, FR_DISK_ERR);
-				}
-				fp->flag &= ~_FA_DIRTY;
-			}
-#endif
-			if (disk_read(fs->drv, fp->buf, nsect, 1) != RES_OK) {	/* Fill sector cache */
-				ABORT(fs, FR_DISK_ERR);
-			}
-#endif
 			fp->sect = nsect;
 		}
 #if !_FS_READONLY
@@ -4441,15 +4376,6 @@ FRESULT f_truncate (
 		}
 		fp->obj.objsize = fp->fptr;	/* Set file size to current R/W point */
 		fp->flag |= _FA_MODIFIED;
-#if !_FS_TINY
-		if (res == FR_OK && (fp->flag & _FA_DIRTY)) {
-			if (disk_write(fs->drv, fp->buf, fp->sect, 1) != RES_OK) {
-				res = FR_DISK_ERR;
-			} else {
-				fp->flag &= ~_FA_DIRTY;
-			}
-		}
-#endif
 		if (res != FR_OK) ABORT(fs, res);
 	}
 

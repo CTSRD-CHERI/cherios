@@ -439,7 +439,7 @@ __used ssize_t oobff(capability arg, request_t* request, __unused uint64_t offse
     request_type_e req = request->type;
 
     if(req == REQUEST_SEEK) {
-        assert_int_ex(ss->addr & (SECTOR_SIZE-1), ==, 0);
+
         int64_t seek_offset = request->request.seek_desc.v.offset;
         int whence = request->request.seek_desc.v.whence;
 
@@ -447,11 +447,11 @@ __used ssize_t oobff(capability arg, request_t* request, __unused uint64_t offse
 
         switch (whence) {
             case SEEK_CUR:
-                target_offset = (seek_offset * SECTOR_SIZE) + ss->addr;
+                target_offset = (seek_offset) + ss->addr;
                 break;
             case SEEK_SET:
                 if(seek_offset < 0) return E_OOB;
-                target_offset = (size_t)(seek_offset * SECTOR_SIZE);
+                target_offset = (size_t)(seek_offset);
                 break;
             case SEEK_END:
             default:
@@ -490,7 +490,7 @@ static int handle_sock_session(session_sock* ss) {
     }
 
     ssize_t res = socket_fulfill_progress_bytes_authorised(ss->ff, SOCK_INF,
-            F_CHECK | F_DONT_WAIT | F_PROGRESS,
+            F_CHECK | F_DONT_WAIT | F_PROGRESS | F_SKIP_PROXY_OOB,
             cert, (capability)ss, 0);
 
     if(res == E_AGAIN) return 0;

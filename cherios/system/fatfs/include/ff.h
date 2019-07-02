@@ -23,7 +23,7 @@
 #include "spinlock.h"
 
 typedef struct fs_proxy {
-	size_t socket_sector;
+	size_t offset;
 	size_t length;
 	requester_t requester;
 	locked_t encrypt_lock;

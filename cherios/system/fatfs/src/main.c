@@ -53,7 +53,7 @@ struct sessions_t {
     uint64_t write_fptr;
     enum poll_events events;
     uint8_t current;
-    spinlock_t session_lock;
+    uint8_t more;
     uint8_t in_use;
     uint8_t nice_close;
 } sessions[MAX_HANDLES];
@@ -62,21 +62,8 @@ size_t first_free = 0;
 size_t first_file = MAX_HANDLES;
 size_t n_files = 0;
 
-#define N_WORKERS 1
-#define JOB_MAX 3
-
-struct {
-    thread t;
-    act_kt message;
-    volatile uint8_t jobs_assigned;
-    volatile uint8_t jobs_done;
-} workers[N_WORKERS];
-
-
-__thread fs_proxy sr_read;
-__thread fs_proxy sr_write;
-
-act_notify_kt main_notify;
+fs_proxy sr_read;
+fs_proxy sr_write;
 
 static void set_encrypt_lock(fs_proxy* proxy, locked_t locked) {
     if(proxy->encrypt_lock != locked) {
@@ -121,8 +108,14 @@ void close_file(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
+ssize_t full_oob(capability arg, request_t* request,  uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     struct sessions_t* fil = (struct sessions_t*)arg;
+
+    if(offset != 0) {
+        fil->more = 1;
+        return E_AGAIN; // Ignore oobs mid stream, we need to proxy first
+    }
+
     assert(!fil->nice_close);
     request_type_e req = request->type;
     uint64_t* modify;
@@ -175,83 +168,110 @@ ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, _
 
 }
 
+typedef FRESULT f_rw_type_f (
+        FIL* fp,			/* Pointer to the file object */
+fulfiller_t fulfill,
+        UINT btw,			/* Number of bytes to write */
+UINT* bw			/* Pointer to number of bytes written */
+);
 
+int proxy_file_to_cache(struct sessions_t* session, uint8_t service_write) {
 
-void handle(enum poll_events events, struct sessions_t* session) {
     FRESULT fresult = 0;
     ssize_t res;
     UINT bytes_handled = 0;
-    UINT bytes_to_push;
+
+    fulfiller_t fulfiller;
+    f_rw_type_f* rw_f;
+    fs_proxy* proxy;
+    uint64_t* fptr;
+
+    if(service_write) {
+        fulfiller = session->sock.read.push_reader;
+        rw_f = &f_write;
+        proxy = &sr_write;
+        fptr = &session->write_fptr;
+    } else {
+        fulfiller = session->sock.write.pull_writer;
+        rw_f = &f_read;
+        proxy = &sr_read;
+        fptr = &session->read_fptr;
+    }
+
+    session->current = service_write;
+
+    // This will handle leading oobs and oobs we already handled once
+    res = socket_fulfill_progress_bytes_unauthorised(fulfiller, SOCK_INF,
+                                                     F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB | F_SET_MARK | F_SKIP_ALL_UNTIL_MARK,
+                                                     NULL,
+                                                     (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
+                                                     NULL, NULL, TRUSTED_DATA);
+
+    assert_int_ex(-res, ==, -E_AGAIN);
+
+    int any_proxy = 0;
+
+    do {
+        session->more = 0;
+
+        // This will count bytes and handle oobs. We set the mark to know how much to skip later
+        res = socket_fulfill_progress_bytes_unauthorised(fulfiller, SOCK_INF,
+                                                         F_CHECK | F_SET_MARK | F_START_FROM_LAST_MARK | F_DONT_WAIT,
+                                                         NULL,
+                                                         (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
+                                                         NULL, NULL, TRUSTED_DATA);
+
+        assert(res >= 0 || res == E_AGAIN || res == E_SOCKET_CLOSED);
+
+        if(res > 0) {
+            if(session->fil.fptr != *fptr) {
+                f_lseek(&session->fil, *fptr);
+            }
+            set_encrypt_lock(proxy, session->encrypt_lock);
+            fresult = rw_f(&session->fil, fulfiller, (UINT)res, &bytes_handled);
+            assert(bytes_handled == res);
+            *fptr +=res;
+            any_proxy = 1;
+        }
+
+    } while(res > 0 && session->more);
+
+    return any_proxy;
+}
+
+void handle(enum poll_events events, struct sessions_t* session) {
 
     assert_int_ex(session->in_use, ==, 1);
 
-    assert(!session->nice_close);
+    assert(session->nice_close < 2);
     assert(session->fil.obj.fs);
+
+    int any_proxy = 0;
+    int was_partial_closed = session->nice_close;
 
     if(events & POLL_IN) {
         // service write (we read)
-        fulfiller_t read_fulfill = session->sock.read.push_reader;
-        assert_int_ex(in_proxy(read_fulfill), ==, 0);
-        uint64_t btp = socket_fulfiller_bytes_requested(read_fulfill);
-        do {
 
-            bytes_to_push = (btp > UINT_MAX) ? (UINT) UINT_MAX : (UINT)btp;
-            // This will handle all oob requests before any data
-            session->current = 1;
-            res = socket_fulfill_progress_bytes_unauthorised(read_fulfill, SOCK_INF,
-                                                                 F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB,
-                                                                 NULL,
-                                                                 (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
-                                                                 NULL, NULL, TRUSTED_DATA);
-            if(res == E_SOCKET_CLOSED) break;
-            assert(res >= 0 || (res == E_AGAIN));
-            if(session->fil.fptr != session->write_fptr) {
-                f_lseek(&session->fil, session->write_fptr);
-            }
-            set_encrypt_lock(&sr_write, session->encrypt_lock);
-            fresult = f_write(&session->fil, read_fulfill, (UINT)bytes_to_push, &bytes_handled);
-            btp -= bytes_handled;
-            session->write_fptr+=bytes_handled;
-        } while(fresult == 0 && btp > 0 && bytes_handled != 0);
+        any_proxy |= proxy_file_to_cache(session, 1);
+
     }
     if(events & POLL_OUT) {
         // service read (we write)
-        fulfiller_t write_fulfill = session->sock.write.pull_writer;
-        assert_int_ex(in_proxy(write_fulfill), ==, 0);
-        uint64_t btp = socket_fulfiller_bytes_requested(write_fulfill);
-        do {
 
-            bytes_to_push = (btp > UINT_MAX) ? (UINT) UINT_MAX : (UINT)btp;
-            // This will handle all oob requests before any data
-            session->current = 0;
-            res = socket_fulfill_progress_bytes_unauthorised(write_fulfill, SOCK_INF,
-                                                         F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB,
-                                                         NULL,
-                                                         (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
-                                                         NULL,NULL, TRUSTED_DATA);
-            if(res == E_SOCKET_CLOSED) break;
-            assert(res >= 0 || (res == E_AGAIN));
-            if(session->fil.fptr != session->read_fptr) {
-                f_lseek(&session->fil, session->read_fptr);
-            }
-            set_encrypt_lock(&sr_read, session->encrypt_lock);
-            fresult = f_read(&session->fil, write_fulfill, (UINT)bytes_to_push, &bytes_handled);
-            btp -= bytes_handled;
-            session->read_fptr +=bytes_handled;
-        } while(fresult == 0 && btp > 0 && bytes_handled != 0);
+        assert(session->nice_close == 0);
+
+        any_proxy |= proxy_file_to_cache(session, 0);
     }
 
-    if(session->nice_close) return;
+    assert(!(any_proxy && was_partial_closed));
 
-    enum poll_events wait_for = POLL_NONE;
-    if(session->sock.con_type & CONNECT_PUSH_READ) wait_for |= POLL_IN;
-    if(session->sock.con_type & CONNECT_PULL_WRITE) wait_for |= POLL_OUT;
-
-    session->events = wait_for;
+    if(session->nice_close && !any_proxy) {
+        session->events = 0;
+        close_file(NULL, session, 2);
+    }
 }
 
-void worker_loop(register_t r, __unused capability c) {
-
+static void init_block_cache_requesters(void) {
     ssize_t ret;
 
     requester_t read = socket_malloc_requester_32(SOCK_TYPE_PULL, NULL);
@@ -264,41 +284,10 @@ void worker_loop(register_t r, __unused capability c) {
     ret = virtio_new_socket(write, CONNECT_PUSH_WRITE);
     assert_int_ex(ret, ==, 0);
 
-    sr_read.socket_sector = sr_write.socket_sector = sr_read.length = sr_write.length = 0;
+    sr_read.offset = sr_write.offset = sr_read.length = sr_write.length = 0;
 
     sr_read.requester = read;
     sr_write.requester = write;
-
-    while(1) {
-        msg_t *msg = get_message();
-        handle((enum poll_events)msg->a0, (struct sessions_t*)msg->c3);
-        next_msg();
-        workers[r].jobs_done++;
-        syscall_cond_notify(main_notify);
-    }
-}
-
-void assign_work(enum poll_events events, struct sessions_t* session) {
-    // TODO proper fan out
-    size_t ndx = 0;
-
-    while(workers[ndx].jobs_assigned - workers[ndx].jobs_done >= JOB_MAX) {
-        syscall_cond_wait(0, 0);
-    }
-
-    message_send(events,0,0,0,(capability)session,NULL,NULL,NULL,workers[ndx].message, SEND, 0);
-}
-
-
-void spawn_workers(void) {
-    main_notify = act_self_notify_ref;
-    for(register_t i = 0; i < N_WORKERS;i++) {
-        char name[] = "fatwrk_00";
-        itoa((int)i, name+7,16);
-        workers[i].jobs_done = workers[i].jobs_assigned = 0;
-        workers[i].t = thread_new(name, i, act_self_ref, &worker_loop);
-        workers[i].message = syscall_act_ctrl_get_ref(get_control_for_thread(workers[i].t));
-    }
 }
 
 
@@ -353,7 +342,6 @@ int open_file(int mode, requester_t read_requester, requester_t write_requester,
         if((fres = f_open(fp, file_name, (BYTE)mode)) == 0) {
             session->read_fptr = session->write_fptr = 0;
             session->encrypt_lock = encrpyt;
-            spinlock_init(&session->session_lock);
             session->in_use = 1;
             session->nice_close = 0;
             size_t next = session->next_ndx;
@@ -429,6 +417,7 @@ void request_loop(void) {
 
                 enum poll_events event = 0;
 
+                // Don't go from checkpoint, we want to wake up to mark oobs as complete when proxying is finished
                 if(session->events & POLL_IN) {
                     POLL_ITEM_F(event_rd, sock_sleep, sock_event, session->sock.read.push_reader, POLL_IN, 0);
                     event |= event_rd;
@@ -439,8 +428,7 @@ void request_loop(void) {
                 }
 
                 if(event & (POLL_IN | POLL_OUT)) {
-                    session->events = POLL_NONE;
-                    assign_work(event, session);
+                        handle(event, session);
                 } else if(event){
                     if(event & POLL_HUP) {
                         close_file(prev_ptr, session, UINT8_MAX);
@@ -493,7 +481,7 @@ int main(capability fs_cap) {
         goto er;
     }
 
-    spawn_workers();
+    init_block_cache_requesters();
 
     namespace_register(namespace_num_fs, act_self_ref);
 
