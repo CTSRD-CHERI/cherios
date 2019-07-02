@@ -73,7 +73,7 @@ int main(__unused register_t arg, __unused capability carg) {
 
     assert_int_ex(result, ==, ms);
 
-    result = strcmp(buf, message);
+    result = strncmp(buf, message, ms);
 
     assert_int_ex(result, == , 0);
 
