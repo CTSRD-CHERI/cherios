@@ -38,6 +38,8 @@
 
 // All the functions that this library exports
 
+typedef int vprintf_t(const char *fmt, va_list ap);
+
 #define SOCKET_LIB_IF_LIST(ITEM, ...)\
 /* Call after object init in your own library */\
     INIT_OTHER_OBJECT_IF_ITEM(ITEM, lib_socket_if_t, __VA_ARGS__)\
@@ -113,7 +115,8 @@
     ITEM(socket_fulfill_progress_bytes_soft_join, ssize_t, (fulfiller_t push_read, fulfiller_t pull_write, size_t bytes, enum FULFILL_FLAGS flags), __VA_ARGS__)\
     ITEM(socket_requester_restrict_auth, int, (requester_t r, found_id_t* data_auth, found_id_t* oob_auth), __VA_ARGS__)\
     ITEM(socket_requester_restrict_seal, int, (requester_t r, sealing_cap sc), __VA_ARGS__)\
-    ITEM(socket_requester_set_extra_data, int, (requester_t r, capability extra), __VA_ARGS__)
+    ITEM(socket_requester_set_extra_data, int, (requester_t r, capability extra), __VA_ARGS__)\
+    ITEM(socket_set_printf, void, (vprintf_t* vprintf, capability data_arg), __VA_ARGS__)\
 
 // Currently dont_wait and recv with a pull socket interact badly. This ignores the don't wait flag.
 #define FORCE_WAIT_SOCKET_RECV 1
@@ -184,7 +187,11 @@ enum FULFILL_FLAGS {
     F_TRACE                 = 0x40, // Same as MSG_TRACE
     F_CANCEL_NON_OOB        = 0x80,
     F_SKIP_OOB              = 0x100,
+    F_SKIP_PROXY_OOB        = 0x200, // Only skip oobs inside proxies. Needs to be larger than F_SKIP_OOB
+    F_SKIP_ALL_UNTIL_MARK   = 0x400
 };
+
+#define SKIP_OOB_PROXY(FLAGS) (((FLAGS) & F_SKIP_PROXY_OOB) / (F_SKIP_PROXY_OOB / F_SKIP_OOB))
 
 #define SOCK_TYPE_PUSH 0
 #define SOCK_TYPE_PULL 1
@@ -263,6 +270,8 @@ enum poll_events {
 
 // DONT USE THESE TYPES EXTERNALLY. THEY ARE HERE FOR SIZE ONLY
 
+// FIXME I might have been a bit overzelous on the volatile qualifiers here.
+
 // Uni-directional socket.
 typedef struct uni_dir_socket_requester_fulfiller_component  {
     guard_t guard; // if you intend to seal something you should include this
@@ -303,8 +312,10 @@ typedef struct uni_dir_socket_fulfiller {
     guard_t guard; // if you intend to seal something you should include this
     uni_dir_socket_requester* requester;  // Read only. But this doesn't matter too much now that everything is in the same library
     volatile uint64_t partial_fulfill_bytes;
-    volatile uint64_t partial_fulfill_mark_bytes;
-    volatile uint16_t fulfill_mark_ptr;
+    uint64_t partial_fulfill_mark_bytes;
+    uint64_t partial_fulfill_proxy_mark_bytes;
+    volatile uint16_t fulfill_proxy_mark_ptr;
+    uint16_t fulfill_mark_ptr;
     uint8_t socket_type;
     uint8_t connected;
 
@@ -312,6 +323,9 @@ typedef struct uni_dir_socket_fulfiller {
     volatile uint16_t proxy_fin_times;      // how many times proxies have finished (can wrap)
     uni_dir_socket_requester* proxyied_in;  // set if proxied
 } uni_dir_socket_fulfiller;
+
+#define MARK_PTR(f, in_proxy) *((in_proxy) ? &(f)->fulfill_proxy_mark_ptr : &(f)->fulfill_mark_ptr)
+#define MARK_BYTES(f, in_proxy) *((in_proxy) ? &(f)->partial_fulfill_proxy_mark_bytes : &(f)->partial_fulfill_mark_bytes)
 
 #define SIZE_OF_request(buffer_size) ((sizeof(request_t) * buffer_size) + sizeof(uni_dir_socket_requester))
 #define SIZE_OF_fulfill sizeof(uni_dir_socket_fulfiller)

@@ -36,9 +36,29 @@
 #include "assert.h"
 #include "cheric.h"
 
-//#define printf(...) syscall_printf(__VA_ARGS__)
-#define printf(...) // Printf now not in the same dynamic library. To get this back finish dynamic linking.
+__thread vprintf_t* vprintf_ptr;
+__thread capability vprintf_data;
 
+__printflike(1, 2)
+int socket_printf(const char *fmt, ...) {
+    int ret = -1;
+    if(vprintf_ptr) {
+        va_list ap;
+        va_start(ap, fmt);
+        ret = INVOKE_FUNCTION_POINTER(vprintf_ptr, vprintf_data, fmt, ap);
+        va_end(ap);
+    }
+    return ret;
+}
+
+__attribute__((used))
+void socket_set_printf(vprintf_t* vprintf, capability data_arg) {
+    vprintf_ptr = vprintf;
+    vprintf_data = data_arg;
+}
+
+// Obviously you cannot debug the socket used with printf
+#define printf(...) socket_printf(__VA_ARGS__)
 
 __unused static inline int is_empty(uni_dir_socket_requester* requester) {
     return (requester->fulfiller_component.fulfill_ptr == requester->requeste_ptr);
@@ -308,11 +328,15 @@ ssize_t socket_request_proxy(requester_t r, fulfiller_t f, uint64_t length, uint
 
     if(!requester || !fulfiller) return E_BAD_SEAL;
 
+    if(fulfiller->socket_type != requester->socket_type) return E_SOCKET_WRONG_TYPE;
+
     if(fulfiller->proxy_times != fulfiller->proxy_fin_times) {
         if(fulfiller->proxyied_in != requester) return E_IN_PROXY;
+    } else if(fulfiller->proxyied_in != requester) {
+        // If this is a new proxy source then reset the mark.
+        MARK_PTR(fulfiller, 1) = fulfiller->requester->fulfiller_component.fulfill_ptr;
+        MARK_BYTES(fulfiller, 1) = fulfiller->partial_fulfill_bytes;
     }
-
-    if(fulfiller->socket_type != requester->socket_type) return E_SOCKET_WRONG_TYPE;
 
     fulfiller->proxyied_in = requester;
     fulfiller->proxy_times +=1;
@@ -634,7 +658,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
     if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill %lx bytes. flags %x\n", bytes, flags);
 
-    if((flags & F_PROGRESS) && (flags & (F_START_FROM_LAST_MARK | F_SET_MARK))) {
+    if((flags & F_PROGRESS) && (flags & (F_START_FROM_LAST_MARK))) {
         if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill bad flags\n");
         return E_BAD_FLAGS;
     }
@@ -646,7 +670,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
     ssize_t ret;
 
     // We cannot fulfill anything until proxying is done
-    if(!(flags & F_IN_PROXY)) {
+    if(!(flags & F_IN_PROXY) && (flags & F_PROGRESS)) {
         ret = socket_internal_fulfiller_wait_proxy(fulfiller, flags & F_DONT_WAIT, 0);
         if(ret < 0) return ret;
         assert_int_ex(fulfiller->proxy_times, ==, fulfiller->proxy_fin_times);
@@ -660,21 +684,25 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
     size_t bytes_remain = bytes;
     uint64_t partial_bytes = (flags & F_START_FROM_LAST_MARK) ?
-                             fulfiller->partial_fulfill_mark_bytes : fulfiller->partial_fulfill_bytes;
+                             MARK_BYTES(fulfiller, flags & F_IN_PROXY) : fulfiller->partial_fulfill_bytes;
     uint16_t mask = requester->buffer_size - 1;
+
+    uint16_t mark_ptr = MARK_PTR(fulfiller,flags & F_IN_PROXY);
+
     uint16_t fptr = (flags & F_START_FROM_LAST_MARK) ?
-                    fulfiller->fulfill_mark_ptr : requester->fulfiller_component.fulfill_ptr;
+                    mark_ptr : requester->fulfiller_component.fulfill_ptr;
 
     uint16_t required = 1;
 
     // To account for the fact that we have fast forwarded
     if(flags & F_START_FROM_LAST_MARK)
         required +=
-                (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr);
+                (mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr);
 
 
-    int un_authed = (requester->data_for_foundation && (requester->data_for_foundation != for_auth));
-    int oob_un_authed = (requester->oob_for_foundation && (requester->oob_for_foundation != for_auth));
+    // Can still set checkpoints even if unauthorised
+    int un_authed = (visit || (flags & F_PROGRESS)) && (requester->data_for_foundation && (requester->data_for_foundation != for_auth));
+    int oob_un_authed = (oob_visit || (flags & F_PROGRESS)) && (requester->oob_for_foundation && (requester->oob_for_foundation != for_auth));
 
     sealing_cap fulfill_sealer = requester->data_seal;
 #define COND_SEAL(X, Y) (Y ? cheri_seal(X,Y) : X)
@@ -686,6 +714,13 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 #define CS(X) COND_SEAL(cheri_setbounds(X, (cheri_getlen(X) - cheri_getoffset(X))), fulfill_sealer)
 #endif
     if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill begin %x \n", fptr);
+
+    int skipping = (flags & F_SKIP_ALL_UNTIL_MARK);
+    uint16_t skip_ptr = mark_ptr;
+    uint64_t skip_bytes = MARK_BYTES(fulfiller, flags & F_IN_PROXY);
+
+    if(skipping) assert((skip_ptr - fptr) <= mask);
+
     while(bytes_remain != 0) {
 
         if((flags & F_CHECK) && partial_bytes == 0) {
@@ -699,17 +734,29 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
         // Check auth
 
-        if((req->type >= REQUEST_OUT_BAND && oob_un_authed) || (req->type && un_authed))
+        if((req->type >= REQUEST_OUT_BAND && oob_un_authed) || ((req->type < REQUEST_OUT_BAND) && un_authed))
             return E_AUTH_TOKEN_ERROR;
 
         // Work out how much we should process
 
         uint64_t effective_len = req->length - partial_bytes;
 
+        int some = 0;
+
+        if(skipping) {
+            int all = fptr - skip_ptr > mask;
+            some = (skip_ptr == fptr) && (partial_bytes < skip_bytes);
+            skipping = all || some;
+            if(some) {
+                effective_len = skip_bytes - partial_bytes;
+            }
+            if(SOCK_TRACING && (flags & F_TRACE)) printf("Skill skipping: %d. %d %d.\n", skipping, all, some);
+        }
+
         uint64_t new_partial;
         uint64_t bytes_to_process;
         int progress_this;
-        if(effective_len > bytes_remain) {
+        if((effective_len > bytes_remain) || some) {
             // We don't free this one
             new_partial = partial_bytes + bytes_remain;
             bytes_to_process = bytes_remain;
@@ -740,17 +787,20 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
             if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill proxy\n");
             proxy = req->request.proxy_for;
             ret = socket_internal_fulfill_progress_bytes_impl(proxy, bytes_to_process,
-                                                         flags | F_IN_PROXY,
+                                                         flags | F_IN_PROXY | SKIP_OOB_PROXY(flags),
                                                          visit, arg, offset, oob_visit, sub_visit,
                                                          data_arg, oob_data_arg, for_auth);
         } else if(req->type == REQUEST_JOIN) {
 
-            if(flags & F_CANCEL_NON_OOB) break;
+            if(flags & F_CANCEL_NON_OOB) {
+                ret = E_AGAIN;
+                break;
+            }
 
             push_to = req->request.push_to;
             ssize_t sub_ret;
 
-            if(sub_visit) {
+            if(sub_visit && !skipping) {
                 ret = 0;
                 if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with sub visit\n");
                 // User can sub their own buffers. Keep getting them and pushing as requests
@@ -773,7 +823,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                     ret +=sub_ret;
                 }
 
-            } else if(visit) {
+            } else if(visit && !skipping) {
                 ret = 0;
 
                 if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill join with normal visit\n");
@@ -839,9 +889,12 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
             if(ret == 0) ret = sub_ret;
 
-        } else {
+        } else if(!skipping) {
             if (req->type == REQUEST_IM || req->type == REQUEST_IND) {
-                if(flags & F_CANCEL_NON_OOB) break;
+                if(flags & F_CANCEL_NON_OOB) {
+                    ret = E_AGAIN;
+                    break;
+                }
                 if(visit) {
                     char *buf = (req->type == REQUEST_IM) ? req->request.im + partial_bytes : req->request.ind + partial_bytes;
                     ret = INVOKE_FUNCTION_POINTER(visit, data_arg, arg, CS(buf), offset, bytes_to_process);
@@ -875,6 +928,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
         // Release this request as it is finished
         if(progress_this) {
+            if(SOCK_TRACING && (flags & F_TRACE)) printf("Sock fulfill progress 1\n");
             if(progress_this & F_PROGRESS) {
                 access->fulfilled_bytes += req->length;
                 if(req->type == REQUEST_PROXY) {
@@ -891,8 +945,9 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                 if(requester->drb_fulfill_ptr) *requester->drb_fulfill_ptr += req->drb_fullfill_inc;
                 socket_internal_set_and_notify(&access->fulfill_ptr, fptr, &access->requester_waiting);
                 required = 1;
-            } else {
-                fulfiller->fulfill_mark_ptr = fptr;
+            }
+            if(progress_this & F_SET_MARK) {
+                MARK_PTR(fulfiller, flags & F_IN_PROXY) = fptr;
             }
         }
 
@@ -904,7 +959,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
     if(flags & F_PROGRESS) {
         fulfiller->partial_fulfill_bytes = partial_bytes;
     } else if(flags & F_SET_MARK) {
-        fulfiller->partial_fulfill_mark_bytes = partial_bytes;
+        MARK_BYTES(fulfiller,flags & F_IN_PROXY) = partial_bytes;
     }
 
     ssize_t actually_fulfill = bytes - bytes_remain;
@@ -923,7 +978,7 @@ ssize_t socket_fulfill_progress_bytes_authorised(fulfiller_t fulfiller, size_t b
     _safe cap_pair pair;
     found_id_t* id = rescap_check_cert(cert, &pair);
     ful_pack* pack = (ful_pack*)pair.data;
-    return socket_internal_fulfill_progress_bytes_impl(f, bytes, flags, pack->ful, arg, offset, pack->ful_oob, pack->sub, pack->data_arg, pack->oob_data_arg, id);
+    return socket_internal_fulfill_progress_bytes_impl(f, bytes, flags & ~F_IN_PROXY, pack->ful, arg, offset, pack->ful_oob, pack->sub, pack->data_arg, pack->oob_data_arg, id);
 }
 
 __attribute__((used))
@@ -934,7 +989,7 @@ ssize_t socket_fulfill_progress_bytes_unauthorised(fulfiller_t fulfiller, size_t
     uni_dir_socket_fulfiller* f = UNSEAL_CHECK_FULFILLER(fulfiller);
     if(!f) return E_BAD_SEAL;
 
-    return socket_internal_fulfill_progress_bytes_impl(f, bytes, flags, visit, arg, offset, oob_visit, sub_visit, data_arg, oob_data_arg, NULL);
+    return socket_internal_fulfill_progress_bytes_impl(f, bytes, flags & ~F_IN_PROXY, visit, arg, offset, oob_visit, sub_visit, data_arg, oob_data_arg, NULL);
 }
 
 __attribute__((used))
@@ -1231,13 +1286,13 @@ static enum poll_events socket_internal_fulfill_poll(uni_dir_socket_fulfiller* f
             uint16_t amount = 1;
             // We wait for an amount to be present such there is something past our checkpoint
             if(from_check) amount +=
-                                   (fulfiller->fulfill_mark_ptr - fulfiller->requester->fulfiller_component.fulfill_ptr) & (fulfiller->requester->buffer_size-1);
+                                   (MARK_PTR(fulfiller, in_proxy) - fulfiller->requester->fulfiller_component.fulfill_ptr) & (fulfiller->requester->buffer_size-1);
 
             wait_res = socket_internal_fulfill_outstanding_wait(fulfiller, amount, !set_waiting, 1);
 
             if(wait_res == 0) {
                 request_t *req = &fulfiller->requester->request_ring_buffer[
-                        (from_check ? fulfiller->fulfill_mark_ptr : fulfiller->requester->fulfiller_component.fulfill_ptr)
+                        (from_check ? MARK_PTR(fulfiller,in_proxy) : fulfiller->requester->fulfiller_component.fulfill_ptr)
                         & (fulfiller->requester->buffer_size-1)];
                 if(req->type == REQUEST_PROXY) {
                     uni_dir_socket_fulfiller* proxy = req->request.proxy_for;
