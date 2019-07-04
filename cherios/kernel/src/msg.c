@@ -47,6 +47,21 @@ DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
 #define ACT_QUEUE_FILL(act) ((msg_nb_t)TRANS_HD(act->msg_tsx) - act->msg_queue->header.start)
 
+static inline void dump_queue(act_t* act) {
+    queue_t* q = act->msg_queue;
+
+    kernel_printf("Act %s queue size is %x. write = %x. read = %x. items = %x\n", act->name, q->header.len, *q->header.end, q->header.start,  *q->header.end - q->header.start);
+
+    size_t mask = q->header.len - 1;
+
+    size_t read = q->header.start & mask;
+    size_t write = *q->header.end & mask;
+
+    for(size_t i = 0; i != q->header.len; i++) {
+        kernel_printf("Token in slot %lx is %lx %s\n", i, cheri_getoffset(q->msg[i].c1), i == write ? "<-- write" : (i == read ? "<-- read" : ""));
+    }
+}
+
 int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t a0, register_t a1, register_t a2, register_t a3,
 			 register_t v0,
@@ -70,15 +85,16 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 	uint64_t last_tsx = *tsx_ptr;
 
 	while(1) {
-		restart:
+		restart: {}
+	    uint64_t start = queue->header.start;
 		LOAD_LINK(tsx_ptr, 64, msg_tsx);
 
 		uint64_t n = TRANS_N(msg_tsx);
-		uint64_t f = TRANS_N(msg_tsx);
+		uint64_t f = TRANS_F(msg_tsx);
 
 		uint64_t head = TRANS_HD(msg_tsx);
 
-		if(head == queue->header.start + qmask) return -1;
+		if(head == start + qmask) return -1;
 
 		if(n == f || backoff_threshold == backoff_ctr) { // Try TSX if free (n == f) or they are taking too long.
 			backoff_ctr = 0;
@@ -233,11 +249,17 @@ static act_t* token_expected(capability token) {
     sync_indirection* si= cheri_setoffset(token, 0);
 
     act_t* ccaller = si->act;
-    got += si->sync_add;
+
+    sync_t add = si->sync_add;
+
+    got += add;
 
     if(ccaller->sync_state.sync_token != got) {
-		printf("Returning to %s from %s got %lx. wanted %lx. (%p)\n", ccaller->name, ((act_t*)CALLER)->name,
-		        got, ccaller->sync_state.sync_token, &(ccaller->sync_state.sync_token));
+		printf("Returning to %s from %s got %lx (%lx + %lx). wanted %lx. (%p, %p)\n", ccaller->name, ((act_t*)CALLER)->name,
+		        got, got - add, add, ccaller->sync_state.sync_token, (void*)si, (void*)ccaller->sync_state.current_sync_indir);
+		printf("The caller is in state %x.\n", ccaller->sched_status);
+		CHERI_PRINT_CAP(token);
+        dump_queue((act_t*)CALLER);
 	}
 
     // We might get a multithreaded return attack, so we have to atomically update the sync token
