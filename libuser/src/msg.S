@@ -192,6 +192,7 @@ call:
 	#Restore sync_token. Args already set properly
 
 	clc		$c4, $zero, 0(sync_state_cap)
+	csc     $cnull, $zero, 0(sync_state_cap)
     move    $a0, $v0
     b msg_entry_loop
     move    $a1, $v1
@@ -208,7 +209,7 @@ return_to_caller:
 
 # must not forget return if we saved it
     cbtu    $c4, pop_frame
-    li      $a2, 0 # don't hint switch if we are about to pop a message
+    li      $a2, 0 # don't hint switch if this activation has more work to do
     call_func message_reply
 
 pop_frame:
