@@ -78,6 +78,6 @@ STOREC(type) " %[res], %[new], %[ptr]    \n"                \
 #define LOAD_LINK(ptr, type, result) __asm__ __volatile(LOADL(type) " %[res], %[pt]" : [res] OUT(type) (result) : [pt] IN(c) (ptr):)
 #define STORE_COND(ptr, type, val, suc) __asm__ __volatile(STOREC(type) " %[sc], %[vl], %[pt]" : \
                     [sc] OUT(64) (suc) : \
-                    [pt] IN(c) (ptr), [vl] IN(type) (val) :)
+                    [pt] IN(c) (ptr), [vl] IN(type) (val) : "memory")
 
 #endif //CHERIOS_ATOMIC_H
