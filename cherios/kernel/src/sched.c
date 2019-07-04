@@ -236,6 +236,13 @@ void sched_delete(act_t * act) {
 void sched_receive_event(act_t* act, sched_status_e events) {
 	CRITICAL_LOCKED_BEGIN(&act->sched_access_lock);
 	/* Set condition variable */
+
+	if(act->sched_status & sched_waiting & events) {
+	    if(act->msg_queue->header.start == *act->msg_queue->header.end) {
+	        events &= ~sched_waiting;
+	    }
+	}
+
 	if(events & sched_sync_block) {
 		kernel_assert(act->sync_state.sync_condition == 1);
 		act->sync_state.sync_condition = 0;
@@ -301,6 +308,7 @@ register_t sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e 
 	// Fast path related. Waking something in the fastpath wait needs to set v1.
 	if(got_event & (sched_wait_notify | sched_wait_timeout)) act->v1 = FAST_RES_TIME;
 	else if (got_event & sched_waiting) act->v1 = FAST_RES_POP;
+	act->woke_from = got_event;
 
 	return 0;
 }
