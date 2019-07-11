@@ -141,11 +141,13 @@ local_cap_var master_key
 
 
 # Stuff to do with virtual space management
+local_cap_var revoke_tmp # Used because there is no cap read upper
 local_reg_var made_first_res
 local_reg_var revoke_state
 local_reg_var revoke_base
 local_reg_var revoke_bound
 local_reg_var need_shootdown
+local_reg_var load_tag_bits
 
 # Method table for nano kernel
 NANO_KERNEL_IF_LIST(LOCAL_CAP_VAR_MACRO)
@@ -270,6 +272,9 @@ nano_kernel_init:
     nop
 #endif
 
+    # Single thread from here on
+
+
     csd         $zero, $zero, made_first_res($kr1c)
 
     dli         $k0, context_table
@@ -355,6 +360,38 @@ nano_kernel_init:
 
     # First range is nano owned
     dli             $t0, phy_page_table                 # t0 is start of book
+
+    # We use the memory here to probe for cloadtags. It is nicely aligined (to at least 6 bits + CAP_BITS) and nothing can see it yet.
+    cincoffset      $c13, $kr1c, $t0
+
+    # write 64 tags
+    li              $t1, (64 * CAP_SIZE)
+1:
+    daddiu          $t1, $t1, -CAP_SIZE
+    bnez            $t1, 1b
+    csc             $c13, $t1, 0($c13)
+
+    # see now many you get
+    cloadtags       $t2, $c13
+
+    # count bits
+    li              $t1, 0
+1:
+    dsrl            $t2, $t2, 1
+    bnez            $t2, 1b
+    daddiu          $t1, $t1, 1
+
+    # store result
+    csd             $t1, $zero, load_tag_bits($kr1c)
+
+    # null em out again
+    li              $t1, (64 * CAP_SIZE)
+1:
+    daddiu          $t1, $t1, -CAP_SIZE
+    bnez            $t1, 1b
+    csc             $cnull, $t1, 0($c13)
+
+    # back to initting the book.  t0 still phy_page_table.
     PHY_SET_STATE   page_nano_owned                     # book[0].state = nano owned
     PHY_LINK_LEN_N (NANO_SIZE / PHY_PAGE_SIZE)          # book[0].len = nano pages
 
@@ -1759,6 +1796,7 @@ rescap_revoke_finish:
 
 #ifdef SMP_ENABLED
     # Now blocking has started we can set that we need suspend/restore
+    # TODO we should also nuke L1 caches
     dli         $t0, (context_array_size) * (SMP_CORES-1)
 1:  csd         $zero, $t0, since_switched($idc)
     bnez        $t0, 1b
@@ -1794,6 +1832,8 @@ rescap_revoke_finish:
     # c8 is the last thing we had to load link
 
 # FIXME. Need to set pages we are loop through to transacting to stop races
+
+# Dont bother with this nonse unless on SMP QEMU
 
 b   l0_loop_start
     nop
@@ -1909,75 +1949,150 @@ l2_retry:       clld        $a0, $c8
 
     # We are now revoking. No errors from now on.
 
-    dli         $a0, PHY_MEM_START_CACHED          #a0 is the start of memory
-    dli         $a1, PHY_MEM_END_CACHED            #a1 the end
+    dli         $a0, PHY_MEM_START_CACHED
+    dli         $a1, (PHY_MEM_END_CACHED - PHY_MEM_START_CACHED)
 
-    # Now we have set revoking
-    dli          $t0, DEF_DATA_PERMS
-
-    dsubu        $a1, $a1, $a0
-    beqz        $a1, revoke_loop_end
-    csetoffset  $c5, $kdc, $a0
+    csetoffset  $c5, $kdc, $a0              # c5 is the capability to the window
     dli         $t3, PHY_PAGE_SIZE
-    dli         $t8, 0                      # t8 is our current byte index
+    dli         $a4, 0                      # a4 is our current byte index
+                                            # a1 is the byte index to stop at
+                                            # a2 is base, a3 is bound, a0 is perms
+    # Now we have set revoking
+    dli          $a0, DEF_DATA_PERMS
 
-revoke_loop_start:  # We will now revoke every capability with a2 <= base < a3.
+    li          $t0, phy_page_table
+    cincoffset  $c6, $idc, $t0              # c6 is phy book
 
-    andi        $t1, $t8, (PHY_PAGE_SIZE-1)                                         # get in phy page offset
-    bnez        $t1, 1f                                                             # if non zero keep scanning
-    dsrl        $t1, $t8, (PHY_PAGE_SIZE_BITS - PHY_PAGE_ENTRY_SIZE_BITS)
-    dli         $t2, phy_page_table
-    daddu       $t1, $t1, $t2                                                       # this should be the index of
-                                                                                    # a page entry
+revoke_loop_start:
 
-    # state of page can change concurrently - but it will only make us scan too much (not too little) #
-    cincoffset  $c8, $idc, $t1
+# First find a record for page type. Hopefully one will just exist
+    beq         $a4, $a1, revoke_loop_end
+    dsrl        $a5, $a4, (PHY_PAGE_SIZE_BITS - PHY_PAGE_ENTRY_SIZE_BITS)
+    move        $a6, $a5
+# TODO WRITEME
 
-# FIXME: this is a potential deadlock
-# FIXME: maybe after some point assume we should scan it
-# FIXME: or make transaction its own bit, not just a state
-    dli         $t0, page_transaction
-2:
-    cllw        $t2, $c8
-    beq         $t2, $t0, 2b                           # If transacting wait till we can find out the type
-    cld         $t1, $zero, PHY_PAGE_OFFSET_len($c8)    # Get length in load link. if non zero use last state
-    cscw        $t0, $t2, $c8                          # store to make sure state/length consistent
-    beqz        $t0, 2b
-    dli         $t0, page_transaction
+get_page_type: # looking for a6, a5 is hint, result should be a type and where this takes us to
+    # atomically copy status and length so we can read them without them changing
+    # WARN: Makes a lot of assumptions about the layout of the phy book
+    # FIXME: Needs fixing for 256 I assume
+    clc         $c7, $a5, 0($c6)
 
-    movn        $t9, $t2, $t1                          # state only valid if length non zero. Use last state otherwise
+    csc         $c7, $zero, revoke_tmp($idc)
+    cgetaddr    $t3, $c7
+    clw         $t2, $zero, (revoke_tmp + PHY_PAGE_OFFSET_status)($idc)     # t2 is status
 
-    # only bother scanning nano owned, mapped and system owned #
+
+    dsll        $t3, $t3, PHY_PAGE_ENTRY_SIZE_BITS                          # t3 is len scaled to entries
+    daddu       $t8, $t3, $a5                                               # t8 is where we cover to
+
+    # exit if (not transacting && len != 0 && t8 > a6)
+
+    LOG_NON_ZERO    $t3, $t3                           # t3 = len != 0
+    LOG_NOT_EQUAL_I $t0, $t2, page_transaction         # t0 = ! transacting
+    sltu            $t1, $a6, $t8                      # t1 = t0 < t8
+
+    and             $t9, $t0, $t1
+    and             $t9, $t9, $t3                      # t9 1 if should exit
+
+    movz            $t8, $zero, $t3                    # t8 = 0 if len == 0
+
+    beqz            $t9, get_page_type
+    movn            $a5, $t8, $t0                      # t1 = t8 if ! transacting
+
+
+check_type:
+    # t2 is status
+    # t8 is offset where status ends
+
+    dsll        $t8, $t8, (PHY_PAGE_SIZE_BITS - PHY_PAGE_ENTRY_SIZE_BITS)
+
+    # t8 is now end address of range
+
     li          $t0, 1
-    dsllv       $t0, $t0, $t9
-    andi        $t0, $t0, (1 << page_nano_owned) | (1 << page_system_owned) | ( 1 << page_mapped)
-    bnez        $t0, 1f
+    dsllv       $t0, $t0, $t2
+    andi        $t0, $t0, (1 << page_nano_owned) | (1 << page_system_owned) | ( 1 << page_mapped) # t1 nz if we should scan
+
+    beqz        $t0, revoke_loop_start
+    movz        $a4, $t8, $t0
+
+    # otherwise it is now time to scan from a4 to t8 (both in bytes)
+    # should result in setting a4 to t8
+    # 1: Check if there are any tags at all
+    # 2: use normal loads to check if
+    # 3: if it actually needs revoking do so
+
+scan_loop: # We will now revoke every capability with a2 <= base < a3. and perms subset of a0
+
+    # c5 is window cap
+    cld         $t0, $zero, load_tag_bits($idc) # how many capabilities we can process in one go with load tags
+    cincoffset  $c1, $c5, $a4                   # c1 - cap to area to scan
+
+
+    dsll        $t0, $t0, CAP_SIZE_BITS         # how many bytes we can process in one go with load tags
+
+
+next_block:
+    beq         $a4, $t8, revoke_loop_start
+    cmove       $c2, $c1
+
+    cloadtags   $t1, $c2
+    cincoffset  $c1, $c2, $t0
+    daddu       $a4, $a4, $t0
+
+next_cap:
+    beqz        $t1, next_block
+    dnegu       $t2, $t1
+
+    and         $t2, $t2, $t1                   # get first bit set
+
+    # take base_2 log WARN: Done assuming 1 byte max in t2, increase this sequence a bit
+    LOGARITHM_2_INT8  $t2, $t3, $t9
+
+    # t2 is offset in caps
+    dsll        $t3, $t2, CAP_SIZE_BITS         # t3 is offset in bytes
+    cincoffset  $c2, $c2, $t3
+
+    clc         $c7, $zero, 0($c2)
+    daddiu      $t3, $t2, 1
+    dsrlv       $t1, $t1, $t3                   # shift down popping off a bunch of zeros and
+
+cap_check:
+    cgetperm    $t2, $c7
+    and         $t3, $t2, $a0
+    LOG_EQUAL   $t2, $t2, $t3   #  = (perms & a0) == perms
+    cgetbase    $t9, $c7
+    sltu        $t3, $t9, $a3   #  = base < a3
+    LOG_AND     $t2, $t2, $t3   #  = ((perms & a0) == perms) && (base < a3)
+    sltu        $t9, $t9, $a2   #  = !(a2 <= base)
+    LOG_AND_NOT $t2, $t2, $t9   #  = ((perms & a0) == perms) && (base < a3) (&& a2 <= base)
+    # dont bother checking tagged, it probably is if we get this far
+    beqz        $t2, next_cap
+    cincoffset  $c2, $c2, CAP_SIZE  # assume we will not need to revoke, move to next cap
+
+    cincoffset  $c2, $c2, -CAP_SIZE # oh no we do! go back again
+detag_loop:
+    cllc        $c8, $c2
+
+#ifdef CHERI_LEGACY_COMPACT
+# Storing will clear the tag if it needs clearing. If filter reg broken you can always put in the following to make it look like revocation is working
+    ccleartag   $c3, $c8
+    CEXEQ       $t3, $c8, $c7
+    cmovn       $c8, $c3, $t3
+#endif
+    cscc        $t2, $c8, $c2
+#ifndef CHERI_LEGACY_COMPACT
+    CEXEQ       $t3, $c8, $c7
+#endif
+    # we only restart if the cap didnt change since we checked if it needed revoking, and the store conditional failed
+    LOG_AND_NOT $t2, $t3, $t2
+    bnez        $t2, detag_loop
     nop
-
-    # Otherwise skip this page
-    daddu       $t8, $t8, $t3
-    bne         $t8, $a1, revoke_loop_start
-    cincoffset  $c5, $c5, $t3
-
-    b           revoke_loop_end
-    nop
-
-1:  cllc        $c6, $c5
-    cgetbase    $t1, $c6
-    sltu        $t2, $t1, $a2
-    bnez        $t2, revoke_loop_footer
-    sltu        $t2, $t1, $a3
-    beqz        $t2, revoke_loop_footer
-
-    nop
-    cscc        $t1, $c6, $c5               # Avoid trample of legitimate capability
-    beqz        $t1, 1b                     # restart on fail
-    nop
-
-revoke_loop_footer:
-    daddiu      $t8, $t8, CAP_SIZE
-    bne         $t8, $a1, revoke_loop_start
-    cincoffset  $c5, $c5, CAP_SIZE
+   # clc         $c8, $zero, 0($c2)
+   # csc         $c8, $zero, 0($c2)
+   # clc         $c8, $zero, 0($c2)
+    # TRACE_OFF
+    b           next_cap
+    cincoffset  $c2, $c2, CAP_SIZE
 
 revoke_loop_end:
 
@@ -2148,7 +2263,7 @@ clear_loop_l1_start_retry:
     dli         $t0, RES_META_SIZE
     csetoffset  $c3, $kdc, $a2
     csetboundsexact  $c3, $c3, $t0
-    sub         $a4, $a4, $t0               #some space for metadata
+    dsubu       $a4, $a4, $t0               #some space for metadata
 
     dli         $t1, DEF_DATA_PERMS
     candperm    $c3, $c3, $t1
@@ -2274,9 +2389,8 @@ rescap_merge:
     cld         $t0, $zero, RES_LENGTH_OFFSET($c3)   # get first length
     cld         $t1, $zero, RES_LENGTH_OFFSET($c4)   # get second length
     daddiu      $t0, RES_META_SIZE
-    cincoffset  $c6, $c3, $t0               # c6 should point to the next reservation
-    cne         $t2, $c6, $c4               # if not equal then we are not merging adjacent blocks
-    bnez        $t2, merge_er_backout2
+    csub        $t2, $c4, $c3
+    bne         $t2, $t0, merge_er_backout2
 
 # From here on we can be confident of no error
 
