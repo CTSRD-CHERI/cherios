@@ -105,9 +105,15 @@ static vpage_range_desc_t* peek_from_pool_head(size_t pool) {
 #define PREV_FIXUP(desc) (desc->tracking.free_chain.prev ? &(desc->tracking.free_chain.prev->tracking.free_chain.next) : &pool_heads[desc->tracking.free_chain.pool_id-1])
 #define NEXT_FIXUP(desc) (desc->tracking.free_chain.next ? &desc->tracking.free_chain.next->tracking.free_chain.prev : NULL)
 #define HAS_NEXT(desc) (desc->tracking.free_chain.next)
-static vpage_range_desc_t* remove_from_pool(vpage_range_desc_t* desc) {
+
+static inline void set_not_in_pool(vpage_range_desc_t* desc) {
+    assert(desc->allocation_type == open_node || desc->allocation_type == tomb_node);
+    desc->tracking.free_chain.pool_id = 0;
+}
+
+static inline vpage_range_desc_t* remove_from_pool(vpage_range_desc_t* desc) {
     if(desc) {
-        assert(desc->allocation_type == open_node);
+        assert(desc->allocation_type == open_node || desc->allocation_type == tomb_node);
         assert(desc->tracking.free_chain.pool_id);
         *PREV_FIXUP(desc) = desc->tracking.free_chain.next;
         if(HAS_NEXT(desc)) *NEXT_FIXUP(desc) = desc->tracking.free_chain.prev;
@@ -116,8 +122,8 @@ static vpage_range_desc_t* remove_from_pool(vpage_range_desc_t* desc) {
     return desc;
 }
 
-static void add_to_pool(vpage_range_desc_t* desc, size_t pool) {
-    assert(desc->allocation_type == open_node);
+static inline void add_to_pool(vpage_range_desc_t* desc, size_t pool) {
+    assert(desc->allocation_type == open_node || desc->allocation_type == tomb_node);
     desc->tracking.free_chain.next = pool_heads[pool];
     desc->tracking.free_chain.prev = NULL;
     if(pool_heads[pool]) pool_heads[pool]->tracking.free_chain.prev = desc;
@@ -125,19 +131,19 @@ static void add_to_pool(vpage_range_desc_t* desc, size_t pool) {
     pool_heads[pool] = desc;
 }
 
-static void add_desc_after(vpage_range_desc_t* after, vpage_range_desc_t* desc) {
-    assert(desc->allocation_type == open_node);
-    assert(after->allocation_type == open_node);
-    assert(after->tracking.free_chain.pool_id);
-    desc->tracking.free_chain.pool_id = after->tracking.free_chain.pool_id;
-    desc->tracking.free_chain.next = after->tracking.free_chain.next;
-    desc->tracking.free_chain.prev = after;
-    after->tracking.free_chain.next = desc;
+static inline void add_after_desc(vpage_range_desc_t* prev, vpage_range_desc_t* desc) {
+    assert(desc->allocation_type == open_node || desc->allocation_type == tomb_node);
+    assert(prev->allocation_type == open_node || prev->allocation_type == tomb_node);
+    assert(prev->tracking.free_chain.pool_id);
+    desc->tracking.free_chain.pool_id = prev->tracking.free_chain.pool_id;
+    desc->tracking.free_chain.next = prev->tracking.free_chain.next;
+    desc->tracking.free_chain.prev = prev;
+    prev->tracking.free_chain.next = desc;
     if(desc->tracking.free_chain.next) desc->tracking.free_chain.next->tracking.free_chain.prev = desc;
 }
 
-static void fixup_desc_chain(vpage_range_desc_t* desc) {
-    assert(desc->allocation_type == open_node);
+static inline void fixup_desc_chain(vpage_range_desc_t* desc) {
+    assert(desc->allocation_type == open_node || desc->allocation_type == tomb_node);
     if(desc->tracking.free_chain.pool_id) {
         *PREV_FIXUP(desc) = desc;
         if(HAS_NEXT(desc)) *NEXT_FIXUP(desc) = desc;
@@ -215,16 +221,18 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
         printf("NULL\n");
         return;
     }
-    printf("\nStart: %lx (%lx). End %lx (%lx). Prev %lx. State %s.\n",
+    printf("\nStart: %lx (%lx). End %lx (%lx). Len %lx (%lx). Prev %lx. State %s.\n",
            desc->start << UNTRANSLATED_BITS,
            desc->start,
            (desc->start + desc->length) << UNTRANSLATED_BITS,
            (desc->start + desc->length),
+           desc->length << UNTRANSLATED_BITS,
+           desc->length,
            (desc->prev) << UNTRANSLATED_BITS,
            desc->allocation_type == open_node ? "open" : (desc->allocation_type == allocation_node ? "allocation" :
                                                           (desc->allocation_type == internal_node ? "internal" : "tomb")));
     printf("|---Allocation length %lx\n", desc->allocated_length);
-    if(desc->allocated_length != 0) {
+    if(desc->allocated_length != 0 || desc->allocation_type == open_node) {
         printf("|---");
         CHERI_PRINT_CAP(desc->reservation);
     }
@@ -235,7 +243,7 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
                 printf("    |--- %s(%lx) x%ld\n", claim->owner->debug_id, cheri_getcursor(claim->owner), claim->n_claims);
             }
         }
-    } else if(desc->allocation_type == open_node) {
+    } else if(desc->allocation_type == open_node || desc->allocation_type == tomb_node) {
         if(desc->tracking.free_chain.pool_id) {
             printf("|---Tracking pool %ld. prev %lx. next %lx\n", desc->tracking.free_chain.pool_id-1, (size_t)desc->tracking.free_chain.prev, (size_t)desc->tracking.free_chain.next);
         }
@@ -575,8 +583,7 @@ static vpage_range_desc_t* pull_up_node(vpage_range_desc_t* child) {
     // The allocation pointers now need fixing. They point out correctly but do not point in correctly due to the move
     if(parent->allocation_type == allocation_node) {
         fixup_claims(parent);
-    } else if(parent->allocation_type == open_node) {
-        assert((parent->reservation != NULL));
+    } else if(parent->allocation_type == open_node || parent->allocation_type == tomb_node) {
         fixup_desc_chain(parent);
     }
 
@@ -662,11 +669,12 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
                 next_desc->prev = left_desc->start;
             }
 
+            remove_from_pool(right_desc);
+
             right_desc->length = 0;
             right_desc->allocation_type = free_node;
 
             if(right_alloc_node) {
-                // FIXME
                 // We are merging two reservation nodes
                 // Merge reservation nodes, and unmap page containing right
                 rescap_merge(left_desc->reservation, right_desc->reservation);
@@ -714,6 +722,13 @@ void revoke_start(vpage_range_desc_t* desc) {
     size_t base = desc->start << UNTRANSLATED_BITS;
     size_t len = desc->length << UNTRANSLATED_BITS;
 
+    res_nfo_t nfo = rescap_nfo(res);
+    size_t base_r = (nfo.base - RES_META_SIZE);
+    size_t len_r = (nfo.length + RES_META_SIZE);
+
+    assert_int_ex(base_r, ==, base);
+    assert_int_ex(len_r, ==, len);
+
     printf("Revoke: Revoking from %lx to %lx (%lx pages)\n", base, base+len, desc->length);
 
     rescap_revoke_start(res); // reads info from the reservation;
@@ -727,6 +742,30 @@ void revoke_start(vpage_range_desc_t* desc) {
     if(REVOKE_SANITY) {
         printf("Sanity Check %lx to %lx\n", base, base+len);
         vmem_visit_range(desc->start << UNTRANSLATED_BITS, desc->length, revoke_sanity, NULL);
+    }
+}
+
+// Argument is a hint that there is something new
+static inline void find_something_to_revoke(vpage_range_desc_t *desc) {
+    if(desc_being_revoked == NULL) {
+        vpage_range_desc_t * to_revoke = NULL;
+        if(desc) {
+            if(desc->allocated_length >= MIN_REVOKE && desc->length == desc->allocated_length) to_revoke = desc;
+        } else {
+            size_t max = MIN_REVOKE-1;
+            FOREACH_IN_POOL(search_desc, PAGE_POOL_TOMB) {
+                if(search_desc->allocated_length >= max && search_desc->length == search_desc->allocated_length) {
+                    to_revoke = search_desc;
+                    max = search_desc->allocated_length;
+                }
+            }
+        }
+        if(to_revoke) {
+            remove_from_pool(to_revoke);
+            revoke_start(to_revoke);
+            printf("Sending revoke request...\n");
+            revoke();
+        }
     }
 }
 
@@ -746,6 +785,7 @@ static vpage_range_desc_t * free_desc(vpage_range_desc_t *desc) {
     // 2: mark as tomb
 
     desc->allocation_type = tomb_node;
+    add_to_pool(desc, PAGE_POOL_TOMB);
 
     // 3 : merge with previous
 
@@ -769,6 +809,8 @@ static vpage_range_desc_t * free_desc(vpage_range_desc_t *desc) {
         }
     }
 
+    if(desc_being_revoked == NULL) find_something_to_revoke(desc);
+
     return desc;
 }
 
@@ -786,23 +828,6 @@ visit_free(vpage_range_desc_t *desc, __unused size_t base, mop_internal_t* owner
         if(desc->claims_used == 0) {
             desc = free_desc(desc);
         }
-    }
-
-    /* Now is a good time to decide to revoke something, we sub the revoke request to a worker thread */
-    if(desc_being_revoked == NULL && desc->allocated_length >= MIN_REVOKE && desc->length == desc->allocated_length) {
-#ifndef CHERI_LEGACY_COMPAT
-        revoke_start(desc);
-        printf("Sending revoke request...\n");
-        revoke();
-#endif
-    } else if(DUMP_INTERVAL != 0) {
-        static register_t last = 0;
-        register_t now = syscall_now();
-        if(now - last > DUMP_INTERVAL) {
-            last = now;
-            mmap_dump();
-        }
-
     }
 
     return desc;
@@ -831,9 +856,9 @@ static vpage_range_desc_t* leaf_to_internal(vpage_range_desc_t* desc, size_t tra
     // The allocation pointers now need fixing. They point out correctly but do not point in correctly due to the move
     if(sub_desc->allocation_type == allocation_node) {
         fixup_claims(sub_desc);
-    } else if(sub_desc->allocation_type == open_node) {
+    } else if(sub_desc->allocation_type == open_node || sub_desc->allocation_type == tomb_node) {
+        if(sub_desc->allocation_type == open_node) assert(sub_desc->reservation != NULL);
         fixup_desc_chain(sub_desc);
-        assert(sub_desc->reservation != NULL);
     }
 
     bzero(&desc->tracking, sizeof(desc->tracking));
@@ -869,9 +894,9 @@ static void push_in_index(size_t page_n, size_t prev, size_t length,
             transfer_claims(split_result->transfer_from, desc);
         }
 #ifdef MAX_POOLS
-        else if(desc->allocation_type == open_node) {
-            assert(desc->reservation != NULL);
-            add_desc_after(split_result->transfer_from, desc);
+        else if(desc->allocation_type == open_node || desc->allocation_type == tomb_node) {
+            if(desc->allocation_type == open_node) assert(desc->reservation != NULL);
+            if(split_result->transfer_from->tracking.free_chain.pool_id) add_after_desc(split_result->transfer_from, desc);
         }
 #endif
         *desc_out = desc;
@@ -1123,6 +1148,9 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         while(1) {
 
 #ifdef MAX_POOLS
+            if(desc == NULL) {
+                mmap_dump();
+            }
             assert(desc != NULL);
             assert(desc->allocation_type == open_node);
             search_page_n = desc->start;
@@ -1369,10 +1397,20 @@ void __revoke_finish(res_t res) {
 
     vpage_range_desc_t* desc = desc_being_revoked;
 
+    res_nfo_t nfo = rescap_nfo(res);
+
+    printf("Got reservation back %lx to %lx\n", nfo.base, nfo.base + nfo.length);
+
+    size_t base = (nfo.base - RES_META_SIZE) >> UNTRANSLATED_BITS;
+    size_t len = (nfo.length + RES_META_SIZE) >> UNTRANSLATED_BITS;
+
+    assert_int_ex(base, ==, desc->start);
+    assert_int_ex(len, ==, desc->length);
+
     desc->reservation = res;
     desc->allocation_type = open_node;
 
-    desc->tracking.free_chain.pool_id = 0;
+    set_not_in_pool(desc);
 
     desc_being_revoked = NULL;
 
@@ -1382,6 +1420,8 @@ void __revoke_finish(res_t res) {
     add_to_pool(now_free, PAGE_POOL_FREE);
 
     printf("Revoke: finished!\n");
+
+    find_something_to_revoke(NULL);
 }
 
 void __revoke(void) {

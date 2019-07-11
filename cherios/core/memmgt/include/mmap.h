@@ -34,12 +34,11 @@
 #include "mman.h"
 #include "stdio.h"
 
-#define DUMP_INTERVAL   0 // 1000000000ULL
-
 #define MAX_CLAIMERS 0x4 // These are double linked and are for claimers
-#define MAX_POOLS 0x1   // These a singly linked and are for allocation
+#define MAX_POOLS 0x2   // Also doubly linked
 
 #define PAGE_POOL_FREE 0
+#define PAGE_POOL_TOMB 1
 
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
 #define DESC_ALLOC_CHUNK_SIZE   (DESC_ALLOC_CHUNK_PAGES * PHY_PAGE_SIZE)
@@ -123,9 +122,12 @@ claimer_t* claim;                \
 claimer_link_t lnk_tmp;         \
 for(lnk = owner->first; !LINK_IS_END(lnk) && (desc = FOLLOW_DESC(lnk), claim = &FOLLOW(lnk), lnk_tmp = claim->next, 1); lnk = lnk_tmp)
 
+
+#define FOREACH_IN_POOL(desc, pool_id) for(vpage_range_desc_t* desc = pool_heads[pool_id]; desc != NULL; desc = desc->tracking.free_chain.next)
+
 typedef struct vpage_range_desc_t {
     // An array of all claimers. Each part of a doubly linked list managed by a mop
-    // When free (unclaimed), these are instead used for allocation metadata
+    // When free (unclaimed), or a tombstone (can be revoked) these are instead used for allocation metadata
     union {
         claimer_t claimers[MAX_CLAIMERS];
         struct {
