@@ -40,6 +40,8 @@
 
 #endif /* CHERIOS_BOOT */
 
+/* Having this here is dangerous for reasons
+ *
 static int line_size = 0;
 
 static void cache_init(void) {
@@ -80,3 +82,5 @@ void caches_invalidate(void * addr, size_t size) {
 	cache_invalidate((size_t)addr, size);
 	cache_invalidate((size_t)addr, size);
 }
+
+*/
