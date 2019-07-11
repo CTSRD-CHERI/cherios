@@ -451,3 +451,53 @@ nop
     mtc0    \tmp, MIPS_CP0_REG_VPEControl
     ehb
 .endm
+
+.macro LOG_NOT R, X
+    sltiu   \R, \X, 1
+.endm
+
+.macro LOG_NON_ZERO R, X
+    sltu    \R, $zero, \X
+.endm
+
+.macro LOG_EQUAL R, X, Y
+    dsubu   \R, \X, \Y
+    LOG_NOT \R, \R
+.endm
+
+.macro LOG_NOT_EQUAL_I R, X, I
+    daddiu  \R, \X, -\I
+    LOG_NON_ZERO \R, \R
+.endm
+
+
+
+.macro LOG_AND R, X, Y
+    and     \R, \X, \Y
+.endm
+
+.macro LOG_OR R, X, Y
+    or      \R, \X, \Y
+.endm
+
+.macro LOG_AND_NOT R, X, Y
+    sltu    \R, \Y, \X
+.endm
+
+.macro LOG_NAND R, X, Y
+
+.endm
+
+
+
+.macro LOGARITHM_2_INT8 X T1 T2
+    li          \T1, 4
+    andi        \T2, \X, 0xF0
+    movz        \T1, $zero, \T2
+    andi        \T2, \X, 0xAA
+    LOG_NON_ZERO \T2, \T2
+    daddu       \T1, \T1, \T2
+    andi        \T2, \X, 0xCC
+    daddiu      \X, \T1, 2
+    movz        \X, \T1, \T2
+.endm
