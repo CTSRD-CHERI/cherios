@@ -68,6 +68,7 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 act_t * dest, act_t * src, capability sync_token) {
 
 #if (K_DEBUG)
+	src->last_sent_to = dest;
 	src->sent_n++;
 	ATOMIC_ADD_RV(&dest->recv_n, 64, 16i, 1);
 #endif
@@ -235,6 +236,8 @@ static capability get_and_set_sealed_sync_token(act_t* ccaller) {
 
     // This stores the seq number in the offset. This is fine on 256, but might be limiting depending on precision
 	capability sync_token = cheri_setoffset(si, sn + MIN_OFFSET);
+
+	kernel_assert(cheri_gettag(sync_token) && "Sequence token not representable. Maximum range was calculated for FPGA, not QEMU.");
 
 	return cheri_seal(sync_token, sync_token_sealer);
 }

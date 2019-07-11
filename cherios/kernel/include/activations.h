@@ -51,11 +51,6 @@
 #define ACT_V0_OFFSET 4416
 #define ACT_V1_OFFSET 4424
 
-// FIXME: I made these numbers up. We should align act so they can be sufficiently large
-#define MIN_OFFSET (-0)
-#define MAX_OFFSET 0x10000
-#define MAX_SEQ_NS (MAX_OFFSET - MIN_OFFSET)
-
 #define FAST_RES_FAST 0
 #define FAST_RES_TIME 1
 #define FAST_RES_POP  2
@@ -70,6 +65,25 @@
 #include "mutex.h"
 #include "dylink.h"
 #include "kernel.h"
+
+// Small objects, regardless of alignment, can have this precision
+#ifdef _CHERI128_
+
+#if(CAN_SEAL_ANY)
+#define MIN_OFFSET (- ((1 << BOTTOM_PRECISION) / 8))
+#define MAX_OFFSET (3 * ((1 << BOTTOM_PRECISION) / 4))
+#else
+
+#define MIN_OFFSET 0
+#define MAX_OFFSET 0x2000
+
+#endif
+
+#else
+#define MIN_OFFSET 0
+#define MAX_OFFSET 0xFFFFFFFFFFFFFFFF
+#endif
+#define MAX_SEQ_NS (MAX_OFFSET - MIN_OFFSET)
 
 typedef u32 aid_t;
 
@@ -126,6 +140,7 @@ typedef struct act_t
 	/* Debug related */
 	size_t image_base;
 #if (K_DEBUG)
+    struct act_t* last_sent_to;
     uint64_t sent_n;
     uint64_t recv_n;
     uint64_t switches;

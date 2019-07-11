@@ -41,6 +41,7 @@
     #define CAP_SIZE 0x20
 	#define CAP_SIZE_S "0x20"
     #define CAP_SIZE_BITS 5
+	#define BOTTOM_PRECISION 64
 	#define SMALL_PRECISION 64
 	#define LARGE_PRECISION 64
     #define CAP_EXTRA_ALIGN 0
@@ -51,8 +52,9 @@
     #define CAP_SIZE 0x10
 	#define CAP_SIZE_S "0x10"
     #define CAP_SIZE_BITS 4
-	#define SMALL_PRECISION 13
-	#define LARGE_PRECISION	10
+	#define BOTTOM_PRECISION 14
+	#define SMALL_PRECISION (BOTTOM_PRECISION - 1)
+	#define LARGE_PRECISION	(BOTTOM_PRECISION - 4)
     #define SMALL_OBJECT_THRESHOLD  (1 << (SMALL_PRECISION)) // Can set bounds with byte align on objects less than this
 
 #else
