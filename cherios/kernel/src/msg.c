@@ -287,7 +287,7 @@ size_t kernel_syscall_provide_sync(res_t res) {
     source_activation->sync_state.allocs_taken = 0;
     source_activation->sync_state.allocs_max = nfo.length / SI_SIZE;
 
-    return source_activation->sync_state.allocs_max;
+    return source_activation->sync_state.allocs_max * MAX_SEQ_NS;
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
