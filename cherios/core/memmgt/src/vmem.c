@@ -235,6 +235,12 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags fla
                 in_block -= phy_len;
                 phy_pagen+= phy_len;
                 ndx = block_end_ndx;
+
+                if(in_block == 0 && book[phy_pagen].status == page_mapped) {
+                    size_t next = book[phy_pagen].len + phy_pagen;
+                    merge_phy_page_range(book[phy_pagen].prev);
+                    phy_pagen = next;
+                }
             }
 
             ndx = end_empty+1;
