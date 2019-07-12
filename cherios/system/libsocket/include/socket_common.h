@@ -61,6 +61,7 @@ typedef int vprintf_t(const char *fmt, va_list ap);
     ITEM(socket_fulfill_progress_bytes_unauthorised, ssize_t, (fulfiller_t fulfiller, size_t bytes, enum FULFILL_FLAGS flags, ful_func* visit, capability arg, uint64_t offset, ful_oob_func* oob_visit, ful_sub* sub_visit, capability data_arg, capability oob_data_arg),__VA_ARGS__)\
 /* Wait for all requests to be marked as fulfilled */\
     ITEM(socket_requester_wait_all_finish, ssize_t, (requester_t * r, int dont_wait),__VA_ARGS__)\
+    ITEM(socket_fulfiller_wait_proxy, ssize_t, (fulfiller_t f, int dont_wait, int delay_sleep), __VA_ARGS__)\
 /**/\
     ITEM(socket_request_im, ssize_t, (requester_t r, uint8_t length, char** buf_out, char* buf_in, uint32_t drb_off),__VA_ARGS__)\
 /**/\

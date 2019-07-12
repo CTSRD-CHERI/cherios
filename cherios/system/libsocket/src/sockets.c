@@ -264,6 +264,11 @@ static ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fu
     return 0;
 }
 
+__attribute__((used))
+ssize_t socket_fulfiller_wait_proxy(fulfiller_t f, int dont_wait, int delay_sleep) {
+    uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
+    return socket_internal_fulfiller_wait_proxy(fulfiller, dont_wait, delay_sleep);
+}
 
 // NOTE: Before making a request call space_wait for enough space
 
