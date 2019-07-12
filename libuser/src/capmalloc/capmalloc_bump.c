@@ -131,6 +131,8 @@ void worker_start(__unused register_t arg, __unused capability carg) {
 
     /* Simple message read loop that calls mem_release/claim on behalf of cap_free */
 
+    syscall_change_priority(act_self_ctrl, PRIO_LOW);
+
     while(1) {
         msg_t* msg = get_message();
 
