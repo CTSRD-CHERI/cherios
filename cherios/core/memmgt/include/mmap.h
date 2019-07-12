@@ -35,10 +35,13 @@
 #include "stdio.h"
 
 #define MAX_CLAIMERS 0x4 // These are double linked and are for claimers
-#define MAX_POOLS 0x2   // Also doubly linked
+#define MAX_POOLS 0x3   // Also doubly linked
 
-#define PAGE_POOL_FREE 0
-#define PAGE_POOL_TOMB 1
+#define PAGE_POOL_FREE_SMALL 0
+#define PAGE_POOL_FREE_LARGE 1
+#define PAGE_POOL_TOMB 2
+
+#define POOL_LARGE_THRESHOLD (1 << 26)
 
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
 #define DESC_ALLOC_CHUNK_SIZE   (DESC_ALLOC_CHUNK_PAGES * PHY_PAGE_SIZE)

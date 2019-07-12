@@ -209,7 +209,7 @@ static void init_desc(res_t big_res) {
     L2->descs[1].prev = 0;
     L2->descs[1].reservation = big_res; // This record holds the reservation for all virtual space
 
-    add_to_pool(&L2->descs[1], PAGE_POOL_FREE);
+    add_to_pool(&L2->descs[1], PAGE_POOL_FREE_LARGE);
 }
 
 /* Some utility functions */
@@ -1083,6 +1083,17 @@ static void release_mop(mop_internal_t* mop) {
     mem_claim_or_release(cheri_getbase(mop),sizeof(mop_internal_t), 1, &mmap_mop, &visit_free, &visit_free_check);
 }
 
+static void adjust_desc_pool(vpage_range_desc_t* desc) {
+    if(desc) {
+        assert(desc->allocation_type == open_node);
+        if(((desc->tracking.free_chain.pool_id-1) == PAGE_POOL_FREE_LARGE) &&
+            (desc->length < (POOL_LARGE_THRESHOLD >> UNTRANSLATED_BITS))) {
+            remove_from_pool(desc);
+            add_to_pool(desc, PAGE_POOL_FREE_SMALL);
+        }
+    }
+}
+
 ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed, size_t* phy_base) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
@@ -1143,7 +1154,9 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
         size_t search_page_n = 0;
 #ifdef MAX_POOLS
-        vpage_range_desc_t* desc = peek_from_pool_head(PAGE_POOL_FREE);
+        size_t pool = (npages >= (POOL_LARGE_THRESHOLD >> UNTRANSLATED_BITS)) ?  PAGE_POOL_FREE_LARGE : PAGE_POOL_FREE_SMALL;
+        vpage_range_desc_t* desc = peek_from_pool_head(pool);
+        if(desc == NULL && pool == PAGE_POOL_FREE_SMALL) desc = peek_from_pool_head(PAGE_POOL_FREE_LARGE);
 #endif
         while(1) {
 
@@ -1191,7 +1204,9 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
             }
 
 #ifdef MAX_POOLS
-            desc = desc->tracking.free_chain.next;
+            vpage_range_desc_t* next = desc->tracking.free_chain.next;
+            desc = ((next == NULL) && (desc->tracking.free_chain.pool_id-1 == PAGE_POOL_FREE_SMALL)) ?
+                        peek_from_pool_head(PAGE_POOL_FREE_LARGE) : next;
             if(desc == NULL)
 #else
             search_page_n += desc->length;
@@ -1223,12 +1238,27 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         }
     }
 
-    // TODO this is what will actually crack the reservation in two. We could probably commit contiguous without the first page nonsense
-    // As long as we do it here
+    // This is where the reservation nodes are actually split
     size_node(page_n, npages, &index);
 
+    if(flags & COMMIT_DMA && npages > 1) {
+        // We skipped a page. If there is exactly one before this allocation, kill it to stop fragmentation
+        vpage_range_desc_t* single_desc  = hard_index(page_n-1);
+
+        if(single_desc && single_desc->length == 1 && single_desc->allocation_type == open_node) {
+            single_desc->allocated_length = 1;
+            remove_from_pool(single_desc);
+            free_desc(single_desc);
+        }
+    }
+
 #ifdef MAX_POOLS
+    vpage_range_desc_t* prev = index.result->tracking.free_chain.prev;
+    vpage_range_desc_t* next = index.result->tracking.free_chain.next;
     remove_from_pool(index.result);
+    // These now might be too small to qualify as large
+    adjust_desc_pool(prev);
+    adjust_desc_pool(next);
 #endif
 
     result = index.result->reservation;
@@ -1417,7 +1447,7 @@ void __revoke_finish(res_t res) {
     vpage_range_desc_t* now_free = pull_up_node(desc);
 
     assert(now_free->reservation != NULL);
-    add_to_pool(now_free, PAGE_POOL_FREE);
+    add_to_pool(now_free, (desc->length >= (POOL_LARGE_THRESHOLD >> UNTRANSLATED_BITS)) ? PAGE_POOL_FREE_LARGE : PAGE_POOL_FREE_SMALL);
 
     printf("Revoke: finished!\n");
 
