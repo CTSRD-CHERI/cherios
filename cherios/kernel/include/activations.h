@@ -75,7 +75,7 @@
 #else
 
 #define MIN_OFFSET 0
-#define MAX_OFFSET 0x2000
+#define MAX_OFFSET 0x1000
 
 #endif
 
