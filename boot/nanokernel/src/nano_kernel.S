@@ -1833,10 +1833,22 @@ rescap_revoke_finish:
 
 # FIXME. Need to set pages we are loop through to transacting to stop races
 
-# Dont bother with this nonse unless on SMP QEMU
-
 b   l0_loop_start
     nop
+
+# Dont bother with this yield stuff unless on SMP QEMU
+
+#define NEED_YIELD 0
+
+#ifdef HARDWARE_qemu
+    #if (SMP_CORES > 1)
+        #undef NEED_YIELD
+        #define NEED_YIELD 1
+    #endif
+#endif
+
+#if (NEED_YIELD)
+
 
     l0_retry_yield:
         YIELD
@@ -1850,6 +1862,14 @@ b   l0_loop_start
         YIELD
         b l2_retry
         nop
+
+#else
+
+    #define l0_retry_yield l0_retry
+    #define l1_retry_yield l1_retry
+    #define l2_retry_yield l2_retry
+
+#endif
 
 
     l0_loop_start:
@@ -1903,17 +1923,17 @@ l2_retry:       clld        $a0, $c8
         2:
             SET_ER(REVOKE_ER_L1_SKIP_START)
             bnez        $t2, revoke_er             # check we arn't skipping the start
-            daddiu      $t2, $t0, -PAGE_TABLE_ENT_SIZE
-            dsll        $t2, $t2, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
+            daddiu      $t9, $t0, -PAGE_TABLE_ENT_SIZE # t0 points one further already
+            dsll        $t9, $t9, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
             dsll        $a0, $t1, (UNTRANSLATED_BITS + L2_BITS - PAGE_TABLE_ENT_BITS)
-            daddu       $a0, $a0, $t2
+            daddu       $a0, $a0, $t9
             daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
             sltu        $a0, $a3, $a0              # when the address is greater than it should be, we have an error
             bnez        $a0, revoke_er        # the last page must have an explicit entry
             SET_ER(REVOKE_ER_L1_SKIP_END)
 
             cscd        $a0, $a1, $c8         # if l1 was un-used set to used here
-            beqz        $a0, l1_retry         # rety if l1 entry has changed
+            beqz        $a0, l1_retry         # rety if l1 entry has changed # FIXME: t2 seems to get clobbered and is needed for retry
             daddiu      $t1, $t1, -PAGE_TABLE_ENT_SIZE
             daddiu      $t1, $t1, PAGE_TABLE_ENT_SIZE
         l1_loop_footer:
@@ -1924,14 +1944,14 @@ l2_retry:       clld        $a0, $c8
             nop
 
     1:
-        SET_ER(REVOKE_ER_L0_SKIP_START)
+        SET_ER(REVOKE_ER_L0_SKIP_END)
         dsll        $a0, $t0, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
         daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
         sltu        $a0, $a3, $a0              # when the address is greater than it should be, we have an error
         bnez        $a0, revoke_er        # the last page must have an explicit entry
-        daddu       $a0, $t1, $t2
+        or          $a0, $t1, $t2              # Both t1 (index into l1), and t2 (index into l2) should be zero
         bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
-        SET_ER(REVOKE_ER_L0_SKIP_END)
+        SET_ER(REVOKE_ER_L0_SKIP_START)
 
         cscd        $a0, $a1, $c8
         beqz        $a0, l0_retry
@@ -2180,7 +2200,7 @@ clear_loop_l0_start_retry:
         sltu        $a0, $a3, $a0              # if the address is greater than it should be, we have an error
         SET_ER(REVOKE_ER_L0_SKIP_START2)
         bnez        $a0, revoke_er        # the last page must have an explicit entry
-        daddu       $a0, $t1, $t2
+        or          $a0, $t1, $t2
         bnez        $a0, revoke_er             # the first page must have an explicit entry, unless aligned well
                                                # when t1 and t2 are zero, this is not the first page, or its aligned
         SET_ER(REVOKE_ER_L0_SKIP_END2)
@@ -2212,10 +2232,10 @@ clear_loop_l1_start_retry:
             # Error check edge cases #
             SET_ER(REVOKE_ER_L1_SKIP_START2)
             bnez        $t2, revoke_er             # check we arn't skipping the start
-            daddiu      $t2, $t0, -PAGE_TABLE_ENT_SIZE
-            dsll        $t2, $t2, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
+            daddiu      $t9, $t0, -PAGE_TABLE_ENT_SIZE
+            dsll        $t9, $t9, (UNTRANSLATED_BITS + L2_BITS + L1_BITS - PAGE_TABLE_ENT_BITS)
             dsll        $a0, $t1, (UNTRANSLATED_BITS + L2_BITS - PAGE_TABLE_ENT_BITS)
-            daddu       $a0, $a0, $t2
+            daddu       $a0, $a0, $t9
             daddiu      $a0, $a0, (-UNTRANSLATED_PAGE_SIZE) # This is the inclusive upper bound we would be freeing
             sltu        $a0, $a3, $a0              # if the address is greater than it should be, we have an error
             bnez        $a0, revoke_er        # the last page must have an explicit entry
@@ -2285,6 +2305,7 @@ clear_loop_l1_start_retry:
 revoke_er:
     inttoc      $c3, $s0
     ctoint      $s0, $c9
+TRACE_OFF
     cclearlo    EN5(c4, c5, c6, c7, c8)
     CRETURN
 
