@@ -87,6 +87,10 @@ static inline size_t round_up_to_nearest_power_2(size_t v) {
 	return v;
 }
 
+#define SLICE_W(Val, Width, LowNdx, Bits) (((Val) << ((Width) - ((LowNdx) + (Bits)))) >> ((Width) - (Bits)))
+
+#define SLICE_64(Val, LowNdx, Bits) SLICE_W(Val, 64, LowNdx, Bits)
+
 #else // __ASEEMBLY__
 
 #define ALIGN_UP_2(X, P)   		(((X) + ((1 << (P)) - 1)) &~ ((1 << (P)) - 1))
