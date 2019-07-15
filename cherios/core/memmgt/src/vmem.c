@@ -297,7 +297,7 @@ int range_is_free(readable_table_t *tbl, size_t start, size_t stop) {
 }
 
 /* Will free a number of mappings, returns how many pages have been freed (might already be free). */
-/* FIXME don't delete tables that contain entries we need for revocation */
+/* We don't need to take care of revoking ranges here as we always leave the first and last page mapped */
 size_t memmgt_free_mappings(ptable_t table, size_t l0, size_t l1, size_t l2, size_t n, size_t lvl, int* can_free) {
     if(can_free) *can_free = 0;
 
@@ -336,6 +336,8 @@ size_t memmgt_free_mappings(ptable_t table, size_t l0, size_t l1, size_t l2, siz
             if(should_free) {
                 /* Free tables */
                 memmgt_free_mapping(table, RO, ndx, 0);
+            } else {
+                begin_free = 0; // If you can't free the current entry the page is not free
             }
             n -= f;
             freed +=f;
