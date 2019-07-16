@@ -59,7 +59,7 @@
 
 
 .set VIRT_MEM_START,                0x2000
-.set VIRT_MEM_END,                  PHY_MEM_START_TOP << TOP_ADDR_SHIFT # virt mem ends where phy begins
+.set VIRT_MEM_END,                  (MAX_VIRTUAL_PAGES << UNTRANSLATED_BITS)
 .set VIRT_MEM_SIZE,                 VIRT_MEM_END - VIRT_MEM_START
 
 # This is the physical memory we will scan in order to support revocation
@@ -904,11 +904,11 @@ zero_page_range:
     cld         $t0, $zero, need_shootdown($idc)                            #ra/t0 clobbered
     bnez        $t0, tlb_shootdown_local
     li          $t3, 1
-    b           no_shootdown
+    b           zero_page_range_no_shootdown
 
 # Send a signal to every core to invalidate their TLB. Can also be called fr
 
-###########################
+########################### WARN: Called by revoke. Make sure to onlu use t0/t1//t3/t8/t8
 # void tlb_shootdown(void)
 .global tlb_shootdown
 tlb_shootdown:
@@ -952,13 +952,20 @@ tlb_shootdown_local:
     bnez        $t0, 1b
     daddiu      $t0, $t0, -(context_array_size)
 #else
-    invalidate_tlb $t0, $t1
+    invalidate_tlb $t0, $t1 # FIXME changes address space. Could cause problems if an interrupt fires. Maybe context switch address space too???
 #endif
-    bnez        $t3, no_shootdown
+    bnez        $t3, tlb_shootdown_local_return
     csd         $zero, $zero, need_shootdown($idc)
     CRETURN
 
-no_shootdown:
+tlb_shootdown_local_return:
+    # Hardcoded trampoline back to fixed number of callers
+    daddiu      $t3, $t3, -1
+    bnez        $t3, revoke_shootdown_continue
+
+zero_page_range_no_shootdown:
+
+# This code is zero_page_range continued
     dli         $t1, PHY_MEM_START_CACHED
     dsll        $a0, $a0, PHY_PAGE_SIZE_BITS
     daddu       $a0, $a0, $t1                          # a0 is the address of page
@@ -1967,6 +1974,12 @@ l2_retry:       clld        $a0, $c8
     # Make exclusive again
     daddiu      $a3, $a3, UNTRANSLATED_PAGE_SIZE
 
+    # Shootdown TLBs so no stale entries exist
+    b           tlb_shootdown_local
+    li          $t3, 2  # 2 means come back here
+
+    revoke_shootdown_continue:
+
     # We are now revoking. No errors from now on.
 
     dli         $a0, PHY_MEM_START_CACHED
@@ -2093,14 +2106,14 @@ cap_check:
 detag_loop:
     cllc        $c8, $c2
 
-#ifdef CHERI_LEGACY_COMPACT
+#ifdef CHERI_LEGACY_COMPAT
 # Storing will clear the tag if it needs clearing. If filter reg broken you can always put in the following to make it look like revocation is working
     ccleartag   $c3, $c8
     CEXEQ       $t3, $c8, $c7
     cmovn       $c8, $c3, $t3
 #endif
     cscc        $t2, $c8, $c2
-#ifndef CHERI_LEGACY_COMPACT
+#ifndef CHERI_LEGACY_COMPAT
     CEXEQ       $t3, $c8, $c7
 #endif
     # we only restart if the cap didnt change since we checked if it needed revoking, and the store conditional failed
@@ -2305,7 +2318,6 @@ clear_loop_l1_start_retry:
 revoke_er:
     inttoc      $c3, $s0
     ctoint      $s0, $c9
-TRACE_OFF
     cclearlo    EN5(c4, c5, c6, c7, c8)
     CRETURN
 
