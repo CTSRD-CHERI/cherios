@@ -699,9 +699,6 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 // Collect at least a few L1s worth
 // define MIN_REVOKE (PAGE_TABLE_ENT_PER_TABLE*4)
 
-#define MIN_REVOKE (0x200)
-#define REVOKE_SANITY 0
-
 static void revoke_sanity(__unused capability arg, __unused ptable_t table, readable_table_t* RO, size_t index, __unused size_t rep_pages) {
     register_t state = RO->entries[index];
 

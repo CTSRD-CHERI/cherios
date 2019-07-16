@@ -43,6 +43,10 @@
 
 #define POOL_LARGE_THRESHOLD (1 << 26)
 
+// Measured in virtual pages
+#define MIN_REVOKE (0x200)
+#define REVOKE_SANITY 0
+
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
 #define DESC_ALLOC_CHUNK_SIZE   (DESC_ALLOC_CHUNK_PAGES * PHY_PAGE_SIZE)
 #define DESC_ALLOC_N_PER_POOL   (DESC_ALLOC_CHUNK_SIZE/ (sizeof(vpage_range_desc_table_t)))
