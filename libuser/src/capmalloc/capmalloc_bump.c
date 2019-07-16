@@ -101,13 +101,14 @@ typedef struct dypool {
 
 #define N_FIXED_POOLS 10
 #define FIXED_POOL_RES_N
-#define DYNAMIC_POOL_SIZE ((1 << 30) - RES_META_SIZE) // This is OK for late commit. This is stupidly large for commit!
+#define DYNAMIC_POOL_SIZE ((1 << 26) - RES_META_SIZE) // This is OK for late commit. This is stupidly large for commit!
 #define DYNAMIC_POOL_SIZE_DMA ((1 << 26) - RES_META_SIZE) // Still pretty big!
 
 #define FIXED_POOL_SIZE   (UNTRANSLATED_PAGE_SIZE -  RES_META_SIZE)
 
 // Need less faulting for bump the pointer
-#define BIG_OBJECT_THRESHOLD (1 << 27)
+#define BIG_OBJECT_THRESHOLD (1 << 20)
+#define BIG_OBJECT_THRESHOLD_DMA (1 << 20)
 
 __thread fixed_pool pools[N_FIXED_POOLS];
 
@@ -442,7 +443,7 @@ res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) 
     CASE_X(8);
     CASE_X(9);
 
-    if(size < BIG_OBJECT_THRESHOLD) {
+    if(size < (arena->dma ? BIG_OBJECT_THRESHOLD_DMA : BIG_OBJECT_THRESHOLD)) {
 
         // Allocate from bumping buffer for medium sized objects
         // return alloc_from_dynamic(size);
