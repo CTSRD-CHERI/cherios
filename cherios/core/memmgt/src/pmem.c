@@ -113,7 +113,11 @@ size_t pmem_try_merge(size_t page_n) {
     return page_n;
 }
 
+DEFINE_ENUM_CASE(e_page_status, NANO_KERNEL_PAGE_STATUS_ENUM_LIST)
+
 void pmem_print_book(page_t *a_book, size_t page_n, size_t times) {
+    size_t totals[page_screwed_the_pooch];
+    bzero(totals, sizeof(totals));
     while(times-- > 0) {
         printf("%p addr: page: %lx. state = %d. len = %lx. prev = %lx\n",
                &a_book[page_n],
@@ -121,10 +125,15 @@ void pmem_print_book(page_t *a_book, size_t page_n, size_t times) {
                a_book[page_n].status,
                a_book[page_n].len,
                a_book[page_n].prev);
+        totals[a_book[page_n].status] +=a_book[page_n].len;
         page_n = a_book[page_n].len + page_n;
         if(page_n == BOOK_END) break;
     }
 
+    printf("Totals: ");
+    for(e_page_status status = 0; status != page_screwed_the_pooch; status++) {
+        printf(" state %s(%d): %lx\n", enum_e_page_status_tostring(status), status, totals[status]);
+    }
 }
 
 void pmem_break_page_to(size_t page_n, size_t len) {
@@ -240,11 +249,6 @@ size_t pmem_find_page_type(size_t required_len, e_page_status required_type, pme
     }
 
     return rounded_index;
-}
-
-void full_dump(void) {
-    pmem_print_book(book, 0, -1);
-    mmap_dump();
 }
 
 void __get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop_sealed, cap_pair* result) {

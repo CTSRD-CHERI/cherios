@@ -726,10 +726,10 @@ void revoke_start(vpage_range_desc_t* desc) {
     size_t base_r = (nfo.base - RES_META_SIZE);
     size_t len_r = (nfo.length + RES_META_SIZE);
 
+    printf("Revoke: Revoking from %lx to %lx (%lx pages)\n", base, base+len, desc->length);
+
     assert_int_ex(base_r, ==, base);
     assert_int_ex(len_r, ==, len);
-
-    printf("Revoke: Revoking from %lx to %lx (%lx pages)\n", base, base+len, desc->length);
 
     rescap_revoke_start(res); // reads info from the reservation;
 
@@ -980,9 +980,10 @@ static void split_index(size_t page_n, struct index_result* containing_index,
 
 }
 
+mop_internal_t first_mop;
+
 mop_t __init_mop(capability sealing_cap, res_t big_res) {
     static int once = 0;
-    static mop_internal_t first_mop;
 
     if(once == 0) {
         once = 1;
@@ -1036,6 +1037,97 @@ void mmap_dump(void) {
         search_page_n += desc->length;
 
     } while(search_page_n != MAX_VIRTUAL_PAGES);
+}
+
+typedef struct {
+    size_t phy_consumed;
+    size_t skipped;
+} count_t;
+
+static void visit_count_maps(capability arg, __unused ptable_t table, readable_table_t* RO, size_t index, size_t rep_pages) {
+    count_t* total = (count_t*)arg;
+
+    table_entry_t entry = RO->entries[index];
+    if(rep_pages == 1 && entry != VTABLE_ENTRY_USED && entry != VTABLE_ENTRY_FREE && entry != VTABLE_ENTRY_TRAN) total->phy_consumed+=2;
+    if(entry == VTABLE_ENTRY_TRAN) total->skipped += (2 * rep_pages);
+}
+
+static void dump_mop(mop_internal_t* mop, int do_children) {
+    printf("Mop: %s (%d)", mop->debug_id, mop->state);
+    size_t actual_alloc = 0;
+    size_t actual_ranges = 0;
+    size_t unique_ranges = 0;
+    size_t unique_alloc = 0;
+    size_t phy_alloc = 0;
+    size_t phy_alloc_unique = 0;
+    size_t skipped = 0;
+    FOREACH_CLAIMED_RANGE(mop, desc, link) {
+        int unique = 1;
+        FOREACH_CLAIMER(desc, ndx, clm) {
+            if(clm->owner != NULL && clm->owner != mop) {
+                unique = 0;
+                break;
+            }
+        }
+
+        count_t count;
+        count.skipped = 0;
+        count.phy_consumed = 0;
+
+        vmem_visit_range(desc->start, desc->length, &visit_count_maps, &count);
+
+        actual_ranges++;
+        phy_alloc+= count.phy_consumed;
+        actual_alloc +=desc->length;
+        skipped +=count.skipped;
+
+        if(unique) {
+            unique_alloc +=desc->length;
+            unique_ranges ++;
+            phy_alloc_unique += count.phy_consumed;
+        }
+    }
+
+    printf("|-- Ranges %lx (actual = %lx, unique = %lx). Pages %lx (actual = %lx, unique = %lx). Phy Pages actual = %lx, unique = %lx. Skipped = %lx\n",
+            mop->allocated_ranges, actual_ranges, unique_ranges, mop->allocated_pages, actual_alloc, unique_alloc, phy_alloc, phy_alloc_unique, skipped);
+
+    for(mop_internal_t* child = mop->child_mop; child != NULL; child = child->next_sibling_mop) {
+        printf("|-- Parent of %s (%d)\n", child->debug_id, child->state);
+    }
+
+    if(do_children) {
+        for(mop_internal_t* child = mop->child_mop; child != NULL; child = child->next_sibling_mop) {
+            dump_mop(child, do_children);
+        }
+    }
+
+}
+
+static void check_mapping_leak(void) {
+    // First loop throgh book
+    size_t phy_map = 0;
+
+    printf("Counting phy...\n");
+    for(size_t i = 0; i != BOOK_END; i += book[i].len) {
+        if(book[i].status == page_mapped) phy_map += book[i].len;
+    }
+
+    printf("Counting virt...\n");
+    count_t virt_map;
+    virt_map.skipped = 0;
+    virt_map.phy_consumed = 0;
+
+    vmem_visit_range(0, (size_t)(MAX_VIRTUAL_PAGES), visit_count_maps, (capability)&virt_map);
+
+    printf("There are %lx physical pages used in mappings. Virtual pages are mapping to %lx pages (%lx skipped)\n", phy_map, virt_map.phy_consumed, virt_map.skipped);
+}
+
+
+void full_dump(void) {
+    pmem_print_book(book, 0, -1);
+    check_mapping_leak();
+    dump_mop(&first_mop, 1);
+    mmap_dump();
 }
 
 static int mem_claim_or_release(size_t base, size_t length, size_t times, mop_internal_t* mop, visit_t* visitf, check_t* checkf) {
