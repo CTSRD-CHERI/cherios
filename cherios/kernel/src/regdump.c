@@ -351,6 +351,22 @@ static inline void dump_tlb() {
 
     __asm__ __volatile__(ASM_MFCO(W, MIPS_CP0_REG_WIRED):[W]"=r"(wired)::);
 
+	register_t index;
+
+	__asm__ __volatile__(
+	ASM_MFCO(ndx, MIPS_CP0_REG_INDEX)
+	ASM_MFCO(HI, MIPS_CP0_REG_ENTRYHI)
+	ASM_MFCO(LO0, MIPS_CP0_REG_ENTRYLO0)
+	ASM_MFCO(LO1, MIPS_CP0_REG_ENTRYLO1)
+	ASM_MFCO(PM, MIPS_CP0_REG_PAGEMASK)
+
+
+	: [HI]"=r"(hi), [LO0]"=r"(lo0), [LO1]"=r"(lo1), [PM]"=r"(pm), [ndx]"=r"(index)
+	:
+	:
+	);
+    printf("TLB Regs: HI:%lx, LO0:%lx, LO1:%lx, PM:%lx, ndx:%lx\n", hi, lo0, lo1, pm, index);
+
     printf("TLB status: \n\n");
 
     printf("|------------------------------------------------------------------------------|\n");
@@ -397,6 +413,9 @@ static inline void dump_tlb() {
                pm_sz_k,is_m? "M" : "K", vpn, asid, pfn0, c0, d0, v0, g0,
             pfn1, c1, d1, v1, g1, i < wired ? "<-wired" : "");
     }
+
+    register_t zero = 0;
+	__asm__ __volatile__(ASM_MTCO(HI, MIPS_CP0_REG_ENTRYHI)::[HI]"r"(zero):);
 
     printf("\n\n");
 }
