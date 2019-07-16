@@ -54,9 +54,9 @@
 #else //qemu
     #include "cheri_pic.h"
 
-	#define N_TLB_ENTS	144 // And another 16 low entries ...
 	#define N_TLB_ASSO	16
-	#define N_TLB_DRCT	128
+	#define N_TLB_DRCT	256
+	#define N_TLB_ENTS	(N_TLB_ASSO + N_TLB_DRCT)
     #define HW_YIELD
     #define YIELD
 
