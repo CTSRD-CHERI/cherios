@@ -450,7 +450,7 @@ int main(capability fs_cap) {
     printf("Fatfs: Hello world\n");
 
     // Still have to do this manually when we send too much
-    syscall_provide_sync(cap_malloc(0x1000));
+    msg_allow_more_sends();
 
     /* Init virtio-blk session */
     virtio_blk_session(fs_cap);

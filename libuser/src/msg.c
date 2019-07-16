@@ -35,6 +35,7 @@
 #include "object.h"
 #include "syscalls.h"
 #include "ccall.h"
+#include "capmalloc.h"
 
 /* These are used by the runtime to know who to respond to */
 //FIXME should be local to the pop loop, anybody who wants to use creturn should do so to a creturn method
@@ -73,4 +74,13 @@ void msg_delay_return(sync_state_t* delay_store) {
 
 int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store) {
     return message_reply(c3, v0, v1, delay_store.sync_caller, 1);
+}
+
+void msg_allow_more_sends(void) {
+    // Don't use malloc, it will cause fragmentation? I need to fix this rubbish.
+#if (LIGHTWEIGHT_OBJECT)
+// TODO. Use mmap.
+#else
+    syscall_provide_sync(cap_malloc(0x1000));
+#endif
 }

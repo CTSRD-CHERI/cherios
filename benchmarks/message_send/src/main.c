@@ -96,7 +96,7 @@ int main(__unused register_t arg, __unused capability carg) {
 
     act_kt sync_act = syscall_act_ctrl_get_ref(get_control_for_thread(t));
 
-    syscall_provide_sync(cap_malloc(0x1000));
+    msg_allow_more_sends();
 
     bench_start();
 

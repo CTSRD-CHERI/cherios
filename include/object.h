@@ -102,6 +102,8 @@ extern void msg_entry(int64_t timeout, int flags);
 void msg_delay_return(sync_state_t* delay_store);
 int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store);
 
+void msg_allow_more_sends(void);
+
 #if (LIGHTWEIGHT_OBJECT)
 #define LW_THR __thread
 #else

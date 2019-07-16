@@ -678,7 +678,7 @@ int main(__unused register_t arg, __unused capability carg) {
     // Init session
     printf("LWIP Hello World!\n");
 
-    syscall_provide_sync(cap_malloc(0x1000));
+    msg_allow_more_sends();
 
     ether_sealer = get_type_owned_by_process();
 
