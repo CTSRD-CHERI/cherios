@@ -419,7 +419,7 @@ __unused static void dump_table(ptable_t tbl) {
 void vmem_visit_range(size_t page_start, size_t pages, vmem_visit_func* func, capability arg) {
 
     while(pages != 0) {
-        size_t l0_index = L0_INDEX(page_start);
+        size_t l0_index = L0_INDEX(page_start << UNTRANSLATED_BITS);
         ptable_t L0 = get_top_level_table();
         readable_table_t* RO = get_read_only_table(L0);
         register_t state = RO->entries[l0_index];
@@ -432,7 +432,7 @@ void vmem_visit_range(size_t page_start, size_t pages, vmem_visit_func* func, ca
             continue;
         }
 
-        size_t l1_index = L1_INDEX(page_start);
+        size_t l1_index = L1_INDEX(page_start << UNTRANSLATED_BITS);
         ptable_t L1 = get_sub_table(L0, l0_index);
         RO = get_read_only_table(L1);
 
@@ -446,7 +446,7 @@ void vmem_visit_range(size_t page_start, size_t pages, vmem_visit_func* func, ca
             continue;
         }
 
-        size_t l2_index = L2_INDEX(page_start);
+        size_t l2_index = L2_INDEX(page_start << UNTRANSLATED_BITS);
         ptable_t L2 = get_sub_table(L1, l1_index);
         RO = get_read_only_table(L2);
 
