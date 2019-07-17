@@ -900,6 +900,11 @@ zero_page_range:
     csw         $a2, $zero, 0($c3)                  # set state cleaning
 #  From here on we are fine to zero. $a0 is page_n. $t2 is len
 
+#if (SMP_CORES == 1)
+    b           tlb_shootdown_local # will only shoot down required pages
+    li          $t3, 1
+#endif
+
     sync
     cld         $t0, $zero, need_shootdown($idc)                            #ra/t0 clobbered
     bnez        $t0, tlb_shootdown_local
@@ -914,6 +919,8 @@ zero_page_range:
 tlb_shootdown:
 ###########################
     li          $t3, 0
+    li          $a0, 0
+    li          $t2, TOTAL_PHY_PAGES
 tlb_shootdown_local:
 #ifdef SMP_ENABLED
 
@@ -952,7 +959,47 @@ tlb_shootdown_local:
     bnez        $t0, 1b
     daddiu      $t0, $t0, -(context_array_size)
 #else
-    invalidate_tlb $t0, $t1 # FIXME changes address space. Could cause problems if an interrupt fires. Maybe context switch address space too???
+
+    # Only shootdown phy pages $a0 , $a2 + $t2
+
+    daddu       $t8, $a0, $t2
+    daddiu      $t8, $t8, 1 # offset by 1 to make inequality eaiser
+
+    dli         $t0, ~(MIPS_CP0_STATUS_IE)
+    dmfc0       $t2, MIPS_CP0_REG_STATUS
+    and         $t0, $t0, $t2
+    dmtc0       $t0, MIPS_CP0_REG_STATUS
+
+    dli         $t0, N_TLB_ENTS-1
+
+1:  bltz        $t0, 2f
+    nop
+
+    dmtc0       $t0, MIPS_CP0_REG_INDEX
+    tlbr
+    dmfc0       $t1, MIPS_CP0_REG_ENTRYLO0
+    dsrl        $t1, $t1, PFN_SHIFT
+
+    # clear entry if a0 <= t1 && t1 < t8 (t1 < t8 && !(t1 < a0))
+    sltu        $t9, $t1, $t8
+    sltu        $t1, $t1, $a0
+    LOG_AND_NOT $t9, $t9, $t1                # t2 = 1 if need clear
+    beqz        $t9, 1b
+    daddiu      $t0, -1
+
+    dmtc0       $zero, MIPS_CP0_REG_ENTRYLO0
+    dmtc0       $zero, MIPS_CP0_REG_ENTRYLO1
+    bgez        $t0, 1b
+    tlbwi
+
+2:
+
+    mtc0        $t2, MIPS_CP0_REG_STATUS
+
+    daddiu      $t8, $t8, -1
+    # t8= $a0 +  $t2, $t2 = t8 - $a0
+    dsubu       $t2, $t8, $a0
+
 #endif
     bnez        $t3, tlb_shootdown_local_return
     csd         $zero, $zero, need_shootdown($idc)
@@ -1974,9 +2021,49 @@ l2_retry:       clld        $a0, $c8
     # Make exclusive again
     daddiu      $a3, $a3, UNTRANSLATED_PAGE_SIZE
 
+
+#if (SMP_CORES > 1)
+
     # Shootdown TLBs so no stale entries exist
     b           tlb_shootdown_local
     li          $t3, 2  # 2 means come back here
+
+#else
+    # Single core shootdown but only for the virtual range we are revoking
+    #a2 is base, #a3 is bound
+
+# disable interrupts
+    dli         $t0, ~(MIPS_CP0_STATUS_IE)
+    mfc0        $t9, MIPS_CP0_REG_STATUS
+    and         $t0, $t0, $t9
+    mtc0        $t0, MIPS_CP0_REG_STATUS
+
+    dli         $t0, N_TLB_ENTS-1
+
+1:  bltz        $t0, revoke_shootdown_continue
+
+    dmtc0       $t0, MIPS_CP0_REG_INDEX
+    tlbr
+    dmfc0       $t1, MIPS_CP0_REG_ENTRYHI   # asid will make the address somewhere in the page, which is fine for the inequality
+
+    # clear entry if a2= < t1 < a3 ( t1 < a3 && !(t1 < a2))
+    sltu        $t2, $t1, $a3
+    sltu        $t3, $t1, $t2
+    LOG_AND_NOT $t2, $t2, $t3                # t2 = 1 if need clear
+    beqz        $t2, 1b
+    daddiu      $t0, -1
+
+    dmtc0       $zero, MIPS_CP0_REG_ENTRYLO0
+    dmtc0       $zero, MIPS_CP0_REG_ENTRYLO1
+    bgez        $t0, 1b
+    tlbwi
+
+#renable
+    mtc0        $t9, MIPS_CP0_REG_STATUS
+
+#endif
+
+
 
     revoke_shootdown_continue:
 
