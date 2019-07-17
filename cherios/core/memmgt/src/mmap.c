@@ -75,14 +75,12 @@ static vpage_range_desc_table_t* desc_table_alloc(void) {
             get_phy_page(pagen, 1, DESC_ALLOC_CHUNK_PAGES, &pr, 0);
             assert(pr.data != NULL);
             pmem_try_merge(pagen);
-            CHERI_PRINT_CAP(pr.data);
             desc_table_pool = pr.data;
         }
 
         n_desc_tables_used++;
         res = & desc_table_pool[desc_table_pool_alloc_n++];
 
-        CHERI_PRINT_CAP(res);
         init_desc_table(res);
     }
 
