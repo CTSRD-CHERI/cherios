@@ -122,7 +122,7 @@ int lwip_driver_init(net_session* session) {
     assert_int_ex(MEM_REQUEST_MIN_REQUEST, >, sizeof(struct virtio_net_hdr) * ((QUEUE_SIZE * 2)));
     session->net_hdrs_paddr = translate_address((size_t)session->net_hdrs, 0);
 
-    u32 features = (1 << VIRTIO_NET_F_MRG_RXBUF);
+    u32 features = (1 << VIRTIO_NET_F_MRG_RXBUF) | (1 << VIRTIO_F_EVENT_IDX);
     int result = virtio_device_init(session->mmio, net, 1, VIRTIO_QEMU_VENDOR, features);
     assert_int_ex(-result, ==, 0);
     result = virtio_device_queue_add(session->mmio, 0, &session->virtq_recv);
@@ -152,7 +152,38 @@ int lwip_driver_init_postup(net_session* session) {
     return 0;
 }
 
+int ienabled = 0;
+
+void lwip_driver_enable_interrupts(net_session* session) {
+
+    if(!ienabled) {
+        le16 val = session->virtq_recv.used->idx;
+        *virtq_used_event(&session->virtq_recv) = val;
+        // We might miss the event if it arrives just as we are enabling interrupts. This is supposed to catch that.
+        assert(val == session->virtq_recv.used->idx);
+    }
+
+    ienabled = 1;
+}
+
+void lwip_driver_disable_interrupts(net_session* session) {
+
+    if(ienabled) {
+        *virtq_used_event(&session->virtq_recv) = QUEUE_SIZE; // Can never write this index
+    }
+
+    ienabled = 0;
+}
+
 void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg, register_t irq) {
+
+    lwip_driver_disable_interrupts(session);
+
+    virtio_device_ack_used(session->mmio);
+
+    // Renable interrupts
+    if(irq != (register_t)-1) syscall_interrupt_enable((int)irq, act_self_ctrl);
+
     free_send(session);
 
     // Then process incoming packets and pass them up to lwip
@@ -160,7 +191,7 @@ void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg,
     int any_in = 0;
     while(recvq->last_used_idx != recvq->used->idx) {
         any_in = 1;
-
+        virtio_device_ack_used(session->mmio);
         size_t used_idx = recvq->last_used_idx & (recvq->num-1);
 
         struct virtq_used_elem used = recvq->used->ring[used_idx];
@@ -178,11 +209,8 @@ void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg,
         recvq->last_used_idx++;
     }
 
+    // Reallocate buffers for recv if some were consumed
     if(any_in) alloc_recv(session);
-    virtio_device_ack_used(session->mmio);
-
-    // Renable interrupts
-    syscall_interrupt_enable((int)irq, act_self_ctrl);
 }
 
 err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {

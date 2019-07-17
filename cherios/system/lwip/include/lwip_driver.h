@@ -151,6 +151,8 @@ extern sealing_cap ether_sealer;
 
 int lwip_driver_init(net_session* session);
 int lwip_driver_init_postup(net_session* session);
+void lwip_driver_enable_interrupts(net_session* session);
+void lwip_driver_disable_interrupts(net_session* session);
 void lwip_driver_handle_interrupt(net_session* session, register_t arg, register_t irq);
 err_t lwip_driver_output(struct netif *netif, struct pbuf *p);
 int lwip_driver_poll(net_session* session);

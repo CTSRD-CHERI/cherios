@@ -674,6 +674,21 @@ void setup_checksum_found(sealing_cap sc) {
 
 }
 
+// If interrupts occur too quickly switch to poll mode. If polling fails some number of times, switch back.
+#define STORM_THRESHOLD 1000000
+#define POLL_FREQUENCY  1000000
+#define POLL_FAIL_LIMIT 3
+
+void handle_rx(net_session* session) {
+    while(lwip_driver_poll(session)) {
+        if(!msg_queue_empty()) {
+            msg_entry(0, 0);
+        } else {
+            lwip_driver_handle_interrupt(session, 0, (register_t)-1); // We now allow poll mode when interrupts coming in too fast.
+        }
+    }
+}
+
 int main(__unused register_t arg, __unused capability carg) {
     // Init session
     printf("LWIP Hello World!\n");
@@ -716,14 +731,12 @@ int main(__unused register_t arg, __unused capability carg) {
 
     printf("LWIP Should now be responsive\n");
 
-
-
-    int ints = 0;
-    int fake_ints = 0;
-
     register_t time = syscall_now();
     // Main loop
     POLL_LOOP_START(sock_sleep, sock_event, 1)
+
+        // Disable interrupts. While running we can poll ourselves
+        lwip_driver_disable_interrupts(&session);
 
         register_t now = syscall_now();
         if((now - time) >= MS_TO_CLOCK(10 * 1000)) { // Give a status report every 10 seconds
@@ -732,30 +745,16 @@ int main(__unused register_t arg, __unused capability carg) {
             FOR_EACH_TCP(T) {
                 n++;
             }
-            printf("Sign of life now = %lx. (%d)(%d) Listeners = %ld. Open TCPS = %lx\n",
-                   now, ints, fake_ints, n_listens, n);
+            printf("Sign of life now = %lx. Listeners = %ld. Open TCPS = %lx\n",
+                   now, n_listens, n);
             stats_display();
         }
 
         sys_check_timeouts();
 
         netif_poll_all();
-        // Wait for a message or socket
 
-        // If our interrupt was set after incoming packets we miss them?
-        // Someting goes horribly wrong here.
-
-        HW_SYNC;
-
-        while(lwip_driver_poll(&session)) {
-            if(!msg_queue_empty()) {
-                ints++;
-                msg_entry(0, 0);
-            } else {
-                fake_ints++;
-                lwip_driver_handle_interrupt(&session, 0, session.irq); // Fake an interrupt
-            }
-        }
+        handle_rx(&session);
 
         restart_poll:
 
@@ -808,6 +807,12 @@ int main(__unused register_t arg, __unused capability carg) {
                 }
             }
 
+        }
+
+        if(sock_sleep) {
+            handle_rx(&session);
+            // Only turn on interrupts if we are actually going to sleep.
+            lwip_driver_enable_interrupts(&session);
         }
 
     POLL_LOOP_END(sock_sleep, sock_event, 1, MS_TO_CLOCK(250)); // Roughly enough for most TCP things

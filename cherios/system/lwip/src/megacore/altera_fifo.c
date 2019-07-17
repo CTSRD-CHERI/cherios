@@ -36,13 +36,30 @@ int altera_transport_init(net_session* session) {
     return 0;
 }
 
+int ienabled = 0;
+
+void lwip_driver_enable_interrupts(__unused net_session* session) {
+
+    // Ack the interrupt
+    if(!ienabled) session->mmio->recv_fifo.ctrl_ie = NTOH32(A_ONCHIP_FIFO_MEM_CORE_INTR_ALMOSTFULL);
+    ienabled = 1;
+}
+
+void lwip_driver_disable_interrupts(__unused net_session* session) {
+
+    // Ack the interrupt
+    if(ienabled) session->mmio->recv_fifo.ctrl_ie =  0;
+    ienabled = 0;
+}
+
+
 int lwip_driver_init_postup(net_session* session) {
     // TODO once we work out hor interrupts work - this is where we should enable
     // Enable interrupts on the receive to enable interrupts when fifo not empty
     ALTERA_FIFO* rx_fifo = &session->mmio->recv_fifo;
 
     rx_fifo->ctrl_almostfull = NTOH32(1); // We want an interrupt when anything arrives
-    rx_fifo->ctrl_ie = NTOH32(A_ONCHIP_FIFO_MEM_CORE_INTR_ALMOSTFULL);
+    lwip_driver_enable_interrupts(session);
 
     syscall_interrupt_enable(session->irq, act_self_ctrl);
 
@@ -51,10 +68,22 @@ int lwip_driver_init_postup(net_session* session) {
 
 #define NTOH32_SE(X) ({uint32_t _tmp = X; _tmp = NTOH32(_tmp); _tmp;})
 
-void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg, register_t irq) {
-    // To read: Read data (triggers change of meta), then you can read meta
+void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg, __unused register_t irq) {
+
+    // Disable further interrupts
+
+    lwip_driver_disable_interrupts(session);
+
+    // Ack the interrupt
 
     ALTERA_FIFO* rx_fifo = &session->mmio->recv_fifo;
+
+    rx_fifo->ctrl_i_event = NTOH32(A_ONCHIP_FIFO_MEM_CORE_INTR_ALMOSTFULL);
+
+    // Renable interrupts with the OS
+    if(irq != (register_t)-1) syscall_interrupt_enable((int)irq, act_self_ctrl);
+
+    // To read: Read data (triggers change of meta), then you can read meta
 
     custom_for_tcp* custom = NULL;
     uint32_t* payload;
@@ -114,12 +143,6 @@ void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg,
         pbuf_free(&custom->as_pbuf.custom.pbuf);
     }
 
-    // Ack the interrupt
-
-    rx_fifo->ctrl_i_event = NTOH32(A_ONCHIP_FIFO_MEM_CORE_INTR_ALMOSTFULL);
-
-    // Renable interrupts
-    syscall_interrupt_enable((int)irq, act_self_ctrl);
     return;
 }
 

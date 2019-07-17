@@ -448,7 +448,7 @@ static void vblk_rw_ret(session_t* session) {
 
 void vblk_interrupt(void* sealed_session, __unused register_t a0, register_t irq) {
     vblk_rw_ret(unseal_session(sealed_session));
-	syscall_interrupt_enable((int)irq, act_self_ctrl);
+	if(irq != (register_t)-1) syscall_interrupt_enable((int)irq, act_self_ctrl);
 }
 
 int vblk_rw(session_t* session, void * buf, size_t sector,
