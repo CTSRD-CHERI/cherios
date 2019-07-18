@@ -104,15 +104,16 @@ typedef struct dypool {
 #define DYNAMIC_POOL_SIZE ((1 << 26) - RES_META_SIZE) // This is OK for late commit. This is stupidly large for commit!
 #define DYNAMIC_POOL_SIZE_DMA ((1 << 26) - RES_META_SIZE) // Still pretty big!
 
-#define FIXED_POOL_SIZE   (UNTRANSLATED_PAGE_SIZE -  RES_META_SIZE)
+#define FIXED_POOL_SIZE   ((64 * UNTRANSLATED_PAGE_SIZE) -  RES_META_SIZE)
 
 // Need less faulting for bump the pointer
 #define BIG_OBJECT_THRESHOLD (1 << 20)
 #define BIG_OBJECT_THRESHOLD_DMA (1 << 20)
 
-__thread fixed_pool pools[N_FIXED_POOLS];
+// We could use a worker to do some work in off cycles, but this was never implemented
+#define USE_WORKER 0
 
-act_kt worker_act = NULL;
+__thread fixed_pool pools[N_FIXED_POOLS];
 
 typedef struct arena_t {
     DLL_LINK(arena_t);
@@ -126,6 +127,9 @@ __thread arena_t default_arena;
 __thread struct {
     DLL(arena_t);
 } arena_list;
+
+#if (USE_WORKER)
+act_kt worker_act = NULL;
 
 void worker_start(__unused register_t arg, __unused capability carg) {
     worker_act = act_self_ref;
@@ -171,12 +175,17 @@ void try_make_worker(void) {
     }
 }
 
-static int offload_claim(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode) {
+
+
+static inline int offload_claim(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode) {
+
     if(proc_handle == NULL) return mem_claim(base, length, times, mop);
 
     if(worker_act == NULL) try_make_worker();
 
     return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, worker_act, mode, 1);
+
+
 }
 
 static int offload_release(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode) {
@@ -186,6 +195,13 @@ static int offload_release(size_t base, size_t length, size_t times, mop_t mop, 
 
     return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, worker_act, mode, 0);
 }
+
+#else
+
+#define offload_claim mem_claim_mode
+#define offload_release mem_release_mode
+
+#endif
 
 static res_nfo_t memhandle_nfo(capability mem) {
     register_t type = cheri_gettype(mem);
@@ -220,7 +236,7 @@ static res_t alloc_from_pool(__unused size_t size, size_t pool_n, arena_t* arena
         }
 
         p->range.start = align_down_to(nfo.base, UNTRANSLATED_PAGE_SIZE);
-        p->range.end = p->range.start + UNTRANSLATED_PAGE_SIZE;
+        p->range.end = p->range.start + FIXED_POOL_SIZE + RES_META_SIZE;
 
         if(p->pool_size > RES_SUBFIELD_BITMAP_BITS) {
             p->rest = rescap_split(p->field, RES_SUBFIELD_BITMAP_BITS << pool_n);
