@@ -247,7 +247,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
     assert(session->fil.obj.fs);
 
     int any_proxy = 0;
-    int was_partial_closed = session->nice_close;
+    __unused int was_partial_closed = session->nice_close;
 
     if(events & POLL_IN) {
         // service write (we read)
@@ -315,7 +315,7 @@ int open_file(int mode, requester_t read_requester, requester_t write_requester,
         assert(write_requester);
         con_type |= CONNECT_PUSH_READ;
         if(session->sock.read.push_reader) {
-            int ret = socket_reuse_fulfiller(session->sock.read.push_reader, SOCK_TYPE_PUSH);
+            __unused int ret = socket_reuse_fulfiller(session->sock.read.push_reader, SOCK_TYPE_PUSH);
             assert_int_ex(ret, ==, 0);
         } else {
             session->sock.read.push_reader = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
@@ -328,7 +328,7 @@ int open_file(int mode, requester_t read_requester, requester_t write_requester,
         con_type |= CONNECT_PULL_WRITE;
         mode |= FA_READ;
         if(session->sock.write.pull_writer) {
-            int ret = socket_reuse_fulfiller(session->sock.write.pull_writer, SOCK_TYPE_PULL);
+            __unused int ret = socket_reuse_fulfiller(session->sock.write.pull_writer, SOCK_TYPE_PULL);
             assert_int_ex(ret, ==, 0);
         } else {
             session->sock.write.pull_writer = socket_malloc_fulfiller(SOCK_TYPE_PULL);

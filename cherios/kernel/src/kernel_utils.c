@@ -72,7 +72,7 @@ void kernel_freeze(void) {
 	kernel_panic("Freeze");
 }
 
-void kernel_panic(const char *s) {
+void kernel_panic(__unused const char *s) {
 	kernel_puts(KMAJ"panic: ");
 	kernel_puts(s);
 	kernel_puts(KRST"\n");

@@ -95,10 +95,12 @@ ERROR_T(res_t) mem_request_phy_out(size_t base, size_t length, mem_request_flags
  * limit but then have lots of memory dumped on you. Note this does not award any capabilities. You can ask for any
  * page to stay mapped, not access any page. You must seek the capability elsewhere. */
 int         mem_claim(size_t base, size_t length, size_t times, mop_t mop);
+int         mem_claim_mode(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode);
 
 /* Will give back your resource allowance, but will not guarantee unmapping. However, If you somehow still manage to
  * access the page it will still refer to the same physical page as before. */
 int         mem_release(size_t base, size_t length, size_t times, mop_t mop);
+int         mem_release_mode(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode);
 
 /* Makes a new mop, places it in space provided by a reservation, and returns a handle. */
 ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop);

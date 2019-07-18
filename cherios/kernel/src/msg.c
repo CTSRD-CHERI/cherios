@@ -47,6 +47,7 @@ DEFINE_ENUM_CASE(ccall_selector_t, CCALL_SELECTOR_LIST)
 
 #define ACT_QUEUE_FILL(act) ((msg_nb_t)TRANS_HD(act->msg_tsx) - act->msg_queue->header.start)
 
+#ifndef __LITE__
 static inline void dump_queue(act_t* act) {
     queue_t* q = act->msg_queue;
 
@@ -61,11 +62,14 @@ static inline void dump_queue(act_t* act) {
         kernel_printf("Token in slot %lx is %lx %s\n", i, cheri_getoffset(q->msg[i].c1), i == write ? "<-- write" : (i == read ? "<-- read" : ""));
     }
 }
+#else
+#define dump_queue(...)
+#endif
 
 int msg_push(capability c3, capability c4, capability c5, capability c6,
 			 register_t a0, register_t a1, register_t a2, register_t a3,
 			 register_t v0,
-			 act_t * dest, act_t * src, capability sync_token) {
+			 act_t * dest, __unused act_t * src, capability sync_token) {
 
 #if (K_DEBUG)
 	src->last_sent_to = dest;
@@ -348,7 +352,7 @@ ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capa
 
 act_kt set_message_reply(capability c3, register_t v0, register_t v1, capability sync_token) {
 
-	act_t * returned_from = (act_t*) CALLER;
+	__unused act_t * returned_from = (act_t*) CALLER;
 
 	if(sync_token == NULL) {
 		KERNEL_ERROR("%s did not provide a sync token", returned_from->name);

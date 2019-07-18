@@ -233,7 +233,7 @@ err_t tcp_sent_callback (void *arg, __unused struct tcp_pcb *tpcb,
     // This is how many bytes have been been sent this. NOT total.
 
     // Progress len bytes
-    ssize_t res = socket_fulfill_progress_bytes_unauthorised(tcp->tcp_input_pushee, len,
+    __unused ssize_t res = socket_fulfill_progress_bytes_unauthorised(tcp->tcp_input_pushee, len,
                                             F_PROGRESS | F_DONT_WAIT | F_SKIP_OOB,
                                            NULL, NULL, 0, NULL, NULL,
                                            NULL, NULL);
@@ -269,7 +269,7 @@ err_t tcp_recv_callback(void * arg, __unused struct tcp_pcb * tpcb,
         count++;
     }
 
-    int res = socket_requester_space_wait(tcp->tcp_output_pusher, count, 1, 0);
+    __unused int res = socket_requester_space_wait(tcp->tcp_output_pusher, count, 1, 0);
 
     assert_int_ex(-res, == , -0);
 
@@ -397,7 +397,7 @@ void handle_fulfill(tcp_session* tcp) {
                                                                       &TRUSTED_CROSS_DOMAIN(tcp_ful_func), tcp, 0, &TRUSTED_CROSS_DOMAIN(tcp_ful_oob_func),
                                                                       NULL, TRUSTED_DATA, TRUSTED_DATA);
 
-    err_t flush = tcp_output(tcp->tcp_pcb);
+    __unused err_t flush = tcp_output(tcp->tcp_pcb);
 
     if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
         finish_closing_user_requester(tcp);
@@ -447,7 +447,7 @@ static void tcp_er(void *arg, __unused err_t err) {
 
 }
 
-static err_t tcp_connected_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
+static err_t tcp_connected_callback(void *arg, __unused struct tcp_pcb *tpcb, err_t err) {
     if(arg == NULL) return err;
 
     tcp_session* tcp = (tcp_session*)arg;
@@ -558,7 +558,7 @@ static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
 static void stop_listening(capability sealed) {
     tcp_listen_session* listen_session = cheri_unseal(sealed, sealer);
 
-    err_t er = tcp_close(listen_session->tcp_pcb);
+    __unused err_t er = tcp_close(listen_session->tcp_pcb);
 
     assert(er == ERR_OK);
 
@@ -713,7 +713,7 @@ int main(__unused register_t arg, __unused capability carg) {
     bzero(&nif, sizeof(struct netif));
 
     // Init LWIP (calls the rest of init session)
-    int res = init_net(&session, &nif);
+    __unused int res = init_net(&session, &nif);
 
     assert_int_ex(res, ==, 0);
 
@@ -731,13 +731,18 @@ int main(__unused register_t arg, __unused capability carg) {
 
     printf("LWIP Should now be responsive\n");
 
+#define SIGN_OF_LIFE 0
+
+#if (SIGN_OF_LIFE)
     register_t time = syscall_now();
+#endif
     // Main loop
     POLL_LOOP_START(sock_sleep, sock_event, 1)
 
         // Disable interrupts. While running we can poll ourselves
         lwip_driver_disable_interrupts(&session);
 
+#if (SIGN_OF_LIFE)
         register_t now = syscall_now();
         if((now - time) >= MS_TO_CLOCK(10 * 1000)) { // Give a status report every 10 seconds
             time = now;
@@ -749,7 +754,7 @@ int main(__unused register_t arg, __unused capability carg) {
                    now, n_listens, n);
             stats_display();
         }
-
+#endif
         sys_check_timeouts();
 
         netif_poll_all();

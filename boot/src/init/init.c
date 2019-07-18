@@ -55,9 +55,11 @@
 #define B_T2 0
 #define B_T3 0
 
+#define TESTS 0
+
 #define B_DEMO 0
 
-#define B_BENCH 1
+#define B_BENCH 0
 
 #define B_BENCH_MS      1
 #define B_BENCH_CALLS   1
@@ -159,7 +161,7 @@ init_elem_t init_list[] = {
 	B_FENCE
 	B_DENTRY(m_fs,	FS_ELF	,		0,	1)
 	B_FENCE
-	B_PENTRY(m_user,	"hello.elf",		0,	1)
+	B_PENTRY(m_user,	"hello.elf",		0,	TESTS)
 	B_WAIT_FOR(namespace_num_fs)
 #if(BUILD_WITH_NET)
     B_WAIT_FOR(namespace_num_tcp)
@@ -178,19 +180,19 @@ init_elem_t init_list[] = {
 	B_PENTRY(m_user,	"test1a.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"test2a.elf",		0,	B_T2)
 	B_PENTRY(m_user,	"test2b.elf",		0,	B_T2)
-    B_PENTRY(m_user,    "exception_test.elf", 0, !B_BENCH)
-    B_PENTRY(m_user, "unsafe_test.elf", 0, !B_BENCH)
-    B_PENTRY(m_user,    "dedup_test.elf", 0, !B_BENCH)
-    B_PENTRY(m_user,    "socket_test.elf", 0 ,!B_BENCH)
-    B_PENTRY(m_user, "fs_test.elf", 0, !B_BENCH)
+    B_PENTRY(m_user,    "exception_test.elf", 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user, "unsafe_test.elf", 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user,    "dedup_test.elf", 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user,    "socket_test.elf", 0 ,!B_BENCH && TESTS)
+    B_PENTRY(m_user, "fs_test.elf", 0, !B_BENCH && TESTS)
 //    B_DENTRY(m_user, "server.elf", 0, 1)
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
-    B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH)
-// B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
-    B_PENTRY(m_user, "top.elf", 0, !B_BENCH)
+    B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH && TESTS)
+    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
+    B_PENTRY(m_user, "top.elf", 0, !B_BENCH && 0)
     B_PENTRY(m_user, "nc_shell.elf", 0, BUILD_WITH_NET)
-    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
+//    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
@@ -565,4 +567,6 @@ int main(init_info_t * init_info, capability pool_auth_cap) {
     syscall_shutdown(REBOOT);
 
     assert(0 && "Should not get past reboot");
+
+    while(1);
 }

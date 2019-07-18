@@ -204,7 +204,7 @@ static void bind_to_sockaddr(struct sockaddr *addr, const struct tcp_bind* bind)
 }
 
 // Creates a socket large enough for either a listening state thing, or a unix like socket but with no inline stuff
-ERROR_T(unix_net_sock_ptr) socket_or_er(int domain, int type, int protocol) {
+ERROR_T(unix_net_sock_ptr) socket_or_er(__unused int domain, __unused int type, __unused int protocol) {
     assert_int_ex(protocol, ==, 0);
     assert_int_ex(domain, ==, AF_INET);
     assert_int_ex(type, ==, SOCK_STREAM);
@@ -328,7 +328,7 @@ int connect(unix_net_sock* socket, __unused const struct sockaddr *address,
 
     sockaddr_to_bind(address, &server);
 
-    int res = netsock_connect_tcp(&socket->bind, &server, socket);
+    __unused int res = netsock_connect_tcp(&socket->bind, &server, socket);
 
     assert(res == 0);
 
@@ -367,7 +367,7 @@ int connect(unix_net_sock* socket, __unused const struct sockaddr *address,
     socket->sock.write.push_writer = requester;
     socket->sock.con_type |= CONNECT_PUSH_WRITE;
     // now make the netsock
-    NET_SOCK ns = netsock_accept_in(flags, (NET_SOCK)socket);
+    __unused NET_SOCK ns = netsock_accept_in(flags, (NET_SOCK)socket);
 
     assert(ns != NULL);
 

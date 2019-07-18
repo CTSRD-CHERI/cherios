@@ -78,7 +78,7 @@ void acts_wait_for_finish(init_elem_t * init_list, size_t  init_list_len) {
         if((!be->daemon) && act_alive(be->ctrl)) {
             printf("%s is alive. Subscribing to its death...\n", be->name);
             act_kt waiting_for = syscall_act_ctrl_get_ref(be->ctrl);
-            int sub = subscribe_terminate(waiting_for, act_self_ref, NULL, 0, 777);
+            __unused int sub = subscribe_terminate(waiting_for, act_self_ref, NULL, 0, 777);
             assert_int_ex(-sub, ==, -SUBSCRIBE_OK);
             if(!act_alive(be->ctrl)) {
                 unsubscribe_terminate(waiting_for, act_self_ref, 777);

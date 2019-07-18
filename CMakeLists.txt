@@ -161,6 +161,16 @@ else()
             -DBUILD_WITH_NET=0)
 endif()
 
+# Add the stripes
+
+option(GO_FAST "Turn off all debugging features, paint on go fast stripes" OFF)
+
+if(GO_FAST)
+    set(BFAST_FLAGS -DGO_FAST=1)
+else()
+    set(BFAST_FLAGS -DGO_FAST=0)
+endif()
+
 include_directories(include)
 include_directories(include/sys)
 include_directories(elf/include)
@@ -178,6 +188,7 @@ set(ASMC_COMPILER_FLAGS
     -DHARDWARE_${HARDWARE}
     ${SMP_FLAGS}
     ${BNET_FLAGS}
+    ${BFAST_FLAGS}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -march=${CHERI_CPU}

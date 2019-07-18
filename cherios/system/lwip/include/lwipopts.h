@@ -119,7 +119,20 @@
 #define LWIP_HTTPD_MAX_REQUEST_URI_LEN  0
 #define LWIP_HTTPD_SUPPORT_11_KEEPALIVE 1
 
-#define LWIP_DEBUG                  1
+#if (GO_FAST)
+    #define LWIP_DEBUG                  0
+    #define LWIP_STATS                  0
+#else
+    #define LWIP_DEBUG                  1
+    #define LWIP_STATS                  1
+
+    #define LWIP_STATS_DISPLAY          0
+    #define MEM_STATS                   0
+    #define SYS_STATS                   0
+    #define MEMP_STATS                  1
+    #define LINK_STATS                  0
+#endif
+
 
 // Other constant is LWIP_DBG_ON
 #define LWIP_HTTPD_SUPPORT_EXTSTATUS 0
@@ -153,12 +166,6 @@
 #define SLIP_DEBUG                  LWIP_DBG_OFF
 #define DHCP_DEBUG                  LWIP_DBG_OFF
 
-#define LWIP_STATS                  1
 
-#define LWIP_STATS_DISPLAY          0
-#define MEM_STATS                   0
-#define SYS_STATS                   0
-#define MEMP_STATS                  1
-#define LINK_STATS                  0
 
 #endif //CHERIOS_LWIPOPTS_H

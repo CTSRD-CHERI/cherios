@@ -71,7 +71,12 @@ void    sched_receive_event(act_t* act, sched_status_e events);
 
 act_t*  sched_get_current_act_in_pool(uint8_t pool_id);
 act_t*  sched_get_current_act(void);
+
+#ifndef __LITE__
 void    dump_sched(void);
+#else
+#define dump_sched(...)
+#endif
 
 void    sched_set_idle_act(act_t* idle_act, uint8_t pool_id);
 

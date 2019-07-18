@@ -89,11 +89,10 @@ user_stats_t dummy_user_stats;
 #endif
 
 DECLARE_WITH_CD(user_stats_t*, kernel_syscall_act_user_info_ref(act_control_kt act));
-user_stats_t* kernel_syscall_act_user_info_ref(act_control_kt act) {
-	act_control_t* ctrl = act_unseal_ctrl_ref(act);
+user_stats_t* kernel_syscall_act_user_info_ref(__unused act_control_kt act) {
 	return cheri_setbounds_exact(
 #if (K_DEBUG)
-	                             &(ctrl->user_stats)
+	                             &(act_unseal_ctrl_ref(act)->user_stats)
 #else
 	                             &dummy_user_stats
 #endif
@@ -164,7 +163,9 @@ DECLARE_WITH_CD(void, kernel_syscall_vmem_notify(act_kt waiter, int suggest_swit
 void kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch) {
 	act_t* target = act_unseal_ref(waiter);
 	act_t* caller = sched_get_current_act();
-	kernel_assert(caller == memgt_ref);
+	if(caller != memgt_ref) {
+		kernel_panic("Only memmgt should be calling this\n");
+	}
 	sched_receive_event(target, sched_wait_commit);
 	if(suggest_switch) {
 		sched_reschedule(target, 0);
@@ -216,6 +217,8 @@ DECLARE_WITH_CD(void, kernel_syscall_puts(char *msg));
 void kernel_syscall_puts(char *msg) {
 	#ifndef __LITE__
 	kernel_printf(KGRN"%s" KREG KRST, msg);
+    #else
+	(void)msg;
 	#endif
 }
 
@@ -224,9 +227,7 @@ void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
 	// Turn of interrupts makes the panic print not get screwed up
 	cp0_status_ie_disable();
 
-	act_t* act_called = sched_get_current_act();
-
-	kernel_printf("Activation %s has called panic\n", act_called->name);
+	kernel_printf("Activation %s has called panic\n", sched_get_current_act()->name);
 
     if(act != NULL) {
         if(cheri_gettype(act) == act_ref_type)
@@ -323,9 +324,8 @@ ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capa
 
 
 DECLARE_WITH_CD(void, kernel_syscall_hang_debug(void));
-void kernel_syscall_hang_debug(void) {
+__used void kernel_syscall_hang_debug(void) {
 	dump_sched();
-
 }
 
 DECLARE_WITH_CD(int, kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token, int hint_switch));

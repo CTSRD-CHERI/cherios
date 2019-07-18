@@ -229,7 +229,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
     if(event_act == NULL) try_set_event_source();
 	if(event_act != NULL) {
-        int status = subscribe_terminate(act, act_self_ref, seal_proc_for_user(process), thread_n, 4);
+        __unused int status = subscribe_terminate(act, act_self_ref, seal_proc_for_user(process), thread_n, 4);
         assert_int_ex(status, ==, SUBSCRIBE_OK);
     }
 
@@ -346,10 +346,10 @@ static void handle_termination(register_t thread_num, process_t* proc, __unused 
 	if(proc->n_threads == 0) {
 		printf("Last thread terminated, killing process\n");
 		proc->state = proc_zombie;
-		int status = mem_reclaim_mop(proc->mop);
+		__unused int status = mem_reclaim_mop(proc->mop);
 		assert_int_ex(status, ==, MEM_OK);
 		if(proc->top) {
-			er_t er = type_destroy_top(proc->top);
+			__unused er_t er = type_destroy_top(proc->top);
 			assert_int_ex((int64_t)er, ==, TYPE_OK);
 		}
 	}

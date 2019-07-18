@@ -46,6 +46,7 @@
 /* todo: sleep cpu */
 sched_pool sched_pools[SMP_CORES];
 
+#ifndef __LITE__
 void dump_sched(void) {
 	for(act_t* act = act_list_start; act != NULL; act = act->list_next) {
 		int is_sending = act->sched_status == sched_sync_block;
@@ -65,6 +66,7 @@ void dump_sched(void) {
 		}
 	}
 }
+#endif
 
 static void sched_nothing_to_run(void) __dead2;
 static void sched_nothing_to_run(void) {

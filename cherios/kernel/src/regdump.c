@@ -496,10 +496,10 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 
 #else
 
-void regdump(int reg_num, act_t* kernel_curr_act){
+void regdump(__unused int reg_num, __unused act_t* kernel_curr_act){
 
 }
-void backtrace(char* stack_pointer, capability return_address, capability idc, capability r17, capability c18) {
+void backtrace(__unused char* stack_pointer, __unused capability return_address, __unused capability idc, __unused capability r17, __unused capability c18) {
 
 }
 void kernel_dump_tlb(void) {

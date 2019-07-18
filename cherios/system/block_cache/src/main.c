@@ -603,6 +603,8 @@ int main(__unused register_t arg, __unused capability carg) {
     main_loop();
 
     assert(0);
+
+    while(1);
 }
 
 void (*msg_methods[]) = {vblk_init, vblk_read, vblk_write, vblk_status, vblk_size, new_socket, writeback_all};

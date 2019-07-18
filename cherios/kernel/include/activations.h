@@ -32,6 +32,8 @@
 #ifndef __ACTIVATIONS_H
 #define __ACTIVATIONS_H
 
+#include "cheric.h"
+
 #define ACT_NAME_MAX_LEN (0x10)
 #define USER_KERNEL_STACK_SIZE  4096
 
@@ -55,17 +57,6 @@
 #define FAST_RES_TIME 1
 #define FAST_RES_POP  2
 
-#ifndef __ASSEMBLY__
-
-#include "cheric.h"
-#include "types.h"
-#include "stddef.h"
-#include "nano/nanokernel.h"
-#include "queue.h"
-#include "mutex.h"
-#include "dylink.h"
-#include "kernel.h"
-
 // Small objects, regardless of alignment, can have this precision
 #ifdef _CHERI128_
 
@@ -84,6 +75,16 @@
 #define MAX_OFFSET 0xFFFFFFFFFFFFFFFF
 #endif
 #define MAX_SEQ_NS (MAX_OFFSET - MIN_OFFSET)
+
+#ifndef __ASSEMBLY__
+
+#include "types.h"
+#include "stddef.h"
+#include "nano/nanokernel.h"
+#include "queue.h"
+#include "mutex.h"
+#include "dylink.h"
+#include "kernel.h"
 
 typedef u32 aid_t;
 

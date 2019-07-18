@@ -73,12 +73,12 @@
 #else
 
     #define DEFINE_ENUM_AR(Type, LIST_DEF)                  \
-        const char* enum_ ## Type ## _tostring(Type val) {  \
+        const char* enum_ ## Type ## _tostring(__unused Type val) {  \
             return "";                                      \
         }                                                   \
 
     #define DEFINE_ENUM_CASE(Type, LIST_DEF)                \
-        const char* enum_ ## Type ## _tostring(Type val) {  \
+        const char* enum_ ## Type ## _tostring(__unused Type val) {  \
             return "";                                      \
         }                                                   \
 

@@ -349,7 +349,7 @@ void thread_init(void) {
     if(was_secure_loaded) {
         // New threads in secure load mode should go through secure_thread_start
         cds_for_new_threads = get_ctl()->cds;
-        entry_t e = foundation_new_entry(0, &secure_thread_start, own_auth);
+        __unused entry_t e = foundation_new_entry(0, &secure_thread_start, own_auth);
         assert(e != NULL);
     }
 }

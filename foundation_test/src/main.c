@@ -119,7 +119,7 @@ int main(__unused register_t arg, __unused capability carg) {
     /* Now get ourselves a cryptographic key */
     res_t key_res = cap_malloc(FOUND_KEY_SIZE);
 
-    found_key_t* key = make_key_for_auth(key_res, own_auth);
+    __unused found_key_t* key = make_key_for_auth(key_res, own_auth);
 
     // They might be, but this is a good check that we did something
     assert(!(key->bytes[0] == 0 && key->bytes[1] == 0 && key->bytes[2] == 0));

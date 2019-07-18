@@ -66,7 +66,7 @@ static inline void connect_to_host(void) {
 
     bind(state.sock, (struct sockaddr*)&client_addr, sizeof(server_addr));
 
-    int res = connect(state.sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
+    __unused int res = connect(state.sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
 
     assert(res == 0);
 

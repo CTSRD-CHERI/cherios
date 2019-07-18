@@ -46,9 +46,9 @@ int main(__unused register_t arg, __unused capability carg) {
     printf("Unsafe Test Hello World\n");
 
     CHERI_PRINT_CAP(cheri_getreg(10));
-    int* x = unsafe_useage(1);
+    __unused int* x = unsafe_useage(1);
     CHERI_PRINT_CAP(cheri_getreg(10));
-    int* y = unsafe_useage(2);
+    __unused int* y = unsafe_useage(2);
     CHERI_PRINT_CAP(cheri_getreg(10));
 
     assert(x != y);

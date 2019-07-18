@@ -35,4 +35,5 @@
 int main(__unused register_t arg, __unused capability carg) {
     handle_loop();
     assert(0);
+    while(1);
 }

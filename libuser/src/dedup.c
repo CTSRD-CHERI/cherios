@@ -101,7 +101,7 @@ capability deduplicate_cap(capability cap, int allow_create, register_t perms, r
 
     open = cheri_incoffset(open, offset);
 
-    int res = memcmp(resolve, open, length);
+    __unused int res = memcmp(resolve, open, length);
 
     assert(res == 0);
 

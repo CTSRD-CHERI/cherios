@@ -1,6 +1,14 @@
 include_directories(include ${CMAKE_SOURCE_DIR}/boot/include/boot
         ${DRIVERS_DIR}/uart/include)
 
+if(GO_FAST)
+    set(KERNEL_DEBUG_SRCS)
+else()
+    set(KERNEL_DEBUG_SRCS
+            ${DRIVERS_DIR}/uart/src/uart.c
+            )
+endif()
+
 set(KERNEL_SRCS
     src/act.c
     src/init.c
@@ -14,7 +22,7 @@ set(KERNEL_SRCS
     src/syscalls.c
     src/timer.c
     src/mutex.c
-    ${DRIVERS_DIR}/uart/src/uart.c
+    ${KERNEL_DEBUG_SRCS}
 )
 set(KERNEL_ASM_SRCS
     src/init.S

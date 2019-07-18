@@ -185,6 +185,7 @@ void con2_start(__unused register_t arg, __unused capability carg) {
 ssize_t TRUSTED_CROSS_DOMAIN(con3_full)(capability arg, char* buf, uint64_t offset, uint64_t length);
 ssize_t con3_full(__unused capability arg, __unused char* buf, __unused uint64_t offset, __unused uint64_t length) {
     assert(0);
+    while(1);
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(con3_full2)(capability arg, char* buf, uint64_t offset, uint64_t length);
@@ -228,7 +229,7 @@ void con3_start(__unused register_t arg, capability carg) {
     fulfiller_t ff = socket_malloc_fulfiller(SOCK_TYPE_PULL);
     assert(ff);
 
-    int result = socket_connect_via_rpc(carg, PORT + 5, NULL, ff);
+    __unused int result = socket_connect_via_rpc(carg, PORT + 5, NULL, ff);
     assert_int_ex(result, ==, 0);
 
     for(size_t i = 0; i != BIG_TEST_SIZE; i++) {
@@ -441,7 +442,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
 
         if(use_sock == 2) {
             enum poll_events events;
-            int poll_r = socket_poll(NULL, 0, -1, &events);
+            __unused int poll_r = socket_poll(NULL, 0, -1, &events);
             assert_int_ex(poll_r, ==, 1);
             assert_int_ex(events, ==, POLL_IN);
             next_msg();
@@ -450,7 +451,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
 
         // unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
 
-        int poll_r = socket_poll(socks, 2, -1, 0);
+        __unused int poll_r = socket_poll(socks, 2, -1, 0);
 
         assert_int_ex(poll_r, ==, 1);
         assert_int_ex(socks[use_sock].revents, ==, POLL_IN);

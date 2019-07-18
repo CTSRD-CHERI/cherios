@@ -62,7 +62,7 @@ void pmem_check_book(void) {
 
     while(pagen < BOOK_END) {
         size_t len = book[pagen].len;
-        size_t prv = book[pagen].prev;
+        __unused size_t prv = book[pagen].prev;
 
         assert_int_ex(len, !=, 0);
 

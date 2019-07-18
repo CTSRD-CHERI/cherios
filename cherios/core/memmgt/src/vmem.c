@@ -362,11 +362,6 @@ static ptable_t get_l2_for_addr(size_t vaddr) {
     return L2;
 }
 
-__unused static inline void check_vaddr(size_t vaddr) {
-    ptable_t L2 = get_l2_for_addr(vaddr);
-    assert(L2 != NULL);
-}
-
 void vmem_free_single(size_t vaddr) {
     ptable_t l2 = get_l2_for_addr(vaddr);
     assert(l2 != NULL);

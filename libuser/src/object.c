@@ -260,6 +260,8 @@ void object_destroy() {
     syscall_act_terminate(act_self_ctrl);
 
     assert(0 && "SHOULD NOT RETURN AFTER DESTROY");
+
+    while(1);
 }
 
 void ctor_null(void) {

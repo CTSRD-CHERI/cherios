@@ -69,7 +69,7 @@ static f_list_item* create_f(requester_t requester) {
 
 	assert(f != NULL);
 
-	int res = socket_fulfiller_connect(item->f, requester);
+	__unused int res = socket_fulfiller_connect(item->f, requester);
 
 	assert_int_ex(res, ==, 0);
 
@@ -169,4 +169,6 @@ int main(capability uart_cap)
 	main_loop();
 
 	assert(0);
+
+	while(1);
 }

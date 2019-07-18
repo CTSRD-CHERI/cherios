@@ -31,10 +31,14 @@
 #ifndef __KERNEL_H__
 #define	__KERNEL_H__
 
-//#define __TRACE__
-//#define __LITE__
-
-#define K_DEBUG 1
+#if (GO_FAST)
+    #define K_DEBUG 0
+    #define __LITE__
+#else
+    #define K_DEBUG 1
+    //#define __TRACE__
+    //#define __LITE__
+#endif
 
 #define MAX_STATIC_ACTIVATIONS 8 // kernel + init + namespace + proc + memgt + memmgt worker *3. Then we need reservations.
 

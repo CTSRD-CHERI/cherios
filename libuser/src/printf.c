@@ -92,7 +92,7 @@ int fputc(int character, FILE *f) {
 
     if(drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size) {
         // FIXME: This disrespects the DONT_WAIT flag
-        ssize_t bw = socket_requester_wait_all_finish(f->write.push_writer, 0);
+        __unused ssize_t bw = socket_requester_wait_all_finish(f->write.push_writer, 0);
         assert_int_ex(-bw, ==, 0);
     }
 
@@ -101,7 +101,7 @@ int fputc(int character, FILE *f) {
     drb->buffer[(drb->requeste_ptr + drb->partial_length++) & (drb->buffer_size-1)] = (char)character;
 
     if(character == '\n' || (drb->requeste_ptr + drb->partial_length - drb->fulfill_ptr == drb->buffer_size)) {
-        ssize_t flush = socket_flush_drb(f);
+        __unused ssize_t flush = socket_flush_drb(f);
         assert(flush >= 0 || flush == E_SOCKET_CLOSED);
     }
 
@@ -109,7 +109,8 @@ int fputc(int character, FILE *f) {
 }
 
 int fputs(const char* str, FILE* f) {
-    if(f) (assert(f->con_type & CONNECT_PUSH_WRITE));
+    if(f) assert(f->con_type & CONNECT_PUSH_WRITE);
+
     while(*str) {
         fputc(*str++, f);
     }

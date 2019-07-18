@@ -65,7 +65,7 @@ static void kernel_exception_capability(register_t ccause, act_t* kernel_curr_ac
 }
 
 static void kernel_exception_data(register_t excode, act_t* kernel_curr_act, size_t badvaddr) __dead2;
-static void kernel_exception_data(register_t excode, act_t* kernel_curr_act, size_t badvaddr) {
+static void kernel_exception_data(__unused register_t excode, act_t* kernel_curr_act, __unused size_t badvaddr) {
 	exception_printf(KRED"Data abort type %ld, BadVAddr:0x%lx in %s"KRST"\n",
 	       excode, badvaddr,
 	       kernel_curr_act->name);
@@ -82,7 +82,7 @@ static void kernel_exception_trap(act_t* kernel_curr_act) {
 }
 
 static void kernel_exception_unknown(register_t excode, act_t* kernel_curr_act) __dead2;
-static void kernel_exception_unknown(register_t excode, act_t* kernel_curr_act) {
+static void kernel_exception_unknown(__unused register_t excode, act_t* kernel_curr_act) {
 	exception_printf(KRED"Unknown exception type '%ld' in  %s"KRST"\n",
 	       excode, kernel_curr_act->name);
 	regdump(-1, kernel_curr_act);

@@ -151,7 +151,7 @@ void kernel_timer(uint8_t cpu_id)
 	KERNEL_TRACE(__func__, "in %lu", cp0_count_get());
 
 	// Set the high solution timer. This must be done before it wraps around since last call.
-	uint64_t old = high_resolution_timers[cpu_id];
+	__unused uint64_t old = high_resolution_timers[cpu_id];
 	uint64_t new = get_high_res_time(cpu_id);
 	kernel_assert(new > old);
     // FIXME QEMU is broken, it misses enough timer interrupts that this gets hit

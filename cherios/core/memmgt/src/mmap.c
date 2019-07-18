@@ -417,7 +417,7 @@ struct index_result {
 };
 
 // Fast but will only work if page_n is not in the middle a range covered by a node
-static vpage_range_desc_t* hard_index_parent(size_t page_n, vpage_range_desc_t* child) {
+static vpage_range_desc_t* hard_index_parent(size_t page_n, __unused vpage_range_desc_t* child) {
 
     if(page_n == MAX_VIRTUAL_PAGES) return NULL;
 
@@ -697,11 +697,13 @@ static vpage_range_desc_t * merge_index(vpage_range_desc_t *left_desc, vpage_ran
 // Collect at least a few L1s worth
 // define MIN_REVOKE (PAGE_TABLE_ENT_PER_TABLE*4)
 
+#if (REVOKE_SANITY)
 static void revoke_sanity(__unused capability arg, __unused ptable_t table, readable_table_t* RO, size_t index, __unused size_t rep_pages) {
     register_t state = RO->entries[index];
 
     assert_int_ex(state, == , VTABLE_ENTRY_USED);
 }
+#endif
 
 void revoke_start(vpage_range_desc_t* desc) {
     assert(desc->allocation_type == tomb_node);
@@ -718,8 +720,8 @@ void revoke_start(vpage_range_desc_t* desc) {
     size_t len = desc->length << UNTRANSLATED_BITS;
 
     res_nfo_t nfo = rescap_nfo(res);
-    size_t base_r = (nfo.base - RES_META_SIZE);
-    size_t len_r = (nfo.length + RES_META_SIZE);
+    __unused size_t base_r = (nfo.base - RES_META_SIZE);
+    __unused size_t len_r = (nfo.length + RES_META_SIZE);
 
     printf("Revoke: Revoking from %lx to %lx (%lx pages)\n", base, base+len, desc->length);
 
@@ -734,10 +736,10 @@ void revoke_start(vpage_range_desc_t* desc) {
     vmem_free_single((base+len)-1);
 
     // Check everything is unmapped
-    if(REVOKE_SANITY) {
+#if (REVOKE_SANITY)
         printf("Sanity Check %lx to %lx\n", base, base+len);
         vmem_visit_range(desc->start << UNTRANSLATED_BITS, desc->length, revoke_sanity, NULL);
-    }
+#endif
 }
 
 // Argument is a hint that there is something new
@@ -1518,8 +1520,8 @@ void __revoke_finish(res_t res) {
 
     printf("Got reservation back %lx to %lx\n", nfo.base, nfo.base + nfo.length);
 
-    size_t base = (nfo.base - RES_META_SIZE) >> UNTRANSLATED_BITS;
-    size_t len = (nfo.length + RES_META_SIZE) >> UNTRANSLATED_BITS;
+    __unused size_t base = (nfo.base - RES_META_SIZE) >> UNTRANSLATED_BITS;
+    __unused size_t len = (nfo.length + RES_META_SIZE) >> UNTRANSLATED_BITS;
 
     assert_int_ex(base, ==, desc->start);
     assert_int_ex(len, ==, desc->length);

@@ -192,7 +192,7 @@ void hash_test(void) {
 
     found_id_t* fid = foundation_entry_get_id(e);
 
-    uint64_t* found_hash = (uint64_t *)fid->sha256;
+    __unused uint64_t* found_hash = (uint64_t *)fid->sha256;
     assert_int_ex(found_hash[0], ==, 0x269e4f72239aee77);
     assert_int_ex(found_hash[1], ==, 0xa468234fe51600c1);
     assert_int_ex(found_hash[2], ==, 0x75690beee5d8a699);

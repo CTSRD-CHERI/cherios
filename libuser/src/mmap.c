@@ -67,7 +67,7 @@ size_t mem_commit_range(size_t addr, size_t pages, mem_request_flags flags) {
     return 0;
 }
 
-void *mmap(void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
+void *mmap(__unused void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
 	cap_pair pair;
 
 	assert(addr == NULL && "The old interface only supports an addr of null");
@@ -184,10 +184,22 @@ int mem_claim(size_t base, size_t length, size_t times, mop_t mop) {
 	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 5);
 }
 
+int mem_claim_mode(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, mode, 5);
+}
+
 int mem_release(size_t base, size_t length, size_t times, mop_t mop) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
 	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 1);
+}
+
+int mem_release_mode(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, mode, 1);
 }
 
 ERROR_T(mop_t) mem_makemop_debug(res_t space, mop_t auth_mop, const char* debug_id) {
@@ -227,5 +239,5 @@ void mmap_set_mop(mop_t mop) {
 void mdump(void) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
-	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt_ref, SYNC_CALL, 3);
+	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt, SYNC_CALL, 3);
 }

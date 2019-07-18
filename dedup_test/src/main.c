@@ -49,11 +49,11 @@ int main(__unused register_t arg, __unused capability carg) {
 
     capability a = (capability)&non_deduped;
 
-    capability b = deduplicate_cap_unaligned(a, 1, cheri_getperm(a));
+    __unused capability b = deduplicate_cap_unaligned(a, 1, cheri_getperm(a));
 
     assert(a != b);
 
-    capability c = deduplicate_cap_unaligned(a, 1, cheri_getperm(a));
+    __unused capability c = deduplicate_cap_unaligned(a, 1, cheri_getperm(a));
 
     assert(b == c);
 
