@@ -44,7 +44,7 @@
 #define POOL_LARGE_THRESHOLD (1 << 26)
 
 // Measured in virtual pages
-#define MIN_REVOKE (0x200)
+#define MIN_REVOKE (0x20000)
 #define REVOKE_SANITY 0
 
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
