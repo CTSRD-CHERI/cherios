@@ -137,7 +137,11 @@
 
 #ifdef HARDWARE_qemu
 
-// QEMU got their memory map wrong. The top 256MB of RAM alias with the first 256MB. OOPS.
+// QEMU did not get the MALTA memory map wrong, it is just really weird.
+// MALTA has a 32bit physical address space, and the upper half aliases the lower,
+// apart from the 0x10000000 to 0x20000000 range in the LOWER half which is obscured by the IO hole
+// the current hack works, but we should probably have the nano kernel do some re-arranging to recover the last 256MB,
+// which is actually where the IO hole is, but in the upper half.
 #define PHY_RAM_SIZE                    ((1L << 31) - 0x10000000)
 #define RAM_PRE_IO_END                  0x10000000
 #define RAM_POST_IO_START               0x20000000
