@@ -41,13 +41,13 @@ struct copy_until_status {
 };
 
 ssize_t TRUSTED_CROSS_DOMAIN(ful_expect)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ful_expect(capability arg, char* buf, uint64_t offset, uint64_t length) {
+__used ssize_t ful_expect(capability arg, char* buf, uint64_t offset, uint64_t length) {
     int res = memcmp((char*)arg+offset,buf,length);
     return (res == 0) ? (ssize_t)length : E_USER_FULFILL_ERROR;
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(ful_copy_until)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ful_copy_until(capability arg, char* buf, uint64_t offset, uint64_t length) {
+__used ssize_t ful_copy_until(capability arg, char* buf, uint64_t offset, uint64_t length) {
     struct copy_until_status *copy = (struct copy_until_status*)arg;
     if(copy->done) return 0;
     for(uint64_t i = 0; i < length; i++) {

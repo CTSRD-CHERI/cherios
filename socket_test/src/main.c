@@ -183,20 +183,20 @@ void con2_start(__unused register_t arg, __unused capability carg) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(con3_full)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t con3_full(__unused capability arg, __unused char* buf, __unused uint64_t offset, __unused uint64_t length) {
+__used ssize_t con3_full(__unused capability arg, __unused char* buf, __unused uint64_t offset, __unused uint64_t length) {
     assert(0);
     while(1);
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(con3_full2)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t con3_full2(capability arg, char* buf, uint64_t offset, uint64_t length) {
+__used ssize_t con3_full2(capability arg, char* buf, uint64_t offset, uint64_t length) {
     char* data = (char*)arg;
     memcpy(buf, data+offset,length);
     return length;
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(con3_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf);
-ssize_t con3_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
+__used ssize_t con3_sub(capability arg, uint64_t offset, uint64_t length, char** out_buf) {
     // Gives the buffer out in small parts to test that multiple calls works
     char* data = (char*)arg;
     assert_int_ex(length+offset, ==, 3*BIG_TEST_SIZE);

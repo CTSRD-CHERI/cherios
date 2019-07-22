@@ -43,7 +43,7 @@
 int in_bench = 0;
 
 DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_start(void));
-uint64_t kernel_syscall_bench_start(void) {
+__used uint64_t kernel_syscall_bench_start(void) {
 	// disable all interrupts on this core
 	kernel_interrupts_off();
 	// start a timer
@@ -52,7 +52,7 @@ uint64_t kernel_syscall_bench_start(void) {
 }
 
 DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_end(void));
-uint64_t kernel_syscall_bench_end(void) {
+__used uint64_t kernel_syscall_bench_end(void) {
 	// finish time
 	uint64_t time = get_high_res_time(cp0_get_cpuid());
 	// enable interrupts again
@@ -63,7 +63,7 @@ uint64_t kernel_syscall_bench_end(void) {
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_info_epoch(void));
-void kernel_syscall_info_epoch(void) {
+__used void kernel_syscall_info_epoch(void) {
     // a bit racey but its only for debug
 #if (K_DEBUG)
     FOR_EACH_ACT(act) {
@@ -73,12 +73,12 @@ void kernel_syscall_info_epoch(void) {
 }
 
 DECLARE_WITH_CD(act_control_kt, kernel_syscall_actlist_first(void));
-act_control_kt kernel_syscall_actlist_first(void) {
+__used act_control_kt kernel_syscall_actlist_first(void) {
 	return (act_control_kt)act_create_sealed_ctrl_ref(act_list_start);
 }
 
 DECLARE_WITH_CD(act_control_kt, kernel_syscall_actlist_next(act_control_kt act));
-act_control_kt kernel_syscall_actlist_next(act_control_kt act) {
+__used act_control_kt kernel_syscall_actlist_next(act_control_kt act) {
 	act_control_t* ctrl = act_unseal_ctrl_ref(act);
     act_t* next = ctrl->list_next;
 	return next ? (act_control_kt)act_create_sealed_ctrl_ref(next) : NULL;
@@ -89,7 +89,7 @@ user_stats_t dummy_user_stats;
 #endif
 
 DECLARE_WITH_CD(user_stats_t*, kernel_syscall_act_user_info_ref(act_control_kt act));
-user_stats_t* kernel_syscall_act_user_info_ref(__unused act_control_kt act) {
+__used user_stats_t* kernel_syscall_act_user_info_ref(__unused act_control_kt act) {
 	return cheri_setbounds_exact(
 #if (K_DEBUG)
 	                             &(act_unseal_ctrl_ref(act)->user_stats)
@@ -100,7 +100,7 @@ user_stats_t* kernel_syscall_act_user_info_ref(__unused act_control_kt act) {
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_act_info(act_control_kt act, act_info_t* info));
-void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
+__used void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
 	act_control_t* ctrl = act_unseal_ctrl_ref(act);
 	info->name = ctrl->name;
 	info->sched_status = ctrl->sched_status;
@@ -126,26 +126,25 @@ void kernel_syscall_act_info(act_control_kt act, act_info_t* info) {
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_dump_tlb(void));
-void kernel_syscall_dump_tlb(void) {
+__used void kernel_syscall_dump_tlb(void) {
 	kernel_dump_tlb();
 }
 
 DECLARE_WITH_CD(size_t, kernel_syscall_provide_sync(res_t res));
-
 DECLARE_WITH_CD(void, kernel_syscall_next_sync(void));
-void kernel_syscall_next_sync(void) {
+__used void kernel_syscall_next_sync(void) {
 	alloc_new_indir(CALLER);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority));
-void kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority) {
+__used void kernel_syscall_change_priority(act_control_kt ctrl, enum sched_prio priority) {
 	if(priority > PRIO_HIGH) return;
 	act_control_t* control = act_unseal_ctrl_ref(ctrl);
 	sched_change_prio((act_t*)control, priority);
 }
 
 DECLARE_WITH_CD(void, kernel_sleep(register_t timeout));
-void kernel_sleep(register_t timeout) {
+__used void kernel_sleep(register_t timeout) {
 	if(timeout != 0) {
 		sched_block_until_event(NULL, NULL, sched_runnable, timeout, 0);
 	} else {
@@ -154,13 +153,13 @@ void kernel_sleep(register_t timeout) {
 }
 
 DECLARE_WITH_CD(register_t , kernel_syscall_now(void));
-register_t kernel_syscall_now(void) {
+__used register_t kernel_syscall_now(void) {
 	// FIXME: Will break if core is moved. Currently core is never moved so this is fine.
 	return get_high_res_time(cp0_get_cpuid());
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch));
-void kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch) {
+__used void kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch) {
 	act_t* target = act_unseal_ref(waiter);
 	act_t* caller = sched_get_current_act();
 	if(caller != memgt_ref) {
@@ -173,48 +172,48 @@ void kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch) {
 }
 
 DECLARE_WITH_CD(void, kernel_wait(void));
-void kernel_wait(void) {
+__used void kernel_wait(void) {
 	//TODO it might be nice for users to suggest next, i.e. they batch a few sends then call wait for their recipient
     sched_block_until_event(NULL, NULL, sched_waiting, 0, 0);
 }
 
 DECLARE_WITH_CD(act_control_t *, kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint));
-act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint) {
+__used act_control_t * kernel_syscall_act_register(reg_frame_t *frame, char *name, queue_t *queue, res_t res, uint8_t cpu_hint) {
 	return act_register_create(frame, queue, name, status_alive, NULL, res, cpu_hint);
 }
 
 DECLARE_WITH_CD(act_t *, kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl));
-act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl) {
+__used act_t * kernel_syscall_act_ctrl_get_ref(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_get_sealed_ref_from_ctrl(ctrl);
 }
 
 DECLARE_WITH_CD(status_e, kernel_syscall_act_ctrl_get_status(act_control_t* ctrl));
-status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl) {
+__used status_e kernel_syscall_act_ctrl_get_status(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_get_status(ctrl);
 }
 
 DECLARE_WITH_CD(sched_status_e, kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl));
-sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl) {
+__used sched_status_e kernel_syscall_act_ctrl_get_sched_status(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return ctrl->sched_status;
 }
 
 DECLARE_WITH_CD(int, kernel_syscall_act_revoke(act_control_t* ctrl));
-int kernel_syscall_act_revoke(act_control_t* ctrl) {
+__used int kernel_syscall_act_revoke(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_revoke(ctrl);
 }
 
 DECLARE_WITH_CD(int, kernel_syscall_act_terminate(act_control_t* ctrl));
-int kernel_syscall_act_terminate(act_control_t* ctrl) {
+__used int kernel_syscall_act_terminate(act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return act_terminate(ctrl);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_puts(char *msg));
-void kernel_syscall_puts(char *msg) {
+__used void kernel_syscall_puts(char *msg) {
 	#ifndef __LITE__
 	kernel_printf(KGRN"%s" KREG KRST, msg);
     #else
@@ -223,7 +222,7 @@ void kernel_syscall_puts(char *msg) {
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_panic_proxy(act_t* act) __dead2);
-void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
+__used void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
 	// Turn of interrupts makes the panic print not get screwed up
 	cp0_status_ie_disable();
 
@@ -242,24 +241,24 @@ void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_panic(void) __dead2);
-void kernel_syscall_panic(void) {
+__used void kernel_syscall_panic(void) {
 	kernel_syscall_panic_proxy(NULL);
 }
 
 DECLARE_WITH_CD(int, kernel_syscall_interrupt_register(int number, act_control_t* ctrl, register_t v0, register_t arg, capability carg));
-int kernel_syscall_interrupt_register(int number, act_control_t* ctrl, register_t v0, register_t arg, capability carg) {
+__used int kernel_syscall_interrupt_register(int number, act_control_t* ctrl, register_t v0, register_t arg, capability carg) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return kernel_interrupt_register(number, ctrl, v0, arg, carg);
 }
 
 DECLARE_WITH_CD(int, kernel_syscall_interrupt_enable(int number, act_control_t* ctrl));
-int kernel_syscall_interrupt_enable(int number, act_control_t* ctrl) {
+__used int kernel_syscall_interrupt_enable(int number, act_control_t* ctrl) {
 	ctrl = act_unseal_ctrl_ref(ctrl);
 	return kernel_interrupt_enable(number, ctrl);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_shutdown(shutdown_t mode));
-void kernel_syscall_shutdown(shutdown_t mode) {
+__used void kernel_syscall_shutdown(shutdown_t mode) {
     // Mode if we want restart/shotdown etc
     switch(mode) {
         case REBOOT:
@@ -273,7 +272,7 @@ void kernel_syscall_shutdown(shutdown_t mode) {
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_register_act_event_registrar(act_t* act));
-void kernel_syscall_register_act_event_registrar(act_t* act) {
+__used void kernel_syscall_register_act_event_registrar(act_t* act) {
 	static int once = 0;
 	if(!once) {
 		once = 1;
@@ -283,7 +282,7 @@ void kernel_syscall_register_act_event_registrar(act_t* act) {
 }
 
 DECLARE_WITH_CD(const char*, kernel_syscall_get_name(act_t * act));
-const char* kernel_syscall_get_name(act_t * act) {
+__used const char* kernel_syscall_get_name(act_t * act) {
     act = act_unseal_ref(act);
     const char* name = act->name;
     name = cheri_setbounds(name, sizeof(act->name));
@@ -292,24 +291,24 @@ const char* kernel_syscall_get_name(act_t * act) {
 }
 
 DECLARE_WITH_CD(act_notify_kt, kernel_syscall_act_ctrl_get_notify_ref(act_control_kt ctrl));
-act_notify_kt kernel_syscall_act_ctrl_get_notify_ref(act_control_kt ctrl) {
+__used act_notify_kt kernel_syscall_act_ctrl_get_notify_ref(act_control_kt ctrl) {
 	return act_seal_for_call(act_unseal_callable((act_t*)ctrl, ctrl_ref_sealer), notify_ref_sealer);
 }
 
 DECLARE_WITH_CD(register_t, kernel_syscall_cond_wait(int notify_on_message, register_t timeout));
-register_t kernel_syscall_cond_wait(int notify_on_message, register_t timeout) {
+__used register_t kernel_syscall_cond_wait(int notify_on_message, register_t timeout) {
     sched_status_e events = sched_wait_notify;
     if(notify_on_message) events |= sched_waiting;
     return sched_block_until_event(NULL, NULL, events, timeout, 0);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_cond_cancel(void));
-void kernel_syscall_cond_cancel(void) {
+__used void kernel_syscall_cond_cancel(void) {
 	sched_get_current_act()->early_notify = 0;
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_cond_notify(act_t* act));
-void kernel_syscall_cond_notify(act_t* act) {
+__used void kernel_syscall_cond_notify(act_t* act) {
 	act = act_unseal_callable(act, notify_ref_sealer);
     sched_receive_event(act, sched_wait_notify);
 }
@@ -317,7 +316,7 @@ void kernel_syscall_cond_notify(act_t* act) {
 DECLARE_WITH_CD (void, kernel_message_send(capability c3, capability c4, capability c5, capability c6,
         register_t a0, register_t a1, register_t a2, register_t a3,
         act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret));
-ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
+__used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
                              register_t a0, register_t a1, register_t a2, register_t a3,
                              act_t* target_activation, ccall_selector_t selector, register_t v0);
 

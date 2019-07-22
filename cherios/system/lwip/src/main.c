@@ -346,7 +346,7 @@ static void tcp_application_ack(tcp_session* tcp) {
 
 // Application -> TCP
 ssize_t TRUSTED_CROSS_DOMAIN(tcp_ful_func)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t tcp_ful_func(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+__used ssize_t tcp_ful_func(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
     // Make a pbuf to send, linked to a byte range
@@ -368,7 +368,7 @@ ssize_t tcp_ful_func(capability arg, char* buf, __unused uint64_t offset, uint64
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(tcp_ful_oob_func)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t tcp_ful_oob_func(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
+__used ssize_t tcp_ful_oob_func(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     tcp_session* tcp = (tcp_session*)arg;
 
     switch(request->type) {

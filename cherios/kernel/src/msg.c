@@ -278,7 +278,7 @@ static act_t* token_expected(capability token) {
     return result ? ccaller : NULL;
 }
 
-size_t kernel_syscall_provide_sync(res_t res) {
+__used size_t kernel_syscall_provide_sync(res_t res) {
     res = rescap_split(res, 0); // Destroy the users handle so we can make a res field without interference
     res_nfo_t nfo = rescap_nfo(res);
     if(nfo.length < SI_SIZE) return 0;
@@ -295,7 +295,7 @@ size_t kernel_syscall_provide_sync(res_t res) {
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
-ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
+__used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
 					 register_t a0, register_t a1, register_t a2, register_t a3,
 					 act_t* target_activation, ccall_selector_t selector, register_t v0) {
 
@@ -350,7 +350,7 @@ ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capa
     return (ret_t*)&source_activation->c3;
 }
 
-act_kt set_message_reply(capability c3, register_t v0, register_t v1, capability sync_token) {
+__used act_kt set_message_reply(capability c3, register_t v0, register_t v1, capability sync_token) {
 
 	__unused act_t * returned_from = (act_t*) CALLER;
 
@@ -383,7 +383,7 @@ act_kt set_message_reply(capability c3, register_t v0, register_t v1, capability
 	return returned_to;
 }
 
-int kernel_message_reply(capability c3, register_t v0, register_t v1, capability sync_token, int hint_switch) {
+__used int kernel_message_reply(capability c3, register_t v0, register_t v1, capability sync_token, int hint_switch) {
 
 	act_kt returned_to = set_message_reply(c3, v0, v1, sync_token);
 
@@ -398,7 +398,7 @@ struct fastpath_return {
 	register_t v1;
 };
 
-struct fastpath_return fastpath_bailout(capability c3, register_t v0, register_t v1, act_reply_kt reply_token, int64_t timeout, int notify_is_timeout) {
+__used struct fastpath_return fastpath_bailout(capability c3, register_t v0, register_t v1, act_reply_kt reply_token, int64_t timeout, int notify_is_timeout) {
 
 	act_t * caller = (act_t*) CALLER;
 	act_kt returned_to = NULL;

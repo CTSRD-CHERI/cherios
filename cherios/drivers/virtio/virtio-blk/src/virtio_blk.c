@@ -176,7 +176,7 @@ static void add_desc(session_t* session, le16 desc_no) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
+__used ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
     request_type_e req = request->type;
 
@@ -211,7 +211,7 @@ ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, _
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(ful_ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ful_ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+__used ssize_t ful_ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     struct session_sock* ss = (struct session_sock*)arg;
 
     int res = virtio_q_chain_add_virtual(&ss->session->queue, &ss->session->free_head, &ss->tail_tmp,

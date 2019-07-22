@@ -45,7 +45,7 @@
                 "\n" \
 
 ssize_t TRUSTED_CROSS_DOMAIN(ful_print)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ful_print(__unused capability arg, char* buf, uint64_t __unused offset, uint64_t length) {
+__used ssize_t ful_print(__unused capability arg, char* buf, uint64_t __unused offset, uint64_t length) {
     printf("%.*s",(int)length, buf);
     return length;
 }

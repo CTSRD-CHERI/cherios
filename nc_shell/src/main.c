@@ -40,7 +40,7 @@ typedef struct {
 } nc_shell_state;
 
 extern ssize_t TRUSTED_CROSS_DOMAIN(ns_ful) (capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ns_ful(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+__used ssize_t ns_ful(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     nc_shell_state* shellState = (nc_shell_state*)arg;
 
     // TODO actually write a shell

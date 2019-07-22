@@ -95,7 +95,7 @@ static int create_stderr(requester_t requester) {
 }
 
 extern ssize_t TRUSTED_CROSS_DOMAIN(ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ff(__unused capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+__used ssize_t ff(__unused capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
 	for(size_t i = 0; i != length; i++) uart_putc(buf[i]);
 	return length;
 }

@@ -91,7 +91,7 @@ __attribute__((noinline)) void lib_calls(void_f* f, uint64_t* column) {
 
 extern void CROSS_DOMAIN(dummy_lib_f)(void);
 extern void TRUSTED_CROSS_DOMAIN(dummy_lib_f)(void);
-void dummy_lib_f(void) {
+__used void dummy_lib_f(void) {
     return;;
 }
 

@@ -146,7 +146,7 @@ void display_board(NET_SOCK ns, board_t* board, ssize_t food) {
 }
 
 extern ssize_t TRUSTED_CROSS_DOMAIN(snake_ful) (capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t snake_ful(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+__used ssize_t snake_ful(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     diff_t* diff = &((struct player*)arg)->diff;
     char c = buf[length-1];
     if(c <= 'Z') c += 'z' - 'Z';
@@ -174,7 +174,7 @@ ssize_t snake_ful(capability arg, char* buf, __unused uint64_t offset, uint64_t 
 }
 
 extern ssize_t TRUSTED_CROSS_DOMAIN(snake_getname) (capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t snake_getname(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+__used ssize_t snake_getname(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     struct player* p = ((struct player*)arg);
     size_t consumed = 0;
 

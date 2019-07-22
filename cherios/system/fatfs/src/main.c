@@ -108,7 +108,7 @@ void close_file(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t full_oob(capability arg, request_t* request,  uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
+__used ssize_t full_oob(capability arg, request_t* request,  uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     struct sessions_t* fil = (struct sessions_t*)arg;
 
     if(offset != 0) {

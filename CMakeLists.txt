@@ -164,6 +164,7 @@ endif()
 # Add the stripes
 
 option(GO_FAST "Turn off all debugging features, paint on go fast stripes" OFF)
+option(ALWAYS_LTO "Always use LTO" OFF)
 
 if(GO_FAST)
     set(BFAST_FLAGS -DGO_FAST=1)
@@ -403,6 +404,10 @@ function(add_cherios_module _target)
   set(multiValueArgs SOURCES)
   cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
+  if(ALWAYS_LTO)
+    set(add_exe_USE_LTO "ON")
+  endif()
+
   if(NOT add_exe_LINKER_SCRIPT)
     message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
   elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
@@ -431,6 +436,7 @@ function(add_cherios_module _target)
 
   set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
   if(${add_exe_USE_LTO} OR ${add_exe_TEMPORAL_A})
+      message("Using LTO for ${_target}")
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
               -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
