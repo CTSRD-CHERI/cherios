@@ -59,11 +59,12 @@
 
 #define B_DEMO 0
 
-#define B_BENCH 0
+#define B_BENCH 1
 
-#define B_BENCH_MS      1
-#define B_BENCH_CALLS   1
-#define B_BENCH_EXPS    1
+#define B_BENCH_MS      0
+#define B_BENCH_CALLS   0
+#define B_BENCH_EXPS    0
+#define B_BENCH_REVOKE  1
 
 const char* nginx_args[] = {"nginx",NULL};
 #define NGINX_ARGS_L 1
@@ -167,11 +168,12 @@ init_elem_t init_list[] = {
     B_WAIT_FOR(namespace_num_tcp)
 #endif
 #if (B_BENCH)
-    B_DENTRY(m_user, "bench_collect.elf", 0, 1)
-    B_WAIT_FOR(namespace_num_bench)
+    B_DENTRY(m_user, "bench_collect.elf", 0, 0)
+//B_WAIT_FOR(namespace_num_bench)
     B_DENTRY(m_user, "calls.elf", 0, B_BENCH_CALLS)
     B_DENTRY(m_user, "message_send.elf", 0, B_BENCH_MS)
     B_DENTRY(m_user, "exceptions.elf", 0, B_BENCH_EXPS)
+    B_DENTRY(m_user, "revoke_bench.elf", 0, B_BENCH_REVOKE)
 #endif
 	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
 	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
@@ -189,9 +191,9 @@ init_elem_t init_list[] = {
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
+    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,0 && BUILD_WITH_NET)
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH && 0)
-    B_PENTRY(m_user, "nc_shell.elf", 0, BUILD_WITH_NET)
+    B_PENTRY(m_user, "nc_shell.elf", 0, !B_BENCH && BUILD_WITH_NET)
 //    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
 #if 0
 	#define T3(_arg) \

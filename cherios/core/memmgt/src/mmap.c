@@ -1543,11 +1543,39 @@ void __revoke_finish(res_t res) {
     find_something_to_revoke(NULL);
 }
 
+#if (REVOKE_BENCH)
+act_kt revoke_bench_act;
+#endif
+
+void __revoke_bench(act_kt act) {
+#if (REVOKE_BENCH)
+    revoke_bench_act = act;
+#else
+    assert(0);
+#endif
+}
+
 void __revoke(void) {
 
     assert(worker_id == 2);
 
-    res_t  res = rescap_revoke_finish();
+    uint64_t scanned = 0;
+
+#if (REVOKE_BENCH)
+    uint64_t before, after;
+
+    if(revoke_bench_act) before = syscall_now();
+#endif
+
+    res_t  res = rescap_revoke_finish(&scanned);
+
+#if (REVOKE_BENCH)
+    if(revoke_bench_act) {
+        after = syscall_now();
+        res_nfo_t nfo = rescap_nfo(res);
+        message_send(scanned, nfo.length + RES_META_SIZE, after - before, 0, NULL, NULL, NULL, NULL, revoke_bench_act, SEND, 0);
+    }
+#endif
 
     if(!cheri_gettag(res)) {
         int er = cheri_getoffset(res);

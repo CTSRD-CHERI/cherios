@@ -43,8 +43,11 @@
 
 #define POOL_LARGE_THRESHOLD (1 << 26)
 
+#define REVOKE_BENCH 1
+#define REVOKE_PRIO PRIO_HIGH
+
 // Measured in virtual pages
-#define MIN_REVOKE (0x20000)
+#define MIN_REVOKE (0x200)
 #define REVOKE_SANITY 0
 
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
@@ -228,5 +231,7 @@ ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed, const char* debug_id
 int __mem_reclaim_mop(mop_t mop_sealed);
 
 void mmap_dump(void);
+
+void __revoke_bench(act_kt act);
 
 #endif //CHERIOS_MMAP_H_H

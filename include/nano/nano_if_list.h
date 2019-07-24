@@ -69,7 +69,7 @@
 /* Tells the revokeer to start revoking this reservation. revoking fails if already revoking. Must be MAPPED */\
     ITEM(rescap_revoke_start, void, (res_t, res), __VA_ARGS__)\
 /* Tells the revokeer to finish revoking this reservation from before. Must be UNMAPPED. */\
-    ITEM(rescap_revoke_finish, res_t, (void), __VA_ARGS__)\
+    ITEM(rescap_revoke_finish, res_t, (uint64_t*, bytes_scanned), __VA_ARGS__)\
 /* Splits an open reservation. The reservation will have size `size'. The remaining space will be returned as a new reservation. */\
     ITEM(rescap_split, res_t, (capability, res, size_t, size), __VA_ARGS__)\
 /* Merges two taken reservations. Cannot merge with revoking. If an open and taken are merged the result is taken*/\

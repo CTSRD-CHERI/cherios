@@ -205,7 +205,7 @@ int new_socket(session_t* session, requester_t requester, enum socket_connect_ty
 
 
 ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
-ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
+__used ssize_t full_oob(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
 
@@ -287,7 +287,7 @@ static size_t memcpy_tmp(uint8_t* dst, uint8_t* src, size_t length) {
 }
 
 ssize_t TRUSTED_CROSS_DOMAIN(ful_ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
-ssize_t ful_ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
+__used ssize_t ful_ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     session_sock *ss = (session_sock *) arg;
     altera_sd_mmio* mmio = ss->session->mmio;
     int push = ss->socket_type == SOCK_TYPE_PUSH;

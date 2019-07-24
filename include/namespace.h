@@ -72,6 +72,7 @@ static const int namespace_num_blockcache = 0x46;
 
 static const int namespace_num_event_service = 0x61;
 static const int namespace_num_dedup_service = 0x62;
+static const int namespace_num_revoke_bench = 0x63;
 
 static const int namespace_num_webserver = 0x70;
 static const int namespace_num_eve  = 0x71;

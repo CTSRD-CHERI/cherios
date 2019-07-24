@@ -1822,13 +1822,16 @@ revoke_start_er:
 #define SET_ER(X) li $s0, X
 
 ####################################### (TODO unsafe)
-# void rescap_revoke_finish(res_t res);
+# void rescap_revoke_finish(uint64_t* bytes_scanned);
 .global rescap_revoke_finish
 rescap_revoke_finish:
 #######################################
 
+    cmove       $c13, $c3
+
     cincoffset  $c4, $idc, revoke_state
     inttoc      $c9, $s0
+    li          $a7, 0                                      # storing how many physical pages have been scanned
     li          $s0, REVOKE_ER_NOT_STARTED
 
     clld        $t0, $c4
@@ -2147,6 +2150,8 @@ scan_loop: # We will now revoke every capability with a2 <= base < a3. and perms
     cld         $t0, $zero, load_tag_bits($idc) # how many capabilities we can process in one go with load tags
     cincoffset  $c1, $c5, $a4                   # c1 - cap to area to scan
 
+    dsubu       $t1, $t8, $a4
+    daddu       $a7, $a7, $t1                   # add how bytes are scanned
 
     dsll        $t0, $t0, CAP_SIZE_BITS         # how many bytes we can process in one go with load tags
 
@@ -2398,7 +2403,11 @@ clear_loop_l1_start_retry:
 
     csd         $zero, $zero, revoke_state($idc) # Set revoke state to 0
 
+    cbez        $c13, skip_store
     ctoint      $s0, $c9
+
+    csd         $a7, $zero, 0($c13)
+skip_store:
     cclearlo    EN5(c4, c5, c6, c7, c8)
     CRETURN
 
