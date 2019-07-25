@@ -72,8 +72,27 @@ STOREC(type) " %[res], %[new], %[ptr]    \n"                \
 : "memory");                                                         \
 }
 
+#define ATOMIC_SWAP(pointer, type, new_val, result) \
+{                                                           \
+register register_t tmp;                                   \
+__asm__ __volatile(                                         \
+SANE_ASM                                                    \
+        "1:"                                                \
+LOADL(type) " %[res], %[ptr]            \n"                 \
+STOREC(type) " %[tmp], %[new], %[ptr]    \n"                \
+"beqz   %[tmp], 1b                      \n"                 \
+"nop                                    \n"                 \
+"2:                                     \n"                 \
+: [tmp] "=&r" (tmp), [res] CLOBOUT(type) (result)           \
+: [ptr] "C" (pointer), [new] IN(type) (new_val)             \
+: "memory");                                                \
+}
+
 #define ATOMIC_CAS_RV(pointer, type, old_val, new_val) \
     ({register_t aa_tmp; ATOMIC_CAS(pointer, type, old_val, new_val, aa_tmp); aa_tmp;})
+
+#define ATOMIC_SWAP_RV(pointer, type, new_val) \
+    ({CTYPE(type) aa_tmp; ATOMIC_SWAP(pointer, type, new_val, aa_tmp); aa_tmp;})
 
 #define LOAD_LINK(ptr, type, result) __asm__ __volatile(LOADL(type) " %[res], %[pt]" : [res] OUT(type) (result) : [pt] IN(c) (ptr):)
 #define STORE_COND(ptr, type, val, suc) __asm__ __volatile(STOREC(type) " %[sc], %[vl], %[pt]" : \
