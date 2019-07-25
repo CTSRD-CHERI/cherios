@@ -260,12 +260,12 @@ csc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 cscbi           ctmp, (CAP_SIZE)(csp)
 ccall_l         $c1, $c2, 2, cra
 clc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
-clc             cra, $zero, (0)(csp)
-clcbi           ctmp, (CAP_SIZE)(csp)
 clc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
-cscbi           ctmp, CTLP_OFFSET_CSP(ctlp)
+clcbi           ctmp, (CAP_SIZE)(csp)
+clc             cra, $zero, (0)(csp)
 cincoffset      csp, csp, (CAP_SIZE*2)
+cscbi           ctmp, CTLP_OFFSET_CSP(ctlp)
 ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_complete_trusting
@@ -290,12 +290,12 @@ ccall_l         $c1, $c2, 2, cra
 1:
 DOMAIN_CAS ctlp, callable_ready, callable_taken, -1
 clc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
-clc             cra, $zero, (0)(csp)
-clcbi           ctmp, (CAP_SIZE)(csp)
 clc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
-cscbi           ctmp, CTLP_OFFSET_CSP(ctlp)
+clcbi           ctmp, (CAP_SIZE)(csp)
+clc             cra, $zero, (0)(csp)
 cincoffset      csp, csp, (CAP_SIZE*2)
+cscbi           ctmp, CTLP_OFFSET_CSP(ctlp)
 ccall_slotless  cra, crd, 2
 
 STUB_END plt_common_trusting
