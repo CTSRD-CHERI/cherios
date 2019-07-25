@@ -63,10 +63,10 @@
         ITEM(syscall_act_ctrl_get_notify_ref, act_notify_kt, (act_control_kt ctrl), __VA_ARGS__)\
 /* Duration of sleep is returned */\
         ITEM(syscall_cond_wait, register_t, (int notify_on_message, register_t timeout), __VA_ARGS__)\
-        ITEM(syscall_cond_notify, void, (act_kt waiter), __VA_ARGS__)\
+        ITEM(syscall_cond_notify, void, (act_notify_kt waiter), __VA_ARGS__)\
         ITEM(syscall_cond_cancel, void, (void), __VA_ARGS__)\
         ITEM(syscall_now, register_t, (void), __VA_ARGS__)\
-        ITEM(syscall_vmem_notify, void, (act_kt waiter, int suggest_switch), __VA_ARGS__)\
+        ITEM(syscall_vmem_notify, void, (act_notify_kt waiter, int suggest_switch), __VA_ARGS__)\
         ITEM(syscall_change_priority, void, (act_control_kt ctrl, enum sched_prio priority), __VA_ARGS__)\
         ITEM(syscall_dump_tlb, void, (void), __VA_ARGS__)\
         ITEM(syscall_provide_sync, size_t, (res_t res), __VA_ARGS__)\
