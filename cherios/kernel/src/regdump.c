@@ -130,9 +130,9 @@ static inline void print_frame_info(int16_t size, char* stack) {
     printf(" Frame size: %4x. Left On Stack: %4x. ", -size, on_stack);
 }
 
-static inline void print_change_stack(char* stack) {
+static inline void print_change_stack(char* stack, const char* reason) {
     uint32_t on_stack = cheri_getlen(stack) - cheri_getoffset(stack);
-    printf("\n Swap to new stack with size %4x", on_stack);
+    printf("\n Swap to new stack with size %4x due to %s", on_stack, reason);
 }
 
 static inline void print_end(void) {
@@ -164,7 +164,7 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 	// csc     c17,$zero,offset(c11)		// stores return address
 
     // Or a prolog with unsafe mem allocates space like this...
-    // csc              $c11, $zero, -48($c10)
+    // cscbi             $c11, X($c10)
     // cincoffset       $c11, $c10, -size
 
     // Or a prolog with a particularly big frame
@@ -196,6 +196,10 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 	uint32_t csc_i_mask		  = (1 << 11) - 1;
     uint32_t daddiu_i_mask    = 0x0000FFFF;
 
+    uint32_t ustack_save_mask 	= 0xffff0000;
+	uint32_t ustack_save_val 	= 0x796a0000;
+	uint32_t ustack_save_i_mask = 0x0000ffff;
+
 	// FIXME maybe use frame pointer?
 
     int unsafe = 0;
@@ -223,6 +227,9 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 
 		capability last_idc = idc;
 
+		int foundc11 = 0;
+		int32_t offsetc11 = 0;
+
 		if(((size_t)return_address & 0xffffffff80000000) != 0xffffffff80000000) {
 			for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
 				if(check_cap(instr)) {
@@ -232,6 +239,12 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 				}
 				uint32_t val = *instr;
 
+				if(unsafe && ((val & ustack_save_mask) == ustack_save_val)) {
+					offsetc11 = ((int32_t)((int16_t)(val & ustack_save_i_mask))) * CAP_SIZE;
+					foundc11 = 1;
+					break;
+				}
+
                 int cinc = (val & cinc_c11_mask) == cinc_from_val;
                 int cinci = (val & cinc_c11_mask) == cinci_form_val;
 
@@ -240,9 +253,8 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
                 int safe_inc = (cinc || cinci) && (from_reg == 11);
                 int unsafe_inc = (cinc || cinci) && (from_reg == 10);
 
-                unsafe = unsafe_inc ? 1 : 0;
-
 				if (safe_inc || unsafe_inc) {
+					unsafe = unsafe_inc ? 1 : 0;
                     if(cinci) {
                         stack_size = (int16_t)(val & cinc_i_mask);
                         if(stack_size & (1 << 10)) {
@@ -253,7 +265,7 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
                         uint32_t prev_val = *(instr-1);
                         stack_size = (int16_t)(prev_val & daddiu_i_mask);
                     }
-                    if(stack_size != 0) break;
+                    if(stack_size != 0 && unsafe == 0) break;
 				}
 
 				if((val & csc_form_mask) == csc_form_val) {
@@ -299,13 +311,17 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 		stack_pointer = stack_pointer - stack_size;
 
         if(unsafe) {
-            char** prev_stack_ptr = (char**)(stack_pointer - (3 * sizeof(capability)));
+        	if(!foundc11) {
+				printf("***bad frame (could not find unsafe stack back ptr)***\n)");
+				return;
+			}
+            char** prev_stack_ptr = (char**)(stack_pointer + offsetc11);
             if(check_cap(prev_stack_ptr)) {
                 printf("*** bad frame (unsafe stack chain broken)***\n");
                 return;
             }
             stack_pointer = *prev_stack_ptr;
-            print_change_stack(stack_pointer);
+            print_change_stack(stack_pointer,"unsafe usage");
         }
 
 		if(last_idc != idc) {
@@ -328,7 +344,7 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 				return;
 			}
 			stack_pointer = (char*)*sp_ptr;
-			print_change_stack(stack_pointer);
+			print_change_stack(stack_pointer, "compartment change");
 		}
 
 		// Offset by 2 instructions for the cjal + nop
