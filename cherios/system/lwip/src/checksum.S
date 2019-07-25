@@ -87,6 +87,9 @@ checksum_found_enter:       # data_arg(table* out_funcs, sealing_cap sealer)
     make_func   checksum_xor_int, 4
     make_func   checksum_swap_bytes, 5
     make_func   checksum_add_buffer, 6
+#ifdef DRIVER_ASM
+    make_func   driver_output_func, 7
+#endif
 
 # init free list
 
@@ -308,6 +311,10 @@ no_ret:
     cclearlo EN6(c1,c2,c3,c4,c5,c6)
     clearlo  EN4(a0,a1,a2,a3)
     CRETURN
+
+#ifdef DRIVER_ASM
+    #include DRIVER_ASM
+#endif
 
 .p2align CAP_SIZE_BITS
 .global checksum_foundation_data_end

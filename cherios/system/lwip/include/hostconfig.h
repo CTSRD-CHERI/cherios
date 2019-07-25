@@ -34,7 +34,7 @@
 #define CHERIOS_GATEWAY     "128.232.18.1"
 #define CHERIOS_DNS         "128.232.1.1"
 
-// #define LOCAL
+#define LOCAL
 
 #ifdef HARDWARE_qemu
 

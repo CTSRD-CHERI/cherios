@@ -29,6 +29,8 @@
  */
 
 #include "lwip_driver.h"
+#include "lightweight_ccall.h"
+#include "lwip/inet_chksum.h"
 
 int altera_transport_init(net_session* session) {
     session->irq = MEGA_CORE_IRQ_RECV_0;
@@ -146,6 +148,16 @@ void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg,
     return;
 }
 
+// Calls a handwritten output. Don't need
+err_t lwip_driver_output_secure(struct netif *netif, struct pbuf *p) {
+    net_session* session = netif->state;
+
+    ALTERA_FIFO* tx_fifo = &session->mmio->tran_fifo;
+
+    return LIGHTWEIGHT_CCALL_FUNC(r, driver_output_func, CHK_DATA, 0, 2, tx_fifo, p);
+}
+
+// Uses the unsealing type it should not have access to
 err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 
     // To write: Set meta (if needed), then set symbols

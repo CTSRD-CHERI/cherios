@@ -145,7 +145,13 @@ _Static_assert(offsetof(custom_for_tcp, as_pbuf) == 0, "We cast between these so
 
 struct custom_for_tcp* alloc_custom(net_session* session);
 
+// This really should only owned by the driver, but I am still in the process of factoring
+// For now it is available, but we will still make sure
 extern sealing_cap ether_sealer;
+
+#ifdef DRIVER_ASM
+extern __weak_symbol err_t driver_output_func(ALTERA_FIFO* tx_fifo, struct pbuf *p);
+#endif
 
 // Per driver
 

@@ -355,7 +355,6 @@ __used ssize_t tcp_ful_func(capability arg, char* buf, __unused uint64_t offset,
 
     assert(cheri_getsealed(buf));
 
-    // TODO TCP_WRITE_FLAG_MORE may be useful here if we know that there is more coming
     err_t er = tcp_write(tcp->tcp_pcb, buf, (uint16_t)to_send, 0);
 
     if(er == ERR_MEM) {
@@ -397,7 +396,11 @@ void handle_fulfill(tcp_session* tcp) {
                                                                       &TRUSTED_CROSS_DOMAIN(tcp_ful_func), tcp, 0, &TRUSTED_CROSS_DOMAIN(tcp_ful_oob_func),
                                                                       NULL, TRUSTED_DATA, TRUSTED_DATA);
 
-    __unused err_t flush = tcp_output(tcp->tcp_pcb);
+    __unused err_t flush = ERR_OK;
+    if(bytes_translated != 0) {
+        // FIXME: I question the idea of flushing like this
+        flush = tcp_output(tcp->tcp_pcb);
+    }
 
     if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
         finish_closing_user_requester(tcp);
@@ -646,7 +649,7 @@ extern char checksum_foundation_data_end;
 extern void checksum_found_enter_offset;
 
 void setup_checksum_found(sealing_cap sc) {
-    capability if_table[7];
+    capability if_table[8];
     capability data_arg;
 
     char* start = &checksum_foundation_data;
@@ -671,7 +674,9 @@ void setup_checksum_found(sealing_cap sc) {
     SET_FUNC(checksum_extern_xor_int, if_table[4]);
     SET_FUNC(checksum_extern_swap_bytes, if_table[5]);
     SET_FUNC(checksum_extern_add_buffer, if_table[6]);
-
+#ifdef DRIVER_ASM
+    SET_FUNC(driver_output_func, if_table[7]);
+#endif
 }
 
 // If interrupts occur too quickly switch to poll mode. If polling fails some number of times, switch back.
