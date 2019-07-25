@@ -43,7 +43,7 @@
 
 // Some helpers
 
-#define LW_DEF_r register register_t reg_out __asm("a0");
+#define LW_DEF_r register register_t reg_out __asm("v0");
 #define LW_DEF_c register capability reg_out __asm("$c3");
 #define LW_DEF_v
 #define LW_DEF(X) LW_DEF_ ## X
@@ -58,7 +58,7 @@
 #define LW_VAL_v
 #define LW_VAl(X) LW_VAL_ ## X
 
-#define LW_CLOB_r "$c3"
+#define LW_CLOB_r "a0", "$c3"
 #define LW_CLOB_c "a0"
 #define LW_CLOB_v "a0", "$c3"
 #define LW_CLOB(X) LW_CLOB_ ## X
