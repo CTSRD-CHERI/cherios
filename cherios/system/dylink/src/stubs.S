@@ -320,7 +320,7 @@ STUB_BEGIN plt_common_untrusting
 cgetoffset      $1, cusp
 tltiu           $1, 0x4000
 
-csc             csp,    $zero,  (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
+cscbi           csp, (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack
 clc             cusp,   $zero,  CSP_OFF_NEXT(cusp)
 
