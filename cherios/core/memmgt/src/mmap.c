@@ -1547,7 +1547,7 @@ void __revoke_finish(res_t res) {
 act_kt revoke_bench_act;
 #endif
 
-void __revoke_bench(act_kt act) {
+void __revoke_bench(__unused act_kt act) {
 #if (REVOKE_BENCH)
     revoke_bench_act = act;
 #else
