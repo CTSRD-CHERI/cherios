@@ -35,6 +35,7 @@
 #include "nano/nanokernel.h"
 #include "assert.h"
 #include "cheric.h"
+#include "atomic.h"
 
 __thread vprintf_t* vprintf_ptr;
 __thread capability vprintf_data;
@@ -81,9 +82,9 @@ static inline size_t data_buf_space(data_ring_buffer* data_buffer) {
 }
 
 /* Sets a condition and notifies anybody waiting on it */
-static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_val, volatile act_kt* waiter_cap) {
+static act_notify_kt socket_internal_set(volatile uint16_t* ptr, uint16_t new_val, volatile act_kt* waiter_cap) {
 
-    act_kt waiter;
+    act_notify_kt waiter;
 
     __asm__ __volatile(
             SANE_ASM
@@ -96,6 +97,12 @@ static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_v
     : "at", "memory"
     );
 
+    return waiter;
+}
+
+static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_val, volatile act_kt* waiter_cap) {
+    act_notify_kt waiter = socket_internal_set(ptr, new_val, waiter_cap);
+
     if(waiter) {
         *waiter_cap = NULL;
         syscall_cond_notify(waiter);
@@ -103,14 +110,13 @@ static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_v
 
     return 0;
 }
-
 /* Checks condition - or sleeps waiting for it */
 /* Condition is not((*monitor - im_off) &0xFFFF < comp_val. Also breaks if *closed_cap = 1. This condition can
  * be coerced into doing all the sleeping needs with judicious overflowing */
 
 static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volatile uint8_t* closed_cap,
                                                volatile uint16_t* monitor_cap,
-                                                uint16_t im_off, uint16_t comp_val, int delay_sleep) {
+                                                uint16_t im_off, uint16_t comp_val, int delay_sleep, act_notify_kt n_token) {
     int result;
 
     do {
@@ -135,7 +141,7 @@ static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volati
                 "li     %[res], 1                   \n"
                 "1:                                 \n"
         : [res]"=&r"(result)
-        : [wc]"C"(wait_cap), [cc]"C"(closed_cap), [mc]"C"(monitor_cap),[self]"C"(act_self_notify_ref),
+        : [wc]"C"(wait_cap), [cc]"C"(closed_cap), [mc]"C"(monitor_cap),[self]"C"(n_token),
                 [im]"r"(im_off), [cmp]"r"(comp_val)
         : "$c1", "memory"
         );
@@ -197,7 +203,7 @@ static int socket_internal_requester_space_wait(uni_dir_socket_requester* reques
                                                &requester->fulfiller_component.fulfiller_closed,
                                                &(requester->fulfiller_component.fulfill_ptr),
                                                requester->requeste_ptr+1,
-                                               amount, delay_sleep);
+                                               amount, delay_sleep, act_self_notify_ref);
 }
 
 __attribute__((used))
@@ -230,7 +236,8 @@ static int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fu
     return socket_internal_sleep_for_condition(&access->fulfiller_waiting,
                                                &fulfiller->requester->requester_closed,
                                                &(fulfiller->requester->requeste_ptr),
-                                               access->fulfill_ptr, amount, delay_sleep);
+                                               access->fulfill_ptr, amount, delay_sleep,
+                                               act_self_notify_ref);
 }
 
 __attribute__((used))
@@ -258,7 +265,8 @@ static ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fu
         uni_dir_socket_requester* proxying = fulfiller->proxyied_in;
         int ret = socket_internal_sleep_for_condition(&proxying->fulfiller_component.requester_waiting,
                                                    &proxying->fulfiller_component.fulfiller_closed,
-                                                   &fulfiller->proxy_fin_times, fulfiller->proxy_times+1, 0xFFFFu, delay_sleep);
+                                                   &fulfiller->proxy_fin_times, fulfiller->proxy_times+1, 0xFFFFu, delay_sleep,
+                                                   act_self_notify_ref);
         return (fulfiller->proxy_times != fulfiller->proxy_fin_times) ? ret : 0; // Ignore errors from the requester if the proxy has finished
     }
     return 0;
@@ -268,6 +276,16 @@ __attribute__((used))
 ssize_t socket_fulfiller_wait_proxy(fulfiller_t f, int dont_wait, int delay_sleep) {
     uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
     return socket_internal_fulfiller_wait_proxy(fulfiller, dont_wait, delay_sleep);
+}
+
+__attribute__((used))
+act_notify_kt socket_requester_take_fulfillers_notify_token(requester_t r) {
+    uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
+    if(!requester) return NULL;
+
+    act_notify_kt token = ATOMIC_SWAP_RV(&requester->fulfiller_component.fulfiller_waiting, c, NULL);
+
+    return token;
 }
 
 // NOTE: Before making a request call space_wait for enough space
@@ -325,6 +343,31 @@ ssize_t socket_request_ind(requester_t r, char* buf, uint64_t length, uint32_t d
     return socket_internal_request_ind(requester, buf, length, drb_off);
 }
 
+static int socket_internal_fulfill_proxy_outstanding_wait(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, act_notify_kt proxy_token) {
+
+    uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
+    int ret = socket_internal_sleep_for_condition(&access->fulfiller_waiting,
+                                                  &fulfiller->requester->requester_closed,
+                                                  &(fulfiller->requester->requeste_ptr),
+                                                  access->fulfill_ptr, amount, 1,
+                                                  proxy_token);
+    assert(ret >= 0);
+
+    // Already some requests ready to go, wake up
+    if(ret == 0) syscall_cond_notify(proxy_token);
+
+    return ret;
+}
+
+__attribute__((used))
+int socket_fulfill_proxy_outstanding_wait(fulfiller_t f, uint16_t amount, act_notify_kt proxy_token) {
+    uni_dir_socket_fulfiller* fulfiller = UNSEAL_CHECK_FULFILLER(f);
+
+    if(!fulfiller) return E_BAD_SEAL;
+
+    return socket_internal_fulfill_proxy_outstanding_wait(fulfiller, amount, proxy_token);
+}
+
 // Requests length bytes to be proxied as fulfillment to fulfiller
 __attribute__((used))
 ssize_t socket_request_proxy(requester_t r, fulfiller_t f, uint64_t length, uint32_t drb_off) {
@@ -357,9 +400,20 @@ ssize_t socket_request_proxy(requester_t r, fulfiller_t f, uint64_t length, uint
     req->drb_fullfill_inc = drb_off;
 
     requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
-                                          request_ptr+1,
-                                          &requester->fulfiller_component.fulfiller_waiting);
+
+    //  Waiting on a proxy to an empty queue is stupid.
+    // Instead if somebody is waiting on this requester, transfer to the proxy queue
+
+    act_notify_kt notify = socket_internal_set(&requester->requeste_ptr,
+                                               request_ptr+1,
+                                               &requester->fulfiller_component.fulfiller_waiting);
+
+    if(notify) {
+        requester->fulfiller_component.fulfiller_waiting = NULL;
+        socket_internal_fulfill_proxy_outstanding_wait(fulfiller, 1, notify);
+    }
+
+    return 0;
 }
 
 // Requests length bytes be fulfilled by a puller, and then pushed into a push request

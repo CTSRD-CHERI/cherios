@@ -64,7 +64,9 @@ typedef int vprintf_t(const char *fmt, va_list ap);
     ITEM(socket_fulfiller_wait_proxy, ssize_t, (fulfiller_t f, int dont_wait, int delay_sleep), __VA_ARGS__)\
 /**/\
     ITEM(socket_request_im, ssize_t, (requester_t r, uint8_t length, char** buf_out, char* buf_in, uint32_t drb_off),__VA_ARGS__)\
+    ITEM(socket_requester_take_fulfillers_notify_token, act_notify_kt, (requester_t r), __VA_ARGS__)\
 /**/\
+    ITEM(socket_fulfill_proxy_outstanding_wait, int, (fulfiller_t f, uint16_t amount, act_notify_kt proxy_token), __VA_ARGS__)\
     ITEM(socket_request_ind, ssize_t,  (requester_t r, char* buf, uint64_t length, uint32_t drb_off),__VA_ARGS__)\
 /**/\
     ITEM(socket_request_proxy, ssize_t, (requester_t r, fulfiller_t f, uint64_t length, uint32_t drb_off),__VA_ARGS__)\
