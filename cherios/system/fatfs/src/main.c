@@ -224,6 +224,7 @@ int proxy_file_to_cache(struct sessions_t* session, uint8_t service_write) {
         assert(res >= 0 || res == E_AGAIN || res == E_SOCKET_CLOSED);
 
         if(res > 0) {
+            assert(session->fil.obj.fs);
             if(session->fil.fptr != *fptr) {
                 f_lseek(&session->fil, *fptr);
             }
@@ -244,7 +245,6 @@ void handle(enum poll_events events, struct sessions_t* session) {
     assert_int_ex(session->in_use, ==, 1);
 
     assert(session->nice_close < 2);
-    assert(session->fil.obj.fs);
 
     int any_proxy = 0;
     __unused int was_partial_closed = session->nice_close;
