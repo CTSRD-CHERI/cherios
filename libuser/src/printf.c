@@ -76,6 +76,16 @@ syscall_printf(const char *fmt, ...)
     return (retval);
 }
 
+
+int
+syscall_vprintf(const char *fmt, va_list ap)
+{
+    char buf[0x100];
+    int ret = kvprintf(fmt, NULL, buf, 10, ap);
+    syscall_puts(buf);
+    return ret;
+}
+
 #endif
 
 // This is the version we would like to use - it writes the character directly to the drb of a socket

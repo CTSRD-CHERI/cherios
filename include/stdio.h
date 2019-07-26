@@ -52,6 +52,7 @@ int	printf(const char *fmt, ...) __printflike(1, 2);
 #define syscall_printf(...) printf(__VA_ARGS__)
 #else
 int	syscall_printf(const char *fmt, ...) __printflike(1, 2);
+int syscall_vprintf(const char *fmt, va_list ap);
 #endif
 int	vprintf(const char *fmt, va_list ap);
 int	fprintf(FILE * f, const char *fmt, ...) __printflike(2, 3);
