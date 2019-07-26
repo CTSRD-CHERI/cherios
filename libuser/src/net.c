@@ -47,10 +47,15 @@ act_kt net_try_get_ref(void) {
 #define TCP_CALLBACK_PORT 123
 
 sealing_cap get_ethernet_sealing_cap(void) {
-    act_kt act = net_try_get_ref();
-    // TODO we should be getting a certified sealing cap
-    sealing_cap sc = message_send_c(0,0, 0, 0, NULL, NULL, NULL, NULL, act, SYNC_CALL, 5);
-    assert(sc != NULL);
+    static sealing_cap sc = NULL;
+
+    if(sc == NULL) {
+        act_kt act = net_try_get_ref();
+        // TODO we should be getting a certified sealing cap
+        sc = message_send_c(0,0, 0, 0, NULL, NULL, NULL, NULL, act, SYNC_CALL, 5);
+        assert(sc != NULL);
+    }
+
     return sc;
 }
 
