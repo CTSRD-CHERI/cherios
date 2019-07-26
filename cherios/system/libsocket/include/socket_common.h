@@ -121,6 +121,8 @@ typedef int vprintf_t(const char *fmt, va_list ap);
     ITEM(socket_requester_set_extra_data, int, (requester_t r, capability extra), __VA_ARGS__)\
     ITEM(socket_set_printf, void, (vprintf_t* vprintf, capability data_arg), __VA_ARGS__)\
 
+// WARN: If you add to this list then edit ngx_errno.h as well
+
 // Currently dont_wait and recv with a pull socket interact badly. This ignores the don't wait flag.
 #define FORCE_WAIT_SOCKET_RECV 1
 
@@ -163,31 +165,39 @@ typedef capability fulfiller_t;
 enum SOCKET_FLAGS {
     MSG_NONE                = 0x0,
     MSG_DONT_WAIT           = 0x1,
-    MSG_NO_CAPS             = 0x2,
-    MSG_NO_COPY             = 0x4,
-    MSG_PEEK                = 0x8,
-    MSG_EMULATE_SINGLE_PTR  = 0x10,
-    SOCKF_GIVE_SOCK_N       = 0x20,
-    MSG_TRACE               = 0x40,
+    MSG_TRACE               = 0x2,
+    MSG_PEEK                = 0x4,
+    MSG_NO_CAPS             = 0x8,
+    MSG_NO_COPY             = 0x10,
+    MSG_NO_COPY_READ        = 0x20,
+    MSG_BUFFER_WRITES       = 0x40,
+    MSG_EMULATE_SINGLE_PTR  = 0x80,
+    SOCKF_GIVE_SOCK_N       = 0x100,
 // Close will assume it has to free the drb, write request, read request, and socket itself unless you specify these
-    SOCKF_DRB_INLINE        = 0x80,
-    SOCKF_SOCK_INLINE       = 0x100,
+    SOCKF_DRB_INLINE        = 0x200,
+    SOCKF_SOCK_INLINE       = 0x400,
 // Changes how poll behaves
     SOCKF_POLL_READ_MEANS_EMPTY = 0x800,
 };
 
 // Global enable/disable for socket tracing. Always uses syscall_printf for safety.
-#define SOCK_TRACING        1
+
+#if (GO_FAST)
+    #define SOCK_TRACING        0
+#else
+    #define SOCK_TRACING        1
+#endif
+
 
 enum FULFILL_FLAGS {
     F_NONE                  = 0x0,
     F_DONT_WAIT             = 0x1, // Same as MSG_DONT_WAIT
-    F_CHECK                 = 0x2,
-    F_IN_PROXY              = 0x4,
-    F_PROGRESS              = 0x8, // Same bit but opposite meaning to MSG_PEEK
-    F_START_FROM_LAST_MARK  = 0x10,
-    F_SET_MARK              = 0x20,
-    F_TRACE                 = 0x40, // Same as MSG_TRACE
+    F_TRACE                 = 0x2, // Same as MSG_TRACE
+    F_PROGRESS              = 0x4, // Same bit but opposite meaning to MSG_PEEK
+    F_CHECK                 = 0x8,
+    F_IN_PROXY              = 0x10,
+    F_START_FROM_LAST_MARK  = 0x20,
+    F_SET_MARK              = 0x40,
     F_CANCEL_NON_OOB        = 0x80,
     F_SKIP_OOB              = 0x100,
     F_SKIP_PROXY_OOB        = 0x200, // Only skip oobs inside proxies. Needs to be larger than F_SKIP_OOB

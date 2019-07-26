@@ -46,7 +46,7 @@ act_kt try_get_fs(void) {
     return fs_act;
 }
 
-#define DEFAULT_DRB_SIZE 0x800
+#define DEFAULT_DRB_SIZE 0x1000
 
 void alloc_drb(FILE_t file) {
     char* buffer = (char*)malloc(DEFAULT_DRB_SIZE);
@@ -106,6 +106,7 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, con
 
     enum socket_connect_type  con_type = CONNECT_NONE;
 
+    // FIXME don't allocate DRB if this is read only
     flags |= SOCKF_DRB_INLINE;
     struct socket_with_file_drb* sock_and_drb = (struct socket_with_file_drb*)(malloc(sizeof(struct socket_with_file_drb)));
     unix_like_socket* sock = &sock_and_drb->sock;
@@ -145,11 +146,7 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, con
     if(r32_read) socket_requester_connect(r32_read);
     if(r32_write) socket_requester_connect(r32_write);
 
-
-
-
-
-    flags |= MSG_NO_COPY; // FIXME: The addition of this flag in all cases is questionable
+    flags |= MSG_NO_COPY_READ;
 
     if(read & write) {
         flags |= MSG_EMULATE_SINGLE_PTR;

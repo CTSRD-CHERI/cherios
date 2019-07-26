@@ -288,25 +288,57 @@ ssize_t socket_requester_request_wait_for_fulfill(requester_t requester, char* b
     return socket_requester_wait_all_finish(requester, 0);
 }
 
+static inline ssize_t copy_into_drb(data_ring_buffer* drb, const char* buf, size_t length) {
+
+    char* drb_buf = drb->buffer;
+    size_t effective_req =  drb->requeste_ptr + drb->partial_length;
+    size_t buffer_size = drb->buffer_size;
+
+    size_t drb_space = buffer_size + effective_req - drb->fulfill_ptr;
+
+    if(drb_space < length) return E_MSG_SIZE;
+
+    size_t start = (effective_req) & (buffer_size-1);
+    size_t end = (start + length) & (buffer_size-1);
+
+    int two_parts = end <= start;
+
+    memcpy(drb_buf + start, buf, two_parts ? (buffer_size - start) : length);
+
+    if (two_parts) {
+        memcpy(drb_buf, buf + (length - end), end);
+    }
+
+    drb->partial_length += length;
+
+    return length;
+}
+
 ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum SOCKET_FLAGS flags) {
     // Need to copy to buffer in order not to expose buf
 
-    ssize_t flush = socket_flush_drb(sock);
-    if(flush < 0) return flush;
+    flags |= sock->flags;
 
-    if((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR) catch_up_write(sock);
+    if(!(flags & MSG_BUFFER_WRITES)) {
+        // If we are buffering writes then we can skip flushing the DRB
+        ssize_t flush = socket_flush_drb(sock);
+        if(flush < 0) return flush;
+    }
+
+
+    if((flags) & MSG_EMULATE_SINGLE_PTR) catch_up_write(sock);
 
     int dont_wait;
     dont_wait = (flags | sock->flags) & MSG_DONT_WAIT;
 
-    if((sock->flags | flags) & MSG_NO_CAPS) buf = cheri_andperm(buf, CHERI_PERM_LOAD);
+    if((flags) & MSG_NO_CAPS) buf = cheri_andperm(buf, CHERI_PERM_LOAD);
 
 
     ssize_t ret = E_SOCKET_WRONG_TYPE;
     if(sock->con_type & CONNECT_PUSH_WRITE) {
         requester_t requester = sock->write.push_writer;
 
-        if((sock->flags | flags) & MSG_NO_COPY) {
+        if((flags) & MSG_NO_COPY) {
             if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 
             if(SOCK_TRACING && (sock->flags & MSG_TRACE)) printf("Socket sending request and waiting for all to finish\n");
@@ -322,29 +354,42 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
 
             if(SOCK_TRACING && (sock->flags & MSG_TRACE)) printf("Socket sending a request\n");
 
-            ret = socket_request_ind_db(requester, buf, length, &sock->write_copy_buffer, dont_wait, perms);
+            if(flags & MSG_BUFFER_WRITES) {
+                // Just copy into DRB. If the DRB gets more than 50% full only then flush
+                ret = copy_into_drb(&sock->write_copy_buffer, buf, length);
+
+                if(sock->write_copy_buffer.partial_length >= (sock->write_copy_buffer.buffer_size >> 1)) {
+                    __unused ssize_t flush = socket_flush_drb(sock);
+                    assert(flush >= 0);
+                }
+            } else {
+                ret = socket_request_ind_db(requester, buf, length, &sock->write_copy_buffer, dont_wait, perms);
+            }
+
         }
 
     } else if(sock->con_type & CONNECT_PULL_WRITE) {
         fulfiller_t fulfiller = sock->write.pull_writer;
         ful_func * ff = (ful_func*)OTHER_DOMAIN_FP(copy_in);
-        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
-        enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
+        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((flags) & MSG_PEEK) ^ F_PROGRESS);
+        enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((flags) & MSG_TRACE);
         ret = socket_fulfill_progress_bytes_unauthorised(fulfiller, length,
                                                      F_CHECK | progress | dont_wait | trace,
                                                      ff, __DECONST(char*, buf), 0, NULL, NULL, LIB_SOCKET_DATA, NULL);
     }
 
-    if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->read_behind+=ret;
+    if(ret > 0 && ((flags) & MSG_EMULATE_SINGLE_PTR)) sock->read_behind+=ret;
     return ret;
 }
 
 ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKET_FLAGS flags) {
 
+    flags |= sock->flags;
+
     ssize_t flush = socket_flush_drb(sock);
     if(flush < 0) return flush;
 
-    if(((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) catch_up_read(sock);
+    if(((flags) & MSG_EMULATE_SINGLE_PTR)) catch_up_read(sock);
 
     int dont_wait;
     dont_wait = (flags | sock->flags) & MSG_DONT_WAIT;
@@ -356,27 +401,29 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
         // TODO this use case is confusing. If we put the user buffer in, we could return 0, have async fulfill and then
         // TODO numbers on further reads. However, if the user provided a different buffer on the second call this would
         // TODO break horribly.
-        if((sock->flags | flags) & MSG_NO_COPY) {
+        if((flags) & MSG_NO_COPY_READ) {
 #if (!FORCE_WAIT_SOCKET_RECV)
             //if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 #endif
             ret = socket_requester_request_wait_for_fulfill(requester, cheri_setbounds(buf, length), length);
             if(ret >= 0) ret = length;
         } else {
+            // This is problematic. We may want write to be copy, but read NO_COPY
+            // Probably need flags for different directions
             ret = E_UNSUPPORTED;
         }
 
     } else if(sock->con_type & CONNECT_PUSH_READ) {
         fulfiller_t fulfiller = sock->read.push_reader;
-        ful_func * ff = (ful_func *)(((sock->flags | flags) & MSG_NO_CAPS) ? OTHER_DOMAIN_FP(copy_out_no_caps) : OTHER_DOMAIN_FP(copy_out));
-        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((sock->flags | flags) & MSG_PEEK) ^ F_PROGRESS);
-        enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((sock->flags | flags) & MSG_TRACE);
+        ful_func * ff = (ful_func *)(((flags) & MSG_NO_CAPS) ? OTHER_DOMAIN_FP(copy_out_no_caps) : OTHER_DOMAIN_FP(copy_out));
+        enum FULFILL_FLAGS progress = (enum FULFILL_FLAGS)(((flags) & MSG_PEEK) ^ F_PROGRESS);
+        enum FULFILL_FLAGS trace = (enum FULFILL_FLAGS)((flags) & MSG_TRACE);
         ret = socket_fulfill_progress_bytes_unauthorised(fulfiller, length,
                                                      F_CHECK | progress | dont_wait | trace,
                                                      ff, (capability)buf, 0, NULL, NULL, LIB_SOCKET_DATA, NULL);
     }
 
-    if(ret > 0 && ((sock->flags | flags) & MSG_EMULATE_SINGLE_PTR)) sock->write_behind+=ret;
+    if(ret > 0 && ((flags) & MSG_EMULATE_SINGLE_PTR)) sock->write_behind+=ret;
 
     return ret;
 }

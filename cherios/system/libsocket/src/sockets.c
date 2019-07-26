@@ -728,6 +728,8 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
     ssize_t ret;
 
+    if(SOCK_TRACING && (flags & F_TRACE)) printf("start with %x (mark %x) of %x\n", requester->fulfiller_component.fulfill_ptr, fulfiller->fulfill_mark_ptr, requester->requeste_ptr);
+
     // We cannot fulfill anything until proxying is done
     if(!(flags & F_IN_PROXY) && (flags & F_PROGRESS)) {
         ret = socket_internal_fulfiller_wait_proxy(fulfiller, flags & F_DONT_WAIT, 0);
@@ -784,7 +786,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
 
         if((flags & F_CHECK) && partial_bytes == 0) {
              // make sure there is something in the queue to read
-            if(flags & F_TRACE) printf("Sock fulfill space wait %x\n", required);
+            if(flags & F_TRACE) printf("Sock fulfill outstanding wait %x\n", required);
             ret = socket_internal_fulfill_outstanding_wait(fulfiller, required, flags & F_DONT_WAIT, 0);
             if(ret < 0) break;
         }
@@ -803,13 +805,13 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
         int some = 0;
 
         if(skipping) {
-            int all = fptr - skip_ptr > mask;
+            int all = fptr != skip_ptr;
             some = (skip_ptr == fptr) && (partial_bytes < skip_bytes);
             skipping = all || some;
             if(some) {
                 effective_len = skip_bytes - partial_bytes;
             }
-            if(SOCK_TRACING && (flags & F_TRACE)) printf("Skill skipping: %d. %d %d.\n", skipping, all, some);
+            if(SOCK_TRACING && (flags & F_TRACE)) printf("Still skipping: %d. %d %d.\n", skipping, all, some);
         }
 
         uint64_t new_partial;
@@ -1020,6 +1022,8 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
     } else if(flags & F_SET_MARK) {
         MARK_BYTES(fulfiller,flags & F_IN_PROXY) = partial_bytes;
     }
+
+    if(SOCK_TRACING && (flags & F_TRACE)) printf("end with %x (mark %x) of %x\n", requester->fulfiller_component.fulfill_ptr, fulfiller->fulfill_mark_ptr, requester->requeste_ptr);
 
     ssize_t actually_fulfill = bytes - bytes_remain;
 

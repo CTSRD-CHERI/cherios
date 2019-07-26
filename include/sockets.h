@@ -174,9 +174,13 @@ int socket_connect_via_rpc(act_kt target, register_t port,
                            fulfiller_t fulfiller);
 
 extern int TRUSTED_CROSS_DOMAIN(vprintf)(const char *fmt, va_list ap);
-static int allow_socket_tracing(void) {
+extern int TRUSTED_CROSS_DOMAIN(syscall_vprintf)(const char *fmt, va_list ap);
+static int allow_socket_tracing(int use_syscall) {
     if(SOCK_TRACING) {
-        socket_set_printf(&TRUSTED_CROSS_DOMAIN(vprintf), (capability)TRUSTED_DATA);
+        socket_set_printf(use_syscall ?
+            &TRUSTED_CROSS_DOMAIN(syscall_vprintf) :
+            &TRUSTED_CROSS_DOMAIN(vprintf),
+        (capability)TRUSTED_DATA);
         return 0;
     }
     return -1;
