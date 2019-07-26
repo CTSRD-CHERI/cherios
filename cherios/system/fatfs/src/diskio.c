@@ -34,7 +34,15 @@ DSTATUS disk_status (
 )
 {
 	assert(pdrv == 0);
-	return (DSTATUS)virtio_blk_status();
+
+	static DSTATUS status = 1;
+
+	if(status != 0) {
+		// This gets polled too much. Currently just cache the value. Maybe a read only capability to a monitor?
+		status = (DSTATUS)virtio_blk_status();
+	}
+
+	return status;
 }
 
 
