@@ -53,8 +53,9 @@ enum session_close_state {
     SCS_USER_FULFILL_CLOSED =   0x8,  // User closed their fulfill channel
     SCS_USER_CLOSING_REQUESTER =0x10, // User sent a close request (but have not yet closed their requester)
     SCS_REMOTE_CLOSE =          0x20, // remote end closed. might still have data to hand up to application
-    SCS_PCB_LAYER_CLOSED =      0x40, // We closed the LWIP tcp layer
-    SCS_NEED_FINAL_CLOSE =      0x80,
+    SCS_PCB_LAYER_CLOSED_TX    =0x40, // We closed the LWIP tcp layer
+    SCS_PCB_LAYER_CLOSED_RX    =0x80,
+    SCS_NEED_FINAL_CLOSE =      0x100,
 };
 
 typedef struct tcp_session {
@@ -218,11 +219,6 @@ int init_net(net_session* session, struct netif* nif) {
     return 0;
 }
 
-static void finish_closing_user_requester(tcp_session* tcp) {
-    if(tcp->tcp_pcb->snd_buf == TCP_SND_BUF) {
-        user_tcp_close_send(tcp);
-    }
-}
 // Application (ack) -> TCP
 err_t tcp_sent_callback (void *arg, __unused struct tcp_pcb *tpcb,
                              u16_t len) {
@@ -240,7 +236,7 @@ err_t tcp_sent_callback (void *arg, __unused struct tcp_pcb *tpcb,
     assert_int_ex(res, ==, len);
 
     if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
-        finish_closing_user_requester(tcp);
+        user_tcp_close_send(tcp);
     }
 
     return ERR_OK;
@@ -397,13 +393,16 @@ void handle_fulfill(tcp_session* tcp) {
                                                                       NULL, TRUSTED_DATA, TRUSTED_DATA);
 
     __unused err_t flush = ERR_OK;
-    if(bytes_translated != 0) {
-        // FIXME: I question the idea of flushing like this
-        flush = tcp_output(tcp->tcp_pcb);
+
+    enum session_close_state user_closing = tcp->close_state & SCS_USER_CLOSING_REQUESTER;
+
+    if(user_closing) {
+        user_tcp_close_send(tcp);
     }
 
-    if(tcp->close_state & SCS_USER_CLOSING_REQUESTER) {
-        finish_closing_user_requester(tcp);
+    if(bytes_translated > 0 && !user_closing) {
+        // FIXME: I question the idea of flushing like this.
+        flush = tcp_output(tcp->tcp_pcb);
     }
 
     assert_int_ex(flush, == , ERR_OK);
@@ -576,12 +575,16 @@ static void user_tcp_close_send(tcp_session* tcp) {
 
     ssize_t res;
 
-    if(!(tcp->close_state & SCS_FULFILL_CLOSED)) {
+    if( !(tcp->close_state & SCS_PCB_LAYER_CLOSED_TX)) {
+        tcp_shutdown(tcp->tcp_pcb,0,1);
+        tcp->close_state |= SCS_PCB_LAYER_CLOSED_TX;
+    }
+
+    if(tcp->tcp_pcb->snd_buf == TCP_SND_BUF && !(tcp->close_state & SCS_FULFILL_CLOSED)) {
         // We will have done this earlier otherwise
         res = socket_close_fulfiller(tcp->tcp_input_pushee, 0, 1);
         tcp->close_state |= SCS_FULFILL_CLOSED;
         assert_int_ex(res, ==, 0);
-        if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) tcp_shutdown(tcp->tcp_pcb,0,1);
     }
 
     if(tcp->close_state & SCS_REQUEST_CLOSED) {
@@ -600,7 +603,11 @@ static void user_tcp_close_recv(tcp_session* tcp) {
         res = socket_close_requester(tcp->tcp_output_pusher, 0, 1);
         tcp->close_state |= SCS_REQUEST_CLOSED;
         assert_int_ex(res, ==, 0);
-        if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED)) tcp_shutdown(tcp->tcp_pcb,1,0);
+    }
+
+    if(!(tcp->close_state & SCS_PCB_LAYER_CLOSED_RX)) {
+        tcp->close_state |= SCS_PCB_LAYER_CLOSED_RX;
+        tcp_shutdown(tcp->tcp_pcb,1,0);
     }
 
     if(tcp->close_state & SCS_FULFILL_CLOSED) {
@@ -796,7 +803,7 @@ int main(__unused register_t arg, __unused capability carg) {
                 tcp_application_ack(tcp_session);
             }
 
-            if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED))) {
+            if(!(tcp_session->close_state & (SCS_FULFILL_CLOSED | SCS_USER_REQUEST_CLOSED | SCS_PCB_LAYER_CLOSED_TX))) {
                 if(tcp_session->tcp_pcb->snd_buf) { // dont even bother if the send window is already full
                     POLL_ITEM_F(revents, sock_sleep, sock_event, tcp_session->tcp_input_pushee, tcp_session->events, 1);
                     if(revents & POLL_IN) {
