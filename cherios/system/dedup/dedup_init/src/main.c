@@ -36,7 +36,9 @@ int main(__unused register_t arg, capability carg) {
     // This thread causes dedup to deduplicate itself.
     act_kt main_thread = (act_kt)carg;
     set_custom_dedup(main_thread);
-    deduplicate_all_functions(1);
+    if(arg == 1) {
+        deduplicate_all_functions(1);
+    }
     // Then tell dedup to go public
     message_send(0,0,0,0,NULL,NULL,NULL,NULL,main_thread,SYNC_CALL, 3);
     return 0;
