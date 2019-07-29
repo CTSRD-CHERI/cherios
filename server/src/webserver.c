@@ -220,7 +220,7 @@ void handle_loop(void) {
     struct tcp_bind bind;
     bind.port = 666;
     bind.addr.addr = IP_ADDR_ANY->addr;
-    netsock_listen_tcp(&bind, 4, NULL);
+    netsock_listen_tcp(&bind, 4, NULL, NULL);
 
     while(1) {
         printf("Server accept...\n");

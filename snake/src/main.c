@@ -327,7 +327,7 @@ int main(__unused register_t arg, __unused capability carg) {
     struct tcp_bind bind;
     bind.addr.addr = IP_ADDR_ANY->addr;
     bind.port = SNAKE_PORT;
-    listening_token_or_er_t token_or_er = netsock_listen_tcp(&bind, 1, NULL);
+    listening_token_or_er_t token_or_er = netsock_listen_tcp(&bind, 1, NULL, NULL);
 
     assert(IS_VALID(token_or_er));
 

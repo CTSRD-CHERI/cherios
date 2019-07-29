@@ -87,6 +87,7 @@ typedef struct tcp_listen_session {
     act_kt callback;
     capability callback_arg;
     register_t callback_port;
+    buffered_requesters_t* req_buffer;
 }tcp_listen_session;
 
 sealing_cap sealer;
@@ -429,9 +430,9 @@ static tcp_session* user_tcp_new(struct tcp_pcb* pcb) {
     return session;
 }
 
-static void send_connect_callback(tcp_session* tcp, err_t err) {
+static void send_connect_callback(tcp_session* tcp, err_t err, int used_requester_buffer) {
     capability sealed_tcp = (capability)tcp;
-    message_send((register_t)err, tcp->tcp_pcb->remote_port, tcp->tcp_pcb->remote_ip.addr, 0, tcp->callback_arg,
+    message_send((register_t)err, tcp->tcp_pcb->remote_port, tcp->tcp_pcb->remote_ip.addr, used_requester_buffer, tcp->callback_arg,
                  sealed_tcp, (capability)socket_make_ref_for_fulfill(tcp->tcp_output_pusher), NULL,
                  tcp->callback, SEND, tcp->callback_port);
     socket_requester_connect(tcp->tcp_output_pusher);
@@ -460,7 +461,7 @@ static err_t tcp_connected_callback(void *arg, __unused struct tcp_pcb *tpcb, er
 
     tcp_err(tcp->tcp_pcb, tcp_er);
 
-    send_connect_callback(tcp, err);
+    send_connect_callback(tcp, err, 0);
 
     return err;
 }
@@ -477,6 +478,18 @@ static void user_tcp_connect_er(void *arg, err_t err) {
     // Then free session
 
     free_tcp_session(tcp);
+}
+
+static int tcp_connect_sockets(tcp_session* tcp, requester_t tcp_input_pusher) {
+    tcp->events = POLL_IN;
+    int res = socket_fulfiller_connect(tcp->tcp_input_pushee, tcp_input_pusher);
+    if(res < 0) return res;
+    if(tcp->close_state & SCS_FULFILL_CLOSED) {
+        // We got the connect AFTER we tried to close! We have to close again to signal the pusher that we closed.
+        socket_close_fulfiller(tcp->tcp_input_pushee, 0, 1);
+    }
+
+    return 0;
 }
 
 static err_t tcp_accept_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
@@ -499,7 +512,16 @@ static err_t tcp_accept_callback(void *arg, struct tcp_pcb *tpcb, err_t err) {
 
     tcp_err(tcp->tcp_pcb, tcp_er);
 
-    send_connect_callback(tcp, err);
+    int used_buffer = 0;
+
+    if(listen_session->req_buffer && RINGBUF_FILL(BRB, listen_session->req_buffer)) {
+        requester_t req = *RINGBUF_POP(BRB, listen_session->req_buffer);
+        used_buffer = 1;
+        __unused int res = tcp_connect_sockets(tcp, socket_make_ref_for_fulfill(req));
+        assert(res == 0);
+    }
+
+    send_connect_callback(tcp, err, used_buffer);
 
     return err;
 }
@@ -508,15 +530,8 @@ static int user_tcp_connect_sockets(capability sealed_session,
                                       requester_t tcp_input_pusher) {
 
     tcp_session* tcp = (tcp_session*)sealed_session; // TODO seal/unseal
-    tcp->events = POLL_IN;
-    int res = socket_fulfiller_connect(tcp->tcp_input_pushee, tcp_input_pusher);
-    if(res < 0) return res;
-    if(tcp->close_state & SCS_FULFILL_CLOSED) {
-        // We got the connect AFTER we tried to close! We have to close again to signal the pusher that we closed.
-        socket_close_fulfiller(tcp->tcp_input_pushee, 0, 1);
-    }
 
-    return 0;
+    return tcp_connect_sockets(tcp, tcp_input_pusher);
 }
 
 static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
@@ -534,12 +549,14 @@ static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
 }
 
 static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
-                            act_kt callback, capability callback_arg, register_t callback_port) {
+                            act_kt callback, capability callback_arg, register_t callback_port,
+                            buffered_requesters_t* bf) {
     tcp_listen_session* listen_session = (tcp_listen_session*)(malloc(sizeof(tcp_listen_session)));
 
     listen_session->callback = callback;
     listen_session->callback_arg = callback_arg;
     listen_session->callback_port = callback_port;
+    listen_session->req_buffer = bf;
 
     listen_session->tcp_pcb = tcp_new();
     err_t er = tcp_bind(listen_session->tcp_pcb, &bind->addr, bind->port);
@@ -691,7 +708,9 @@ void setup_checksum_found(sealing_cap sc) {
 #define POLL_FREQUENCY  1000000
 #define POLL_FAIL_LIMIT 3
 
-void handle_rx(net_session* session) {
+int handle_rx(net_session* session) {
+    tcp_session* tcp_head_before = tcp_head;
+
     while(lwip_driver_poll(session)) {
         if(!msg_queue_empty()) {
             msg_entry(0, 0);
@@ -699,6 +718,7 @@ void handle_rx(net_session* session) {
             lwip_driver_handle_interrupt(session, 0, (register_t)-1); // We now allow poll mode when interrupts coming in too fast.
         }
     }
+    return (int)(tcp_head_before != tcp_head);
 }
 
 int main(__unused register_t arg, __unused capability carg) {
@@ -827,9 +847,15 @@ int main(__unused register_t arg, __unused capability carg) {
         }
 
         if(sock_sleep) {
-            handle_rx(&session);
-            // Only turn on interrupts if we are actually going to sleep.
-            lwip_driver_enable_interrupts(&session);
+            // If we modify the set then we need to loop over them again to set up sleep vars
+            int modified = handle_rx(&session);
+            if(modified) {
+                sock_sleep = 0;
+            } else {
+                // Only turn on interrupts if we are actually going to sleep.
+                lwip_driver_enable_interrupts(&session);
+            }
+
         }
 
     POLL_LOOP_END(sock_sleep, sock_event, 1, MS_TO_CLOCK(250)); // Roughly enough for most TCP things

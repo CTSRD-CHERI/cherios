@@ -42,6 +42,7 @@
 #include "lwip/err.h"
 #include "lwip/inet.h"
 #include "lwip/sockets.h" // We don't use any of the socket functions. But the types are useful for compat
+#include "ringbuffers.h"
 
 struct tcp_bind {
     ip_addr_t addr;
@@ -59,6 +60,14 @@ struct net_sock {
     capability callback_arg;
 };
 
+#define BRB(...) RINGBUF_MEMBER_DYNAMIC(backlog, requester_t, uint8_t, __VA_ARGS__)
+
+typedef struct buffered_requesters {
+    RINGBUF_INDEX_T(BRB) consumed;
+    RINGBUF_DEF_FIELDS_DYNAMIC(BRB);
+    RINGBUF_DEF_BUF_ZERO(BRB);
+} buffered_requesters_t;
+
 // Without inline drb or inline reqs as this might just be a listen socket
 typedef struct unix_net_sock {
     unix_like_socket sock;
@@ -66,10 +75,11 @@ typedef struct unix_net_sock {
     struct net_sock* next_to_accept; // Inline linked list to allow out of order accepts
     capability callback_arg;
     listening_token token;
+    buffered_requesters_t* backlog_requesters;
 } unix_net_sock;
 
 // TODO: Reduce again when I teach NGINX about AIO
-#define NET_SOCK_DRB_SIZE 0x20000
+#define NET_SOCK_DRB_SIZE 0x200
 
 typedef struct net_sock* NET_SOCK;
 
@@ -78,7 +88,7 @@ act_kt net_try_get_ref(void);
 sealing_cap get_ethernet_sealing_cap(void);
 
 listening_token_or_er_t netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
-                       capability callback_arg);
+                       capability callback_arg,  buffered_requesters_t* bufferedRequesters);
 void netsock_stop_listen(listening_token token);
 
 int netsock_connect_tcp(struct tcp_bind* bind, struct tcp_bind* server,

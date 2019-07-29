@@ -59,11 +59,26 @@ sealing_cap get_ethernet_sealing_cap(void) {
     return sc;
 }
 
+buffered_requesters_t* make_backlog_buffer(uint8_t backlog) {
+    assert(is_power_2(backlog));
+    size_t size = sizeof(buffered_requesters_t) + (sizeof(requester_t) * backlog);
+    buffered_requesters_t* bf = (buffered_requesters_t*)malloc(size);
+
+    bf->backlog_sz = backlog;
+
+    for(uint8_t i = 0; i != backlog; i++) {
+        *RINGBUF_PUSH(BRB, bf) = socket_malloc_requester_32(SOCK_TYPE_PUSH, NULL);
+    }
+
+    return bf;
+}
+
 listening_token_or_er_t netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlog,
-                       capability callback_arg) {
+                       capability callback_arg, buffered_requesters_t* bufferedRequesters) {
     act_kt act = net_try_get_ref();
     assert(act != NULL);
-    capability res = message_send_c(backlog, TCP_CALLBACK_PORT, 0, 0, bind, act_self_ref, callback_arg, NULL, act, SYNC_CALL, 1);
+
+    capability res = message_send_c(backlog, TCP_CALLBACK_PORT, 0, 0, bind, act_self_ref, callback_arg, bufferedRequesters, act, SYNC_CALL, 1);
     return MAKE_VALID(listening_token, res);
 }
 
@@ -98,8 +113,10 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
     capability callback = msg->c3;
     capability session_token = msg->c4;
 
-    uint16_t port = msg->a1;
-    uint32_t addr = msg->a2;
+    uint16_t port = (uint16_t)msg->a1;
+    uint32_t addr = (uint32_t)msg->a2;
+
+    int used_requester_buffer = (int)msg->a3;
 
     requester_t requester = (requester_t*)msg->c5;
     int err = (int)msg->a0;
@@ -108,7 +125,9 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
 
     if(err != 0) return NULL;
 
-    uint8_t drb_inline = (uint8_t)!(flags & MSG_NO_COPY_WRITE);
+    // On the standard accept path we don't know the sock flags to use as we don't know which socket we are accepting,
+    // so this to 0 for now. Nobody should want a DRB for a netsock anyway. Use copyless.
+    uint8_t drb_inline = 0;
     // Alloc netsock
 
     NET_SOCK sock = in;
@@ -120,6 +139,7 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
         uint32_t drb_size = 0;
 
         if(drb_inline) {
+            printf("DRB inline\n");
             size+=NET_SOCK_DRB_SIZE;
             flags |= SOCKF_DRB_INLINE;
             drb_size = NET_SOCK_DRB_SIZE;
@@ -128,7 +148,18 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
         sock = (NET_SOCK)malloc(size);
 
         if(drb_inline) drb = ((char*)sock) + sizeof(struct net_sock);
-        requester_t write_req = socket_malloc_requester_32(SOCK_TYPE_PUSH, drb ? &sock->sock.write_copy_buffer : NULL);
+        requester_t write_req  = socket_malloc_requester_32(SOCK_TYPE_PUSH, NULL); ;
+
+        if(used_requester_buffer) {
+            requester_t replacement = write_req;
+            buffered_requesters_t* bf = ((unix_net_sock*)callback)->backlog_requesters;
+            assert(bf != NULL);
+            write_req = *RINGBUF_EL(bf->consumed++, BRB, bf);
+            *RINGBUF_PUSH(BRB, bf) = replacement;
+        }
+
+        if(drb) socket_requester_set_drb(write_req,  &sock->sock.write_copy_buffer);
+
         fulfiller_t ful = socket_malloc_fulfiller(SOCK_TYPE_PUSH);
 
         socket_init(&sock->sock, flags, drb, drb_size, CONNECT_PUSH_READ | CONNECT_PUSH_WRITE);
@@ -143,9 +174,11 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
 
     // Send message to net_act
 
-    act_kt net = net_try_get_ref();
+    if(!used_requester_buffer) {
+        act_kt net = net_try_get_ref();
 
-    message_send(0,0,0,0, session_token, socket_make_ref_for_fulfill(sock->sock.write.push_writer), NULL, NULL, net, SEND, 2);
+        message_send(0,0,0,0, session_token, socket_make_ref_for_fulfill(sock->sock.write.push_writer), NULL, NULL, net, SEND, 2);
+    }
 
     assert(requester != NULL);
 
@@ -241,6 +274,11 @@ int bind(unix_net_sock* sockfd, const struct sockaddr *addr,
 
 static ssize_t close_listen(unix_net_sock* sock) {
     netsock_stop_listen(sock->token);
+    if(sock->backlog_requesters) {
+        RINGBUF_FOREACH_POP(x, BRB, sock->backlog_requesters) {
+            free(*x);
+        }
+    }
     free(sock);
     return 0;
 }
@@ -273,7 +311,9 @@ static enum poll_events poll_listen(unix_like_socket* sock, enum poll_events ask
 
 int listen(unix_net_sock* sockfd, int backlog) {
     if(sockfd->token != NULL) return -1; // We don't support changing the backlog via calling listen twice
-    listening_token_or_er_t res = netsock_listen_tcp(&sockfd->bind, backlog, sockfd);
+    buffered_requesters_t* bufferedRequesters = make_backlog_buffer(backlog);
+    sockfd->backlog_requesters = bufferedRequesters;
+    listening_token_or_er_t res = netsock_listen_tcp(&sockfd->bind, backlog, sockfd, bufferedRequesters);
     assert(res.val != NULL);
     if(!IS_VALID(res)) return res.er;
     sockfd->sock.custom_close = (close_fun*)&close_listen;
