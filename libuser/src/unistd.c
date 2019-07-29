@@ -106,10 +106,15 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, con
 
     enum socket_connect_type  con_type = CONNECT_NONE;
 
-    // FIXME don't allocate DRB if this is read only
-    flags |= SOCKF_DRB_INLINE;
-    struct socket_with_file_drb* sock_and_drb = (struct socket_with_file_drb*)(malloc(sizeof(struct socket_with_file_drb)));
-    unix_like_socket* sock = &sock_and_drb->sock;
+    int inline_drb = write && !(flags & MSG_NO_COPY_WRITE);
+
+    size_t size = inline_drb ? sizeof(struct socket_with_file_drb) : sizeof(struct unix_like_socket);
+
+    unix_like_socket* sock = (unix_like_socket*)malloc(size);
+
+    if(inline_drb) {
+        flags |= SOCKF_DRB_INLINE;
+    }
 
     if(read) {
         con_type |= CONNECT_PULL_READ;
@@ -148,11 +153,13 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, con
 
     flags |= MSG_NO_COPY_READ;
 
-    if(read & write) {
+    if(read && write) {
         flags |= MSG_EMULATE_SINGLE_PTR;
     }
 
-    if((result = socket_init(sock, flags, sock_and_drb->drb_data, DEFAULT_DRB_SIZE, con_type))) goto er2;
+    if((result = socket_init(sock, flags,
+            inline_drb ? ((struct socket_with_file_drb*)sock)->drb_data : NULL,
+                    inline_drb ? DEFAULT_DRB_SIZE : 0, con_type))) goto er2;
 
     sock->read.pull_reader = r32_read;
     sock->write.push_writer = r32_write;

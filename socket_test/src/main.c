@@ -160,7 +160,7 @@ void con2_start(__unused register_t arg, __unused capability carg) {
 
     assert(sock2->read.pull_reader != NULL);
 
-    res = socket_init(sock2, MSG_NO_COPY, NULL, 0, CONNECT_PULL_READ);
+    res = socket_init(sock2, MSG_NO_COPY_WRITE, NULL, 0, CONNECT_PULL_READ);
 
     assert_int_ex(res, ==, 0);
 
@@ -319,7 +319,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
 
     assert_int_ex(res, ==, 0);
 
-    res = socket_init(sock2, MSG_NO_COPY, NULL, 0, CONNECT_PUSH_WRITE);
+    res = socket_init(sock2, MSG_NO_COPY_WRITE, NULL, 0, CONNECT_PUSH_WRITE);
     assert_int_ex(res, ==, 0);
 
     res = socket_listen_rpc(PORT+2, sock2->write.push_writer, NULL);
@@ -338,7 +338,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
 
     assert_int_ex(res, ==, 0);
 
-    res = socket_init(sock4, MSG_NO_COPY, NULL, 0, CONNECT_PULL_READ);
+    res = socket_init(sock4, MSG_NO_COPY_WRITE, NULL, 0, CONNECT_PULL_READ);
     assert_int_ex(res, ==, 0);
 
     res = socket_listen_rpc(PORT+5, sock4->read.pull_reader, NULL);
@@ -515,9 +515,9 @@ int main(__unused register_t arg, __unused capability carg) {
     size_t p1 = 13;
     size_t p2 = size2 + size3 - p1;
 
-    ssize_t rec = socket_recv(sock, buf, p1, MSG_NO_COPY);
+    ssize_t rec = socket_recv(sock, buf, p1, MSG_NO_COPY_WRITE);
     assert_int_ex(rec, ==, p1);
-    rec = socket_recv(sock, buf + p1, p2, MSG_NO_COPY);
+    rec = socket_recv(sock, buf + p1, p2, MSG_NO_COPY_WRITE);
     assert_int_ex(rec, ==, p2);
 
     // Test multiple sends with partial reads
@@ -577,13 +577,13 @@ int main(__unused register_t arg, __unused capability carg) {
         unix_like_socket* ssock = use_sock == 0 ? sock : sock2;
 
         // No copy will result in block until finishing so we can get good testing of select where one socket is blocked and the other is not
-        sent = socket_send(ssock, str1, size1, MSG_NO_COPY);
+        sent = socket_send(ssock, str1, size1, MSG_NO_COPY_WRITE);
         assert_int_ex(sent, ==, size1);
     }
 
     // Test the closing mechanic
 
-    rec = socket_recv(sock, buf, 1, MSG_NO_COPY);
+    rec = socket_recv(sock, buf, 1, MSG_NO_COPY_WRITE);
     assert_int_ex(rec, ==, E_SOCKET_CLOSED);
     rec = socket_send(sock, buf, 1, MSG_NONE);
     assert_int_ex(rec, ==, E_SOCKET_CLOSED);

@@ -108,7 +108,7 @@ NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {
 
     if(err != 0) return NULL;
 
-    uint8_t drb_inline = (uint8_t)!(flags & MSG_NO_COPY);
+    uint8_t drb_inline = (uint8_t)!(flags & MSG_NO_COPY_WRITE);
     // Alloc netsock
 
     NET_SOCK sock = in;

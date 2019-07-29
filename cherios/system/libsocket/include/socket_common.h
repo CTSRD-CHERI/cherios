@@ -168,7 +168,7 @@ enum SOCKET_FLAGS {
     MSG_TRACE               = 0x2,
     MSG_PEEK                = 0x4,
     MSG_NO_CAPS             = 0x8,
-    MSG_NO_COPY             = 0x10,
+    MSG_NO_COPY_WRITE       = 0x10,
     MSG_NO_COPY_READ        = 0x20,
     MSG_BUFFER_WRITES       = 0x40,
     MSG_EMULATE_SINGLE_PTR  = 0x80,

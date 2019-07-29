@@ -153,7 +153,7 @@ int main(__unused register_t arg, __unused capability carg) {
     for(uint8_t i = 0; i != AES_BLOCKLEN; i++) iv[i] = i;
 
     // Write an encrypted file
-    FILE_t file3 = open_encrypted("enc1", FA_OPEN_ALWAYS | FA_WRITE, MSG_NO_COPY, key, iv);
+    FILE_t file3 = open_encrypted("enc1", FA_OPEN_ALWAYS | FA_WRITE, MSG_NO_COPY_WRITE, key, iv);
     assert(file3 != NULL);
 
     result = write(file3, LOREM, BIG_SIZE);

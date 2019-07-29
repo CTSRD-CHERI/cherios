@@ -267,8 +267,9 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
     } else {
 
         // If no data buffer is provided we may very well wait and cannot perform a copy
-        if((con_type & (CONNECT_PUSH_WRITE | CONNECT_PULL_READ)) && (flags & MSG_DONT_WAIT)) return E_SOCKET_WRONG_TYPE;
-        //if((con_type & CONNECT_PUSH_WRITE) && !(flags & MSG_NO_COPY)) return E_COPY_NEEDED;
+        // Reads _could_ work using proxies. I just dunno.
+        if((con_type & (CONNECT_PUSH_WRITE)) && (flags & MSG_DONT_WAIT)) return E_SOCKET_WRONG_TYPE;
+        if((con_type & CONNECT_PUSH_WRITE) && !(flags & MSG_NO_COPY_WRITE)) return E_COPY_NEEDED;
 
         sock->write_copy_buffer.buffer = NULL;
         return 0;
@@ -338,7 +339,7 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
     if(sock->con_type & CONNECT_PUSH_WRITE) {
         requester_t requester = sock->write.push_writer;
 
-        if((flags) & MSG_NO_COPY) {
+        if((flags) & MSG_NO_COPY_WRITE) {
             if(dont_wait) return E_COPY_NEEDED; // We can't not copy and not wait for consumption
 
             if(SOCK_TRACING && (sock->flags & MSG_TRACE)) printf("Socket sending request and waiting for all to finish\n");
