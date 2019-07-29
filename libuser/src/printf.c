@@ -43,7 +43,15 @@
 // Instead we just use a syscall, currently the kernel has its own uart driver
 
 // This will just collect data in a buffer until a \n or the buffer is full, then use syscall puts
+
+#define CAN_PRINT 1
+
 #ifdef USE_SYSCALL_PUTS
+
+#if (GO_FAST)
+    #undef CAN_PRINT
+    #define CAN_PRINT 0
+#endif
 
 #define BUF_SIZE	0x100
 static size_t syscall_buf_offset = 0;
@@ -63,6 +71,10 @@ void buf_putc(char chr) {
 int
 syscall_printf(const char *fmt, ...)
 {
+#if (GO_FAST)
+    (void)fmt;
+    return 0;
+#else
     char buf[0x100];
     va_list ap;
     int retval;
@@ -74,22 +86,30 @@ syscall_printf(const char *fmt, ...)
     syscall_puts(buf);
 
     return (retval);
+#endif
 }
 
 
 int
 syscall_vprintf(const char *fmt, va_list ap)
 {
+#if (GO_FAST)
+    (void)fmt;
+    (void)ap;
+    return 0;
+#else
     char buf[0x100];
     int ret = kvprintf(fmt, NULL, buf, 10, ap);
     syscall_puts(buf);
     return ret;
+#endif
 }
 
 #endif
 
 // This is the version we would like to use - it writes the character directly to the drb of a socket
 
+#if (CAN_PRINT)
 int fputc(int character, FILE *f) {
 #ifdef USE_SYSCALL_PUTS
     if(f == NULL) {
@@ -164,3 +184,30 @@ fprintf(FILE *f, const char *fmt, ...)
 
 	return (retval);
 }
+
+#else
+
+int fputc(__unused int character, __unused FILE *f) {
+    return 0;
+}
+
+int fputs(__unused const char* str, __unused FILE* f) {
+    return 0;
+}
+
+int puts(__unused const char *s) {
+    return 0;
+}
+
+int vprintf(__unused const char *fmt, __unused va_list ap) {
+    return 0;
+}
+
+int printf(__unused const char *fmt, ...) {
+    return 0;
+}
+
+int fprintf(__unused FILE *f, __unused const char *fmt, ...) {
+    return 0;
+}
+#endif

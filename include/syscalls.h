@@ -35,6 +35,15 @@
 #include "cheriplt.h"
 #include "nano/nanotypes.h"
 
+
+#if (GO_FAST)
+        #define GO_FAST_ITEMS(ITEM, ...)
+        #define syscall_puts(s) ((void)s)
+#else
+        #define GO_FAST_ITEMS(ITEM, ...)\
+                        ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)
+#endif
+
 #define SYS_CALL_LIST(ITEM, ...)                                                                                   \
         ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
                                         const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
@@ -52,7 +61,7 @@
         ITEM(syscall_act_ctrl_get_sched_status, sched_status_e, (act_control_kt ctrl), __VA_ARGS__)                          \
         ITEM(syscall_act_revoke, int, (act_control_kt ctrl), __VA_ARGS__)                                                    \
         ITEM(syscall_act_terminate, int, (act_control_kt ctrl), __VA_ARGS__)                                                 \
-        ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)                                                             \
+        GO_FAST_ITEMS(ITEM, __VA_ARGS__)\
         ITEM(syscall_panic, void, (void), __VA_ARGS__)                                                                       \
         ITEM(syscall_panic_proxy, void, (act_kt proxy), __VA_ARGS__)                                                                       \
         ITEM(syscall_interrupt_register, int, (int number, act_control_kt ctrl, register_t v0, register_t arg, capability carg), __VA_ARGS__)                                                     \
