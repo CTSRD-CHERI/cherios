@@ -59,12 +59,15 @@
 
 #define B_DEMO 0
 
+#define DEDUP_INIT 0
+
 #define B_BENCH 1
 
 #define B_BENCH_MS      0
 #define B_BENCH_CALLS   0
 #define B_BENCH_EXPS    0
-#define B_BENCH_REVOKE  1
+#define B_BENCH_REVOKE  0
+#define B_BENCH_PINGER  1
 
 const char* nginx_args[] = {"nginx",NULL};
 #define NGINX_ARGS_L 1
@@ -148,7 +151,7 @@ init_elem_t init_list[] = {
     B_DENTRY(m_uart,	"uart.elf",		0,	1)      // Needed for stdout so bring up asap. This needs the link server for libsocket
     B_DENTRY(m_user,    "activation_events.elf", 0, 1)
     B_DENTRY(m_dedup,    "dedup.elf", 0 ,1)
-    B_DENTRY(m_dedup_init, "dedup_init.elf", 0, 1)
+    B_DENTRY(m_dedup_init, "dedup_init.elf", DEDUP_INIT, 1)
     B_WAIT_FOR(namespace_num_dedup_service)
     B_DENTRY(m_tman, "type_manager.elf",0,1)
     B_WAIT_FOR(namespace_num_tman)
@@ -169,6 +172,7 @@ init_elem_t init_list[] = {
 #endif
 #if (B_BENCH)
     B_DENTRY(m_user, "bench_collect.elf", 0, 0)
+    B_DENTRY(m_user, "ping_dump.elf", 0, B_BENCH_PINGER)
 //B_WAIT_FOR(namespace_num_bench)
     B_DENTRY(m_user, "calls.elf", 0, B_BENCH_CALLS)
     B_DENTRY(m_user, "message_send.elf", 0, B_BENCH_MS)
@@ -191,7 +195,7 @@ init_elem_t init_list[] = {
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,0 && BUILD_WITH_NET)
+    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH && 0)
     B_PENTRY(m_user, "nc_shell.elf", 0, !B_BENCH && BUILD_WITH_NET)
 //    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
