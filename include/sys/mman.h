@@ -209,4 +209,14 @@ static inline int for_each_phy(capability arg, phy_handle_flags flags, phy_handl
     return num+1;
 }
 
+struct revoke_tracking {
+    size_t total_virt_alloc;
+    size_t total_virt_free;
+    size_t revokes_started;
+    size_t revokes_finished;
+    size_t revoked_bytes;
+};
+
+struct revoke_tracking* get_tracking(void);
+
 #endif // SYS_MMAN_H

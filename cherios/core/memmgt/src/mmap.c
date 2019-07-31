@@ -30,6 +30,7 @@
  */
 
 #include <mmap.h>
+#include <nano/nanokernel.h>
 #include "sys/mman.h"
 #include "types.h"
 #include "utils.h"
@@ -1183,6 +1184,16 @@ static void adjust_desc_pool(vpage_range_desc_t* desc) {
     }
 }
 
+#if (REVOKE_BENCH)
+
+struct revoke_tracking tracking;
+
+struct revoke_tracking* __get_tracking(void) {
+    return &tracking;
+}
+
+#endif
+
 ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed, size_t* phy_base) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
@@ -1204,6 +1215,10 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
     length += (2*RES_META_SIZE);
 
     ALIGN_PAGE_REQUEST(base, length, page_n, npages)
+
+#if(REVOKE_BENCH)
+    tracking.total_virt_alloc += length;
+#endif
 
     if(flags & ALIGN_TOP) {
         // We want all npages to have the same top bits we round up to a power of 2, and subtract 1 to get
@@ -1509,6 +1524,12 @@ int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed) {
 
     if(mop == NULL) return MEM_BAD_MOP;
 
+#if(REVOKE_BENCH)
+    size_t down = base & (UNTRANSLATED_PAGE_SIZE-1);
+    size_t diff = (length + down + UNTRANSLATED_PAGE_SIZE - 1) & ~(UNTRANSLATED_PAGE_SIZE-1);
+    tracking.total_virt_free += diff;
+#endif
+
     return mem_claim_or_release(base, length, times, mop, &visit_free, &visit_free_check);
 }
 
@@ -1561,7 +1582,11 @@ void __revoke(void) {
 
     uint64_t scanned = 0;
 
-#if (REVOKE_BENCH)
+#if(REVOKE_BENCH)
+    tracking.revokes_started ++;
+#endif
+
+#if (REVOKE_BENCH && REVOKE_TIME)
     uint64_t before, after;
 
     if(revoke_bench_act) before = syscall_now();
@@ -1570,11 +1595,17 @@ void __revoke(void) {
     res_t  res = rescap_revoke_finish(&scanned);
 
 #if (REVOKE_BENCH)
+    res_nfo_t nfo = rescap_nfo(res);
+    size_t length = nfo.length + RES_META_SIZE;
+    tracking.revoked_bytes += length;
+    tracking.revokes_finished ++;
+#if(REVOKE_TIME)
     if(revoke_bench_act) {
         after = syscall_now();
-        res_nfo_t nfo = rescap_nfo(res);
-        message_send(scanned, nfo.length + RES_META_SIZE, after - before, 0, NULL, NULL, NULL, NULL, revoke_bench_act, SEND, 0);
+
+        message_send(scanned, length, after - before, 0, NULL, NULL, NULL, NULL, revoke_bench_act, SEND, 0);
     }
+#endif
 #endif
 
     if(!cheri_gettag(res)) {

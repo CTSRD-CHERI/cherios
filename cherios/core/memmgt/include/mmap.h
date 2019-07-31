@@ -44,6 +44,7 @@
 #define POOL_LARGE_THRESHOLD (1 << 26)
 
 #define REVOKE_BENCH 1
+#define REVOKE_TIME 0
 #define REVOKE_PRIO PRIO_HIGH
 
 // Measured in virtual pages
@@ -233,5 +234,6 @@ int __mem_reclaim_mop(mop_t mop_sealed);
 void mmap_dump(void);
 
 void __revoke_bench(act_kt act);
+struct revoke_tracking* __get_tracking(void);
 
 #endif //CHERIOS_MMAP_H_H

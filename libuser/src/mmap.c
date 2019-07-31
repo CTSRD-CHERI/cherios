@@ -241,3 +241,9 @@ void mdump(void) {
 	assert(memmgt != NULL);
 	message_send(0,0,0,0,NULL,NULL,NULL,NULL, memmgt, SYNC_CALL, 3);
 }
+
+struct revoke_tracking* get_tracking(void) {
+	act_kt memmgt = try_init_memmgt_ref();
+	assert(memmgt != NULL);
+	return (struct revoke_tracking*)message_send_c(0,0,0,0,NULL,NULL,NULL,NULL, memmgt, SYNC_CALL, 14);
+}

@@ -42,7 +42,7 @@ __thread int worker_id = 0;
 
 /* FIXME: Any thread will accidentally run any of these. They should be thread local */
 void (*msg_methods[]) = {__mem_request, __mem_release, vmem_commit_vmem, full_dump, virtual_to_physical, __mem_claim,
-						 NULL, __mem_makemop, __get_physical_capability, __mem_reclaim_mop, __revoke, __revoke_finish, __vmem_commit_vmem_range, __revoke_bench};
+						 NULL, __mem_makemop, __get_physical_capability, __mem_reclaim_mop, __revoke, __revoke_finish, __vmem_commit_vmem_range, __revoke_bench, __get_tracking};
 
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
