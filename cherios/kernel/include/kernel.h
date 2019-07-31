@@ -50,8 +50,8 @@
     #define	TIMER_INTERVAL		400000
     #define	TIMER_INTERVAL_MIN	200000  // We can miss interrupts in QEMU because min does not keep up
 #else
-    #define	TIMER_INTERVAL		40000000
-    #define	TIMER_INTERVAL_MIN	20000000
+    #define	TIMER_INTERVAL		4000000
+    #define	TIMER_INTERVAL_MIN	2000000
 #endif
 
 #endif /* !__KERNEL_H__ */
