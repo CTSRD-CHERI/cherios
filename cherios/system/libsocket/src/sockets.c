@@ -249,7 +249,7 @@ int socket_fulfiller_outstanding_wait(fulfiller_t fulfiller, uint16_t amount, in
 
 // Wait for all requests to be marked as fulfilled
 __attribute__((used))
-ssize_t socket_requester_wait_all_finish(requester_t * r, int dont_wait) {
+ssize_t socket_requester_wait_all_finish(requester_t r, int dont_wait) {
     uni_dir_socket_requester* requester = UNSEAL_CHECK_REQUESTER(r);
     if(!requester) return E_BAD_SEAL;
     ssize_t ret = socket_internal_requester_space_wait(requester, requester->buffer_size, dont_wait, 0);
