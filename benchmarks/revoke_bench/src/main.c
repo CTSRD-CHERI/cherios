@@ -51,6 +51,8 @@
 #define S1              (0x0ff8000)
 #define S2              (0x0007fc0)
 
+#define SAMPLES         10
+
 typedef struct result_s {
     uint64_t phy_scanned;
     uint64_t virt_size;
@@ -128,6 +130,7 @@ capability cause_revoke(result_t* result, size_t size, enum type e) {
 
 void print(result_t* r) {
     printf("0x%lx,0x%lx,0x%lx\n", r->phy_scanned, r->virt_size, r->time);
+    socket_requester_wait_all_finish(stdout->write.push_writer, 0);
 }
 
 int main(__unused register_t arg, __unused capability carg) {
@@ -166,8 +169,10 @@ int main(__unused register_t arg, __unused capability carg) {
     size_t size = REVOKE_SIZE_START;
 
     for(size_t i = 0; i != REVOKE_SIZE_N; i++) {
-        cause_revoke(results+i, size, NORMAL);
-        print(results+i);
+        for(int j = 0; j != SAMPLES; j++) {
+            cause_revoke(results+i, size, NORMAL);
+            print(results+i);
+        }
         size <<= 1;
     }
 
@@ -178,13 +183,14 @@ int main(__unused register_t arg, __unused capability carg) {
     sleep(MS_TO_CLOCK(1000));
 
     for(size_t i = 0; i != REVOKE_PHY_N; i++) {
-        cause_revoke(results + (3 * i), DEFAULT_FORCE_REVOKE_SIZE, NORMAL);
-        print(results + (3 * i));
-        cause_revoke(results + (3 * i) + 1, DEFAULT_FORCE_REVOKE_SIZE, ANY_CAP);
-        print(results + (3 * i) + 1);
-        cause_revoke(results + (3 * i) + 2, DEFAULT_FORCE_REVOKE_SIZE, REV_CAP);
-        print(results + (3 * i) + 2);
-
+        for(int j = 0; j != SAMPLES; j++) {
+            cause_revoke(results + (3 * i), DEFAULT_FORCE_REVOKE_SIZE, NORMAL);
+            print(results + (3 * i));
+            cause_revoke(results + (3 * i) + 1, DEFAULT_FORCE_REVOKE_SIZE, ANY_CAP);
+            print(results + (3 * i) + 1);
+            cause_revoke(results + (3 * i) + 2, DEFAULT_FORCE_REVOKE_SIZE, REV_CAP);
+            print(results + (3 * i) + 2);
+        }
         increase_usage();
     }
 
