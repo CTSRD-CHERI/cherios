@@ -143,7 +143,8 @@ static top_t proc_get_own_top(void) {
 	static top_t own_top;
 
 	if(own_top == NULL) {
-		assert(try_init_tman_ref() != NULL);
+		__unused act_kt tman = try_init_tman_ref();
+		assert(tman != NULL);
 		own_top = type_get_first_top();
 		assert(own_top != NULL);
 	}
