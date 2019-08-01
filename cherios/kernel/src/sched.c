@@ -50,7 +50,13 @@ sched_pool sched_pools[SMP_CORES];
 void dump_sched(void) {
 	for(act_t* act = act_list_start; act != NULL; act = act->list_next) {
 		int is_sending = act->sched_status == sched_sync_block;
-		kernel_printf("%20s : status %x%s%s\n", act->name, act->sched_status, is_sending ? " sent to " : "", is_sending ? act->last_sent_to->name : "");
+		kernel_printf("%20s : status %x%s%s\n", act->name, act->sched_status, is_sending ? " sent to " : "", is_sending ?
+#if (K_DEBUG)
+                                                                                                             act->last_sent_to->name
+#else
+                                                                                                             "???"
+#endif
+		: "");
 	}
 
 	for(size_t p = 0; p != SMP_CORES; p++) {
