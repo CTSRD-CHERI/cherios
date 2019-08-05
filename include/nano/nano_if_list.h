@@ -67,7 +67,7 @@
 /* Returns the length/base of a reservation (not including any metadata) */\
     ITEM(rescap_nfo, res_nfo_t, (res_t, res), __VA_ARGS__)\
 /* Tells the revokeer to start revoking this reservation. revoking fails if already revoking. Must be MAPPED */\
-    ITEM(rescap_revoke_start, void, (res_t, res), __VA_ARGS__)\
+    ITEM(rescap_revoke_start, int, (res_t, res), __VA_ARGS__)\
 /* Tells the revokeer to finish revoking this reservation from before. Must be UNMAPPED. */\
     ITEM(rescap_revoke_finish, res_t, (uint64_t*, bytes_scanned), __VA_ARGS__)\
 /* Splits an open reservation. The reservation will have size `size'. The remaining space will be returned as a new reservation. */\

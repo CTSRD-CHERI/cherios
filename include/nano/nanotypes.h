@@ -69,21 +69,50 @@
 
 /* Size of metadata for reservations. Split into private and user data */
 #define RES_PRIV_SIZE                   (0)
-#define RES_META_SIZE                   (32)
+#define RES_META_SIZE                   (16)
 #define RES_USER_SIZE                   (RES_META_SIZE - RES_PRIV_SIZE)
 
 
-#define RES_LENGTH_OFFSET               16
-#define RES_PID_OFFSET                  24 // PID wastes a stupid amount of bits (64), it could use 2 XY. Where X = is first, Y = is last
+
+#define RES_LENGTH_OFFSET               0
+#define RES_LENGTH_SHIFT_HIGH           11
+#define RES_LENGTH_SHIFT_LOW            4
+
 #define RES_STATE_OFFSET                0           // Keep zero for link/conditional
-#define STORE_RES_STATE                 csb
-#define LOAD_RES_STATE                  clb
-#define STOREC_RES_STATE                cscb
-#define LOADL_RES_STATE                 cllb
-#define RES_SUBFIELD_SIZE_OFFSET        1
-#define RES_SIZE_NOT_FIELD              0xFF
-#define RES_SUBFIELD_BITMAP_OFFSET      2
-#define RES_SUBFIELD_BITMAP_BITS        (14 * 8)
+#define STORE_RES_STATE                 csh
+#define LOAD_RES_STATE                  clh
+#define STOREC_RES_STATE                csch
+#define LOADL_RES_STATE                 cllh
+
+#define LOADL_RES_LENGTH                clld
+#define STOREC_RES_LENGTH               cscd
+
+#define RES_STATE_MASK                  0xC000
+#define RES_LOW_TERM_MASK               0x2000
+#define RES_HIGH_TERM_MASK              0x1000
+#define RES_SCALE_MASK                  0x0FE0
+#define RES_ALL_MASK                    0xFFE0
+#define RES_OTHER_MASK                  0x001F
+
+#define RES_STATE_SHIFT                 14
+#define RES_SCALE_SHIFT                 5
+#define RES_STATE_IN_LENGTH_SHIFT       (6 * 8)
+
+#define RES_SCALE_NOT_FIELD              0 // A parent or taken, not a field
+// Makes the largest field x 64 be 4GB, so that the result of the multiplication will be 32 bit
+#define RES_SCALE_MAX                   (0b1100100 - 1)
+#define RES_SUBFIELD_BITMAP_OFFSET      8
+#define RES_SUBFIELD_BITMAP_BITS        (8 * 8)
+
+
+// New layout. All state bits shoved in top half of length.
+// Low terminator technically redundant.
+// | State  | Low Term | High Term | Scale  | Length  | Bitmap  |
+// | 2 bits | 1 bits   | 1 bits    | 7 bits | 53 bits | 64 bits |
+
+// Scale is |Exp|Mantissa|, length has 4 zero bits implied at the bottom, giving a 57 bits of length
+//          | 5 |   2    |
+
 
 
 // The layout of contexts
@@ -207,10 +236,10 @@
 #define VTABLE_ENTRY_TRAN               (T_E_CAST (-2))
 
 
-#define REVOKE_STATE_AVAIL      0
-#define REVOKE_STATE_STARTED    1
-#define REVOKE_STATE_REVOKING   2
-#define REVOKE_STATE_TRANS      3
+#define REVOKE_STATE_AVAIL      0 // can call start
+#define REVOKE_STATE_STARTING   1 // in the middle of start
+#define REVOKE_STATE_STARTED    2 // can call finish
+#define REVOKE_STATE_REVOKING   3 // in the middle of finish
 
 #define PFN_SHIFT                       6
 /* These bits will eventually be untranslated high bits, but we will check they are equal to a field in the leaf
@@ -241,12 +270,16 @@
     ITEM(page_cleaning, 9)                         \
     ITEM(page_screwed_the_pooch, 10)               \
 
+
+// Some code assumes open is 0. Others can be re-arranged
+// merged is really merged or revoking
+// taken is really taken, parented, or split into a subfield
+
 #define NANO_KERNEL_RES_STATUS_ENUM_LIST(ITEM) \
     ITEM(res_open,          0)                  \
     ITEM(res_taken,         1)                  \
     ITEM(res_merged,        2)                  \
-    ITEM(res_trans,         3)                  \
-    ITEM(res_revoking,      4)
+    ITEM(res_revoking,      3)
 
 DECLARE_ENUM(e_res_status, NANO_KERNEL_RES_STATUS_ENUM_LIST)
 
@@ -304,6 +337,7 @@ DECLARE_ENUM(e_reg_select, NANO_REG_LIST_FOR_ENUM)
 
 #ifndef __ASSEMBLY__
 
+_Static_assert(RES_USER_SIZE >= CAP_SIZE, "I shrunk reservation metadata nodes. This probably broke 256.");
 _Static_assert(sizeof(register_t) == REG_SIZE, "This should be true");
 
 #define BOOK_END                        ((size_t)(TOTAL_PHY_PAGES))

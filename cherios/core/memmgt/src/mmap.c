@@ -538,7 +538,7 @@ static int visit_free_check(vpage_range_desc_t *desc, __unused size_t base, mop_
 
     // Does not have a claim on this range
     if(index == (size_t)(-1) || desc->tracking.claimers[index].owner != owner) {
-        printf(KRED"WARNING Got a free for something unclaimed!\n"KRST);
+        printf(KRED"WARNING Got a free for something unclaimed! Freed by %s\n"KRST, owner->debug_id);
         mmap_dump_desc(desc);
         return VISIT_CONT;
     }
@@ -729,12 +729,17 @@ void revoke_start(vpage_range_desc_t* desc) {
     assert_int_ex(base_r, ==, base);
     assert_int_ex(len_r, ==, len);
 
-    rescap_revoke_start(res); // reads info from the reservation;
+    __unused int result  = rescap_revoke_start(res); // reads info from the reservation;
+
+    assert(result == 0);
 
     // Now we have finished reading metadata we can free the pages
 
     vmem_free_single(base);
-    vmem_free_single((base+len)-1);
+
+    if(desc->length != 1) {
+        vmem_free_single((base+len)-1);
+    }
 
     // Check everything is unmapped
 #if (REVOKE_SANITY)

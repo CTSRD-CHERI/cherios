@@ -141,6 +141,98 @@ static inline res_t reservation_precision_align(res_t res, size_t length, size_t
     return res;
 }
 
+// These are the scales / sizes used by the nanokernel for splitsub.
+
+static inline size_t scale_to_size(size_t scale) {
+    scale++;
+    size_t low = (scale & 0b11);
+    size_t hi = scale >> 2;
+
+    low = hi ? low | 4 : low;
+
+    size_t less1 = hi-1;
+
+    size_t res = (hi ? (low << less1) : low);
+
+    return res;
+}
+
+
+// Works as long as (LOG_2_LARGEST_SIZE-LOG_2_SMALLEST_SIZE) <= (34)
+
+// Maps:
+
+// 0001 -> 0
+// 0010 -> 1
+// 0011 -> 2
+// 0100 -> 3
+// 0100 -> 4
+// 0110 -> 5
+// 0111 -> 6
+// 1000 -> 7
+// 1010 -> 8
+// 1100 -> 9
+// 1110 -> 10
+// etc
+
+// WARN: Handle a size of zero yourself, this will blow up
+
+#define LOG_2_SMALLEST_SIZE 0
+#define LOG_2_LARGEST_SIZE 10
+#define LOG_2_DIFF (LOG_2_LARGEST_SIZE - LOG_2_SMALLEST_SIZE)
+#define RES_SIZE_TYPE uint32_t // combats a bug where the compiler doesn't know sltiu doesn't need trucating
+
+static inline RES_SIZE_TYPE size_to_scale(RES_SIZE_TYPE size) {
+
+// Benefits of offsetting:
+//  Lets us use one fewer rounds if we near a boundary with largest size
+//  all values need rounding, not just all but those that are exact sizes
+//  gives an index starting at 0
+        size --;
+
+#if (LOG_2_SMALLEST_SIZE <= 3)
+        if(size <= 8) return size;
+#endif
+
+        RES_SIZE_TYPE shifted = size >> (LOG_2_SMALLEST_SIZE + 2);
+        RES_SIZE_TYPE log = 0;
+
+#if ((LOG_2_LARGEST_SIZE - LOG_2_SMALLEST_SIZE) > 18)
+RES_SIZE_TYPE b5 = (shifted & (0xFFFF0000)) ? 16 : 0;
+    shifted >>= b5;
+    log |= b5;
+#endif
+#if ((LOG_2_LARGEST_SIZE - LOG_2_SMALLEST_SIZE) > 10)
+RES_SIZE_TYPE b4 = (shifted & (0xFF00)) ? 8 : 0;
+    shifted >>= b4;
+    log |= b4;
+#endif
+#if ((LOG_2_LARGEST_SIZE - LOG_2_SMALLEST_SIZE) > 6)
+RES_SIZE_TYPE b3 = (shifted & (0xF0)) ? 4 : 0;
+    shifted >>= b3;
+    log |= b3;
+#endif
+#if ((LOG_2_LARGEST_SIZE - LOG_2_SMALLEST_SIZE) > 4)
+RES_SIZE_TYPE b2 = (shifted & (0xC)) ? 2 : 0;
+    shifted >>= b2;
+    log |= b2;
+#endif
+        RES_SIZE_TYPE b1 = (shifted & (0x2)) ? 1 : 0;
+        log |= b1;
+
+        // log is the base 2 logarithm of (size >> (LOG_2_SMALLEST_SIZE + 2)), rounded down
+
+        log += LOG_2_SMALLEST_SIZE;
+
+        RES_SIZE_TYPE low_bits = (size >> log);
+
+        low_bits &= 0b11;
+
+        RES_SIZE_TYPE res = (low_bits | ((log + 1) << 2));
+
+        return res;
+}
+
 #else
 
 #define LOCAL_CAP_VAR_MACRO(item,...)   local_cap_var item ## _cap;

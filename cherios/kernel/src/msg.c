@@ -285,7 +285,7 @@ __used size_t kernel_syscall_provide_sync(res_t res) {
 
     act_t* source_activation = (act_t*) CALLER;
 
-    res = rescap_splitsub(res, SI_BITS);
+    res = rescap_splitsub(res, size_to_scale(SI_SIZE));
 
     source_activation->sync_state.alloc_block = res;
     source_activation->sync_state.allocs_taken = 0;

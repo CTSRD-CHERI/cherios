@@ -146,6 +146,7 @@ local_reg_var made_first_res
 local_reg_var revoke_state
 local_reg_var revoke_base
 local_reg_var revoke_bound
+local_reg_var revoke_new_state
 local_reg_var need_shootdown
 local_reg_var load_tag_bits
 
@@ -1081,9 +1082,13 @@ make_first_reservation:
     dli         $t1, RES_TYPE                     # sealing type
 
     csetoffset  $c4, $kdc, $t1
-    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)     # set state to open
+
+    li          $t3, (res_open << RES_STATE_SHIFT) | RES_LOW_TERM_MASK | RES_HIGH_TERM_MASK # Open with both terminators
+    dsll        $t3, $t3, RES_STATE_IN_LENGTH_SHIFT
+    dsrl        $t2, $t2, RES_LENGTH_SHIFT_LOW              # low bits of length not stored
+    or          $t2, $t2, $t3                               # high bits store state
+
     csd         $t2, $zero, (RES_LENGTH_OFFSET)($c3)        # set length
-    csd         $zero, $zero, (RES_PID_OFFSET)($c3)         # set parent to none
 
     csetboundsexact  $c3, $c3, $t0
     cseal       $c3, $c3, $c4                     # handle
@@ -1570,63 +1575,77 @@ rescap_take:
     csetoffset  $c3, $c3, $zero
 
     cgetbase    $t0, $c3
-    daddiu      $t0, $t0, RES_META_SIZE     # get base
-    li          $t8, RES_SIZE_NOT_FIELD
-
-1:  LOADL_RES_STATE $t2, $c3                # get state
     bnez        $t3, take_sub
-    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)      # get length (protected by load linked)
-    bnez        $t2, take_er                # error if not open
-    dli         $t2, res_taken
-    STOREC_RES_STATE $t3, $t2, $c3          # try set to taken
+    daddiu      $t0, $t0, RES_META_SIZE     # get base
+
+1:  LOADL_RES_LENGTH $t2, $c3                # get state
+    li          $t3, (res_open << RES_STATE_SHIFT) | (RES_SIZE_NOT_FIELD << RES_SCALE_SHIFT)
+# check state
+    dsrl        $t1, $t2, RES_STATE_IN_LENGTH_SHIFT
+    andi        $t1, $t1, (RES_STATE_MASK | RES_SCALE_MASK)
+    bne         $t1, $t3, take_er
+# set everything the same but with state as taken
+    li          $t3, (res_taken << RES_STATE_SHIFT) | (RES_SCALE_NOT_FIELD << RES_SCALE_SHIFT)
+    dsll        $t3, $t3, (RES_STATE_IN_LENGTH_SHIFT)
+    or          $t2, $t2, $t3
+    STOREC_RES_LENGTH $t3, $t2, $c3
     beqz        $t3, 1b
-    csb         $t8, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # set not subfield by setting size to not field
-                                                          # this will not matter even if this store cond fails
-                                                          # FIXME: This was meant to be before state change, does not work on fpga
+
+    # extract length (was loaded in LL/SC, but its safe to scale here)
+    dsll        $t1, $t2, RES_LENGTH_SHIFT_HIGH
     b           take_make
-    nop
+    dsrl        $t1, $t1, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW)
 
 take_sub:
-# t0 is base of ALL of the reservation. t1 is length of ALL. t2 is state. t3 is index+1.
-# We don't really care about a merge race. A revoke race should be impossible as c3 will be detagged.
-# We must handle the take race however. Do this will conditionals on the resfield bits
+# t0 is base of ALL of the reservation. t3 is index+1.
 
-    dli         $t8, res_taken
-    bne         $t2, $t8, take_er           # subfields are marked taken. We should look at the bitmap.
+# atomically set correct bit
+
     daddiu      $t3, $t3, -1
 
-    # first calculate byte and mask
+    cincoffset  $c4, $c3, RES_SUBFIELD_BITMAP_OFFSET
+
+# set bit or error if already set
+2:  clld        $t9, $c4
+    # mask
     dli         $t2, 1
-    andi        $t8, $t3, 0b111
-    dsllv       $t8, $t2, $t8               # t8 is 1 byte mask for bitfield
-    dsrl        $t2, $t3, 3                 # t2 is byte
-
-    # set bit or error if already set
-    cincoffset  $c3, $c3, RES_SUBFIELD_BITMAP_OFFSET
-    cincoffset  $c3, $c3, $t2
-
-2:  cllb        $t9, $c3
-    and         $a7, $t8, $t9
-    bnez        $a7, take_er
-    or          $t9, $t9, $t8
-    cscb        $t9, $t9, $c3
+    dsll        $t2, $t2, $t3               # bit set in correct place
+    and         $t8, $t2, $t9
+    bnez        $t8, take_er
+    or          $t9, $t9, $t2
+    cscd        $t9, $t9, $c4
     beqz        $t9, 2b
-    nop
 
-    # calculate base offset
-    negu        $t2, $t2
-    clb         $t2, $t2, (RES_SUBFIELD_SIZE_OFFSET-RES_SUBFIELD_BITMAP_OFFSET)($c3)   # t2 is the scale
-    daddiu      $t8, $t3, 1
-    dsllv       $t3, $t3, $t2                               # baseoff
-    dsllv       $t8, $t8, $t2                               # bound
 
-    # check bound not greater than total length
-    sltu        $t9, $t1, $t8
+    cld         $t8, $zero, RES_LENGTH_OFFSET($c3)
+    dsrl        $t2, $t8, (RES_STATE_IN_LENGTH_SHIFT + RES_SCALE_SHIFT) # t2 is scale with some junk at the top
+
+    dsll        $t8, $t8, RES_LENGTH_SHIFT_HIGH
+    dsrl        $t8, $t8, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW) # t8 is length of whole reservation
+
+# t3 is index. t2 scale with some junk at top. t8 length of whole reservation. t0 is base of whole reservation.
+
+# calculate size of sub
+    andi        $t1, $t2, 0b11      # mantissa
+    dsrl        $t2, $t2, 2
+    andi        $t2, $t2, 0b11111   # exp
+    ori         $t9, $t1, 0b100
+    movn        $t1, $t9, $t2
+    daddiu      $t9, $t2, -1
+    movn        $t2, $t9, $t2
+    dsllv       $t1, $t1, $t2
+
+// 00010 01
+
+# t1 is sub size
+    mult        $t1, $t3
+    mflo        $t3             # t3 is now the offset from base
+
+    daddu       $t9, $t3, $t1   # t9 is where this would end
+    sltu        $t9, $t8, $t9   # is the length less than where this ends?
     bnez        $t9, take_er
 
-    # otherwise correctly calculate capability base+bounds to generate
     daddu       $t0, $t0, $t3
-    dsubu       $t1, $t8, $t3
 
 # t0 is base. t1 is length. #
 take_make:
@@ -1659,17 +1678,19 @@ take_er:
 rescap_getsub:
 ##################################################
 
-    cgetoffset  $t0, $c3
-    bnez        $t0, getsub_er          # can only sub the main reservation
     cincoffset  $c4, $kdc, RES_TYPE
     cunseal     $c5, $c3, $c4
+    cnull       $c3
 
-    clb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c5) # size field indicates whether or not it is a subfield
-    daddiu      $t0, $t0, -(RES_SIZE_NOT_FIELD)
-    beqz        $t0, getsub_er
+    cgetoffset  $t0, $c3
+    bnez        $t0, getsub_er          # can only sub the main reservation
 
     sltiu       $t0, $a0, RES_SUBFIELD_BITMAP_BITS
     beqz        $t0, getsub_er          # can only have an index that will fit in the bitfield
+
+    LOAD_RES_STATE $t0, $zero, RES_STATE_OFFSET($c5) # scale field indicates whether or not it is a subfield
+    andi        $t0, $t0, RES_SCALE_MASK
+    beqz        $t0, getsub_er                       # scale field of zero means not field
 
     daddiu      $a0, $a0, 1             # 0 means it is the parent of the subfield
     csetoffset  $c3, $c5, $a0           # offset field encodes sub
@@ -1686,49 +1707,66 @@ getsub_er:
 rescap_splitsub:
 ####################################################
 
+    sltiu       $t0, $a0, (RES_SCALE_MAX + 1)
+    beqz        $t0, take_er
+    daddiu      $a0, $a0, 1
+
     cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
     cunseal     $c3, $c3, $c4                    # unseal res
+
 1:  LOADL_RES_STATE $t0, $c3                     # get state
-    bnez        $t0, take_er                                    # error if not open
-    dli         $t0, res_trans
+    dsll        $t2, $a0, RES_SCALE_SHIFT
+    ori         $t2, $t2, (res_taken << RES_STATE_SHIFT)
+    andi        $t1, $t0, RES_STATE_MASK
+    bnez        $t1, take_er                     # error if not open
+    or          $t0, $t0, $t2                    # keep terminators and length the same, set scale to and res taken
     STOREC_RES_STATE $t0, $t0, $c3               # set to transacting to lock this in, but not make useable
     beqz        $t0, 1b
+    nop
 
-    csh         $zero, $zero, RES_SUBFIELD_BITMAP_OFFSET($c3)
-    csw         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+2)($c3)
-    csd         $zero, $zero, (RES_SUBFIELD_BITMAP_OFFSET+6)($c3)      # set bitfield to all not taken
-    csb         $a0, $zero, (RES_SUBFIELD_SIZE_OFFSET)($c3)             # set scale
-
-    sync
-    dli         $t0, res_taken
-    STORE_RES_STATE $t0, $zero, RES_STATE_OFFSET($c3)
     cseal       $c3, $c3, $c4
 
     cclearlo    EN1(c4)
     CRETURN
 
 #################################### (safe)
-# size_t rescap_nfo(res_t res)
+# res_nfo_t rescap_nfo(res_t res) v0 = length, v1 = base
 .global rescap_nfo
 rescap_nfo:
 ####################################
-    li          $v0, 0
     cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
     cgetoffset  $t3, $c3                    # get sub-id if exists
     csetoffset  $c3, $c3, $zero
-    cld         $v0, $zero, RES_LENGTH_OFFSET($c3)       # get length
 
+    cld         $t8, $zero, RES_LENGTH_OFFSET($c3)
     cgetbase    $v1, $c3
-    beqz        $t3, normal_info
     daddiu      $v1, RES_META_SIZE
+    dsll        $v0, $t8, RES_LENGTH_SHIFT_HIGH
+    beqz        $t3, normal_info
+    dsrl        $v0, $v0, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW) # v0 is length of whole reservation
 
-    dli         $t2, 1
-    clb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3)
-    dsllv       $v0, $t2, $t0               # set new bounds
+sub_info:
+
+    dsrl        $t2, $t8, (RES_STATE_IN_LENGTH_SHIFT + RES_SCALE_SHIFT) # t2 is scale with some junk at the top
+
+# t3 is index. t2 scale with some junk at top. t8 length of whole reservation. t0 is base of whole reservation.
+
+# calculate size of sub
+    andi        $t1, $t2, 0b11      # mantissa
+    dsrl        $t2, $t2, 2
+    andi        $t2, $t2, 0b11111   # exp
+    ori         $t9, $t1, 0b100
+    movn        $t1, $t9, $t2
+    daddiu      $t9, $t2, -1
+    movn        $t2, $t9, $t2
+    dsllv       $v0, $t1, $t2
+
+# t1 is sub size
     daddiu      $t3, $t3, -1
-    dsllv       $t3, $t3, $t0
+    mult        $v0, $t3
+    mflo        $t3             # t3 is now the offset from base
     daddu       $v1, $v1, $t3
 
     normal_info:
@@ -1756,53 +1794,90 @@ rescap_nfo:
 
 
 ###################################### (safe)
-# void rescap_revoke_start(res_t res);
+# int rescap_revoke_start(res_t res);
 .global rescap_revoke_start
 rescap_revoke_start:
 ######################################
-    cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
-    cunseal     $c3, $c3, $c4               # unseal res
+
+    cincoffset  $c5, $idc, revoke_state
+    li          $v0, -1
+
+.macro STATE_CHANGE from, to, er
+2:  clld        $t0, $c5
+    dli         $t2, \to
+    daddiu      $t0, $t0, -\from
+    bnez        $t0, \er
+    cscd        $t0, $t1, $c5
+    beqz        $t0, 2b
+.endm
+
+# check we are not already revoking
+    STATE_CHANGE REVOKE_STATE_AVAIL, REVOKE_STATE_STARTING, revoke_start_er_bailout
+    li          $t1, REVOKE_STATE_AVAIL
+
+
+# Can revoke taken/open things that are not sub reservations or parents of sub-reservations
+# Can also only revoke well aligned things
 
     cgetoffset  $t0, $c3                    # cant revoke sub-reservations
     bnez        $t0, revoke_start_er
-    li          $t2, res_taken
-
-1:  LOADL_RES_STATE $t0, $c3
-    bne         $t0, $t2, revoke_start_er  # check this reservation is taken
-    li          $t0, res_trans
-    STOREC_RES_STATE $t0, $t0, $c3         # set to transaction so nothing else can modify
-    beqz        $t0, 1b
 
     cgetbase    $a2, $c3                    #a2 is the base of our revoke
-    cld         $t1, $zero, RES_LENGTH_OFFSET($c3)
-    daddiu      $a4, $t1, RES_META_SIZE     #a4 is the size of revoke
-    daddu        $a3, $a2, $a4               #a3 is the end of our revoke (not inclusive)
-
     andi        $t0, $a2, (PHY_PAGE_SIZE-1)
-    bnez        $t0, revoke_start_er_backout1              # base of revocation must be page aligned
+    bnez        $t0, revoke_start_er_bailout              # base of revocation must be page aligned
+
+    cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+
+
+# Check
+1:  LOADL_RES_LENGTH $t0, $c3
+    li          $t2, RES_STATE_MASK
+    dsll        $t3, $t2, RES_STATE_IN_LENGTH_SHIFT
+    not         $t3, $t3                    # to deset only the state
+    and         $a0, $t0, $t3               # a0 will be the state of the new reservation
+
+# TODO
+    # Must not be field
+    dsrl        $t2, $t0, RES_STATE_IN_LENGTH_SHIFT
+    andi        $t3, $t2, RES_SCALE_MASK
+    bnez        $t3, revoke_start_er_bailout
+
+    # Must be taken or open
+    andi        $t3, $t2, RES_STATE_MASK
+    sltiu       $t3, $t3, (res_taken << RES_STATE_SHIFT) + 1
+    beqz        $t3, revoke_start_er_bailout
+
+    # get and check length
+    dsll        $a4, $t0, RES_LENGTH_SHIFT_HIGH
+    dsrl        $a4, $a4, (RES_LENGTH_SHIFT_HIGH-RES_LENGTH_SHIFT_LOW)
+    daddiu      $a4, $a4, RES_META_SIZE     #a4 is the size of revoke
     andi        $t0, $a4, (PHY_PAGE_SIZE-1)
-    bnez        $t0, revoke_start_er_backout1              # size of revocation must be page aligned
+    bnez        $t0, revoke_start_er_bailout              # size of revocation must be page aligned
 
-    cincoffset  $c5, $idc, revoke_state
-2:  clld        $t0, $c5
-    bnez        $t0, revoke_start_er_backout1              # check we are not already revoking
-    dli         $t0, REVOKE_STATE_TRANS
-    cscd        $t0, $t0, $c5
-    beqz        $t0, 2b
+    # set revoking
+    li          $t2, res_revoking
+    dsll        $t2, $t2, (RES_STATE_SHIFT + RES_STATE_IN_LENGTH_SHIFT)
+    or          $t2, $t2, $a0
+    STOREC_RES_LENGTH $t2, $t2, $c3
+    beqz        $t2, 1b
 
-    # We are locked in at this point
 
-    li          $t2, res_revoking                           # when we finish set from transacting to revoking
+# We are locked in at this point
+    daddu        $a3, $a2, $a4               #a3 is the end of our revoke (exclusive)
 
     csd         $a2, $zero, revoke_base($idc)
     csd         $a3, $zero, revoke_bound($idc)
+    csd         $a0, $zero, revoke_new_state($idc)
+
+    li          $v0, 0
+    li          $t1, REVOKE_STATE_STARTED
+
     sync                                                    # make sure we have set base and bound before advertising started
 
-    li          $t1, REVOKE_STATE_STARTED
-    csd         $t1, $zero, 0($c5) # Set revoke state to 1
 
-revoke_start_er_backout1:
-    STORE_RES_STATE $t2, $zero, RES_STATE_OFFSET($c3) # Mark reservation as revoking or open again
+revoke_start_er_bailout:
+    csd         $t1, $zero, 0($c5) # Set revoke state to 1
 revoke_start_er:
     cclearlo    EN4(c3, c4, c5, c6)
     CRETURN
@@ -2215,7 +2290,6 @@ detag_loop:
    # clc         $c8, $zero, 0($c2)
    # csc         $c8, $zero, 0($c2)
    # clc         $c8, $zero, 0($c2)
-    # TRACE_OFF
     b           next_cap
     cincoffset  $c2, $c2, CAP_SIZE
 
@@ -2383,6 +2457,8 @@ clear_loop_l1_start_retry:
 
     # Make a new reservation here now. This will cause a fault but the vtables should be available again #
 
+    cld         $t2, $zero, revoke_new_state($idc)
+
     cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
 
     dli         $t0, RES_META_SIZE
@@ -2393,10 +2469,8 @@ clear_loop_l1_start_retry:
     dli         $t1, DEF_DATA_PERMS
     candperm    $c3, $c3, $t1
 
-    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)       # set state to open
-    csd         $zero, $zero, (RES_PID_OFFSET)($c3)                   # set parent to 0
-    csd         $a4, $zero, RES_LENGTH_OFFSET($c3)                    # set length
-
+    # FAULT HERE
+    csd         $t2, $zero, RES_STATE_OFFSET($c3)
     cseal       $c3, $c3, $c4               # seal new reservation
 
     sync
@@ -2431,53 +2505,60 @@ rescap_split:
     cincoffset  $c4, $kdc, RES_TYPE         # create unsealing cap
     cunseal     $c3, $c3, $c4               # unseal res
 
-1:  LOADL_RES_STATE $t0, $c3                # get state
-    bnez        $t0, split_er               # reservation must be open
-    li          $t0, res_trans
-    STOREC_RES_STATE $t0, $t0, $c3          # set transacting to avoid race
-    beqz        $t0, 1b
+# State must be open. Length must be GREATER than size.
+# Extract remaining space, a capability to base, and the high terminator
 
-    cld         $t1, $zero, (RES_LENGTH_OFFSET)($c3) # get length
-    beqz        $t1, split_er_backout       # length must be non zero
+1:  LOADL_RES_LENGTH $t0, $c3                # get state
+    daddiu      $a1, $a0, RES_META_SIZE     # with metadta
+    dsrl        $t3, $a0, RES_LENGTH_SHIFT_LOW
+# Extract state
+    dsrl        $t1, $t0, RES_STATE_IN_LENGTH_SHIFT
+    andi        $t2, $t1, RES_STATE_MASK
+# Check state open
+    bnez        $t2, split_er
+# Extract high terminator
+    andi        $t8, $t1, RES_HIGH_TERM_MASK
+# Extract length
+    dsll        $t9, $t0, RES_LENGTH_SHIFT_HIGH
+    dsrl        $t9, $t9, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW)
+# Check length greater than a0
+    sltu        $t2, $a0, $t9
+    beqz        $t2, split_er
+# Keep the low terminator and state
+    andi        $t1, $t1, (RES_LOW_TERM_MASK | RES_STATE_MASK)
+    dsll        $t1, $t1, RES_STATE_IN_LENGTH_SHIFT
+# But with a new length
+    or          $t1, $t1, $t3
+# NOTE: You MUST materialise the capability before the store conditional. Otherwise there is a subtle attack around revocation.
+    cgetbase    $t0, $c3
+    daddu       $t0, $a1
+    csetoffset  $c5, $kdc, $t0              # Create new meta node
+    STOREC_RES_LENGTH $t1, $t1, $c3
+    beqz        $t1, 1b
+    nop
 
-    daddiu      $a1, $t1, -(RES_META_SIZE)  # length minus new metadata space
-    sltu        $t0, $a1, $a0
-    bnez        $t0, split_er_backout       # size arg too large
 
-    # At this point we can no longer error
+# Now create a new node. c5 already has the right base. t9 was old length. a1 is the length with metadata. t8 is high term.
 
-    dsubu       $a1, $a1, $a0                   # size of remainder
-    cld         $t0, $zero, (RES_PID_OFFSET)($c3)       # get pid
-    csd         $a0, $zero, (RES_LENGTH_OFFSET)($c3)    # set length for old res
+# a1 is now new length
+    dsubu       $a1, $t9, $a1
+    dsrl        $a1, $a1, RES_LENGTH_SHIFT_LOW
+    dsll        $t8, $t8, RES_STATE_IN_LENGTH_SHIFT
+    or          $t8, $t8, $a1               # State and length
 
-    # We can now allow the original to be used again
-    sync
-    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)
-
-    dli         $t8, RES_META_SIZE
-
-    cgetbase    $t3, $c3
-    daddiu      $t3, $t3, RES_META_SIZE
-    daddu       $t3, $t3, $a0               # start of next reservation
+    csd         $t8, $zero, RES_LENGTH_OFFSET($c5)
 
     dli         $t1, DEF_DATA_PERMS
-
-    csetoffset  $c3, $kdc, $t3              # Create new meta node
-    csetboundsexact  $c3, $c3, $t8
+    li          $t0, RES_META_SIZE
+    csetboundsexact  $c3, $c5, $t0
     candperm    $c3, $c3, $t1
-
-    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)     # set state of new reservation to open
-    csd         $a1, $zero, (RES_LENGTH_OFFSET)($c3)        # set length of new reservation
-    csd         $t0, $zero, (RES_PID_OFFSET)($c3)           # set parent
-
     cseal        $c3, $c3, $c4
-    cclearlo    EN1(c4)
+
+    cclearlo    EN2(c4, c5)
     CRETURN
 
-split_er_backout:
-    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3)
 split_er:
-    cclearlo    EN2(c3, c4)
+    cclearlo    EN3(c3, c4, c5)
     CRETURN
 
 
@@ -2488,55 +2569,77 @@ rescap_merge:
 #############################################
     ceq         $t0, $c3, $c4
     bnez        $t0, merge_er               # naughty people may try trip us up merging a reservation with itself
-    cincoffset  $c5, $kdc, RES_TYPE         # create unsealing cap
-    cunseal     $c3, $c3, $c5
-    cunseal     $c4, $c4, $c5               # unseal both arguments
-
     cgetoffset  $t1, $c3                    # can't split subfields
     bnez        $t1, merge_er
     cgetoffset  $t1, $c4
     bnez        $t1, merge_er
 
-    dli         $t3, res_taken
+    cincoffset  $c5, $kdc, RES_TYPE         # create unsealing cap
+    cunseal     $c4, $c4, $c5               # unseal both arguments
+    cunseal     $c3, $c3, $c5
 
-1:  LOADL_RES_STATE $t1, $c3
-    bne         $t3, $t1, merge_er          # check first is taken
-    li          $t1, res_trans
-    STOREC_RES_STATE $t1, $t1, $c3
-    beqz        $t1, 1b
+# First set the state of the second to merged. It cannot have the low terminator. Extract length and high terminator.
 
-2:  LOADL_RES_STATE $t1, $c4
-    bne         $t3, $t1, merge_er_backout1 # check first is taken
-    li          $t1, res_trans
-    STOREC_RES_STATE $t1, $t1, $c4
-    beqz        $t1, 2b
+1:  LOADL_RES_LENGTH $t1, $c4
+    li          $t3, (res_taken << RES_STATE_SHIFT) | (RES_SCALE_NOT_FIELD << RES_SCALE_SHIFT)
 
-    cld         $t0, $zero, (RES_PID_OFFSET)($c3) # get depth of first
-    cld         $t1, $zero, (RES_PID_OFFSET)($c4) # get depth of second
-    bne         $t0, $t1, merge_er_backout2          # must have same depth
+# extract state
+    dsrl        $t0, $t1, RES_STATE_IN_LENGTH_SHIFT
 
-    cld         $t0, $zero, RES_LENGTH_OFFSET($c3)   # get first length
-    cld         $t1, $zero, RES_LENGTH_OFFSET($c4)   # get second length
-    daddiu      $t0, RES_META_SIZE
-    csub        $t2, $c4, $c3
-    bne         $t2, $t0, merge_er_backout2
+# check state taken, not a field, and not a low terminator
+    andi        $t2, $t0, (RES_STATE_MASK | RES_SCALE_MASK | RES_LOW_TERM_MASK)
+    bne         $t2, $t3, merge_er
 
-# From here on we can be confident of no error
 
-    daddu        $t0, $t0, $t1               # this is the total new length
+# Extract length
+    dsll        $t8, $t1, RES_LENGTH_SHIFT_HIGH
+    dsrl        $t8, $t8, (RES_LENGTH_SHIFT_HIGH-RES_LENGTH_SHIFT_LOW)
+
+# extract high terminator
+    andi        $t9, $t0, RES_HIGH_TERM_MASK
+
+# set to merged (other fields don't matter, merged is an invalid node for all other purposes)
     li          $t1, res_merged
-    csd         $t0, $zero, RES_LENGTH_OFFSET($c3)      # store back in the field of the lower address reservation a new length.
-    sync
-    STORE_RES_STATE $t1, $zero, RES_STATE_OFFSET($c4)   # set higher address reservation to merged
-    STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c3)   # set lower address back to taken
+    dsll        $t1, $t1, (RES_STATE_SHIFT + RES_STATE_IN_LENGTH_SHIFT)
+    STOREC_RES_LENGTH $t1, $t1, $c4
+    beqz        $t1, 1b
+    nop
+
+# Now add to the length of the first. It cannot have the high terminator. Add low terminator and length of other
+
+2:  LOADL_RES_LENGTH $t1, $c3
+
+# extract state
+    dsrl        $t0, $t1, RES_STATE_IN_LENGTH_SHIFT
+
+# check state taken, not a field, and not a high terminator
+    andi        $t2, $t0, (RES_STATE_MASK | RES_SCALE_MASK | RES_HIGH_TERM_MASK)
+    bne         $t2, $t3, merge_er
+
+# Get new state bits
+    andi        $t2, $t0, RES_ALL_MASK
+    or          $t2, $t2, $t9
+
+# Extract length
+    dsll        $t1, $t1, RES_LENGTH_SHIFT_HIGH
+    dsrl        $t1, $t1, (RES_LENGTH_SHIFT_HIGH-RES_LENGTH_SHIFT_LOW)
+    daddiu      $t1, $t1, RES_META_SIZE # recoever one metadatas worth as well
+# Check it hits base of other
+    csub        $t0, $c4, $c3
+    bne         $t0, $t1, merge_er
+    daddu       $t1, $t1, $t8
+# Rescale and add state in
+    dsrl        $t1, $t1, RES_LENGTH_SHIFT_LOW
+    dsll        $t2, $t2, RES_STATE_IN_LENGTH_SHIFT
+    or          $t1, $t1, $t2
+    STOREC_RES_LENGTH $t1, $t1, $c3
+    beqz        $t1, 1b
+    nop
+
     cseal       $c3, $c3, $c5               # although the caller can just use the first argument, its nice to return it
     cclearlo    EN3(c4, c5, c6)
     CRETURN
 
-merge_er_backout2:
-    STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c4)     # set higher address reservation back to open
-merge_er_backout1:
-    STORE_RES_STATE $t3, $zero, RES_STATE_OFFSET($c3)     # set lower address back to open
 merge_er:
     cclearlo    EN4(c3, c4, c5, c6)
     CRETURN
@@ -2546,21 +2649,32 @@ merge_er:
 .global rescap_parent
 rescap_parent:
 #################################
-    cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
-    cunseal     $c3, $c3, $c4               # unseal res
     cgetoffset  $t0, $c3
     bnez        $t0, parent_er              # must not be a sub field
 
-    dli          $t2, res_taken
-    dli          $t0, RES_SIZE_NOT_FIELD
-1:  LOADL_RES_STATE $t1, $c3                # get state
-    bnez        $t1, parent_er              # reservation must be open
-    cld         $t8, $zero, (RES_LENGTH_OFFSET)($c3) # get length
+    cincoffset  $c4, $kdc, RES_TYPE              # create unsealing cap
+    cunseal     $c3, $c3, $c4               # unseal res
+
+
+1:  LOADL_RES_LENGTH $t1, $c3               # get everything
+    li          $t2, (res_taken << RES_STATE_SHIFT) | (RES_SCALE_NOT_FIELD << RES_SCALE_SHIFT)
+    dsll        $t2, $t2, RES_STATE_IN_LENGTH_SHIFT
+
+# extract length
+    dsll        $t8, $t1, RES_LENGTH_SHIFT_HIGH
+    dsrl        $t8, $t8, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW)
     beqz        $t8, parent_er              # empty reservation will not have enough space
-    nop # Had the store here. Doesn't work on FPGA.
-    STOREC_RES_STATE $t1, $t2, $c3          # set state field for parent
+
+# extract state
+    dsrl        $t0, $t1, RES_STATE_IN_LENGTH_SHIFT
+    andi        $t0, $t0, RES_STATE_MASK
+    bnez        $t0, parent_er              # reservation must be open
+
+# Keep everything else the same but the state / scale fields
+    or          $t2, $t2, $t1
+    STOREC_RES_LENGTH $t1, $t2, $c3          # set state/scale field for parent.
     beqz        $t1, 1b
-    csb         $t0, $zero, RES_SUBFIELD_SIZE_OFFSET($c3) # fine to do to anything open
+
 
     cgetbase    $t0, $c3                    # parent base is id for child
     dli         $a0, RES_META_SIZE
@@ -2573,9 +2687,12 @@ rescap_parent:
     dli         $t3, DEF_DATA_PERMS
     candperm    $c3, $c3, $t3
 
-    STORE_RES_STATE $zero, $zero, RES_STATE_OFFSET($c3) # set state for child
+
+    li          $t0, (res_open << RES_SCALE_SHIFT) | RES_LOW_TERM_MASK | RES_HIGH_TERM_MASK
+    dsll        $t0, $t0, RES_STATE_IN_LENGTH_SHIFT
+    dsrl        $t2, $t2, RES_LENGTH_SHIFT_LOW
+    or          $t2, $t2, $t0                           # add in state and terminators
     csd         $t2, $zero, (RES_LENGTH_OFFSET)($c3)    # set length for child
-    csd         $t0, $zero, (RES_PID_OFFSET)($c3)       # set depth for child
 
     cseal       $c3, $c3, $c4               # seal child for return
 

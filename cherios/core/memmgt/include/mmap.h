@@ -45,10 +45,10 @@
 
 #define REVOKE_BENCH 1
 #define REVOKE_TIME 0
-#define REVOKE_PRIO PRIO_HIGH
+#define REVOKE_PRIO PRIO_MID
 
 // Measured in virtual pages
-#define MIN_REVOKE (0x200)
+#define MIN_REVOKE (1)
 #define REVOKE_SANITY 0
 
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)

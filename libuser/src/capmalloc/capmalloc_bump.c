@@ -32,8 +32,11 @@
 /* Simple bumping allocator. Uses a worker thread for free to avoid delay. Small objects all allocated from
  * separate pools, otherwise there is a single buffer. */
 
-/* Resource counting is done on a PAGE basis, and is left completely to the system. Double free will therefore go
- * un-noticed until a page is freed too early. However, due to temporal safety, accidental free / double free
+/* Freed ranges are remembered in a linked list until the last object is freed. The system is only notified
+ * when a range is completely finished with. For objects from other mallocs we currently don't cache any claims */
+
+/* Resource counting is done on a range basis. Double free will therefore go un-noticed until a range is
+ * freed too early. However, due to temporal safety, accidental free / double free
  * will result in either a) A page fault, b) access to a safe object. One will result in clean exit (as you have a
  * program error), the other in continued proper function of the program. Either way we are safe. */
 
@@ -68,14 +71,16 @@ typedef struct fixed_pool {
     res_t field;
     res_t rest;
 
+    size_t object_size;
+
     size_t field_ndx;
     size_t total_ndx;
     size_t pool_size;
 
+    size_t dma_off;
+
     // When we stop using this pool, claim the range this many times
     dy_pool_range_t range;
-
-    size_t dma_off;
 } fixed_pool;
 
 
@@ -99,8 +104,11 @@ typedef struct dypool {
     size_t dma_off;
 } dypool;
 
-#define N_FIXED_POOLS 10
-#define FIXED_POOL_RES_N
+
+#define N_FIXED_POOLS 32
+
+#define LARGEST_FIXED_OBJECT 0x200
+
 #define DYNAMIC_POOL_SIZE ((1 << 26) - RES_META_SIZE) // This is OK for late commit. This is stupidly large for commit!
 #define DYNAMIC_POOL_SIZE_DMA ((1 << 26) - RES_META_SIZE) // Still pretty big!
 
@@ -118,6 +126,7 @@ __thread fixed_pool pools[N_FIXED_POOLS];
 typedef struct arena_t {
     DLL_LINK(arena_t);
     fixed_pool pools[N_FIXED_POOLS];
+    struct old_claim_t* old_fixed_pools_heads[N_FIXED_POOLS];
     dypool dynamic_pool;
     struct old_claim_t* old_pools_head;
     int dma;
@@ -203,9 +212,79 @@ static int offload_release(size_t base, size_t length, size_t times, mop_t mop, 
 
 #endif
 
+#define CLAIM_BLOCK_SIZE (UNTRANSLATED_PAGE_SIZE - RES_META_SIZE)
+#define CLAIMS_PER_BLOCK (CLAIM_BLOCK_SIZE / sizeof(struct old_claim_t))
+
+
+// Small reusing slab allocator for this specific structure. Don't want to use malloc in malloc.
+
+__thread old_claim_t* old_claim_block;
+__thread old_claim_t* claim_free_head;
+
+static inline struct old_claim_t* malloc_old_claim(void) {
+    old_claim_t* claim = claim_free_head;
+    old_claim_t* new_head;
+    if(cheri_gettag(claim)) {
+        // Is a pointer
+        new_head = claim->next;
+    } else {
+        // Is an index into the block
+        size_t ndx = (size_t)claim;
+        if(old_claim_block == NULL) {
+            ERROR_T(res_t) res = mem_request(0, CLAIM_BLOCK_SIZE, COMMIT_NOW, own_mop);
+            assert(IS_VALID(res));
+            _safe cap_pair pair;
+            rescap_take(res.val, &pair);
+            old_claim_block = (old_claim_t*)pair.data;
+        }
+        claim = &old_claim_block[ndx++];
+        if(ndx == CLAIMS_PER_BLOCK) {
+            old_claim_block = NULL;
+            ndx = 0;
+        }
+        new_head = (old_claim_t*)(uintptr_t)ndx;
+    }
+
+    claim_free_head = new_head;
+    return claim;
+}
+
+static inline void free_old_claim(struct old_claim_t* claim) {
+    claim->next = claim_free_head;
+    claim_free_head = claim;
+}
+
 static res_nfo_t memhandle_nfo(capability mem) {
     register_t type = cheri_gettype(mem);
     return (type == RES_TYPE) ? rescap_nfo(mem) : MAKE_NFO(cheri_getlen(mem), cheri_getbase(mem));
+}
+
+static void release_range(dy_pool_range_t* range) {
+    offload_release(range->start, range->end - range->start, 1, own_mop, SEND);
+}
+
+static void finish_dynamic_pool(arena_t* arena) {
+    dypool* dynamic_pool = &arena->dynamic_pool;
+
+    if(dynamic_pool->range.outstanding_claims == 0) {
+        release_range(&dynamic_pool->range);
+    } else {
+        old_claim_t* new_old = malloc_old_claim();
+        new_old->range = dynamic_pool->range;
+        new_old->next = arena->old_pools_head;
+        arena->old_pools_head = new_old;
+    }
+
+    dynamic_pool->head = NULL;
+}
+
+static void finish_static_pool(arena_t* arena, size_t pool_n) {
+
+    old_claim_t* new_old = malloc_old_claim();
+    new_old->range = arena->pools[pool_n].range;
+    new_old->next =  arena->old_fixed_pools_heads[pool_n];
+    arena->old_fixed_pools_heads[pool_n] = new_old;
+
 }
 
 static res_t alloc_from_pool(__unused size_t size, size_t pool_n, arena_t* arena, size_t* dma_off) {
@@ -239,7 +318,7 @@ static res_t alloc_from_pool(__unused size_t size, size_t pool_n, arena_t* arena
         p->range.end = p->range.start + FIXED_POOL_SIZE + RES_META_SIZE;
 
         if(p->pool_size > RES_SUBFIELD_BITMAP_BITS) {
-            p->rest = rescap_split(p->field, RES_SUBFIELD_BITMAP_BITS << pool_n);
+            p->rest = rescap_split(p->field, RES_SUBFIELD_BITMAP_BITS * p->object_size);
         }
 
         p->field_ndx = 0;
@@ -261,14 +340,15 @@ static res_t alloc_from_pool(__unused size_t size, size_t pool_n, arena_t* arena
         p->field = NULL;
 
         /* We send one less claim as we had the initial claim (for the metadata) which we no longer need */
-        if(p->range.outstanding_claims > 1) offload_claim(p->range.start, UNTRANSLATED_PAGE_SIZE, p->range.outstanding_claims-1, own_mop, SEND);
+        finish_static_pool(arena, pool_n);
+
     } else if(++(p->field_ndx) == RES_SUBFIELD_BITMAP_BITS) {
         /* Start a new subfield */
 
         p->field = p->rest;
 
         if(p->pool_size - p->total_ndx > RES_SUBFIELD_BITMAP_BITS) {
-            p->rest = rescap_split(p->field, RES_SUBFIELD_BITMAP_BITS << pool_n);
+            p->rest = rescap_split(p->field, RES_SUBFIELD_BITMAP_BITS * p->object_size);
         }
 
         p->field_ndx = 0;
@@ -277,27 +357,6 @@ static res_t alloc_from_pool(__unused size_t size, size_t pool_n, arena_t* arena
     }
 
     return result;
-}
-
-static void send_claims_to_central(dy_pool_range_t* range) {
-    if(range->outstanding_claims == 0) {
-        offload_release(range->start, range->end - range->start, 1, own_mop, SEND);
-    } else if(range->outstanding_claims > 1) offload_claim(range->start, range->end-range->start, range->outstanding_claims-1, own_mop, SEND);
-}
-
-static void finish_dynamic_pool(arena_t* arena) {
-    dypool* dynamic_pool = &arena->dynamic_pool;
-    // TODO convert this pool into an old
-    if(dynamic_pool->range.outstanding_claims == 0) {
-        send_claims_to_central(&dynamic_pool->range);
-    } else {
-        old_claim_t* new_old = (old_claim_t*)malloc(sizeof(old_claim_t));
-        new_old->range = dynamic_pool->range;
-        new_old->next = arena->old_pools_head;
-        arena->old_pools_head = new_old;
-    }
-
-    dynamic_pool->head = NULL;
 }
 
 static res_t alloc_from_dynamic(size_t size, arena_t* arena, size_t* dma_off) {
@@ -444,22 +503,16 @@ res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) 
 
     if(try_init_memmgt_ref() == NULL) return NULL;
 
-#define CASE_X(x) if(size <= (1 << x)) return alloc_from_pool(size, x, arena, dma_off);
-
-    /* Allocate from a fixed size pool if object is small */
-
-    CASE_X(0);
-    CASE_X(1);
-    CASE_X(2);
-    CASE_X(3);
-    CASE_X(4);
-    CASE_X(5);
-    CASE_X(6);
-    CASE_X(7);
-    CASE_X(8);
-    CASE_X(9);
-
-    if(size < (arena->dma ? BIG_OBJECT_THRESHOLD_DMA : BIG_OBJECT_THRESHOLD)) {
+    if(size <= LARGEST_FIXED_OBJECT) {
+        size = size ? size : 1;
+        if(size >= CAP_SIZE) {
+            // Make sure we keep sizes aligned
+            size = (size + (CAP_SIZE-1)) & ~(CAP_SIZE-1);
+        }
+        uint32_t pool = size_to_scale((uint32_t)size);
+        return alloc_from_pool(size, pool, arena, dma_off);
+    }
+    else if(size < (arena->dma ? BIG_OBJECT_THRESHOLD_DMA : BIG_OBJECT_THRESHOLD)) {
 
         // Allocate from bumping buffer for medium sized objects
         // return alloc_from_dynamic(size);
@@ -475,26 +528,41 @@ res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) 
     }
 }
 
-static dy_pool_range_t* find_inuse(size_t base, old_claim_t*** previous_next_link) {
+static dy_pool_range_t* find_inuse(size_t base, size_t  length, old_claim_t*** previous_next_link) {
 
-    // FIXME: This is really slow...
+    if(length  >= BIG_OBJECT_THRESHOLD) {
+        return NULL;
+    }
+
+    uint32_t ndx;
+
+    if(length <= LARGEST_FIXED_OBJECT) {
+        length = length ? length : 1;
+        ndx = size_to_scale(length);
+    }
 
     DLL_FOREACH(arena_t, arena, &arena_list) {
-        for(size_t i = 0; i < N_FIXED_POOLS; i++) {
-            fixed_pool* p = &arena->pools[i];
 
+        old_claim_t** before;
+
+        if(length <= LARGEST_FIXED_OBJECT) {
+            fixed_pool* p = &arena->pools[ndx];
             if(p->field != NULL && base >= p->range.start && base < p->range.end) {
                 return &p->range;
             }
+
+            before = &arena->old_fixed_pools_heads[ndx];
+        } else {
+            if(arena->dynamic_pool.head != NULL && base >= arena->dynamic_pool.range.start && base < arena->dynamic_pool.range.end) {
+                return &arena->dynamic_pool.range;
+            }
+
+            before = &arena->old_pools_head;
         }
 
-        if(arena->dynamic_pool.head != NULL && base >= arena->dynamic_pool.range.start && base < arena->dynamic_pool.range.end) {
-            return &arena->dynamic_pool.range;
-        }
 
-        old_claim_t* old = arena->old_pools_head;
+        old_claim_t* old = *before;
 
-        old_claim_t** before = &arena->old_pools_head;
         while(old != NULL) {
             if(base >= old->range.start && base < old->range.end) {
                 if(previous_next_link) *previous_next_link = before;
@@ -513,7 +581,7 @@ static dy_pool_range_t* find_inuse(size_t base, old_claim_t*** previous_next_lin
 int cap_claim(capability mem) {
     res_nfo_t nfo = memhandle_nfo(mem);
 
-    dy_pool_range_t* have_tracker = find_inuse(nfo.base, NULL);
+    dy_pool_range_t* have_tracker = find_inuse(nfo.base, nfo.length, NULL);
 
     if(have_tracker) {
         have_tracker->outstanding_claims++;
@@ -531,7 +599,7 @@ void cap_free(capability mem) {
     res_nfo_t nfo = memhandle_nfo(mem);
 
     old_claim_t** old_before = NULL;
-    dy_pool_range_t* have_tracker = find_inuse(nfo.base, &old_before);
+    dy_pool_range_t* have_tracker = find_inuse(nfo.base, nfo.length, &old_before);
 
     if(have_tracker) {
         if(have_tracker->outstanding_claims == 0) {
@@ -542,7 +610,7 @@ void cap_free(capability mem) {
             offload_release(have_tracker->start, have_tracker->end - have_tracker->start, 1, own_mop, SEND);
             old_claim_t* to_free = *old_before;
             *old_before = (*old_before)->next;
-            free(to_free);
+            free_old_claim(to_free);
         }
         return;
     } else {
@@ -555,6 +623,28 @@ void cap_free(capability mem) {
     }
 }
 
+void init_fixed_pool(fixed_pool* pool, size_t object_size) {
+
+    pool->field = NULL;
+
+    /* Space in one page minus systems part */
+    size_t page_size = FIXED_POOL_SIZE;
+
+    /* How big a largest field of this size is */
+    size_t field_size = RES_META_SIZE + (RES_SUBFIELD_BITMAP_BITS * object_size);
+
+    /* How many fields in page rounded */
+    size_t fields_per_page = (page_size + field_size - 1) / field_size;
+
+    /* All meta data acounted for, round down so fits in page */
+    size_t allocs_in_pool = (page_size - (fields_per_page * RES_META_SIZE)) / object_size;
+
+    /* How many allocations we can make in a pool of this size */
+    pool->pool_size = allocs_in_pool;
+
+    pool->object_size = object_size;
+}
+
 static void init_arena(arena_t* arena, int dma) {
     /* If we are a process it stands to reason we can create threads. Otherwise we can't use free =( */
 
@@ -562,22 +652,8 @@ static void init_arena(arena_t* arena, int dma) {
     arena->dynamic_pool.commit_chunk = COMMIT_CHUNK_MIN;
 
     for(size_t i = 0; i < N_FIXED_POOLS; i++) {
-        arena->pools[i].field = NULL;
-
-        /* Space in one page minus systems part */
-        size_t page_size = FIXED_POOL_SIZE;
-
-        /* How big a largest field of this size is */
-        size_t field_size = RES_META_SIZE + (RES_SUBFIELD_BITMAP_BITS << i);
-
-        /* How many fields in page rounded */
-        size_t fields_per_page = (page_size + field_size - 1) / field_size;
-
-        /* All meta data acounted for, round down so fits in page */
-        size_t allocs_in_pool = (page_size - (fields_per_page * RES_META_SIZE)) >> i;
-
-        /* How many allocations we can make in a pool of this size */
-        arena->pools[i].pool_size = allocs_in_pool;
+        size_t object_size = scale_to_size(i);
+        init_fixed_pool(&arena->pools[i], object_size);
     }
 
     arena->dma = dma;
