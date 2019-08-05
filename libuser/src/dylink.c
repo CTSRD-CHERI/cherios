@@ -64,7 +64,7 @@ void dylink(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_f
     // Allocate space / stacks for new thread in other library
     res_t locals_res, stack_res, ustack_res, sign_res;
     locals_res = cap_malloc(size);
-    stack_res = mem_request(0, DEFAULT_STACK_SIZE, 0, own_mop).val;
+    stack_res = mem_request(0, DEFAULT_STACK_SIZE_NO_QUEUE, EXACT_SIZE, own_mop).val;
     ustack_res = mem_request(0, NewTemporalStackSize, EXACT_SIZE, own_mop).val;
     sign_res = cap_malloc(RES_CERT_META_SIZE);
 

@@ -298,7 +298,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         // New threads created by a foundation are started in foundation mode
         // Can't allocate these as one block, this would make setting bounds hard
 
-        capability stack = malloc(DEFAULT_STACK_SIZE);
+        capability stack = malloc(DEFAULT_STACK_SIZE_NO_QUEUE);
         capability tls_seg = malloc(crt_tls_seg_size);
 
         size_t space_required =  RES_CERT_META_SIZE +           // to lock
@@ -311,7 +311,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
         struct secure_start_t* start_message = ( struct secure_start_t*)pair.data;
 
-        stack = cheri_incoffset(stack, DEFAULT_STACK_SIZE);
+        stack = cheri_incoffset(stack, DEFAULT_STACK_SIZE_NO_QUEUE);
 
         start_message->carg = carg;
         start_message->arg = arg;
