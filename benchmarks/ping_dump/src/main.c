@@ -86,7 +86,7 @@ int main(__unused register_t arg, __unused capability carg) {
                 dump_all_mmap();
                 break;
             default:
-                printf("Ping dump got a command it did not unserstand");
+                printf("Ping dump got a command it did not unserstand\n");
         }
 
         close(&ns->sock);
