@@ -38,7 +38,7 @@ set(X_SRCS
 # libuser now provides this
 list(REMOVE_ITEM X_SRCS ${LWIP_DIR}/src/core/ipv4/ip4_addr.c)
 
-add_cherios_executable(${ACT_NAME} ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
+add_cherios_executable(${ACT_NAME} ADD_TO_FILESYSTEM CAN_VARY_SS LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
 
 if("${HARDWARE}" STREQUAL "fpga")
     if("${MSGDMA}")

@@ -8,4 +8,4 @@ set(X_SRCS
     src/sockets.c
 )
 
-add_cherios_executable_light(${ACT_NAME} ADD_TO_FILESYSTEM TEMPORAL_A LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
+add_cherios_executable_light(${ACT_NAME} ADD_TO_FILESYSTEM CAN_VARY_SS TEMPORAL_A LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})

@@ -316,6 +316,15 @@ STUB_BEGIN plt_common_untrusting
 
 # FIXME: Now out of date since nanokernel introduced constraints on idc for exceptions
 
+#if (UNSAFE_STACKS_OFF)
+
+#define RETURN_STACK csp
+cincoffset      csp,    csp,   -(CLO_SIZE)                         # allocate space for closure without upping stack
+
+#else
+
+#define RETURN_STACK cusp
+
 # Ensure adequate stack space.
 cgetoffset      $1, cusp
 tltiu           $1, 0x4000
@@ -323,6 +332,8 @@ tltiu           $1, 0x4000
 cscbi           csp, (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack
 clc             cusp,   $zero,  CSP_OFF_NEXT(cusp)
+
+#endif
 
 clcbi           ctmp,  CTLP_OFFSET_CSP(ctlp)
 csc             csp,    $zero,  CTLP_OFFSET_CSP(ctlp)
@@ -406,15 +417,15 @@ daddiu          $at,    (callable_ready - returnable_ready)
 
 # We know this is a legal return closure. We can now load ctlp and check it is in a correct state.
 #if (CAN_SEAL_ANY)
-cmove           cusp, $idc                      # actually our current stack, but will be cusp on return so might as well be in this reg
+cmove           RETURN_STACK, $idc                      # actually our current stack, but will be cusp on return so might as well be in this reg
 #endif
 
 clc             ctlp, $zero, CAP_SIZE($idc)
 
 #if (!CAN_SEAL_ANY)
 # We need to reload a stack with larger bounds because we were forced to set bounds
-clcbi           cusp, CTLP_OFFSET_CSP(ctlp)
-cincoffset      cusp,  cusp, CLO_SAFE_SIZE
+clcbi           RETURN_STACK, CTLP_OFFSET_CSP(ctlp)
+cincoffset      RETURN_STACK,  RETURN_STACK, CLO_SAFE_SIZE
 #endif
 
 # We still might be returning too early
@@ -432,17 +443,21 @@ nop
 .set            ctr,    0
 .macro REST_C reg
     .set ctr, (ctr + CAP_SIZE)
-    clc  \reg, $zero, (-ctr)(cusp)
+    clc  \reg, $zero, (-ctr)(RETURN_STACK)
 .endmacro
 .macro REST_R reg
     .set ctr, (ctr + REG_SIZE)
-    cld  \reg, $zero, (-ctr)(cusp)
+    cld  \reg, $zero, (-ctr)(RETURN_STACK)
 .endmacro
 
 # Restore everything saved. If this is an attack this will be junk, but we don't use any of it until the check
 
 REST_C  $c17 # scavanged forward pointer
+#if(UNSAFE_STACKS_OFF)
+.set    ctr, (ctr + CAP_SIZE) # No back pointer here
+#else
 REST_C  csp # back pointer
+#endif
 REST_C  $c18
 REST_C  $c19
 REST_C  $c20
@@ -462,6 +477,12 @@ REST_R  $s7
 
 # We just need to correct the up link on cusp
 
+#if(UNSAFE_STACKS_OFF)
+cincoffset      csp, csp, CLO_UNSAFE_SIZE
+cscbi           ctmp2, CTLP_OFFSET_CSP(ctlp) # csp should be set to what it was
+clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
+#else
+
 clc             ctmp,   $zero,  CTLP_OFFSET_CUSP(ctlp)
 # We modified the csp and cusp values in our ctlp and so have to restore them (although cusp may be different now)
 cscbi           ctmp2, CTLP_OFFSET_CSP(ctlp) # csp should be set to what it was
@@ -469,6 +490,7 @@ cscbi           cusp, CTLP_OFFSET_CUSP(ctlp) # set to current value of cusp. Mor
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
 csc             ctmp,   $zero,  CSP_OFF_NEXT(cusp)
 
+#endif
 
 ccall_slotless  cra, crd, 2
 

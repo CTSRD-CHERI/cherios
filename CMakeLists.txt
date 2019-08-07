@@ -172,6 +172,16 @@ else()
     set(BFAST_FLAGS -DGO_FAST=0)
 endif()
 
+set(VARY_SS "UNCHANGED" CACHE STRING "Force safe stacks ON/OFF for programs that support it")
+set(EXPAND_LIMIT "64" CACHE STRING "Default expand limit for temporal anlysis")
+
+
+if(VARY_SS STREQUAL "OFF")
+    set(VARY_FLAGS -DUNSAFE_STACKS_OFF=1)
+else()
+    set(VARY_FLAGS -DUNSAFE_STACKS_OFF=0)
+endif()
+
 include_directories(include)
 include_directories(include/sys)
 include_directories(elf/include)
@@ -190,6 +200,7 @@ set(ASMC_COMPILER_FLAGS
     ${SMP_FLAGS}
     ${BNET_FLAGS}
     ${BFAST_FLAGS}
+    ${VARY_FLAGS}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -march=${CHERI_CPU}
@@ -399,10 +410,19 @@ set(TEMP_16 "SHELL:-mllvm -TemporalExpandLimit=16")
 set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
 
 function(add_cherios_module _target)
-  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO)
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS)
   set(oneValueArgs LINKER_SCRIPT)
   set(multiValueArgs SOURCES)
   cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+
+  if(${add_exe_CAN_VARY_SS})
+      if("${VARY_SS}" STREQUAL "ON")
+            set(add_exe_TEMPORAL_A "ON")
+      elseif(${VARY_SS} STREQUAL "OFF")
+            set(add_exe_TEMPORAL_A "OFF")
+      endif()
+  endif()
+
 
   if(ALWAYS_LTO)
     set(add_exe_USE_LTO "ON")
@@ -446,7 +466,7 @@ function(add_cherios_module _target)
 
   if(${add_exe_TEMPORAL_A})
       target_link_libraries(${_target}
-          -Wl,-mllvm,-TemporalType=analysis,-mllvm,-TemporalExpandLimit=64
+          -Wl,-mllvm,-TemporalType=analysis,-mllvm,-TemporalExpandLimit=${EXPAND_LIMIT}
       )
   endif()
 
@@ -468,6 +488,24 @@ set(UFS_DIR             "${CMAKE_SOURCE_DIR}/ufs")
 set(INIT_ASM            "${INIT_ASM_DIR}/init.S")
 set(PLT_ASM             "${CHERIOS_DIR}/system/dylink/src/stubs.S")
 set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/secure_init.S")
+
+if(${VARY_SS} STREQUAL "UNCHANGED")
+
+    set(DEFAULT_SECURE_ASM ${SECURE_INIT_ASM})
+    set(DEFAULT_INSECURE_ASM ${INIT_ASM})
+
+elseif(${VARY_SS} STREQUAL "ON")
+
+    set(DEFAULT_SECURE_ASM ${SECURE_INIT_ASM})
+    set(DEFAULT_INSECURE_ASM ${SECURE_INIT_ASM})
+
+elseif(${VARY_SS} STREQUAL "OFF")
+
+    set(DEFAULT_SECURE_ASM ${INIT_ASM})
+    set(DEFAULT_INSECURE_ASM ${INIT_ASM})
+
+endif()
+
 set (LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lwip)
 include(lwip/src/Filelists.cmake)
 set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")

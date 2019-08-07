@@ -77,6 +77,10 @@ capability new_stack(capability old_c10) {
 int temporal_exception_handle(__unused register_t cause, __unused register_t ccause, exception_restore_frame* restore_frame) {
 // Looking for: cgetoffset $X, $c10; tltiu $X, Y
 
+#if(UNSAFE_STACKS_OFF)
+    return 1;
+#endif
+
 #define REG_MASK            0b11111
 
 #define CGETOFFSET              0b01001000000000000101000000000111

@@ -73,7 +73,12 @@
 #include "mips.h"
 
 #define _safe __attribute__((temporal_safe))
+
+#if(UNSAFE_STACKS_OFF)
+#define _unsafe
+#else
 #define _unsafe __attribute__((temporal_unsafe))
+#endif
 
 typedef struct {
     size_t length;
