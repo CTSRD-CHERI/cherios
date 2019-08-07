@@ -1197,6 +1197,12 @@ struct revoke_tracking* __get_tracking(void) {
     return &tracking;
 }
 
+#else
+
+struct revoke_tracking* __get_tracking(void) {
+    return NULL;
+}
+
 #endif
 
 ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed, size_t* phy_base) {

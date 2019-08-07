@@ -43,12 +43,12 @@
 
 #define POOL_LARGE_THRESHOLD (1 << 26)
 
-#define REVOKE_BENCH 1
+#define REVOKE_BENCH 0
 #define REVOKE_TIME 0
-#define REVOKE_PRIO PRIO_MID
+#define REVOKE_PRIO PRIO_IDLE
 
 // Measured in virtual pages
-#define MIN_REVOKE (1)
+#define MIN_REVOKE (0x8000)
 #define REVOKE_SANITY 0
 
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
