@@ -105,6 +105,8 @@ typedef struct dypool {
 } dypool;
 
 
+// Examples for N pools and largest fixed object are (16, 0x20), (32, 0x200), (40, 0x800)
+
 #define N_FIXED_POOLS 32
 
 #define LARGEST_FIXED_OBJECT 0x200
@@ -505,10 +507,6 @@ res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) 
 
     if(size <= LARGEST_FIXED_OBJECT) {
         size = size ? size : 1;
-        if(size >= CAP_SIZE) {
-            // Make sure we keep sizes aligned
-            size = (size + (CAP_SIZE-1)) & ~(CAP_SIZE-1);
-        }
         uint32_t pool = size_to_scale((uint32_t)size);
         return alloc_from_pool(size, pool, arena, dma_off);
     }
