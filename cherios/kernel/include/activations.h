@@ -140,21 +140,7 @@ typedef struct act_t
 
 	/* Debug related */
 	size_t image_base;
-#if (K_DEBUG)
-    struct act_t* last_sent_to;
-    uint64_t sent_n;
-    uint64_t recv_n;
-    uint64_t switches;
-    uint64_t had_time;
-    uint64_t had_time_epoch;
-	uint64_t commit_faults;
-#ifdef HARDWARE_fpga
-    // on FPGA we get some hardware counters
-	STAT_DEBUG_LIST(STAT_MEMBER)
-#endif
 
-	user_stats_t user_stats;
-#endif
 	/* Queue related */
 	queue_t * msg_queue;		/* A pointer to the message queue */
 	msg_nb_t queue_mask;		/* Queue mask (cannot trust userspace
@@ -206,6 +192,22 @@ typedef struct act_t
 	struct act_t * semaphore_next_waiter;
 
 	char name[ACT_NAME_MAX_LEN];	/* Activation name (for debuging) */
+
+#if (K_DEBUG)
+	struct act_t* last_sent_to;
+	uint64_t sent_n;
+	uint64_t recv_n;
+	uint64_t switches;
+	uint64_t had_time;
+	uint64_t had_time_epoch;
+	uint64_t commit_faults;
+#ifdef HARDWARE_fpga
+	// on FPGA we get some hardware counters
+	STAT_DEBUG_LIST(STAT_MEMBER)
+#endif
+
+	user_stats_t user_stats;
+#endif
 
 } act_t;
 

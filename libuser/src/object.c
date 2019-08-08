@@ -135,8 +135,15 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
         // temporal will have failed to bump stats correctly
         own_stats->temporal_reqs = 2;
         own_stats->temporal_depth = 2;
+#if(EXTRA_TEMPORAL_TRACKING)
+        own_stats->stacks_at_level[0] = 1;
+        own_stats->stacks_at_level[1] = 1;
+#endif
     } else {
         own_stats->temporal_depth = 1;
+#if(EXTRA_TEMPORAL_TRACKING)
+        own_stats->stacks_at_level[0] = 1;
+#endif
     }
 #endif
 

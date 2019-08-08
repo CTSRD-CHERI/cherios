@@ -32,6 +32,9 @@
 #define _TYPES_H_
 
 #include "cheric.h"
+
+#define EXTRA_TEMPORAL_TRACKING 20
+
 /*
  * Possible status for an activation
  */
@@ -106,6 +109,8 @@ typedef struct cap_pair {
 
 typedef struct user_stats_s {
     USER_STATS_LIST(STAT_MEMBER)
+    uint32_t stacks_at_level[EXTRA_TEMPORAL_TRACKING];
+
 } user_stats_t;
 
 typedef struct act_info_s {

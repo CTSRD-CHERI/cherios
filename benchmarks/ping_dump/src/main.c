@@ -49,6 +49,21 @@ static void dump_all_mmap(void) {
     mdump();
 }
 
+static void dump_stacks(void) {
+
+    for(act_control_kt act = syscall_actlist_first(); act != NULL ; act = syscall_actlist_next(act)) {
+        user_stats_t* stats = syscall_act_user_info_ref(act);
+        const char* name = syscall_get_name(syscall_act_ctrl_get_ref(act));
+
+        printf("%s. reqs: %ld. depth %ld. More:\n", name, stats->temporal_reqs,stats->temporal_depth);
+        for(size_t i = 0; i != EXTRA_TEMPORAL_TRACKING; i++) {
+            if(stats->stacks_at_level[i] == 0) break;
+            printf("%d\n", stats->stacks_at_level[i]);
+        }
+
+    }
+}
+
 int main(__unused register_t arg, __unused capability carg) {
 
     // Set up a TCP server
@@ -84,6 +99,9 @@ int main(__unused register_t arg, __unused capability carg) {
                 break;
             case 'm':
                 dump_all_mmap();
+                break;
+            case 's':
+                dump_stacks();
                 break;
             default:
                 printf("Ping dump got a command it did not unserstand\n");

@@ -38,6 +38,41 @@
 // WARN: It is a _really_ bad idea to call a function that will use too much unsafe stack from here.
 // WARN: We can cope with exactly 1 use of the unsafe stack (enough for secure loaded things to make a call out)
 
+
+#if(EXTRA_TEMPORAL_TRACKING && !LIGHTWEIGHT_OBJECT)
+    size_t stack_bases[EXTRA_TEMPORAL_TRACKING];
+    size_t at_stacks = 1; // We will start with 1 stack. It should never have to be replaced.
+
+
+    static inline void made_new_stack(capability new, capability old) {
+        size_t old_base = (size_t)cheri_getbase(old);
+        size_t new_base = (size_t)cheri_getbase(new);
+
+        size_t level = 0;
+
+        if(old_base == 0) {
+            // This is a stack at a new level
+            level = at_stacks++;
+        } else {
+            for(size_t i = 0; i != at_stacks; i++) {
+                if(stack_bases[i] == old_base) {
+                    level = i;
+                    break;
+                }
+            }
+        }
+
+        assert(level != 0);
+
+        stack_bases[level] = new_base;
+
+        if(own_stats) own_stats->stacks_at_level[level]++;
+    }
+
+#endif
+
+
+
 capability new_stack(capability old_c10) {
 
     assert(cheri_getlen(old_c10) != EXCEPTION_UNSAFE_STACK_SIZE);
@@ -146,6 +181,10 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     }
 
     capability new_c10 = new_stack(old_c10);
+
+#if(EXTRA_TEMPORAL_TRACKING && !LIGHTWEIGHT_OBJECT)
+    made_new_stack(new_c10, old_c10);
+#endif
 
     if(old_link) {
         *(capability *)(((char*)new_c10) + CSP_OFF_NEXT) = old_link;
