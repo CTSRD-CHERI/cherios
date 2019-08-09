@@ -1215,7 +1215,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
         return MAKE_ER(res_t, MEM_BAD_BASE);
     }
 
-    size_t align_power = 0;
+    size_t align_mask = 0;
 
     size_t req_base = base;
     size_t req_length = length;
@@ -1234,7 +1234,15 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
     if(flags & ALIGN_TOP) {
         // We want all npages to have the same top bits we round up to a power of 2, and subtract 1 to get
         // the mask
-        align_power = round_up_to_nearest_power_2(npages);
+        assert(0); // nobody using this. Representable flag is enough for most purposes.
+    }
+
+    if(flags & REPRESENTABLE) {
+        // We want to align such that top address aligns well
+        precision_rounded_length prl = round_cheri_length(req_length);
+        assert(prl.length == req_length);
+        // mask on page numbers
+        align_mask = prl.mask >> UNTRANSLATED_BITS;
     }
 
     if(npages == 0) npages = 1;
@@ -1295,26 +1303,19 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
 
             if(flags & COMMIT_DMA) search_page_n++;
 
-            if(desc->allocation_type == open_node && desc->length >= npages) {
-                int can_use_range = !(flags & ALIGN_TOP) || ((search_page_n & ((align_power - 1))) + npages <= align_power);
-                int can_use_part_range = (flags & ALIGN_TOP) && (desc->length >= 2 * npages);
+            // how much we would have to offset by to ensure top alignment (don't align base)
+            size_t offset = (-(search_page_n+npages)) & align_mask;
+            if(desc->allocation_type == open_node && desc->length >= npages + offset) {
 
-                if(can_use_range) {
-                    // Pretend like they requested the start
-                    page_n = search_page_n;
-                } else if(can_use_part_range) {
-                    // This range is badly aligned, but long enough to give the alignment requested
-                    page_n = align_up_to(search_page_n, align_power);
-                }
+                page_n = search_page_n + offset;
 
                 if(flags & COMMIT_DMA) search_page_n--;
-                if(can_use_range || can_use_part_range) {
-                    index.indexs[0] = NDX(search_page_n,0);
-                    index.indexs[1] = NDX(search_page_n,1);
-                    index.indexs[2] = NDX(search_page_n,2);
-                    index.result = desc;
-                    break;
-                }
+
+                index.indexs[0] = NDX(search_page_n,0);
+                index.indexs[1] = NDX(search_page_n,1);
+                index.indexs[2] = NDX(search_page_n,2);
+                index.result = desc;
+                break;
 
             }
 

@@ -48,7 +48,7 @@
 #define REVOKE_PRIO PRIO_IDLE
 
 // Measured in virtual pages
-#define MIN_REVOKE (0x8000)
+#define MIN_REVOKE (0x20000)
 #define REVOKE_SANITY 0
 
 #define DESC_ALLOC_CHUNK_PAGES  (0x1000)
