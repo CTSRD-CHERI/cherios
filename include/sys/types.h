@@ -33,7 +33,11 @@
 
 #include "cheric.h"
 
+#if (GO_FAST)
+#define EXTRA_TEMPORAL_TRACKING 0
+#else
 #define EXTRA_TEMPORAL_TRACKING 20
+#endif
 
 /*
  * Possible status for an activation
