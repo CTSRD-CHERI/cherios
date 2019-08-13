@@ -67,7 +67,10 @@
 #define B_BENCH_CALLS   0
 #define B_BENCH_EXPS    0
 #define B_BENCH_REVOKE  0
-#define B_BENCH_PINGER  1
+#define B_BENCH_PINGER  0
+
+
+#define B_BENCH_COLLECT (B_BENCH_MS | B_BENCH_CALLS | B_BENCH_EXPS)
 
 const char* nginx_args[] = {"nginx",NULL};
 #define NGINX_ARGS_L 1
@@ -171,9 +174,11 @@ init_elem_t init_list[] = {
     B_WAIT_FOR(namespace_num_tcp)
 #endif
 #if (B_BENCH)
-    B_DENTRY(m_user, "bench_collect.elf", 0, 0)
+    B_DENTRY(m_user, "bench_collect.elf", 0, B_BENCH_COLLECT)
     B_DENTRY(m_user, "ping_dump.elf", 0, B_BENCH_PINGER)
-//B_WAIT_FOR(namespace_num_bench)
+#if(B_BENCH_COLLECT)
+    B_WAIT_FOR(namespace_num_bench)
+#endif
     B_DENTRY(m_user, "calls.elf", 0, B_BENCH_CALLS)
     B_DENTRY(m_user, "message_send.elf", 0, B_BENCH_MS)
     B_DENTRY(m_user, "exceptions.elf", 0, B_BENCH_EXPS)

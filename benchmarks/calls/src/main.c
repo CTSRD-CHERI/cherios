@@ -36,10 +36,12 @@
 #include "capmalloc.h"
 #include "bench_collect.h"
 #include "macroutils.h"
+#include "temporal.h"
 
 #define SYNC_SAMPLES 0x1000
 #define DUP         0x10
-#define SYNC_TIMES 0x3
+#define SYNC_TIMES 1000
+
 #define COLUMNS 6
 
 #define DD(X) X X X X X X X X X X X X X X X X
@@ -57,7 +59,9 @@ void nothing(uint64_t* column) {
     uint64_t end2 = syscall_bench_end();
     uint64_t diff1 = end - start;
     uint64_t diff2 = end2 - start2;
+#if (!GO_FAST)
     printf("******BENCH: Nothing: %lx, %lx\n", diff1, diff2);
+#endif
     column[0] = diff1;
     column[COLUMNS] = diff2;
 }
@@ -65,6 +69,10 @@ void nothing(uint64_t* column) {
 __attribute__((noinline)) void lib_calls(void_f* f, uint64_t* column) {
 
     for(int tms = 0; tms != SYNC_TIMES; tms++) {
+
+        // Calling may require the unsafe stack. Consume it.
+        if(tms % 100 == 99) sleep(MS_TO_CLOCK(3000));
+        replace_usp();
 
         for(int i = 0; i != 32; i++) {
             f();
@@ -83,7 +91,9 @@ __attribute__((noinline)) void lib_calls(void_f* f, uint64_t* column) {
         *column = diff2;
         column+=COLUMNS;
 
+#if (!GO_FAST)
         printf("******BENCH: call %x of %x (x%x) : %lx\n", tms+1, SYNC_TIMES, SYNC_SAMPLES, diff2);
+#endif
     }
 
     return;
@@ -104,6 +114,9 @@ PLT(bench_t, BENCH_EXT_LIST)
 PLT_ALLOCATE(bench_t, BENCH_EXT_LIST)
 
 int main(__unused register_t arg, __unused capability carg) {
+
+    // Actually sends a lot of messages in order to create new stacks
+    syscall_provide_sync(cap_malloc((CAP_SIZE * 5) * SYNC_TIMES));
 
     get_ctl()->cds = get_type_owned_by_process();
     get_ctl()->cdl = &entry_stub;

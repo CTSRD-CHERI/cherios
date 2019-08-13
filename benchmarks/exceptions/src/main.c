@@ -39,7 +39,9 @@
 #include "bench_collect.h"
 
 #define SYNC_SAMPLES 0x1000
-#define SYNC_TIMES 0x3
+
+#define SYNC_TIMES 1000
+
 #define COLUMNS 2
 
 uint64_t vals[COLUMNS*SYNC_TIMES];
@@ -97,7 +99,9 @@ void do_test(uint64_t* column) {
 
         column += COLUMNS;
 
+#if (!GO_FAST)
         printf("******BENCH: call %x of %x (x%x) : %lx\n", tms+1, SYNC_TIMES, SYNC_SAMPLES, diff2);
+#endif
     }
 
     return;

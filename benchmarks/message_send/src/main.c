@@ -35,9 +35,11 @@
 #include "stdio.h"
 #include "capmalloc.h"
 #include "bench_collect.h"
+#include "temporal.h"
+#include "assert.h"
 
 #define SYNC_SAMPLES 0x1000
-#define SYNC_TIMES 4
+#define SYNC_TIMES 1000
 #define COLUMNS 2
 
 uint64_t vals[COLUMNS*SYNC_TIMES];
@@ -46,6 +48,8 @@ void null_func(void) {}
 
 
 void send_rec(__unused register_t reg, __unused capability cap) {
+    __unused size_t n = syscall_provide_sync(cap);
+    assert(n > (2*SYNC_TIMES));
     msg_entry(-1, 0);
 }
 
@@ -55,14 +59,21 @@ void become_untrust(capability sealer) {
     init_kernel_if_t_change_mode(&plt_common_untrusting);
 }
 
+void reset() {
+    syscall_next_sync();
+    replace_usp();
+}
+
 void send(act_kt sync_act, uint64_t* column) {
 
     for(int tms = 0; tms != SYNC_TIMES; tms++) {
 
         // Make sure we have enough tokens
 
-        syscall_next_sync();
-
+        if(tms % 100 == 99) sleep(MS_TO_CLOCK(3000));
+        reset();
+        // replace usp on other side
+        message_send(0, 0, 0, 0, get_ctl()->cds, NULL,NULL, NULL, sync_act, SYNC_CALL, 2);
         // warm up
 
         for(int i = 0; i != 32; i++) {
@@ -81,8 +92,9 @@ void send(act_kt sync_act, uint64_t* column) {
 
         *column = diff2;
         column += COLUMNS;
-
+#if (!GO_FAST)
         printf("******BENCH: SyncSend %x of %x (x%x) : %lx\n", tms+1, SYNC_TIMES, SYNC_SAMPLES, diff2);
+#endif
     }
 
     return;
@@ -92,11 +104,11 @@ int main(__unused register_t arg, __unused capability carg) {
     // Test sync send
 
 
-    thread t = thread_new("sync_send_rec", 0, NULL, &send_rec);
+    thread t = thread_new("sync_send_rec", 0, cap_malloc((CAP_SIZE * 5) * SYNC_TIMES), &send_rec);
 
     act_kt sync_act = syscall_act_ctrl_get_ref(get_control_for_thread(t));
 
-    msg_allow_more_sends();
+    syscall_provide_sync(cap_malloc((CAP_SIZE * 5) * SYNC_TIMES));
 
     bench_start();
 
@@ -122,7 +134,7 @@ int main(__unused register_t arg, __unused capability carg) {
     return 0;
 }
 
-void (*msg_methods[]) = {null_func, become_untrust};
+void (*msg_methods[]) = {null_func, become_untrust, reset};
 
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};

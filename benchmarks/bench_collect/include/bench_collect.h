@@ -38,8 +38,15 @@
 #define MAX_Q 0x10
 #define HOST_PORT 7777
 
-#define HOST_IP "128.232.18.57"
+#if 0
 
+#define HOST_IP "128.232.18.57" // My PC's interface attached to the lab network
+
+#else
+
+#define HOST_IP "10.0.0.5" // My PC's other iterface I use to connect directly to the FPGA
+
+#endif
 
 static inline act_kt get_bench_collect_act(void) {
     static act_kt act = NULL;
