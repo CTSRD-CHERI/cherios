@@ -182,6 +182,7 @@ typedef struct act_t
 		volatile int sync_condition;    /* A synchronisation flag for whether or not we expect a return */
         sync_indirection* current_sync_indir; /* The current indirection we are using to generate tokens */
         res_t alloc_block;              /* The user provides this to create more sync_indrections */
+        res_t next_block;				/* Potentially more blocks */
         size_t allocs_taken;
         size_t allocs_max;
 	} sync_state;

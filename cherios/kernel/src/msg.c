@@ -197,7 +197,44 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 	//todo: zero queue?
 }
 
+size_t next_indir_block(act_t* ccaller) {
+	res_t res = ccaller->sync_state.next_block;
+
+	if(res == NULL) return 0;
+
+	res_nfo_t nfo = rescap_nfo(res);
+
+	if(nfo.length < SI_SIZE) return 0;
+
+	size_t max_allos = nfo.length / SI_SIZE;
+	size_t in_block = max_allos;
+
+	res_t remain = NULL;
+
+	if(max_allos > RES_SUBFIELD_BITMAP_BITS) {
+		in_block = RES_SUBFIELD_BITMAP_BITS;
+		remain = rescap_split(res, RES_SUBFIELD_BITMAP_BITS * SI_SIZE);
+
+	}
+
+	res = rescap_splitsub(res, size_to_scale(SI_SIZE));
+
+	ccaller->sync_state.alloc_block = res;
+	ccaller->sync_state.allocs_taken = 0;
+	ccaller->sync_state.allocs_max = in_block;
+	ccaller->sync_state.next_block = remain;
+
+	// Not accurate because of metadata but its close enough
+	return max_allos * MAX_SEQ_NS;
+}
+
 sync_indirection* alloc_new_indir(act_t* ccaller) {
+
+	if(ccaller->sync_state.alloc_block == NULL || ccaller->sync_state.allocs_taken == ccaller->sync_state.allocs_max) {
+		__unused size_t more =  next_indir_block(ccaller);
+		kernel_assert(more != 0);
+	}
+
     kernel_assert(ccaller->sync_state.alloc_block != NULL);
     kernel_assert(ccaller->sync_state.allocs_taken != ccaller->sync_state.allocs_max);
 
@@ -280,18 +317,12 @@ static act_t* token_expected(capability token) {
 
 __used size_t kernel_syscall_provide_sync(res_t res) {
     res = rescap_split(res, 0); // Destroy the users handle so we can make a res field without interference
-    res_nfo_t nfo = rescap_nfo(res);
-    if(nfo.length < SI_SIZE) return 0;
 
     act_t* source_activation = (act_t*) CALLER;
 
-    res = rescap_splitsub(res, size_to_scale(SI_SIZE));
+	source_activation->sync_state.next_block = res;
 
-    source_activation->sync_state.alloc_block = res;
-    source_activation->sync_state.allocs_taken = 0;
-    source_activation->sync_state.allocs_max = nfo.length / SI_SIZE;
-
-    return source_activation->sync_state.allocs_max * MAX_SEQ_NS;
+	return next_indir_block(source_activation);
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
