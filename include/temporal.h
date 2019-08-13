@@ -40,4 +40,8 @@
 
 int temporal_exception_handle(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
 
+extern void try_replace_usp(void);
+void consume_usp(void);
+void replace_usp(void);
+
 #endif //CHERIOS_TEMPORAL_H

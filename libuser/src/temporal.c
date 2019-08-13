@@ -220,3 +220,36 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
 
     return 0;
 }
+
+// A function that does nothing but perform the check sequence we use for unsafe stacks then returns
+__asm (
+SANE_ASM
+".text; .global try_replace_usp; .ent try_replace_usp; try_replace_usp: \n"
+"cgetoffset      $1, $c10     \n"
+"tltiu           $1, 0x4000   \n"
+"ccall           $c17, $c18, 2\n"
+"nop                          \n"
+".end try_replace_usp         \n"
+);
+
+
+// Consumes the entire unsafe stack so on the next use it will fault and be replaced
+void consume_usp(void) {
+    //
+    __asm __volatile (SANE_ASM
+                      "cbez       $c10, 1f                \n"
+                      "nop                                \n"
+                      "clcbi      $c1, %[off]($c10)       \n"
+                      "li         $t0, -%[off]            \n"
+                      "csetoffset $c10, $c10, $t0         \n"
+                      "cscbi       $c1, %[off]($c10)      \n"
+                      "1:\n"
+    :
+    : [off]"i"(CSP_OFF_NEXT)
+    :"$c10", "$c1", "t0");
+}
+
+void replace_usp(void) {
+    consume_usp();
+    try_replace_usp();
+}
