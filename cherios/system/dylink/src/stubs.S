@@ -125,19 +125,35 @@
 .endmacro
 
 
-.macro DOMAIN_CAS ptr, from, to, bump
-1:  clld    $at, \ptr
+.macro DOMAIN_CAS_LL  ptr, from, to, bump
+    1:  clld    $at, \ptr
+.endm
+
+.macro DOMAIN_CAS_SC  ptr, from, to, bump
     andi    $t0, $at, 0xff
     tnei    $t0, \from
     daddiu  $at, $at, (\to + (\bump * 256) - \from)
     cscd    $at, $at, \ptr
     beqz    $at, 1b
+.endm
+
+.macro DOMAIN_CAS ptr, from, to, bump
+    DOMAIN_CAS_LL \ptr, \from, \to, \bump
+    DOMAIN_CAS_SC \ptr, \from, \to, \bump
 .endmacro
 
-.macro DOMAIN_CHANGE ptr, from, to, bump
+.macro DOMAIN_CHANGE_LOADS ptr, from, to, bump
     cld     $at, $zero, 0(\ptr)
+.endm
+
+.macro DOMAIN_CHANGE_USES ptr, from, to, bump
     daddiu  $at, $at, (\to + (\bump * 256) - \from)
     csd     $at, $zero, 0(\ptr)
+.endm
+
+.macro DOMAIN_CHANGE ptr, from, to, bump
+    DOMAIN_CHANGE_LOADS \ptr, \from, \to, \bump
+    DOMAIN_CHANGE_USES \ptr, \from, \to, \bump
 .endmacro
 
 .macro STUB_BEGIN name
@@ -181,14 +197,14 @@ STUB_BEGIN entry_stub
 
 
 # Check our guard
-DOMAIN_CAS ctlp, callable_ready, callable_taken, 0
+DOMAIN_CAS_LL ctlp, callable_ready, callable_taken, 0
+# Save callers cra/crd
+csc         cra, $zero, -(2 * CAP_SIZE)(csp)                    # save caller state for epilog trampoline
+csc         crd, $zero, -CAP_SIZE(csp)
+DOMAIN_CAS_SC ctlp, callable_ready, callable_taken, 0
 nop
 
-# Save callers cra/crd
-
 cincoffset  csp, csp, -(2 * CAP_SIZE)
-csc         cra, $zero, 0(csp)                    # save caller state for epilog trampoline
-csc         crd, $zero, CAP_SIZE(csp)
 
 # Call intented target
 
@@ -198,11 +214,14 @@ cmove       crd, ctlp
 # Now restore callers cra/crd
 
 clc         cra, $zero, 0(csp)                    # load back callers state
+
+sync
+DOMAIN_CHANGE_LOADS ctlp, callable_taken, callable_ready, 0
+
 clc         crd, $zero, CAP_SIZE(csp)             #
 cincoffset  csp, csp, (2 * CAP_SIZE)
 
-sync
-DOMAIN_CHANGE ctlp, callable_taken, callable_ready, 0
+DOMAIN_CHANGE_USES ctlp, callable_taken, callable_ready, 0
 
 cclearhi    0                                       # TODO all argument regs (not c3) and tmp regs and stacks etc
 cclearlo    0                                       # TODO
@@ -225,8 +244,8 @@ STUB_BEGIN plt_stub
 
 .p2align CAP_SIZE_BITS
 
-clc         $c1, $zero, (1*CAP_SIZE)($c12)
 clc         $c12, $zero, (2* CAP_SIZE)($c12)   # Load common stub (or unsealed target for single domain)
+clc         $c1, $zero, (1*CAP_SIZE)($c12)
 cjr         $c12                               # jump to mode stub (can we use ccall here to make single domain faster?)
 clc         $c2, $zero, 0(ctlp)                 # Load target domain data (0 replaced with %captab(lib_sym)
 
@@ -281,16 +300,19 @@ cincoffset      csp, csp, -(2*CAP_SIZE)
 clcbi           ctmp, CTLP_OFFSET_CSP(ctlp)
 csc             cra, $zero, (0)(csp)
 csc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
+sync
+DOMAIN_CHANGE_LOADS ctlp, callable_taken, callable_ready, 1
 csc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
 cscbi           ctmp, (CAP_SIZE)(csp)
-sync
-DOMAIN_CHANGE ctlp, callable_taken, callable_ready, 1
+DOMAIN_CHANGE_USES ctlp, callable_taken, callable_ready, 1
 ccall_l         $c1, $c2, 2, cra
 
 1:
-DOMAIN_CAS ctlp, callable_ready, callable_taken, -1
+# Loads are idempotent and so can be used to fill load delay slot
+DOMAIN_CAS_LL ctlp, callable_ready, callable_taken, -1
 clc             csp, $zero, CTLP_OFFSET_CSP(ctlp)
 clc             cusp, $zero, CTLP_OFFSET_CUSP(ctlp)
+DOMAIN_CAS_SC ctlp, callable_ready, callable_taken, -1
 clc             cgp, $zero, CTLP_OFFSET_CGP(ctlp)
 clcbi           ctmp, (CAP_SIZE)(csp)
 clc             cra, $zero, (0)(csp)
@@ -406,9 +428,9 @@ ccall_slotless  $c1, $c2, 2
 
 # idc points to the stack. It is actually already what will be our unsafe stack
 
-3:
-dli             $t1,    returnable_used
 2:clld          $at,    $idc
+clc             ctmp, $zero, CAP_SIZE($idc)             # we load to ctmp to not clobber idc. We want to do this early so we can fill data load slots
+dli             $t1,    returnable_used
 andi            $t0,    $at,    0xff
 tnei            $t0,    returnable_ready                                            # must first be legal
 cscd            $t0,    $t1,    $idc
@@ -420,7 +442,7 @@ daddiu          $at,    (callable_ready - returnable_ready)
 cmove           RETURN_STACK, $idc                      # actually our current stack, but will be cusp on return so might as well be in this reg
 #endif
 
-clc             ctlp, $zero, CAP_SIZE($idc)
+cmove           ctlp, ctmp
 
 #if (!CAN_SEAL_ANY)
 # We need to reload a stack with larger bounds because we were forced to set bounds
@@ -430,15 +452,6 @@ cincoffset      RETURN_STACK,  RETURN_STACK, CLO_SAFE_SIZE
 
 # We still might be returning too early
 # at contains what we expect to find in our ctlp. Check we have it then mark ourselves as taken
-
-2:clld          $t0,    ctlp
-tne             $t0,    $at
-daddiu          $t0,    (callable_taken - callable_ready) + (-1 * 256)
-cscd            $t0,    $t0,    $idc
-beqz            $t0,    2b
-nop
-
-# It is only now safe to access other fields of ctlp, so restore our stacks. We have the stacks,
 
 .set            ctr,    0
 .macro REST_C reg
@@ -450,14 +463,25 @@ nop
     cld  \reg, $zero, (-ctr)(RETURN_STACK)
 .endmacro
 
-# Restore everything saved. If this is an attack this will be junk, but we don't use any of it until the check
-
+2:clld          $t0,    ctlp
 REST_C  $c17 # scavanged forward pointer
 #if(UNSAFE_STACKS_OFF)
 .set    ctr, (ctr + CAP_SIZE) # No back pointer here
 #else
 REST_C  csp # back pointer
 #endif
+tne             $t0,    $at
+daddiu          $t0,    (callable_taken - callable_ready) + (-1 * 256)
+cscd            $t0,    $t0,    $idc
+beqz            $t0,    2b
+
+# It is only now safe to access other fields of ctlp, so restore our stacks. We have the stacks,
+# Well, we loaded some already but thats OK. We will ignore their values if we trap and we don't leave the compartment with them
+
+
+
+# Restore everything saved. If this is an attack this will be junk, but we don't use any of it until the check
+
 REST_C  $c18
 REST_C  $c19
 REST_C  $c20
