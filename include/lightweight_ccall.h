@@ -92,7 +92,7 @@
 
 #define LW_INS(Rargs, ...) LW_INS_R ## Rargs (__VA_ARGS__)
 
-#define CCALL_SLOTLESS   "ccall      $c1, $c2, 2       \n nop\n"
+#define CCALL_SLOTLESS   "ccall      $c1, $c2, 2\n"
 
 #define LIGHTWEIGHT_CCALL_FUNC_BASE(OutT, f, d, EXTRA_DEFS, EXTRA_IN)               \
 ({                                                                                  \
