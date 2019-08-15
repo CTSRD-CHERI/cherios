@@ -38,7 +38,7 @@
 #define MAX_Q 0x10
 #define HOST_PORT 7777
 
-#if 0
+#ifdef HARDWARE_qemu
 
 #define HOST_IP "128.232.18.57" // My PC's interface attached to the lab network
 

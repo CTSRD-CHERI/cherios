@@ -32,6 +32,7 @@
 #include "net.h"
 #include "namespace.h"
 #include "bench_collect.h"
+#include "unistd.h"
 
 typedef struct {
     unix_net_sock* sock;
@@ -73,6 +74,19 @@ static inline void connect_to_host(void) {
     printf("Benchmark collector connected\n");
 }
 
+#define W(X) socket_requester_space_wait(req, X, 0, 0)
+
+void con_finish(void) {
+    requester_t req = state.sock->sock.write.push_writer;
+    W(1);
+    char c = 'F';
+    socket_request_im(req, 1, NULL, &c, 0);
+    state.sock->sock.flags &=~MSG_DONT_WAIT;
+    close(&state.sock->sock);
+
+    printf("Benchmark collector connection closed\n");
+
+}
 
 static inline int b_start(void) {
 
@@ -96,7 +110,7 @@ static inline void b_add_file(size_t columns, char* name, char** headers) {
 
     requester_t req = state.sock->sock.write.push_writer;
 
-#define W(X) socket_requester_space_wait(req, X, 0, 0)
+
 
     b_finish_file();
 
@@ -150,7 +164,12 @@ int main(__unused register_t arg, __unused capability carg) {
 
     namespace_register(namespace_num_bench, act_self_ref);
 
-    msg_enable = 1;
+    do {
+        msg_entry(MS_TO_CLOCK(5000), 0);
+    } while(state.doing_bench);
+
+    con_finish();
+
     return 0;
 }
 
