@@ -68,4 +68,6 @@ int main(void) {
 	handle_loop();
 
 	assert(0 && "Should not reach here");
+
+	while(1){}
 }

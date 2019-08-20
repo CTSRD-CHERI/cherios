@@ -3,7 +3,7 @@ get_filename_component(ACT_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 set(X_SRCS
-    ${SECURE_INIT_ASM}
+    ${DEFAULT_SECURE_ASM}
     src/main.c
     src/aes.c
 )

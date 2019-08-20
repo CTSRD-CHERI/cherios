@@ -96,6 +96,15 @@ const char* nginx_args[] = {"nginx",NULL};
 
 #endif
 
+
+#if (FORCE_SECURE)
+    #define DEFAULT_TO(X) m_secure
+#elif (FORCE_INSECURE)
+    #define DEFAULT_TO(X) m_user
+#else
+    #define DEFAULT_TO(X) X
+#endif
+
 #define B_ENTRY(_type, _name, _arg, _daemon, _cond) \
 	{_type,	_cond, _name, _arg, _daemon, 0, NULL},
 #define B_DENTRY(_type, _name, _arg, _cond) \
@@ -161,12 +170,12 @@ init_elem_t init_list[] = {
 //  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
 	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	!B_DEMO)
-    B_DENTRY(m_secure | m_user, "block_cache.elf", 0, !B_DEMO)
+    B_DENTRY(DEFAULT_TO(m_secure) | m_user, "block_cache.elf", 0, !B_DEMO)
 #if (B_DEMO == 0)
     B_WAIT_FOR(namespace_num_blockcache)
-    B_PENTRY(m_virtnet, "lwip.elf", 0, 1 && BUILD_WITH_NET)
+    B_PENTRY(m_virtnet | DEFAULT_TO(m_user), "lwip.elf", 0, 1 && BUILD_WITH_NET)
 	B_FENCE
-	B_DENTRY(m_fs,	FS_ELF	,		0,	1)
+	B_DENTRY(m_fs | DEFAULT_TO(m_user),	FS_ELF	,		0,	1)
 	B_FENCE
 	B_PENTRY(m_user,	"hello.elf",		0,	TESTS)
 	B_WAIT_FOR(namespace_num_fs)
@@ -200,7 +209,7 @@ init_elem_t init_list[] = {
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
     B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_nginx | m_secure, "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
+    B_PENTRY(m_nginx | DEFAULT_TO(m_secure), "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH && 0)
     B_PENTRY(m_user, "nc_shell.elf", 0, !B_BENCH && BUILD_WITH_NET)
 //    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)

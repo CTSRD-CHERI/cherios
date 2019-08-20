@@ -207,9 +207,9 @@ nop
 cincoffset  csp, csp, -(2 * CAP_SIZE)
 
 # Call intented target
-
-cjalr       $c12, cra
 cmove       crd, ctlp
+cjalr       $c12, cra
+cincoffset  $c12, $c12, -4
 
 # Now restore callers cra/crd
 

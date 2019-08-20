@@ -107,7 +107,7 @@ void close_file(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
     }
 }
 
-ssize_t TRUSTED_CROSS_DOMAIN(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+ssize_t CROSS_DOMAIN_DEFAULT_INSECURE(full_oob)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
 __used ssize_t full_oob(capability arg, request_t* request,  uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     struct sessions_t* fil = (struct sessions_t*)arg;
 
@@ -204,8 +204,8 @@ int proxy_file_to_cache(struct sessions_t* session, uint8_t service_write) {
     res = socket_fulfill_progress_bytes_unauthorised(fulfiller, SOCK_INF,
                                                      F_CHECK | F_PROGRESS | F_DONT_WAIT | F_CANCEL_NON_OOB | F_SET_MARK | F_SKIP_ALL_UNTIL_MARK,
                                                      NULL,
-                                                     (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
-                                                     NULL, NULL, TRUSTED_DATA);
+                                                     (capability)session, 0, CROSS_DOMAIN_DEFAULT_INSECURE_SEALED(full_oob),
+                                                     NULL, NULL, DATA_DEFAULT_INSECURE);
 
     assert_int_ex(-res, ==, -E_AGAIN);
 
@@ -218,8 +218,8 @@ int proxy_file_to_cache(struct sessions_t* session, uint8_t service_write) {
         res = socket_fulfill_progress_bytes_unauthorised(fulfiller, SOCK_INF,
                                                          F_CHECK | F_SET_MARK | F_START_FROM_LAST_MARK | F_DONT_WAIT,
                                                          NULL,
-                                                         (capability)session, 0, TRUSTED_CROSS_DOMAIN(full_oob),
-                                                         NULL, NULL, TRUSTED_DATA);
+                                                         (capability)session, 0, CROSS_DOMAIN_DEFAULT_INSECURE_SEALED(full_oob),
+                                                         NULL, NULL, DATA_DEFAULT_INSECURE);
 
         assert(res >= 0 || res == E_AGAIN || res == E_SOCKET_CLOSED);
 

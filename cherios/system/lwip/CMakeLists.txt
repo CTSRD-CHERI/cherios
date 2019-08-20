@@ -18,7 +18,7 @@ endif()
 
 
 set(X_SRCS
-    ${INIT_ASM}
+    ${DEFAULT_INSECURE_ASM}
     ${lwipcore_SRCS}
     ${lwipcore4_SRCS}
     ${LWIP_DIR}/src/netif/ethernet.c

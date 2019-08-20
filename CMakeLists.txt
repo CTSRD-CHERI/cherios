@@ -172,6 +172,7 @@ else()
     set(BFAST_FLAGS -DGO_FAST=0)
 endif()
 
+set(VARY_SECURE "UNCHANGED" CACHE STRING "Force secure load and distrust calling ON/OFF for programs that support it")
 set(VARY_SS "UNCHANGED" CACHE STRING "Force safe stacks ON/OFF for programs that support it")
 set(EXPAND_LIMIT "64" CACHE STRING "Default expand limit for temporal anlysis")
 
@@ -180,6 +181,12 @@ if(VARY_SS STREQUAL "OFF")
     set(VARY_FLAGS -DUNSAFE_STACKS_OFF=1)
 else()
     set(VARY_FLAGS -DUNSAFE_STACKS_OFF=0)
+endif()
+
+if(VARY_SECURE STREQUAL "OFF")
+    set(VARY_SECURE_FLAGS -DFORCE_INSECURE=1)
+elseif(VARY_SECURE STREQUAL "ON")
+    set(VARY_SECURE_FLAGS -DFORCE_SECURE=1)
 endif()
 
 include_directories(include)
@@ -201,6 +208,7 @@ set(ASMC_COMPILER_FLAGS
     ${BNET_FLAGS}
     ${BFAST_FLAGS}
     ${VARY_FLAGS}
+    ${VARY_SECURE_FLAGS}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -march=${CHERI_CPU}
@@ -489,17 +497,17 @@ set(INIT_ASM            "${INIT_ASM_DIR}/init.S")
 set(PLT_ASM             "${CHERIOS_DIR}/system/dylink/src/stubs.S")
 set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/secure_init.S")
 
-if(${VARY_SS} STREQUAL "UNCHANGED")
+if(${VARY_SECURE} STREQUAL "UNCHANGED")
 
     set(DEFAULT_SECURE_ASM ${SECURE_INIT_ASM})
     set(DEFAULT_INSECURE_ASM ${INIT_ASM})
 
-elseif(${VARY_SS} STREQUAL "ON")
+elseif(${VARY_SECURE} STREQUAL "ON")
 
     set(DEFAULT_SECURE_ASM ${SECURE_INIT_ASM})
     set(DEFAULT_INSECURE_ASM ${SECURE_INIT_ASM})
 
-elseif(${VARY_SS} STREQUAL "OFF")
+elseif(${VARY_SECURE} STREQUAL "OFF")
 
     set(DEFAULT_SECURE_ASM ${INIT_ASM})
     set(DEFAULT_INSECURE_ASM ${INIT_ASM})

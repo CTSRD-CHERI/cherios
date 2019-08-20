@@ -338,8 +338,8 @@ static void unlock(session_sock* ss, locked_t locked_data) {
     ss->aes_data = aes_data;
 }
 
-ssize_t CROSS_DOMAIN(ff)(capability arg, char* buf, uint64_t offset, uint64_t length, capability extra_arg);
-__used ssize_t ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length, __unused capability extra_arg) {
+ssize_t CROSS_DOMAIN_DEFAULT_SECURE(ff)(capability arg, char* buf, uint64_t offset, uint64_t length);
+__used ssize_t ff(capability arg, char* buf, __unused uint64_t offset, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -392,8 +392,8 @@ __used ssize_t ff(capability arg, char* buf, __unused uint64_t offset, uint64_t 
     return copied;
 }
 
-ssize_t CROSS_DOMAIN(ff_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf, capability extra_arg);
-__used ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length, char** out_buf, __unused capability extra_arg) {
+ssize_t CROSS_DOMAIN_DEFAULT_SECURE(ff_sub)(capability arg, uint64_t offset, uint64_t length, char** out_buf);
+__used ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length, char** out_buf) {
     session_sock* ss = (session_sock*)arg;
 
     size_t addr = ss->addr;
@@ -433,7 +433,7 @@ __used ssize_t ff_sub(capability arg, __unused uint64_t offset, uint64_t length,
     return to_copy;
 }
 
-ssize_t CROSS_DOMAIN(oobff)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
+ssize_t CROSS_DOMAIN_DEFAULT_SECURE(oobff)(capability arg, request_t* request, uint64_t offset, uint64_t partial_bytes, uint64_t length);
 __used ssize_t oobff(capability arg, request_t* request, __unused uint64_t offset, __unused uint64_t partial_bytes, uint64_t length) {
     session_sock* ss = (session_sock*)arg;
     request_type_e req = request->type;
@@ -483,10 +483,10 @@ static int handle_sock_session(session_sock* ss) {
         cert = rescap_take_authed(reser, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, AUTH_CERT, own_auth, NULL, NULL).cert;
         ful_pack* pack = (ful_pack*)pair.data;
 
-        pack->data_arg = pack->oob_data_arg = UNTRUSTED_DATA;
-        pack->ful = SEALED_CROSS_DOMAIN(ff);
-        pack->ful_oob = SEALED_CROSS_DOMAIN(oobff);
-        pack->sub = SEALED_CROSS_DOMAIN(ff_sub);
+        pack->data_arg = pack->oob_data_arg = DATA_DEFAULT_SECURE;
+        pack->ful = CROSS_DOMAIN_DEFAULT_SECURE_SEALED(ff);
+        pack->ful_oob = CROSS_DOMAIN_DEFAULT_SECURE_SEALED(oobff);
+        pack->sub = CROSS_DOMAIN_DEFAULT_SECURE_SEALED(ff_sub);
     }
 
     ssize_t res = socket_fulfill_progress_bytes_authorised(ss->ff, SOCK_INF,
@@ -586,11 +586,43 @@ static void writeback_all(session_t* session) {
     socket_requester_wait_all_finish(requester, 0);
 }
 
+#if (FORCE_INSECURE)
+
+extern auth_t make_auth_entry(void);
+
+__asm(
+    ".text \n .p2align 4\n"
+    ".global make_auth_entry; .ent make_auth_entry; make_auth_entry:\n"
+    "csc $c2, $zero, 0($c3)\n"      // return auth token
+    "ccall $c17, $c18, 2\n"
+    "nop \n nop\n"
+    ".end make_auth_entry"
+);
+
+static inline auth_t make_fake_auth(void) {
+    size_t im_size = 16;
+    size_t size = FOUNDATION_META_SIZE(1, im_size) + im_size;
+    char* f_data = (char*)make_auth_entry;
+    res_t res = cap_malloc(size);
+    entry_t entry = foundation_create(res, im_size, f_data, 0, 1, 0);
+    auth_t result = NULL;
+    foundation_enter((capability)&result, NULL, NULL, NULL, NULL, entry, NULL);
+    assert(result != NULL);
+    return result;
+}
+
+#endif
+
 int main(__unused register_t arg, __unused capability carg) {
     while((vblk_ref = namespace_get_ref(namespace_num_virtio)) == NULL) {
         sleep(0);
     }
     sealer = get_type_owned_by_process();
+
+#if (FORCE_INSECURE)
+    own_auth = make_fake_auth();
+    get_ctl()->cds = get_type_owned_by_process();
+#endif
 
     int res = namespace_register(namespace_num_blockcache,act_self_ref);
 
