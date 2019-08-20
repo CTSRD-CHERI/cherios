@@ -35,8 +35,8 @@ void	__assert_int_ex(const char *, const char *, int, const char *,  const char 
                         unsigned long long int, unsigned long long int) __dead2;
 
 #if (GO_FAST)
-    #define	assert(e)
-    #define assert_int_ex(a, op, b)
+    #define	assert(e) (void)(e)
+    #define assert_int_ex(a, op, b) (void)(a) ; (void)(b)
 #else
 
 #define	assert(e)	((e) ? (void)0 : __assert(__func__, __FILE__, \
