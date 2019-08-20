@@ -300,6 +300,11 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 
 		// We allocate enough space for all segments plus a TLS segment (plus enough to align to a capability)
 		size_t contig_size = out_im->image_size + out_im->tls_mem_size + CAP_SIZE;
+
+		// And align the result to a register size
+
+		contig_size = (contig_size + (REG_SIZE-1)) & ~(REG_SIZE-1);
+
         cap_pair pair;
         size_t res_size_needed;
         res_t res_for_found;

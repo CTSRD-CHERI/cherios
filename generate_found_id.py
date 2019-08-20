@@ -59,12 +59,18 @@ def main():
             elif(seg_type == 'PT_TLS'):
                 tls_seg_size = mem_size
 
-    #Program loader adds in a tls seg size + CAP_SIZE of extra zeros
+    # Program loader adds in a tls seg size + CAP_SIZE of extra zeros
 
     tls_seg_size += cap_size
     virt_addr_ptr += tls_seg_size
 
-    sha.update(bytearray(tls_seg_size))
+    # Also need to pad to a multiple of 8 bytes to be loaded in a foundation
+
+    align_bytes = (-virt_addr_ptr % 8)
+
+    virt_addr_ptr += align_bytes
+
+    sha.update(bytearray(tls_seg_size + align_bytes))
 
     digest = sha.digest()
 
