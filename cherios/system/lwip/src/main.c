@@ -348,7 +348,9 @@ __used ssize_t tcp_ful_func(capability arg, char* buf, __unused uint64_t offset,
 
     // Make a pbuf to send, linked to a byte range
 
-    uint16_t to_send = (length > (uint64_t)tcp->tcp_pcb->snd_buf) ? tcp->tcp_pcb->snd_buf : (uint16_t)length;
+    uint16_t length16 = length > UINT16_MAX ? (uint16_t)UINT16_MAX : (uint16_t)length;
+
+    tcpwnd_size_t to_send = ((tcpwnd_size_t)length16 > tcp->tcp_pcb->snd_buf) ? tcp->tcp_pcb->snd_buf : (tcpwnd_size_t)length16;
 
     assert(cheri_getsealed(buf));
 

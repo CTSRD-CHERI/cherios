@@ -44,12 +44,15 @@
 //#define LWIP_MEM_ALIGN(x) cheri_setoffset(x,((cheri_getoffset(x) + MEM_ALIGNMENT - 1) & ~(MEM_ALIGNMENT-1)))
 
 #define MEM_SIZE                    (4 * 1024 * 1024)
+
+
+
 // These seem to get IGNORED when we use mem_malloc. We probably want to use pools however. Only payloads need malloc.
-#define MEMP_NUM_PBUF               1024
+#define MEMP_NUM_PBUF               (1024)
 #define MEMP_NUM_UDP_PCB            20
 #define MEMP_NUM_TCP_PCB            20
 #define MEMP_NUM_TCP_PCB_LISTEN     16
-#define MEMP_NUM_TCP_SEG            128
+#define MEMP_NUM_TCP_SEG            256
 #define MEMP_NUM_REASSDATA          32
 #define MEMP_NUM_ARP_QUEUE          10
 #define PBUF_POOL_SIZE              512
@@ -67,15 +70,20 @@
 #define LWIP_BROADCAST_PING         1
 #define LWIP_MULTICAST_PING         1
 #define LWIP_RAW                    1
-#define TCP_WND                     (4 * TCP_MSS)
+
 #define TCP_MSS                     1460
-#define TCP_SND_BUF                 (32 * TCP_MSS)
+
 #define LWIP_SINGLE_NETIF           1
 #define TCP_LISTEN_BACKLOG          1
 #define LWIP_NETIF_STATUS_CALLBACK  1
 #define LWIP_NETIF_LINK_CALLBACK    1
 #define LWIP_NETIF_HWADDRHINT       1
 #define LWIP_NETCONN                0
+
+#define LWIP_WND_SCALE              1
+#define TCP_RCV_SCALE               0
+#define TCP_WND                     (16 * TCP_MSS)
+#define TCP_SND_BUF                 (64 * TCP_MSS)
 
 // We don't want any of the functions, but we do want the types
 #define LWIP_SOCKET_TYPES           1
