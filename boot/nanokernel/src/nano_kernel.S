@@ -426,7 +426,7 @@ nano_kernel_init:
     PHY_NEXT
     PHY_LINK_PREV
     PHY_NEXT_PREV
-    PHY_SET_STATE   page_io
+    PHY_SET_STATE   page_io_unused
     PHY_LINK_LEN_N  TOTAL_IO_PAGES
 
 #ifdef RAM_SPLIT
@@ -1328,18 +1328,26 @@ get_phy_page:
 
 
     dli         $t1, page_system_owned
-    dli         $t2, page_io
+    dli         $t2, page_io_system
     movn        $t1, $t2, $a3                           # t1 is the state we set to on success
+
+    dli         $t8, (1 << page_unused) | (1 << page_system_owned)
+    dli         $t2, (1 << page_io_unused) | (1 << page_io_system)
+    movn        $t8, $t2, $a3
 
 # Set to transacting
 
 1:  cllw        $t3, $c6                                # t3 is what we will restore on error
-    beqz        $t3, 2f                                 # must be free
+    li          $t0, 1
+    dsllv       $t0, $t0, $t3
+    and         $t0, $t0, $t8
+    beqz        $t0, get_phy_page_end                   # must be in correct state
     li          $t2, page_transaction
-    bne         $t1, $t3, get_phy_page_end              # or in the state we will set it to
-2:  nop
+
     cscw        $t0, $t2, $c6
     beqz        $t0, 1b
+
+
     cld         $t2, $zero, PHY_PAGE_OFFSET_len($c6)    # $t2 = len of record
 
     bne         $t2, $a2, get_phy_page_backout          # $t2 must be npages
@@ -1561,6 +1569,14 @@ get_userdata_for_res:
     CRETURN
 
 
+# res_open -> res_open_io
+#void rescap_make_io (res_t res)
+
+#FIXME todo
+
+#void rescap_take_io (res_t res, cap_pair* out)
+
+# FIXME todo
 
 # WARN: This is called as subroutine. Be careful on register usage. Don't clobber argument registers #
 ############################################ (safe)
@@ -1856,7 +1872,7 @@ rescap_revoke_start:
     bnez        $t0, revoke_start_er_bailout              # size of revocation must be page aligned
 
     # set revoking
-    li          $t2, res_revoking
+    li          $t2, res_merged
     dsll        $t2, $t2, (RES_STATE_SHIFT + RES_STATE_IN_LENGTH_SHIFT)
     or          $t2, $t2, $a0
     STOREC_RES_LENGTH $t2, $t2, $c3
@@ -2856,6 +2872,10 @@ get_read_only_table:
     cclearlo    EN1(c4)
     CRETURN
 
+# void create_io_mapping(register_t page, ptable table, register_t index_start, register_t index_stop, register_t flags, res_t open_io)
+
+# TODO. Check that open_io covers page and range. Then create mapping but from page_io_unused -> page_io_mapped
+
 # Notes: Locks the physical page, and atomically updates the vtable entry #
 ######################################################################################### (safe)
 # void create_mapping(register_t page, ptable table, register_t index_start, register_t index_stop, register_t flags)
@@ -2891,6 +2911,7 @@ create_mapping:
     bne         $t0, $t1, create_mapping_er_restore_phy
 
     dsll        $a0, $a0, PFN_SHIFT
+    andi        $a3, $a3, 0b111111
     or          $a0, $a0, $a3                           # The PFN to use
 
     daddiu      $a1, $a1, 1                             # offset to negate other offset
@@ -2922,7 +2943,7 @@ create_mapping_er:
     CRETURN
 
 
-
+# FIXME: handle free mapping of page_io_mapped -> page_io_unused
 ###################################################### (safe)
 # void free_mapping(ptable_t table, register_t index)
 .global free_mapping

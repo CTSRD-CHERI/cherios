@@ -110,6 +110,8 @@
 // | State  | Low Term | High Term | Scale  | Length  | Bitmap  |
 // | 2 bits | 1 bits   | 1 bits    | 7 bits | 53 bits | 64 bits |
 
+// if Scale == RES_SCALE_NOT_FIELD, this is not a field. Otherwise it is and scale is its scale.
+
 // Scale is |Exp|Mantissa|, length has 4 zero bits implied at the bottom, giving a 57 bits of length
 //          | 5 |   2    |
 
@@ -264,11 +266,13 @@
     ITEM(page_mapped, 3)                           \
     ITEM(page_ptable, 4)                           \
     ITEM(page_ptable_free, 5)                      \
-    ITEM(page_io, 6)                               \
-    ITEM(page_dirty, 7)                            \
-    ITEM(page_transaction, 8)                      \
-    ITEM(page_cleaning, 9)                         \
-    ITEM(page_screwed_the_pooch, 10)               \
+    ITEM(page_io_unused, 6)                        \
+    ITEM(page_io_system, 7)                        \
+    ITEM(page_io_mapped, 8)                        \
+    ITEM(page_dirty, 9)                            \
+    ITEM(page_transaction, 10)                     \
+    ITEM(page_cleaning, 11)                        \
+    ITEM(page_screwed_the_pooch, 12)               \
 
 
 // Some code assumes open is 0. Others can be re-arranged
@@ -279,7 +283,7 @@
     ITEM(res_open,          0)                  \
     ITEM(res_taken,         1)                  \
     ITEM(res_merged,        2)                  \
-    ITEM(res_revoking,      3)
+    ITEM(res_open_io,       3)
 
 DECLARE_ENUM(e_res_status, NANO_KERNEL_RES_STATUS_ENUM_LIST)
 
