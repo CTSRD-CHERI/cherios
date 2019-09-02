@@ -64,6 +64,33 @@ static void dump_stacks(void) {
     }
 }
 
+static void dump_counters(void) {
+#define STR_LS(m,s,...) "," s
+#define FMT(m,s,...) ",%lu"
+#define MEM(m,s,...) ,info. m
+
+    printf("Stat dump:\n\n");
+    printf("Name, Time, Switch, Sent, Recv, CFaults" STAT_DEBUG_LIST(STR_LS) "\n");
+
+    for(act_control_kt act = syscall_actlist_first(); act != NULL ; act = syscall_actlist_next(act)) {
+        act_info_t info;
+        syscall_act_info(act, &info);
+
+        printf("%s,%lu,%lu,%lu,%lu,%lu" STAT_DEBUG_LIST(FMT) "\n",
+        info.name, info.had_time, info.switches, info.sent_n, info.received_n, info.commit_faults STAT_DEBUG_LIST(MEM));
+    }
+}
+
+static void dump_help(void) {
+    printf("Usage: send 'c\\n' where c is one of the following:\n");
+    printf("\t h - displays this help message\n");
+    printf("\t t - dump revocation tracking\n");
+    printf("\t m - dump most of mmans state\n");
+    printf("\t s - dump temporal stack information\n");
+    printf("\t c - dump beri stat counters and some OS stats\n");
+    printf("Many of these will need to be enabled in the build first or they will crash / be nonsense\n");
+}
+
 int main(__unused register_t arg, __unused capability carg) {
 
     // Set up a TCP server
@@ -94,6 +121,9 @@ int main(__unused register_t arg, __unused capability carg) {
         assert(buf[1] == '\n');
 
         switch(buf[0]) {
+            case 'h':
+                dump_help();
+                break;
             case 't':
                 dump_tracking(tracking);
                 break;
@@ -103,8 +133,13 @@ int main(__unused register_t arg, __unused capability carg) {
             case 's':
                 dump_stacks();
                 break;
+            case 'c':
+                dump_counters();
+                break;
             default:
-                printf("Ping dump got a command it did not unserstand\n");
+                printf("Ping dump got a command it did not understand\n");
+                dump_help();
+                break;
         }
 
         close(&ns->sock);
