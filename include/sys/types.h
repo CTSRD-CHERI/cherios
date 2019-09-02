@@ -32,6 +32,8 @@
 #define _TYPES_H_
 
 #include "cheric.h"
+#include "macroutils.h"
+#include "statcounters.h"
 
 #if (GO_FAST)
 #define EXTRA_TEMPORAL_TRACKING 0
@@ -92,6 +94,14 @@ typedef struct cap_pair {
 } cap_pair;
 
 #ifdef HARDWARE_fpga
+
+#if(ALL_THE_STATS)
+
+    #define ITM(Name, X, Y, ITEM, ...) ITEM(Name, STRINGIFY(Name), __VA_ARGS__)
+    #define STAT_DEBUG_LIST(ITEM, ...) STAT_ALL_LIST(ITM, ITEM, __VA_ARGS__)
+
+#else
+
 #define STAT_DEBUG_LIST(ITEM,...) 		\
 	ITEM(cycle, 	" cycle ", __VA_ARGS__)			\
 	ITEM(inst, 		" insts ",  __VA_ARGS__)				\
@@ -101,6 +111,8 @@ typedef struct cap_pair {
 	ITEM(dcache_read_miss, "drdmiss", __VA_ARGS) \
 	ITEM(dcache_write_hit, "dwr hit", __VA_ARGS__)\
 	ITEM(dcache_write_miss, "dwrmiss", __VA_ARGS__)
+
+#endif
 #else
 #define STAT_DEBUG_LIST(ITEM, ...)
 #endif

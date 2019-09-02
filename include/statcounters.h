@@ -31,6 +31,10 @@
 #ifndef STATCOUNTERS_H
 #define STATCOUNTERS_H
 
+#define ALL_THE_STATS 0
+
+#ifndef __ASSEMBLY__
+
 /*
  * internals
  */
@@ -138,5 +142,7 @@ static inline uint64_t get_##name##_count (void)					\
 
 
 STAT_ALL_LIST(DEFINE_GET_STAT_COUNTER)
+
+#endif
 
 #endif

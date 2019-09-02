@@ -33,7 +33,19 @@
 #ifndef _CHERIOS_SCHED_H_
 #define	_CHERIOS_SCHED_H_
 
-#define SCHED_POOL_SIZE                 1328
+#include "kernel.h"
+#include "statcounters.h"
+
+#if(K_DEBUG)
+#if(ALL_THE_STATS)
+    #define SCHED_POOL_SIZE                 1648
+#else
+    #define SCHED_POOL_SIZE                 1408
+#endif
+#else
+    #define SCHED_POOL_SIZE                 1328
+#endif
+
 #define SCHED_POOL_CURRENT_ACT_OFFSET   CAP_SIZE
 #define SCHED_POOL_IN_QUEUES_OFFSET     (2*CAP_SIZE)
 #define SCHED_POOL_LOCK_OFFSET          ((2 *CAP_SIZE) + REG_SIZE)

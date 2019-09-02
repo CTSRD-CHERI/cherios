@@ -42,7 +42,7 @@
 
 #define MAX_STATIC_ACTIVATIONS 8 // kernel + init + namespace + proc + memgt + memmgt worker *3. Then we need reservations.
 
-#if (!K_DEBUG)
+#if (GO_FAST)
 #define KERNEL_FASTPATH 1
 #endif
 
