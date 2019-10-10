@@ -175,6 +175,9 @@ int
 fprintf(FILE *f, const char *fmt, ...)
 {
     assert(f->con_type & CONNECT_PUSH_WRITE);
+
+    needs_drb(f);
+
 	va_list ap;
 	int retval;
 

@@ -54,6 +54,12 @@ void alloc_drb(FILE_t file) {
     socket_requester_set_drb(file->write.push_writer, &file->write_copy_buffer);
 }
 
+void needs_drb(FILE_t file) {
+    if(file->write_copy_buffer.buffer_size == 0) {
+        alloc_drb(file);
+    }
+}
+
 FRESULT mkdir(const char* name) {
     act_kt dest = try_get_fs();
 

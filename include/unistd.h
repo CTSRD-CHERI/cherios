@@ -61,6 +61,7 @@ ssize_t close(FILE_t file);
 #define read(file,buf,length) socket_recv(file,buf,length,0)
 ssize_t lseek(FILE_t file, int64_t offset, int whence);
 #define sendfile(sockout,sockin,count) socket_sendfile(sockout,sockin,count)
+void needs_drb(FILE_t file);
 FRESULT mkdir(const char* name);
 FRESULT rename(const char* old, const char* new);
 FRESULT unlink(const char* name);
