@@ -4,3 +4,6 @@
 [submodule "nginx"]
 	path = nginx
 	url = https://github.com/CTSRD-CHERI/nginx.git
+[submodule "libcxxrt"]
+	path = libcxxrt
+	url = https://github.com/CTSRD-CHERI/libcxxrt

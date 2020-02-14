@@ -418,7 +418,7 @@ set(TEMP_16 "SHELL:-mllvm -TemporalExpandLimit=16")
 set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
 
 function(add_cherios_module _target)
-  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS)
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS NEED_LIBCXXRT)
   set(oneValueArgs LINKER_SCRIPT)
   set(multiValueArgs SOURCES)
   cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -487,6 +487,11 @@ function(add_cherios_module _target)
   add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
     COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
     )
+
+
+    if(add_exe_NEED_LIBCXXRT)
+        target_link_libraries(${_target} cxxrt-static)
+    endif()
 endfunction()
 
 set(CHERIOS_DIR         "${CMAKE_SOURCE_DIR}/cherios")
@@ -519,6 +524,8 @@ include(lwip/src/Filelists.cmake)
 set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
 
 add_subdirectory(libuser)
+
+add_subdirectory(libcxxrt)
 
 add_subdirectory(cherios)
 
@@ -564,5 +571,7 @@ add_subdirectory(demos)
 #add_subdirectory(test2a)
 #add_subdirectory(test2b)
 #add_subdirectory(test3)
+
+add_subdirectory(cpptest)
 
 add_subdirectory(boot)
