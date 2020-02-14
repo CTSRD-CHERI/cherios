@@ -16,6 +16,8 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/strcat.c
     ${CMAKE_SOURCE_DIR}/libcrt/memchr.c
     ${CMAKE_SOURCE_DIR}/libcrt/strcpy.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strdup.c
+    ${CMAKE_SOURCE_DIR}/libcrt/strtol.c
 )
 
 set(LIBUSER_ASM_SRCS

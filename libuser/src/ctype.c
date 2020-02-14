@@ -29,16 +29,17 @@
  */
 
 #include "ctype.h"
+#include "mips.h"
 
 int toupper(int c) {
-	if(c>='a' && c<='z') {
+	if(islower(c)) {
 		c += 'A'-'a';
 	}
 	return c;
 }
 
 int tolower(int c) {
-	if(c>='A' && c <= 'Z') {
+	if(isupper(c)) {
 		c += 'a'-'A';
 	}
 	return c;
@@ -52,4 +53,31 @@ char * strtoupper(char * s) {
 	}
 
 	return s;
+}
+
+int isupper(int c) {
+    return c>='A' && c <= 'Z';
+}
+
+int islower(int c) {
+    return c>='a' && c<='z';
+}
+
+int isascii(int c) {
+    return (c >> 7) == 0;
+}
+
+int isalpha(int c) {
+    return isupper(c) || islower(c);
+}
+
+int isdigit(int c) {
+	return ((char)c >= '0') && ((char)c <= '9');
+}
+
+int isspace(int c) {
+    uint64_t set =
+            (1ULL << ' ') | (1ULL << '\n') | (1ULL << '\t') | (1ULL << '\v') | (1ULL << '\f') |(1ULL << '\r');
+
+    return (set & (1 << c)) != 0;
 }

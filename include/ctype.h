@@ -32,3 +32,10 @@ int toupper(int c);
 int tolower(int c);
 
 char * strtoupper(char * s);
+
+int isdigit(int c);
+int isspace(int c);
+int isupper(int c);
+int islower(int c);
+int isascii(int c);
+int isalpha(int c);

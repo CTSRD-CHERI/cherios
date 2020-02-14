@@ -96,4 +96,6 @@ int (*compar)(const void *, const void	*));
 
 #define getenv(name) NULL
 
+
+long strtol(const char *nptr, char **endptr, int base);
 #endif /* !__STDLIB_H__ */

@@ -188,6 +188,97 @@ fprintf(FILE *f, const char *fmt, ...)
 	return (retval);
 }
 
+// People who use functions like this should be shot
+
+int asprintf(char **strp, const char *fmt, ...) {
+
+    va_list ap;
+    int retval;
+
+    va_start(ap, fmt);
+    retval = vasprintf(strp, fmt, ap);
+            va_end(ap);
+
+    return (retval);
+}
+
+// Anything smaller than this will be formatted to the stack then copied into a correctly sized buffer
+// Anything larger will end up in a buffer rounded to the nearest power of 2
+#define ASPRINT_BUF_SIZE 0x200
+
+typedef struct asprintf_state_s {
+    // Each is double the size of the last. If it not the first the previous pointer is stashed at the start of the buffer
+    char* buf;
+    size_t cur_fill; // How full the current buffer is (all previous will be completely full)
+    size_t cur_index; // Which buffer is currently being filled;
+} asprintf_state_t;
+
+static void asprintf_func(int ch, void* arg) {
+    asprintf_state_t* state = (asprintf_state_t*)arg;
+
+    if((state->cur_fill >= ASPRINT_BUF_SIZE) && is_power_2(state->cur_fill)) {
+        char* next_buf = (char*)malloc(state->cur_fill * 2);
+        *((char**)next_buf) = state->buf;
+        state->buf = next_buf;
+        state->cur_index++;
+    }
+
+    state->buf[state->cur_fill++] = (char)ch;
+}
+
+int vasprintf(char **strp, const char *fmt, va_list ap) {
+    // We will eventually just keep doubling the target buffer and copy.
+    // But start with the stack so that small string take up the exact size.
+    char tmp_buf[ASPRINT_BUF_SIZE];
+    asprintf_state_t state;
+    state.buf = tmp_buf;
+    state.cur_fill = 0;
+    state.cur_index = 0;
+
+    int retval = kvprintf(fmt, &asprintf_func, &state, 10, ap);
+
+    // Pick which buffer to use
+    size_t top_index = state.cur_index;
+    char* final_s;
+
+    if(top_index == 0) {
+        final_s = malloc(state.cur_fill);
+        memcpy(final_s, tmp_buf, state.cur_fill);
+    } else {
+        final_s = state.buf;
+        char* buf = *((char**)final_s);
+
+        size_t off = ASPRINT_BUF_SIZE << (size_t)(top_index - 2);
+
+        // Condense and free extra buffers
+        while(top_index != 1) {
+            // Copy
+            memcpy(final_s+off,buf+off,off);
+
+            // Lift the previous buffer out
+            char* prev_buf = *((char**)buf);
+
+            // Free
+            free(buf);
+
+            // Adjust size
+            off >>=1;
+
+            // Go to next buffer
+            buf = prev_buf;
+            top_index--;
+        }
+
+        assert(buf == tmp_buf);
+        // last buffer does not need freeing and is a slightly different size than the pattern would imply
+        memcpy(final_s, buf, ASPRINT_BUF_SIZE);
+
+    }
+
+    *strp = final_s;
+    return retval;
+}
+
 #else
 
 int fputc(__unused int character, __unused FILE *f) {
