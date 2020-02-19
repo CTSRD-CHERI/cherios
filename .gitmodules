@@ -7,3 +7,6 @@
 [submodule "libcxxrt"]
 	path = libcxxrt
 	url = https://github.com/CTSRD-CHERI/libcxxrt
+[submodule "libcxx"]
+	path = libcxx
+	url = https://github.com/CTSRD-CHERI/libcxx.git
