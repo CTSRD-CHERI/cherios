@@ -36,12 +36,15 @@
 
 #ifndef __ASSEMBLY__
 
+#include "cdefs.h"
 #include "cheric.h"
 #include "cheriplt.h"
 #include "types.h"
 #include "math.h"
 
+__BEGIN_DECLS
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
+__END_DECLS
 
 #define ALLOCATE_PLT_NANO PLT_ALLOCATE_csd(nano_kernel_if_t, NANO_KERNEL_IF_LIST)
 

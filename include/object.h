@@ -31,6 +31,7 @@
 #ifndef _OBJECT_H_
 #define	_OBJECT_H_
 
+#include "cdefs.h"
 #include "mips.h"
 #include "cheric.h"
 #include "queue.h"
@@ -44,6 +45,8 @@
 #define AUTO_DEDUP_ALL_FUNCTIONS    0
 #define AUTO_DEDUP_STATS            0
 #define AUTO_COMPACT                0
+
+__BEGIN_DECLS
 
 extern if_req_auth_t nanoreq_auth;
 
@@ -103,6 +106,8 @@ void msg_delay_return(sync_state_t* delay_store);
 int msg_resume_return(capability c3, register_t  v0, register_t  v1, sync_state_t delay_store);
 
 void msg_allow_more_sends(void);
+
+__END_DECLS
 
 #if (LIGHTWEIGHT_OBJECT)
 #define LW_THR __thread

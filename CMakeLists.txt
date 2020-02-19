@@ -1,3 +1,6 @@
+set(CMAKE_SYSTEM_NAME "Generic" CACHE STRING "Target system" FORCE)
+set(CMAKE_SYSTEM_PROCESSOR "Mips" CACHE STRING "Target CPU" FORCE)
+set(CMAKE_CROSSCOMPILING ON)
 cmake_minimum_required(VERSION 3.4)
 # We have to set LANGUAGES to none so that we can set CMAKE_C_COMPILER
 # before it checks the C compiler features. We can then use enable_language()
@@ -46,6 +49,8 @@ if(CHERI_SDK_DIR)
         set(CheriSDK_TOOLCHAIN_DIR "${CHERI_SDK_DIR}/bin")
         set(CheriSDK_CC "${CheriSDK_TOOLCHAIN_DIR}/clang")
         set(CheriSDK_CXX "${CheriSDK_TOOLCHAIN_DIR}/clang++")
+        set(CheriSDK_AR "${CheriSDK_TOOLCHAIN_DIR}/llvm-ar")
+        set(CheriSDK_RANLIB "${CheriSDK_TOOLCHAIN_DIR}/llvm-ranlib")
     endif()
 endif()
 
@@ -72,6 +77,8 @@ endif()
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
 set(CMAKE_C_COMPILER ${CheriSDK_CC})
+set(CMAKE_AR ${CheriSDK_AR})
+set(CMAKE_RANLIB ${CheriSDK_RANLIB})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # make sure we compile for cheri:
 set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
@@ -91,10 +98,12 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # CMake will try to link ctr1.o into the executable and this might not exist
 # We don't need it as we are building in a freestanding environment here anyway
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
-set(CMAKE_ASM_FLAGS_INIT "-mcpu=${CHERI_CPU}")
-set(CMAKE_C_FLAGS_INIT "-mcpu=${CHERI_CPU}")
-set(CMAKE_CXX_FLAGS_INIT "-mcpu=${CHERI_CPU}")
-set(CMAKE_EXE_LINKER_FLAGS "-mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld -static"
+
+# The --target flag line is needed so that CLion can detect the include paths (it doesn't add the CMAKE_C_COMPILER_TARGET)
+set(CMAKE_ASM_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_C_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_CXX_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_EXE_LINKER_FLAGS "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld -static"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 

@@ -40,6 +40,8 @@
 
 typedef unix_like_socket FILE;
 
+__BEGIN_DECLS
+
 extern __thread FILE * stderr;
 extern __thread FILE * stdout;
 
@@ -66,4 +68,6 @@ void panic_proxy(const char *str, act_kt act) __dead2;
 
 int asprintf(char **strp, const char *fmt, ...);
 int vasprintf(char **strp, const char *fmt, va_list ap);
+
+__END_DECLS
 #endif /* !__STDIO_H__ */

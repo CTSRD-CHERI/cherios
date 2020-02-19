@@ -31,11 +31,14 @@
 #ifndef CHERIOS_CAPMALLOC_H
 #define CHERIOS_CAPMALLOC_H
 
+#include "cdefs.h"
 #include "cheric.h"
 #include "nano/nanokernel.h"
 
 struct arena_t;
 
+
+__BEGIN_DECLS
 /* Get a reservation capability of size `size'. Will result in a claim being made on all memory the reservation covers,
  * both the metadata and the capability that would result from a take. */
 res_t       cap_malloc(size_t size);
@@ -59,5 +62,7 @@ void        cap_free(capability mem);
 /* Note on free and claim: You may claim something X times. It will only be freed after calling free X times. */
 
 void        init_cap_malloc(void);
+
+__END_DECLS
 
 #endif //CHERIOS_CAPMALLOC_H

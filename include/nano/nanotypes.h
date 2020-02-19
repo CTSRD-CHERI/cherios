@@ -363,7 +363,7 @@ typedef capability if_req_auth_t;
 
 /* Identifying information for a foundation. ALSO the public of a pair. Private half is an auth_t */
 typedef struct found_id_t {
-    char sha256[256/8];
+    uint8_t sha256[256/8];
     size_t length;
     size_t e0;
     size_t nentries;
