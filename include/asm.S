@@ -104,6 +104,7 @@ li  $zero, 0xdead
 .endm
 
 .macro get_tls_sym reg, sym
+    .type \sym, "tls_object"
     clcbi	\reg, %captab_tls20(\sym)($c26)
 .endm
 

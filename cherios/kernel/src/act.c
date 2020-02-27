@@ -49,6 +49,10 @@
 act_t				kernel_acts[MAX_STATIC_ACTIVATIONS]  __sealable;
 aid_t				kernel_next_act;
 
+#if (DEBUG_COUNT_CALLS)
+user_stats_t* own_stats;
+#endif
+
 // TODO: Put these somewhere sensible;
 static queue_default_t init_queue, kernel_queue;
 static kernel_if_t internel_if;
@@ -100,6 +104,11 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	/* The kernel context already exists and we set it here */
 	kernel_act->context = own_context;
     sched_create(0, kernel_act, PRIO_HIGH); // priority does not matter here. Exception context not interrupted.
+
+#if (DEBUG_COUNT_CALLS)
+    own_stats = &kernel_act->user_stats;
+#endif
+
 	// Create and register the init activation
 	KERNEL_TRACE("act", "Retroactively creating init activation");
 

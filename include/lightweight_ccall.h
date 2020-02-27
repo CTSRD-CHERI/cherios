@@ -30,6 +30,7 @@
 #ifndef CHERIOS_LIGHTWEIGHT_CCALL_H
 #define CHERIOS_LIGHTWEIGHT_CCALL_H
 
+#include "types.h"
 
 // Usage LIGHTWEIGHT_CCALL_FUNC([r|c|v], func_arg, data_arg, [0,4], (reg_args) ... , [0,4], (cap_args) ...)
 
@@ -94,8 +95,15 @@
 
 #define CCALL_SLOTLESS   "ccall      $c1, $c2, 2\n"
 
+#if (DEBUG_COUNT_CALLS)
+  #define BUMP_LEAF if(own_stats != NULL) own_stats->fast_leaf++;
+#else
+  #define BUMP_LEAF
+#endif
+
 #define LIGHTWEIGHT_CCALL_FUNC_BASE(OutT, f, d, EXTRA_DEFS, EXTRA_IN)               \
 ({                                                                                  \
+  BUMP_LEAF                                                                         \
   LW_DEF(OutT)                                                                      \
   register capability _code_tmp __asm ("$c1") = f;                                  \
   register capability _data_tmp __asm ("$c2") = d;                                  \

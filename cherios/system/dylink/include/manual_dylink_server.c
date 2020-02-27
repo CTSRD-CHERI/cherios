@@ -119,6 +119,9 @@ single_use_cert create_new_external_thread(res_t locals_res, res_t stack_res, re
 int __attribute__((used)) INIT_OTHER_OBJECT(LIB_IF_T)(act_control_kt self_ctrl, mop_t mop, queue_t* queue, startup_flags_e start_flags) {
     mmap_set_mop(mop);
     object_init(self_ctrl, queue, NULL, NULL, start_flags, 0);
+    if(own_stats == NULL) {
+        own_stats = syscall_act_user_info_ref(self_ctrl);
+    }
     return 0;
 }
 

@@ -58,9 +58,7 @@ __thread act_kt act_self_ref  = NULL;
 __thread act_notify_kt act_self_notify_ref = NULL;
 __thread queue_t * act_self_queue = NULL;
 
-#if !(LIGHTWEIGHT_OBJECT)
 __thread user_stats_t* own_stats;
-#endif
 
 int    was_secure_loaded;
 auth_t own_auth;

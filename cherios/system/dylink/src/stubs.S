@@ -34,7 +34,7 @@
 #include "cheric.h"
 #include "dylink.h"
 #include "asm.S"
-
+#include "types.h"
 
 #----   is  $cds (domain sealing capability)                        in a virtual reg, caller saved, can get from ctlp
 #$c11   is  $csp (stack pointer capability)                         callee saved
@@ -168,6 +168,25 @@
     .end \name
 .endmacro
 
+
+.macro BUMP_STAT OFFSET CTMP RTMP
+#if DEBUG_COUNT_CALLS
+#if (IS_KERNEL)
+    clcbi   \CTMP, CTLP_OFFSET_CGP($idc)
+    clcbi	\CTMP, %captab20(own_stats)(\CTMP)
+#else
+    get_tls_sym \CTMP, own_stats
+#endif
+    clcbi   \CTMP, 0(\CTMP)
+    cbtu    \CTMP, 77f
+    nop
+    cld     \RTMP, $zero, \OFFSET(\CTMP)
+    daddiu  \RTMP, \RTMP, 1
+    csd     \RTMP, $zero, \OFFSET(\CTMP)
+    77:
+#endif
+.endm
+
 #define trampoline_dest     $c12
 
 #define csp                 $c11
@@ -203,6 +222,7 @@ csc         cra, $zero, -(2 * CAP_SIZE)(csp)                    # save caller st
 csc         crd, $zero, -CAP_SIZE(csp)
 DOMAIN_CAS_SC ctlp, callable_ready, callable_taken, 0
 nop
+BUMP_STAT   STATS_UNTRUSTED_OFFSET, ctmp, $t0
 
 cincoffset  csp, csp, -(2 * CAP_SIZE)
 
@@ -259,7 +279,7 @@ STUB_END plt_stub
 # We treat the nano kernel as in our own domain
 
 STUB_BEGIN plt_common_single_domain
-
+BUMP_STAT       STATS_COMMON_DOMAIN_OFFSET, ctmp, $t0
 ccall_slotless $c1, $c2, 2
 
 STUB_END plt_common_single_domain
@@ -270,7 +290,7 @@ STUB_END plt_common_single_domain
 # If we have more than one domain, but we trust all of them
 
 STUB_BEGIN plt_common_complete_trusting
-
+BUMP_STAT       STATS_COMPLETE_TRUST_OFFSET, ctmp, $t0
 cincoffset      csp, csp, -(2*CAP_SIZE)
 clcbi           ctmp, CTLP_OFFSET_CSP(ctlp)
 csc             cra, $zero, (0)(csp)
@@ -295,7 +315,7 @@ STUB_END plt_common_complete_trusting
 # If we have more than one domain, we trust this one, but not all
 
 STUB_BEGIN plt_common_trusting
-
+BUMP_STAT       STATS_TRUST_OFFSET, ctmp, $t0
 cincoffset      csp, csp, -(2*CAP_SIZE)
 clcbi           ctmp, CTLP_OFFSET_CSP(ctlp)
 csc             cra, $zero, (0)(csp)
@@ -347,9 +367,13 @@ cincoffset      csp,    csp,   -(CLO_SIZE)                         # allocate sp
 
 #define RETURN_STACK cusp
 
+#WARN: There might be some code that skips this check by knowing its offset. Try to insert code only after the check
+
 # Ensure adequate stack space.
 cgetoffset      $1, cusp
 tltiu           $1, 0x4000
+
+BUMP_STAT       STATS_UNTRUSTING_OFFSET, ctmp, $t0
 
 cscbi           csp, (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack

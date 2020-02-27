@@ -35,6 +35,16 @@
 #include "macroutils.h"
 #include "statcounters.h"
 
+#define DEBUG_COUNT_CALLS 0
+#define STATS_COMMON_DOMAIN_OFFSET  0
+#define STATS_COMPLETE_TRUST_OFFSET 8
+#define STATS_TRUST_OFFSET          16
+#define STATS_UNTRUSTING_OFFSET     24
+#define STATS_UNTRUSTED_OFFSET      32
+#define STATS_FAST_LEAFS_OFFSET     40
+
+#ifndef __ASSEMBLY__
+
 #if (GO_FAST)
 #define EXTRA_TEMPORAL_TRACKING 0
 #else
@@ -117,9 +127,23 @@ typedef struct cap_pair {
 #define STAT_DEBUG_LIST(ITEM, ...)
 #endif
 
+// WARN: I have not put any static asserts for these offsets. Change with care
+#if (DEBUG_COUNT_CALLS)
+#define USER_STATS_CALLS(ITEM, ...) \
+    ITEM(common_domain, "co-dom", __VA_ARGS__)\
+    ITEM(complete_trusting, "ctrust", __VA_ARGS__)\
+    ITEM(trusting, "strust", __VA_ARGS__)\
+    ITEM(untrusting, "utrstg", __VA_ARGS__)\
+    ITEM(untrusted, "utrstd", __VA_ARGS__)\
+    ITEM(fast_leaf, "fstlef", __VA_ARGS__)
+#else
+#define USER_STATS_CALLS(...)
+#endif
+
 #define USER_STATS_LIST(ITEM, ...) \
+    USER_STATS_CALLS(ITEM,__VA_ARGS__)\
     ITEM(temporal_depth, "tdepth", __VA_ARGS__)\
-    ITEM(temporal_reqs, "treqst", __VA_ARGS__)\
+    ITEM(temporal_reqs, "treqst", __VA_ARGS__)
 
 #define STAT_MEMBER(name, ...) uint64_t name;
 
@@ -153,4 +177,7 @@ typedef capability act_kt;
 typedef capability act_control_kt;
 typedef capability act_reply_kt;
 typedef capability act_notify_kt;
+
+#endif
+
 #endif

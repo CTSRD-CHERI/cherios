@@ -364,6 +364,7 @@ function(add_cherios_kernel _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
   target_link_libraries(${_target} CheriOS::LibCRT)
+  target_compile_definitions(${_target} PUBLIC -DIS_KERNEL=1)
 endfunction()
 
 function(add_cherios_nano _target)

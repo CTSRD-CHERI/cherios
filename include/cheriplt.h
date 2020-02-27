@@ -47,9 +47,35 @@
 #include "ccall.h"
 #include "utils.h"
 #include "misc.h"
+#include "types.h"
 
 // FIXME: alias needs size too
 #define WEAK_DUMMY(name) ".weak " #name "_dummy \n"
+
+#if (DEBUG_COUNT_CALLS)
+
+#if (IS_KERNEL)
+#define GET_STATS   "clcbi   $c15, " X_STRINGIFY(CTLP_OFFSET_CGP) "($idc) \n"\
+                    "cbtu $c15, 77f \n "\
+                    "nop \n"\
+                    "clcbi	$c15, %captab20(own_stats)($c15)\n"
+#else
+#define GET_STATS ".type own_stats, \"tls_object\"\n clcbi $c15, %captab_tls20(own_stats)($c26)\n"
+#endif
+
+#define BUMP_CSD_COUNTER GET_STATS \
+        "clcbi   $c15, 0($c15) \n"\
+        "cbtu    $c15, 77f\n"\
+        "nop\n"\
+        "cld     $t0, $zero, " X_STRINGIFY(STATS_COMMON_DOMAIN_OFFSET) "($c15)\n"\
+        "daddiu  $t0, $t0, 1\n"\
+        "csd     $t0, $zero, " X_STRINGIFY(STATS_COMMON_DOMAIN_OFFSET) "($c15)\n"\
+        "77:\n"
+
+#else
+#define BUMP_CSD_COUNTER
+#endif
+
 
 #define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias, alias2) \
 __asm__ (                       \
@@ -61,6 +87,7 @@ __asm__ (                       \
     "" #name ":\n"              \
     alias                       \
     WEAK_DUMMY(name)            \
+    BUMP_CSD_COUNTER            \
     "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
     "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     "ccall       $c1, $c2, 2 \n"\

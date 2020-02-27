@@ -78,8 +78,8 @@ start:
     cbts    $c3, has_thread_local
 	cmove   $idc, $c3
 # We might not get given any locals as the kernel doesn't use TLS and we discard the tls segment
-# We still require something tagged for TLS however. Just use the stack (with 0 bounds?)
-    csetbounds  $idc, $c11, $zero
+# We still require something tagged for TLS however. Best to point it at kernel activation zero, which has a spare CTL
+    get_sym     $idc, kernel_acts
 
 has_thread_local:
 	# Zero BSS.
