@@ -64,6 +64,26 @@ static void dump_stacks(void) {
     }
 }
 
+static void dump_user_stats(void) {
+
+    printf("User stat dump:\n\n");
+
+#define USD_HDR(f,n,...) "," n
+#define USD_FMT(f,n,...) ",%lu"
+#define USD_MEM(f,n, x, ...) , (x)->f
+
+    printf("Name" USER_STATS_LIST(USD_HDR) "\n");
+
+    for(act_control_kt act = syscall_actlist_first(); act != NULL ; act = syscall_actlist_next(act)) {
+        user_stats_t* stats = syscall_act_user_info_ref(act);
+        const char* name = syscall_get_name(syscall_act_ctrl_get_ref(act));
+
+        printf("%s" USER_STATS_LIST(USD_FMT)"\n", name USER_STATS_LIST(USD_MEM, stats));
+
+
+    }
+}
+
 static void dump_counters(void) {
 #define STR_LS(m,s,...) "," s
 #define FMT(m,s,...) ",%lu"
@@ -88,6 +108,7 @@ static void dump_help(void) {
     printf("\t m - dump most of mmans state\n");
     printf("\t s - dump temporal stack information\n");
     printf("\t c - dump beri stat counters and some OS stats\n");
+    printf("\t u - dump all the user specified stats\n");
     printf("Many of these will need to be enabled in the build first or they will crash / be nonsense\n");
 }
 
@@ -135,6 +156,9 @@ int main(__unused register_t arg, __unused capability carg) {
                 break;
             case 'c':
                 dump_counters();
+                break;
+            case 'u':
+                dump_user_stats();
                 break;
             default:
                 printf("Ping dump got a command it did not understand\n");
