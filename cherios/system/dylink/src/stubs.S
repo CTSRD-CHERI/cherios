@@ -373,13 +373,13 @@ cincoffset      csp,    csp,   -(CLO_SIZE)                         # allocate sp
 cgetoffset      $1, cusp
 tltiu           $1, 0x4000
 
-BUMP_STAT       STATS_UNTRUSTING_OFFSET, ctmp, $t0
-
 cscbi           csp, (-CLO_UNSAFE_SIZE + CSP_OFF_PREV)(cusp)
 cincoffset      csp,    cusp,   -(CLO_SIZE)                         # allocate space for closure and up the stack
 clc             cusp,   $zero,  CSP_OFF_NEXT(cusp)
 
 #endif
+
+BUMP_STAT       STATS_UNTRUSTING_OFFSET, ctmp, $t0
 
 clcbi           ctmp,  CTLP_OFFSET_CSP(ctlp)
 csc             csp,    $zero,  CTLP_OFFSET_CSP(ctlp)
