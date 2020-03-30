@@ -40,7 +40,7 @@
 #include "cheric.h"
 #include "cheriplt.h"
 #include "types.h"
-#include "math.h"
+#include "math_utils.h"
 
 __BEGIN_DECLS
 PLT(nano_kernel_if_t, NANO_KERNEL_IF_LIST)

@@ -34,7 +34,13 @@ extern "C" {
 #include "stdio.h"
 }
 
-class Foo {
+
+class Base {
+public:
+    virtual void v_f() = 0;
+};
+
+class Foo : public Base {
 public:
     virtual void v_f() {
         printf("I am the parent (virtual)!\n");
@@ -65,9 +71,8 @@ class Weird : public Another, public Foo {
     }
 };
 
-__attribute__((noinline)) void call_some_funcs(Foo* f) {
+__attribute__((noinline)) void call_some_funcs(Base* f) {
     f->v_f();
-    f->v_s();
 }
 
 int test() {

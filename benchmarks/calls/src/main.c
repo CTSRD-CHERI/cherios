@@ -38,6 +38,7 @@
 #include "macroutils.h"
 #include "temporal.h"
 #include "lightweight_ccall.h"
+#include "misc.h"
 
 #define SYNC_SAMPLES 0x1000
 #define DUP         0x10

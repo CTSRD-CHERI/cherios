@@ -27,52 +27,79 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+
+// Compatibility layer for POSIX.
+
 #ifndef CHERIOS_UNISTD_H
 #define CHERIOS_UNISTD_H
 
-#include "sockets.h"
-#include "stdio.h"
+#include "cheristd.h"
 #include "ff.h"
-#define LWIP_SOCKET_TYPES           1
-#define LWIP_SOCKET                 0
-#include "lwip/sockets.h"
+#include "errno.h"
 
-typedef FILE* FILE_t;
-typedef capability dir_token_t;
+typedef int64_t off_t;
 
-// Open/close will contact the FS activation for you and also do allocation for you
-// ONLY use close on something created by open. Otherwise the other functions are just wrappers for the socket_* family
+// Low short has modes supported by FS.
+// High short covers the socket flags and extra functions calls after open.
 
-DEC_ERROR_T(FILE_t);
+#define O_APPEND                    ((1 << 16) | FA_WRITE)
+#define O_CREAT                     FA_OPEN_ALWAYS
+#define O_RDWR                      (FA_READ | FA_WRITE)
+#define O_RDONLY                    FA_READ
+#define O_WRONLY                    FA_WRITE
+#define O_NONBLOCK                  (1 << 17)
+#define O_TRUNC                     ((1 << 18))
+#define O_NDELAY                    O_NONBLOCK /* same as O_NONBLOCK, for compatibility */
 
-ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, const uint8_t* key, const uint8_t* iv);
-static inline FILE_t open(const char* name, int mode, enum SOCKET_FLAGS flags) {
-    ERROR_T(FILE_t) res = open_er(name, mode, flags, NULL, NULL);
-    return IS_VALID(res) ? res.val : NULL;
+static int open(const char *name, int flags) {
+
+    u_long nonblock = flags & O_NONBLOCK;
+
+    int mode = (int)(flags & 0xFF);
+
+    ERROR_T(FILE_t) result = open_er(name, mode,
+                                     (enum SOCKET_FLAGS)((nonblock ? MSG_DONT_WAIT : MSG_NONE) | SOCKF_GIVE_SOCK_N | MSG_BUFFER_WRITES),
+                                     NULL, NULL);
+
+    if(IS_VALID(result)) {
+        ssize_t res = 0;
+        if(flags & O_TRUNC) {
+            res = truncate_file(result.val);
+        }
+        if(res < 0) {
+            map_sock_errors(res);
+            return -1;
+        }
+        if((flags & O_APPEND) == O_APPEND) {
+            res = lseek_file(result.val, 0, SEEK_END);
+        }
+        if(res < 0) {
+            map_sock_errors(res);
+            return -1;
+        }
+    } else {
+        if((ssize_t)result.er < 0) map_sock_errors((ssize_t)result.er);
+        else map_fs_errors((FRESULT)result.er);
+        return -1;
+    }
+
+    return socket_to_posix_handle(result.val);
 }
-static inline FILE_t open_encrypted(const char* name, int mode, enum SOCKET_FLAGS flags, const uint8_t* key, const uint8_t* iv) {
-    ERROR_T(FILE_t) res = open_er(name, mode, flags, key, iv);
-    return IS_VALID(res) ? res.val : NULL;
+
+static inline int close(int handle) {
+    return map_sock_errors(close_file(posix_handle_to_socket(handle)));
 }
 
-void process_async_closes(int force);
-ssize_t close(FILE_t file);
-#define write(file,buf,length) socket_send(file,buf,length,0)
-#define read(file,buf,length) socket_recv(file,buf,length,0)
-ssize_t lseek(FILE_t file, int64_t offset, int whence);
-#define sendfile(sockout,sockin,count) socket_sendfile(sockout,sockin,count)
-void needs_drb(FILE_t file);
-FRESULT mkdir(const char* name);
-FRESULT rename(const char* old, const char* new);
-FRESULT unlink(const char* name);
-ssize_t truncate(FILE_t file);
-ssize_t flush(FILE_t file);
-ssize_t filesize(FILE_t file);
-act_kt try_get_fs(void);
-FRESULT stat(const char* path, FILINFO* fno);
+static inline ssize_t lseek(int handle, int64_t offset, int whence) {
+    return lseek_file(posix_handle_to_socket(handle), offset, whence);
+}
 
-dir_token_t opendir(const char* name);
-FRESULT readdir(dir_token_t dir, FILINFO* fno);
-FRESULT closedir(dir_token_t dir);
+static inline ssize_t write(int handle, const void *buf, size_t length) {
+    return write_file(posix_handle_to_socket(handle), buf, length);
+}
+
+static inline ssize_t read(int handle, void *buf, size_t length) {
+    return read_file(posix_handle_to_socket(handle), buf, length);
+}
 
 #endif //CHERIOS_UNISTD_H

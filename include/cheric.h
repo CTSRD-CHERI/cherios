@@ -577,6 +577,12 @@ typedef struct reg_frame {
 
 } reg_frame_t;
 
+#if defined(__cplusplus)
+#define C_REGCLASS
+#else
+#define C_REGCLASS register
+#endif
+
 #endif // ASSEMBLY
 
 #define MIPS_FRAME_SIZE        (32*REG_SIZE)

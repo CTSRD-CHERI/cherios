@@ -8,10 +8,10 @@ include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
 include_directories(${UFS_DIR}/include)
 
 set(LIBCRT_SRCS
-    ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strlen.c
-    ${CMAKE_SOURCE_DIR}/libcrt/memset.c
-    ${CMAKE_SOURCE_DIR}/libcrt/memcpy.S
+    ${CMAKE_SOURCE_DIR}/libcrt/libc/freebsd_ports/subr_prf.c
+    ${CMAKE_SOURCE_DIR}/libcrt/libc/freebsd_ports/strlen.c
+    ${CMAKE_SOURCE_DIR}/libcrt/libc/freebsd_ports/memset.c
+    ${CMAKE_SOURCE_DIR}/libcrt/libc/memcpy_l.S
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
 )

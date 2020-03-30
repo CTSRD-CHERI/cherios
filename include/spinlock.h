@@ -32,20 +32,21 @@
 #define CHERIOS_SPINLOCK_H
 
 #include "cheric.h"
+#include "cdefs.h"
 
 /* TODO align this nicely */
-#define CACHE_LINE_SIZE 64;
 
 typedef struct spinlock_t{
     volatile char lock;
 } spinlock_t;
 
+__BEGIN_DECLS
 
 static inline void spinlock_init(spinlock_t* lock) {
     lock->lock = 0;
 }
 static inline void spinlock_acquire(spinlock_t* lock) {
-    register register_t tmp;
+    C_REGCLASS register_t tmp;
     __asm__ volatile (
     SANE_ASM
     "1:"
@@ -68,7 +69,7 @@ static inline void spinlock_acquire(spinlock_t* lock) {
 
 static inline int spinlock_try_acquire(spinlock_t* lock, register_t times) {
     int result;
-    register register_t tmp0;
+    C_REGCLASS register_t tmp0;
     __asm__ volatile (
     SANE_ASM
             "li     %[result], 0                \n"
@@ -95,5 +96,7 @@ static inline void spinlock_release(spinlock_t* lock) {
     lock->lock = 0;
     HW_SYNC;
 }
+
+__END_DECLS
 
 #endif //CHERIOS_SPINLOCK_H

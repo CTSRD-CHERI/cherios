@@ -33,68 +33,182 @@
 #ifndef _MATH_H_
 #define _MATH_H_
 
+#include "math_utils.h"
+#include "cdefs.h"
 #include "mips.h"
 
 #ifndef __ASSEMBLY__
 
-static inline int imax(int a, int b) {
-	return (a>b ? a : b);
+typedef struct {
+    long int quot;
+    long int rem;
+} ldiv_t;
+
+typedef struct {
+	int quot;
+	int rem;
+} div_t;
+
+typedef ldiv_t lldiv_t;
+
+__BEGIN_DECLS
+
+static long labs(long j) {
+    return(j < 0 ? -j : j);
 }
 
-static inline int imin(int a, int b) {
-	return (a<b ? a : b);
+static long long llabs(long long j) {
+    return labs(j);
 }
 
-static inline size_t umax(size_t a, size_t b) {
-	return (a>b ? a : b);
+#define DIV_BODY 			\
+    r.quot = num / denom;	\
+	r.rem = num % denom;	\
+							\
+	if (num >= 0 && r.rem < 0) {\
+		r.quot++;			\
+		r.rem -= denom;		\
+	}						\
+	return (r);
+
+static div_t div(int num, int denom) {
+    div_t r;
+	DIV_BODY
 }
 
-static inline size_t umin(size_t a, size_t b) {
-	return (a<b ? a : b);
+static ldiv_t ldiv(long num, long denom) {
+	ldiv_t r;
+	DIV_BODY
 }
 
-static inline int slog2(size_t s) {
-	int i=-1;
-	while(s) {
-		i++;
-		s >>= 1;
-	}
-	return i;
+#undef DIV_BODY
+
+static lldiv_t lldiv(long long num, long long denom) {
+	return ldiv(num ,denom);
 }
 
-static inline int is_power_2(size_t x) {
-	return (x & (x-1)) == 0;
-}
 
-static inline size_t align_up_to(size_t size, size_t align) {
-	size_t mask = align - 1;
-	return (size + mask) & ~mask;
-}
+// Floating point stuff. Mostly all unimplemented
 
-static inline size_t align_down_to(size_t size, size_t align) {
-	return size & ~(align-1);
-}
+typedef float float_t;
+typedef double double_t;
 
-static inline size_t round_up_to_nearest_power_2(size_t v) {
-	v--;
-	v |= v >> 1L;
-	v |= v >> 2L;
-	v |= v >> 4L;
-	v |= v >> 8L;
-	v |= v >> 16L;
-	v |= v >> 32L;
-	v++;
-	return v;
-}
+// TODO
+#define UNIMPLEMENTED_MACRO (TRAP,0)
+#define fpclassify(arg) UNIMPLEMENTED_MACRO
+#define signbit(X) (X < 0)
+#define isfinite(arg) UNIMPLEMENTED_MACRO
+#define isinf(X) UNIMPLEMENTED_MACRO
+#define isnan(X) UNIMPLEMENTED_MACRO
+#define isnormal(X) UNIMPLEMENTED_MACRO
+#define isgreater(x, y) UNIMPLEMENTED_MACRO
+#define isgreaterequal(x, y) UNIMPLEMENTED_MACRO
+#define isless(x, y) UNIMPLEMENTED_MACRO
+#define islessequal(x, y) UNIMPLEMENTED_MACRO
+#define islessgreater(x, y) UNIMPLEMENTED_MACRO
+#define isunordered(x, y) UNIMPLEMENTED_MACRO
 
-#define SLICE_W(Val, Width, LowNdx, Bits) (((Val) << ((Width) - ((LowNdx) + (Bits)))) >> ((Width) - (Bits)))
+#define INFINITY UNIMPLEMENTED_MACRO
 
-#define SLICE_64(Val, LowNdx, Bits) SLICE_W(Val, 64, LowNdx, Bits)
+#define FP_NORMAL		0
+#define FP_SUBNORMAL	1
+#define FP_ZERO			2
+#define FP_INFINITE		3
+#define FP_NAN			4
 
+// One arg
+#define DEFINE_BUILTIN_F_T_1(Name, T, Suffix, ...) static T Name ## Suffix(T x) {return (__builtin_## Name ## Suffix(x));}
+// Two args
+#define DEFINE_BUILTIN_F_T_2(Name, T, Suffix, ...) static T Name ## Suffix(T x, T y) {return (__builtin_## Name ## Suffix(x,y));}
+// Three args
+#define DEFINE_BUILTIN_F_T_3(Name, T, Suffix, ...) static T Name ## Suffix(T x, T y, T z) {return (__builtin_## Name ## Suffix(x,y, z));}
+// Two args (second is a ptr)
+#define DEFINE_BUILTIN_F_T_2_Star(Name, T, Suffix, ...) static T Name ## Suffix(T x, T* y) {return (__builtin_## Name ## Suffix(x,y));}
+// Two args (second is any given type)
+#define DEFINE_BUILTIN_F_T_1_X(Name, T, Suffix, T2) static T Name ## Suffix(T x, T2 y) {return (__builtin_## Name ## Suffix(x,y));}
+// One arg, custom return type
+#define DEFINE_BUILTIN_F_T_R(Name, T, Suffix, T2) static T2 Name ## Suffix(T x) {return (__builtin_## Name ## Suffix(x));}
+// Three args (third is any given type)
+#define DEFINE_BUILTIN_F_T_2_X(Name, T, Suffix, T2) static T Name ## Suffix(T x, T z, T2 y) {return (__builtin_## Name ## Suffix(x,z, y));}
+// One argument of a given type
+#define DEFINE_BUILTIN_F_T_0_X(Name, T, Suffix, T2) static T Name ## Suffix(T2 y) {return (__builtin_## Name ## Suffix(y));}
+
+// Different widths of floats and their suffixes
+#define DEFINE_BUILTIN_F_F(Name, F,...)     \
+    F(Name,float,f, __VA_ARGS__)            \
+    F(Name, double,,__VA_ARGS__)            \
+    F(Name,long double,l,__VA_ARGS__)
+
+// Handy wrappers
+#define DEFINE_BUILTIN_F_N(Name, N) DEFINE_BUILTIN_F_F(Name, DEFINE_BUILTIN_F_T_ ## N)
+#define DEFINE_BUILTIN_F(Name) DEFINE_BUILTIN_F_N(Name, 1)
+#define DEFINE_BUILTIN_F_0_OtherT(Name, T2) DEFINE_BUILTIN_F_F(Name, DEFINE_BUILTIN_F_T_0_X, T2)
+#define DEFINE_BUILTIN_F_OtherT(Name, T2) DEFINE_BUILTIN_F_F(Name, DEFINE_BUILTIN_F_T_1_X, T2)
+#define DEFINE_BUILTIN_F_2_OtherT(Name, T2) DEFINE_BUILTIN_F_F(Name, DEFINE_BUILTIN_F_T_2_X, T2)
+
+#define DEFINE_BUILTIN_F_2_STAR(Name) DEFINE_BUILTIN_F_F(Name, DEFINE_BUILTIN_F_T_2_Star)
+#define DEFINE_BUILTIN_F_R(Name, R) DEFINE_BUILTIN_F_F(Name, DEFINE_BUILTIN_F_T_R, R)
+
+DEFINE_BUILTIN_F(fabs)
+DEFINE_BUILTIN_F(acos)
+DEFINE_BUILTIN_F(asin)
+DEFINE_BUILTIN_F(sin)
+DEFINE_BUILTIN_F(cos)
+DEFINE_BUILTIN_F(tan)
+DEFINE_BUILTIN_F(atan)
+DEFINE_BUILTIN_F_N(atan2,2)
+DEFINE_BUILTIN_F(ceil)
+DEFINE_BUILTIN_F(floor)
+DEFINE_BUILTIN_F(cosh)
+DEFINE_BUILTIN_F(sinh)
+DEFINE_BUILTIN_F(tanh)
+DEFINE_BUILTIN_F(exp)
+DEFINE_BUILTIN_F_N(fmod, 2)
+DEFINE_BUILTIN_F_OtherT(frexp, int*)
+DEFINE_BUILTIN_F_OtherT(ldexp, int)
+DEFINE_BUILTIN_F(log)
+DEFINE_BUILTIN_F(log10)
+DEFINE_BUILTIN_F_N(pow, 2)
+DEFINE_BUILTIN_F_2_STAR(modf)
+DEFINE_BUILTIN_F(sqrt)
+DEFINE_BUILTIN_F(cbrt)
+DEFINE_BUILTIN_F(atanh)
+DEFINE_BUILTIN_F(acosh)
+DEFINE_BUILTIN_F(asinh)
+DEFINE_BUILTIN_F_N(copysign,2)
+DEFINE_BUILTIN_F(erf)
+DEFINE_BUILTIN_F(erfc)
+DEFINE_BUILTIN_F(exp2)
+DEFINE_BUILTIN_F(expm1)
+DEFINE_BUILTIN_F_N(fdim, 2)
+DEFINE_BUILTIN_F_N(fma, 3)
+DEFINE_BUILTIN_F_N(fmax, 2)
+DEFINE_BUILTIN_F_N(fmin, 2)
+DEFINE_BUILTIN_F_N(hypot, 2)
+DEFINE_BUILTIN_F(logb)
+DEFINE_BUILTIN_F_R(ilogb, int)
+DEFINE_BUILTIN_F(lgamma)
+DEFINE_BUILTIN_F(tgamma)
+DEFINE_BUILTIN_F(rint)
+DEFINE_BUILTIN_F(round)
+DEFINE_BUILTIN_F(trunc)
+DEFINE_BUILTIN_F_R(lrint, long)
+DEFINE_BUILTIN_F_R(llrint, long long)
+DEFINE_BUILTIN_F_R(lround, long)
+DEFINE_BUILTIN_F_R(llround, long long)
+DEFINE_BUILTIN_F(log1p)
+DEFINE_BUILTIN_F(log2)
+DEFINE_BUILTIN_F(nearbyint)
+DEFINE_BUILTIN_F_N(nextafter, 2)
+DEFINE_BUILTIN_F_OtherT(nexttoward,long double)
+DEFINE_BUILTIN_F_N(remainder,2)
+DEFINE_BUILTIN_F_2_OtherT(remquo,int*)
+DEFINE_BUILTIN_F_OtherT(scalbn, int)
+DEFINE_BUILTIN_F_OtherT(scalbln, long)
+DEFINE_BUILTIN_F_0_OtherT(nan, const char*)
+
+__END_DECLS
 #else // __ASEEMBLY__
-
-#define ALIGN_UP_2(X, P)   		(((X) + ((1 << (P)) - 1)) &~ ((1 << (P)) - 1))
-#define ALIGN_DOWN_2(X, P)  	((X) &~ ((1 << (P)) - 1))
 
 #endif
 

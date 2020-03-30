@@ -32,7 +32,7 @@
 #include "cheric.h"
 #include "webserver.h"
 #include "stdio.h"
-#include "unistd.h"
+#include "cheristd.h"
 #include "colors.h"
 #include "stdlib.h"
 #include "namespace.h"
@@ -136,7 +136,7 @@ int handle_get_post(struct session* s, struct initial* ini) {
 
     if(ini->method == POST && file_size == 0) ER_R("POST should include a file size\n");
 
-    FILE_t f = open(ini->file, FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
+    FILE_t f = open_file(ini->file, FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
     if(f == NULL) {
         send_response_initial(s, 404, NOT_FOUND "\n", sizeof(NOT_FOUND));
@@ -146,7 +146,7 @@ int handle_get_post(struct session* s, struct initial* ini) {
     if(ini->method == GET && file_size == 0) {
         result = filesize(f);
         if(result < 0) {
-            close(f);
+            close_file(f);
             ER_R("Error in getting file size\n");
         }
         file_size = (size_t)result;
@@ -161,7 +161,7 @@ int handle_get_post(struct session* s, struct initial* ini) {
         result = sendfile(f,(FILE_t)s->sock, file_size);
     }
 
-    close(f);
+    close_file(f);
 
     if(result < 0 || (size_t)result != file_size){
         if(ini->method == POST) {
@@ -244,7 +244,7 @@ void handle_loop(void) {
             finish_headers(&s);
         }
 
-        res = close((FILE_t)netsock);
+        res = close_file((FILE_t)netsock);
 
         assert_int_ex(res, ==, 0);
 

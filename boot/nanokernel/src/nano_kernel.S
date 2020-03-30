@@ -36,13 +36,11 @@
 #include "assembly_utils.h"
 #include "nano/nanokernel.h"
 #include "dylink.h"
-#include "math.h"
+#include "math_utils.h"
 #include "sha256.h"
 
 # FIXME. SPecial registers are now no longer general purpose. This makes things work:
 .set cheri_sysregs_accessible
-
-.set CACHE_LINE_SIZE,                64
 
 # Top bits of virtual address decide which range we are using
 # FIXME these are from see mips run and are probably wrong. Use versions in mips.h

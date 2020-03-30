@@ -35,11 +35,11 @@
 #define LWIP_NO_UNISTD_H 1
 //#include "unistd.h"
 #include "stdint.h"
-#include "stdio.h"
-#include "stdlib.h"
 #include "stdint.h"
-#include "string.h"
 #include "assert.h"
+#define LWIP_TIMEVAL_PRIVATE 0
+#include "sys/time.h"
+
 
 #define LWIP_NO_CTYPE_H 1
 
@@ -72,10 +72,6 @@ typedef int32_t s32_t;
 #define LWIP_PLATFORM_ASSERT(x) assert(x)
 
 #define LWIP_CONST_CAST(target_type, val) __DECONST(target_type, val)
-
-//TODO
-
-#define memmove memcpy
 
 //#define mem_clib_free free_debug
 //#define mem_clib_malloc malloc_debug

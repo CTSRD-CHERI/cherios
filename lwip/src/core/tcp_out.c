@@ -79,6 +79,7 @@
 #endif
 
 #include <string.h>
+#include "misc.h"
 
 #ifdef LWIP_HOOK_FILENAME
 #include LWIP_HOOK_FILENAME

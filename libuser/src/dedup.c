@@ -429,7 +429,13 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
     }
 
 #if (AUTO_DEDUP_STATS)
-    printf("%s's code segment went from %ld bytes to %ld bytes\n", syscall_get_name(act_self_ref), orig_size, new_size);
+    printf(
+#if(AUTO_DEDUP_STATS_COPYABLE)
+            "%s,%ld,%ld\n"
+#else
+            "%s's code segment went from %ld bytes to %ld bytes\n"
+#endif
+            , syscall_get_name(act_self_ref), orig_size, new_size);
 #endif
 
 #else

@@ -75,9 +75,77 @@ int isdigit(int c) {
 	return ((char)c >= '0') && ((char)c <= '9');
 }
 
+int isalnum(int c) {
+	return isdigit(c) || isalpha(c);
+}
+
 int isspace(int c) {
     uint64_t set =
             (1ULL << ' ') | (1ULL << '\n') | (1ULL << '\t') | (1ULL << '\v') | (1ULL << '\f') |(1ULL << '\r');
 
     return (set & (1 << c)) != 0;
+}
+
+int isblank(int c) {
+	return (c == ' ' || c == '\t');
+}
+
+int iscntrl(int c) {
+	return (((unsigned  int)c <= 0x1F) || c == 0x7F);
+}
+
+int isgraph(int c) {
+	return (c >= 0x21 && c <= 0x7E);
+}
+
+int isprint(int c) {
+	return isgraph(c) || isspace(c);
+}
+
+
+#define SET_ITEM(X,Off) || (1ULL << (X-Off))
+#define CHK_ITEM(X, Off) _Static_assert(X >= Off && (X-Off) <= 63, "Elements of set should be in 64 wide range");
+#define CHECK_SET(List, Start) List(CHK_ITEM, Start)
+#define SET_OF(List, Start) (0 List(SET_ITEM, Start))
+#define IS_MEMBER(Elem, List, Start) (Elem > Start && ((1ULL << (Elem - Start)) & SET_OF(List, Start)))
+
+#define PUNCT_START_1 '!'
+#define PUNCT_LISTT_1(ITEM, ...) \
+	ITEM('!', __VA_ARGS__)\
+	ITEM('"', __VA_ARGS__)\
+	ITEM('#', __VA_ARGS__)\
+	ITEM('$', __VA_ARGS__)\
+	ITEM('%', __VA_ARGS__)\
+	ITEM('&', __VA_ARGS__)\
+	ITEM('\'', __VA_ARGS__)\
+	ITEM('(', __VA_ARGS__)\
+	ITEM(')', __VA_ARGS__)\
+	ITEM('*', __VA_ARGS__)\
+	ITEM('+', __VA_ARGS__)\
+	ITEM(',', __VA_ARGS__)\
+	ITEM('-', __VA_ARGS__)\
+	ITEM('.', __VA_ARGS__)\
+	ITEM('/', __VA_ARGS__)\
+	ITEM(':', __VA_ARGS__)\
+	ITEM(';', __VA_ARGS__)\
+	ITEM('<', __VA_ARGS__)\
+	ITEM('=', __VA_ARGS__)\
+	ITEM('>', __VA_ARGS__)\
+	ITEM('?', __VA_ARGS__)\
+	ITEM('@', __VA_ARGS__)\
+	ITEM('[', __VA_ARGS__)\
+	ITEM('\\', __VA_ARGS__)\
+	ITEM(']', __VA_ARGS__)\
+	ITEM('^', __VA_ARGS__)\
+	ITEM('_', __VA_ARGS__)\
+	ITEM('`', __VA_ARGS__)
+
+CHECK_SET(PUNCT_LISTT_1, PUNCT_START_1)
+
+int ispunct(int c) {
+	return IS_MEMBER(c, PUNCT_LISTT_1, PUNCT_START_1) || (c >= '{' && c <= '}');
+}
+
+int isxdigit(int c) {
+	return isdigit(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
 }

@@ -35,6 +35,10 @@
 #include "capmalloc.h"
 #include "stdio.h"
 #include "assert.h"
+#include "stddef.h"
+#include "locale.h"
+
+__BEGIN_DECLS
 
 static inline capability malloc(size_t size) {
     res_t res = cap_malloc(size);
@@ -44,6 +48,13 @@ static inline capability malloc(size_t size) {
     assert_int_ex(cheri_getlen(taken), >=, size);
     //taken = cheri_setbounds(taken, size); screws with free
     return taken;
+}
+
+static inline int posix_memalign(void **memptr, size_t alignment, size_t size) {
+    size_t alignment_easy = (size <= RES_META_SIZE) ? size : RES_META_SIZE;
+    assert(alignment <= alignment_easy);
+    *memptr = malloc(size);
+    return 0;
 }
 
 static inline capability malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) {
@@ -92,10 +103,41 @@ int     rand(void);
 void  qsort(void	*base, size_t nmemb, size_t size,
 int (*compar)(const void *, const void	*));
 
-//char *getenv(const char *name)
-
-#define getenv(name) NULL
+static char *getenv(__unused const char *name) {
+    return NULL;
+}
 
 
 long strtol(const char *nptr, char **endptr, int base);
+
+// Not implemented
+double      atof(const char* str);
+long        atol(const char *str);
+long long   atoll(const char *str);
+double      strtod(const char *__restrict str, char **__restrict str_end);
+float       strtof(const char *__restrict str, char **__restrict str_end);
+long double strtold(const char *__restrict str, char **__restrict str_end);
+long long   strtoll(const char *__restrict str, char **__restrict str_end, int base);
+unsigned long strtoul(const char *__restrict str, char **__restrict str_end, int base);
+unsigned long long strtoull(const char *__restrict str, char **__restrict str_end, int base);
+
+int mblen(const char* s, size_t n);
+int mbtowc(wchar_t *__restrict pwc, const char *__restrict s, size_t n);
+int wctomb(char *s, wchar_t wc);
+size_t mbstowcs(wchar_t *__restrict dst, const char *__restrict src, size_t len);
+size_t wcstombs(char *__restrict dst, const wchar_t *__restrict src, size_t len);
+
+void* bsearch(const void *key, const void *ptr, size_t count, size_t size, int (*comp)(const void*, const void*));
+
+void srand(unsigned seed);
+void *realloc(void *ptr, size_t new_size);
+
+int system(const char *command);
+int atexit(void (*func)(void));
+int at_quick_exit(void (*func)(void));
+void quick_exit(int exit_code) __dead2;
+void _Exit(int exit_code) __dead2;
+
+__END_DECLS
+
 #endif /* !__STDLIB_H__ */

@@ -61,7 +61,7 @@
 
 #define DEDUP_INIT 0
 
-#define B_BENCH 1
+#define B_BENCH 0
 
 #define B_BENCH_MS      0
 #define B_BENCH_CALLS   0
@@ -213,6 +213,7 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH && 0)
     B_PENTRY(m_user, "nc_shell.elf", 0, !B_BENCH && BUILD_WITH_NET)
 //    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
+    B_PENTRY(m_user,"cpptest.elf",0,1)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)

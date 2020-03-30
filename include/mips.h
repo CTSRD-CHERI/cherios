@@ -75,6 +75,8 @@
 
 #define HW_SYNC __asm__ __volatile__ ("sync")
 
+#define TRAP ({__asm__ __volatile__("teqi $zero, 0");0;})
+
 #ifndef __ASSEMBLY__
 
 /*
@@ -143,9 +145,6 @@ typedef uint ## size ## _t  uint_fast ## size ## _t;
 #define INT_SIZES(ITEM) ITEM(8) ITEM(16) ITEM(32) ITEM(64)
 
 INT_SIZES(define_intypes)
-
-#define ULONG_MAX	4294967295UL
-#define UINT_MAX	ULONG_MAX
 
 #define	NBBY		8	/* Number of bits per byte. */
 #ifdef __cplusplus

@@ -33,15 +33,20 @@
 
 #include "cdefs.h"
 #include "mips.h"
-
+#include "locale.h"
 
 __BEGIN_DECLS
 void	bzero(void *, size_t);
 void *	memcpy(void *dest, const void *src, size_t n);
+void * memmove ( void * destination, const void * source, size_t num );
 void *	memset(void *, int, size_t);
 char *	strchr(const char * s, int c);
+char *  strrchr(const char *cp, int ch);
 char *	strcpy(char * dest,const char *src);
 char *  strcat ( char * destination, const char * source );
+char * strncat(char *dst, const char *src, size_t n);
+size_t strcspn(const char * __restrict s, const char * __restrict charset);
+size_t strspn(const char *s, const char *charset);
 char * strdup(const char *str1);
 void *  memchr( const void * ptr, int value, size_t num );
 int	strcmp(const char *s1, const char *s2);
@@ -52,6 +57,15 @@ char *  strstr(const char *s, const char *find);
 char *strpbrk(const char *str1, const char *str2);
 
 int memcmp ( const char * ptr1, const char * ptr2, size_t num );
+
+#define strcoll strcmp
+#define strxfrm strncpy
+
+static char *strerror(__unused int errnum) {
+    // TODO: There are actually strings defined via macro in errno.h to use
+    return NULL;
+}
+
 __END_DECLS
 
 #endif /* !__STRING_H__ */

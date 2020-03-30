@@ -72,8 +72,10 @@ ssize_t socket_requester_lseek(requester_t requester, int64_t offset, int whence
 uint8_t free_ns[MAX_SOCKNS];
 uint8_t free_n;
 
-// Not thread safe, bit of a hack to help nginx...
-static uint8_t alloc_sockn(void) {
+unix_like_socket* ns_inverse_map[MAX_SOCKNS];
+
+// Not thread safe
+static uint8_t alloc_sockn(unix_like_socket* sock) {
     static int init = 0;
     if(!init) {
         init = 1;
@@ -88,12 +90,16 @@ static uint8_t alloc_sockn(void) {
 
     free_n = free_ns[free_n];
 
+    ns_inverse_map[res] = sock;
+    sock->sockn = res;
+
     return res;
 }
 
 static void free_sockn(uint8_t n) {
     free_ns[n] = free_n;
     free_n = n;
+    ns_inverse_map[n] = NULL;
 }
 
 int socket_listen_rpc(register_t port,
@@ -260,7 +266,7 @@ int socket_init(unix_like_socket* sock, enum SOCKET_FLAGS flags,
 
     sock->flags = flags;
 
-    if(flags & SOCKF_GIVE_SOCK_N) sock->sockn = alloc_sockn();
+    if(flags & SOCKF_GIVE_SOCK_N) alloc_sockn(sock);
 
     if(data_buffer) {
         return init_data_buffer(&sock->write_copy_buffer, data_buffer, data_buffer_size);
@@ -666,7 +672,7 @@ int socket_poll(poll_sock_t* socks, size_t nsocks, int timeout, enum poll_events
 int assign_socket_n(unix_like_socket* sock) {
     if(sock->flags & SOCKF_GIVE_SOCK_N) return -1;
     sock->flags |= SOCKF_GIVE_SOCK_N;
-    sock->sockn = alloc_sockn();
+    alloc_sockn(sock);
 
     return 0;
 }

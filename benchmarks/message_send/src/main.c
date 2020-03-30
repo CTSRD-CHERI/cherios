@@ -37,6 +37,7 @@
 #include "bench_collect.h"
 #include "temporal.h"
 #include "assert.h"
+#include "misc.h"
 
 #define SYNC_SAMPLES 0x1000
 #define SYNC_TIMES 1000

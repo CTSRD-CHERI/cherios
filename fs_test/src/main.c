@@ -30,7 +30,7 @@
 
 
 #include "cheric.h"
-#include "unistd.h"
+#include "cheristd.h"
 #include "assert.h"
 #include "stdio.h"
 #include "string.h"
@@ -50,7 +50,7 @@ int main(__unused register_t arg, __unused capability carg) {
 
     printf("Fs test start..\n");
 
-    FILE_t file = open("foobar", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
+    FILE_t file = open_file("foobar", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
     assert(file != NULL);
 
@@ -61,15 +61,15 @@ int main(__unused register_t arg, __unused capability carg) {
 
     ssize_t result;
 
-    result = write(file, message, ms);
+    result = write_file(file, message, ms);
 
     assert_int_ex(result, ==, ms);
 
-    result = lseek(file, 0, SEEK_SET);
+    result = lseek_file(file, 0, SEEK_SET);
 
     assert_int_ex(result, ==, 0);
 
-    result = read(file, buf, ms);
+    result = read_file(file, buf, ms);
 
     assert_int_ex(result, ==, ms);
 
@@ -77,22 +77,22 @@ int main(__unused register_t arg, __unused capability carg) {
 
     assert_int_ex(result, == , 0);
 
-    result = close(file);
+    result = close_file(file);
 
     assert_int_ex(result, ==, 0);
 
-    file = open("bigtest", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
+    file = open_file("bigtest", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
     assert(file != NULL);
 
-    result = write(file, LOREM, BIG_SIZE);
+    result = write_file(file, LOREM, BIG_SIZE);
 
     assert_int_ex(-result, ==, -BIG_SIZE);
 
-    result = lseek(file, 0, SEEK_SET);
+    result = lseek_file(file, 0, SEEK_SET);
     assert_int_ex(result, ==, 0);
 
-    result = read(file, dest, BIG_SIZE);
+    result = read_file(file, dest, BIG_SIZE);
     assert_int_ex(result, ==, BIG_SIZE);
 
     for(size_t i = 0; i < BIG_SIZE; i++) {
@@ -100,25 +100,25 @@ int main(__unused register_t arg, __unused capability carg) {
         dest[i] = 0;
     }
 
-    FILE_t file2 = open("Target", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
+    FILE_t file2 = open_file("Target", FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE);
 
-    result = lseek(file, 0, SEEK_SET);
+    result = lseek_file(file, 0, SEEK_SET);
     assert_int_ex(result, ==, 0);
 
     result = sendfile(file2, file, BIG_SIZE);
     assert_int_ex(result, ==, BIG_SIZE);
 
-    flush(file);
+    flush_file(file);
 
-    result = close(file);
+    result = close_file(file);
     assert_int_ex(result, ==, 0);
 
-    flush(file2);
+    flush_file(file2);
 
-    result = lseek(file2, 0, SEEK_SET);
+    result = lseek_file(file2, 0, SEEK_SET);
     assert_int_ex(result, ==, 0);
 
-    result = read(file2, dest, BIG_SIZE);
+    result = read_file(file2, dest, BIG_SIZE);
     assert_int_ex(result, ==, BIG_SIZE);
 
     result = socket_requester_space_wait(file2->read.pull_reader, SPACE_AMOUNT_ALL, 1, 0);
@@ -140,7 +140,7 @@ int main(__unused register_t arg, __unused capability carg) {
         assert_int_ex(LOREM[i], ==, dest[i]);
     }
 
-    result = close(file2);
+    result = close_file(file2);
     assert_int_ex(result, ==, 0);
 
     printf("Normal Fs test success! Trying Encryption\n");
@@ -156,20 +156,20 @@ int main(__unused register_t arg, __unused capability carg) {
     FILE_t file3 = open_encrypted("enc1", FA_OPEN_ALWAYS | FA_WRITE, MSG_NO_COPY_WRITE, key, iv);
     assert(file3 != NULL);
 
-    result = write(file3, LOREM, BIG_SIZE);
+    result = write_file(file3, LOREM, BIG_SIZE);
     assert_int_ex(result, ==, BIG_SIZE);
 
-    result = close(file3);
+    result = close_file(file3);
     assert_int_ex(result, ==, 0);
 
-    FILE_t file4 = open("enc1", FA_OPEN_ALWAYS | FA_READ, MSG_NONE);
+    FILE_t file4 = open_file("enc1", FA_OPEN_ALWAYS | FA_READ, MSG_NONE);
     assert(file4 != NULL);
 
     bzero(dest, BIG_SIZE);
-    result = read(file4, dest, BIG_SIZE);
+    result = read_file(file4, dest, BIG_SIZE);
 
     assert_int_ex(result, ==, BIG_SIZE);
-    result = close(file4);
+    result = close_file(file4);
     assert_int_ex(result, == ,0);
 
 
@@ -191,9 +191,9 @@ int main(__unused register_t arg, __unused capability carg) {
     assert(file5 != NULL);
 
     bzero(dest, BIG_SIZE);
-    result = read(file5, dest, BIG_SIZE);
+    result = read_file(file5, dest, BIG_SIZE);
     assert_int_ex(result, ==, BIG_SIZE);
-    result = close(file5);
+    result = close_file(file5);
     assert_int_ex(result, == ,0);
 
     result = 1;

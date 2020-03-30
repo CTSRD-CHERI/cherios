@@ -38,7 +38,7 @@
 #include "thread.h"
 #include "stdlib.h"
 #include "atomic.h"
-#include "unistd.h"
+#include "cheristd.h"
 
 FATFS fs;
 
@@ -76,7 +76,7 @@ static void set_encrypt_lock(fs_proxy* proxy, locked_t locked) {
 }
 
 
-void close_file(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
+void close_file_internal(size_t* prev_ndx, struct sessions_t* session, uint8_t level) {
     assert_int_ex(session->in_use, ==, 1);
 
     if(session->nice_close < level) {
@@ -157,7 +157,7 @@ __used ssize_t full_oob(capability arg, request_t* request,  uint64_t offset, __
             f_truncate(&fil->fil);
             return length;
         case REQUEST_CLOSE:
-            close_file(NULL, fil, 1);
+            close_file_internal(NULL, fil, 1);
             return length;
         case REQUEST_FLUSH:
             assert(0 && "TODO");
@@ -267,7 +267,7 @@ void handle(enum poll_events events, struct sessions_t* session) {
 
     if(session->nice_close && !any_proxy) {
         session->events = 0;
-        close_file(NULL, session, 2);
+        close_file_internal(NULL, session, 2);
     }
 }
 
@@ -291,7 +291,7 @@ static void init_block_cache_requesters(void) {
 }
 
 
-int open_file(int mode, requester_t read_requester, requester_t write_requester, const char* file_name, locked_t* encrpyt) {
+int open_file_internal(int mode, requester_t read_requester, requester_t write_requester, const char* file_name, locked_t* encrpyt) {
 
     int read = mode & FA_READ;
     int write = mode & FA_WRITE;
@@ -388,7 +388,7 @@ static FRESULT close_dir(capability sealed_dir) {
     return res;
 }
 
-void (*msg_methods[]) = {open_file, make_dir, f_rename, f_unlink, f_stat, open_dir, read_dir, close_dir};
+void (*msg_methods[]) = {open_file_internal, make_dir, f_rename, f_unlink, f_stat, open_dir, read_dir, close_dir};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL};
 size_t ctrl_methods_nb = countof(ctrl_methods);
@@ -409,7 +409,7 @@ void request_loop(void) {
             assert_int_ex(session->in_use, ==, 1);
 
             if(session->nice_close == 2) {
-                close_file(prev_ptr, session, UINT8_MAX);
+                close_file_internal(prev_ptr, session, UINT8_MAX);
                 goto restart_loop;
             }
 
@@ -431,7 +431,7 @@ void request_loop(void) {
                         handle(event, session);
                 } else if(event){
                     if(event & POLL_HUP) {
-                        close_file(prev_ptr, session, UINT8_MAX);
+                        close_file_internal(prev_ptr, session, UINT8_MAX);
                         goto restart_loop;
                     }
                     if(event & (POLL_ER | POLL_NVAL)) {

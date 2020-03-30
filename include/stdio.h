@@ -37,13 +37,16 @@
 #include "stdarg.h"
 #include "colors.h"
 #include "types.h"
+#include "locale.h"
 
 typedef unix_like_socket FILE;
-
-__BEGIN_DECLS
-
 extern __thread FILE * stderr;
 extern __thread FILE * stdout;
+extern __thread FILE * stdin; // Currently always NULL
+
+#define EOF -1
+
+__BEGIN_DECLS
 
 typedef void kvprintf_putc_f (int,void*);
 int	kvprintf(char const *fmt, void (*func)(int, void*), void *arg, int radix, va_list ap);
@@ -61,13 +64,51 @@ int	fprintf(FILE * f, const char *fmt, ...) __printflike(2, 3);
 int sprintf ( char * str, const char * format, ... );
 int snprintf(char *str, size_t size, const char *format, ...);
 int	puts(const char *s);
-#define putc(c,s) fputc(c,s)
 int	fputc(int character, FILE * stream);
+static int putc(int ch, FILE *stream) {
+    return fputc(ch,stream);
+}
 void	panic(const char *str) __dead2;
 void panic_proxy(const char *str, act_kt act) __dead2;
 
 int asprintf(char **strp, const char *fmt, ...);
 int vasprintf(char **strp, const char *fmt, va_list ap);
+
+typedef size_t fpos_t;
+
+// Not yet implemented
+
+int fclose(FILE *stream);
+int fflush(FILE *stream);
+void setbuf(FILE *__restrict stream, char *__restrict buffer);
+int setvbuf(FILE *__restrict stream, char *__restrict buffer, int mode, size_t size);
+int fscanf(FILE *__restrict stream, const char *__restrict format, ... );
+int sscanf(const char *__restrict buffer, const char *__restrict format, ... );
+int vfprintf(FILE *__restrict stream, const char *__restrict format, va_list vlist);
+int vfscanf(FILE *__restrict stream, const char *__restrict format, va_list vlist);
+int vsscanf(const char *__restrict buffer, const char *__restrict format, va_list vlist);
+int fgetc(FILE *stream);
+char *fgets(char *__restrict str, int count, FILE *__restrict stream);
+int fputs(const char *__restrict str, FILE *__restrict stream);
+int getc(FILE *stream);
+int ungetc(int ch, FILE *stream);
+size_t fread(void *__restrict buffer, size_t size, size_t count,
+              FILE *__restrict stream);
+size_t fwrite(const void *__restrict buffer, size_t size, size_t count,
+               FILE *__restrict stream);
+int fgetpos(FILE *__restrict stream, fpos_t *__restrict pos);
+int fsetpos(FILE *stream, const fpos_t *pos);
+int fseek(FILE *stream, long offset, int origin);
+long ftell(FILE *stream);
+void rewind(FILE *stream);
+void clearerr(FILE *stream);
+int feof(FILE *stream);
+int ferror(FILE *stream);
+void perror(const char *s);
+int getchar(void);
+int scanf(const char *__restrict format, ...);
+int vscanf(const char *__restrict format, va_list vlist);
+int putchar(int ch);
 
 __END_DECLS
 #endif /* !__STDIO_H__ */

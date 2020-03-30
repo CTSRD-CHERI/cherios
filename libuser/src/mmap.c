@@ -36,6 +36,7 @@
 #include "namespace.h"
 #include "stdio.h"
 #include "assert.h"
+#include "errno.h"
 
 act_kt memmgt_ref = NULL;
 // FIXME: Probably should not circumvent the main mmap activation.

@@ -37,9 +37,6 @@
 #include "spinlock.h"
 #include "cp0.h"
 
-/* TODO align this nicely */
-#define CACHE_LINE_SIZE 64;
-
 #define CRITICAL_LOCKED_BEGIN_ID(lock, id) \
     id = critical_section_enter();         \
     spinlock_acquire(lock);

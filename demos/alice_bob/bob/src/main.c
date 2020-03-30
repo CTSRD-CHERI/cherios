@@ -35,6 +35,7 @@
 #include "alice_bob.h"
 #include "capmalloc.h"
 #include "assert.h"
+#include "misc.h"
 
 cert_t response_cert;
 

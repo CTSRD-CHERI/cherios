@@ -37,6 +37,7 @@
 #include "capmalloc.h"
 #include "dylink.h"
 #include "bench_collect.h"
+#include "misc.h"
 
 #define SYNC_SAMPLES 0x1000
 

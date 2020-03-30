@@ -33,7 +33,6 @@
 #define SYS_MMAN_H
 
 #include "cdefs.h"
-#include "errno.h"
 #include "types.h"
 #include "nano/nanokernel.h"
 #include "elf.h"
@@ -149,10 +148,6 @@ enum mmap_flags
 #define MAP_ANONYMOUS map_anonymous
 #define MAP_SHARED map_shared
 
-enum mmap_return
-{
-    ENOMEM = 1
-};
 
 cap_pair mmap_based_alloc(size_t s, Elf_Env* env);
 res_t mmap_based_capmalloc(size_t s, Elf_Env* env);

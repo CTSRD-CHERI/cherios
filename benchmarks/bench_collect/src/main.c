@@ -32,7 +32,8 @@
 #include "net.h"
 #include "namespace.h"
 #include "bench_collect.h"
-#include "unistd.h"
+#include "cheristd.h"
+#include "misc.h"
 
 typedef struct {
     unix_net_sock* sock;
@@ -82,7 +83,7 @@ void con_finish(void) {
     char c = 'F';
     socket_request_im(req, 1, NULL, &c, 0);
     state.sock->sock.flags &=~MSG_DONT_WAIT;
-    close(&state.sock->sock);
+    close_file(&state.sock->sock);
 
     printf("Benchmark collector connection closed\n");
 

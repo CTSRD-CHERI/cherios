@@ -1,13 +1,17 @@
 set(CMAKE_SYSTEM_NAME "Generic" CACHE STRING "Target system" FORCE)
 set(CMAKE_SYSTEM_PROCESSOR "Mips" CACHE STRING "Target CPU" FORCE)
 set(CMAKE_CROSSCOMPILING ON)
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 3.13)
 # We have to set LANGUAGES to none so that we can set CMAKE_C_COMPILER
 # before it checks the C compiler features. We can then use enable_language()
 # to initialize all the C and ASM rules
 project(CheriOS LANGUAGES NONE VERSION 0.0.1)
 
+# Allow override of options using set
+cmake_policy(SET CMP0077 NEW)
 #
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 # Configure hardare at compile time.  Default to "qemu" for CHERI QEMU MALTA.
 # Other option are "fpga" for CHERI on FPGA and "l3" for the L3 simulator.
 #
@@ -197,6 +201,9 @@ if(VARY_SECURE STREQUAL "OFF")
 elseif(VARY_SECURE STREQUAL "ON")
     set(VARY_SECURE_FLAGS -DFORCE_SECURE=1)
 endif()
+
+# These files make use of include_next and so need be listed FIRST
+#include_directories(libcxx/include)
 
 include_directories(include)
 include_directories(include/sys)
@@ -500,7 +507,7 @@ function(add_cherios_module _target)
 
 
     if(add_exe_NEED_LIBCXXRT)
-        target_link_libraries(${_target} cxxrt-static)
+        #target_link_libraries(${_target} cxxrt-static)
     endif()
 endfunction()
 
@@ -534,6 +541,24 @@ include(lwip/src/Filelists.cmake)
 set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
 
 add_subdirectory(libuser)
+
+# Just include libcxx directly so it picks up the right compiler options
+set(LIBCXX_ENABLE_SHARED OFF)
+set(LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY OFF)
+set(LIBCXX_ENABLE_FILESYSTEM OFF)
+set(LLVM_INCLUDE_TESTS OFF)
+set(LIBCXX_INCLUDE_BENCHMARKS OFF)
+set(LLVM_INCLUDE_DOCS OFF)
+set(LIBCXX_ABI_FORCE_ITANIUM ON)
+set(LIBCXX_ENABLE_EXCEPTIONS OFF)
+set(LIBCXX_ENABLE_RTTI OFF)
+set(LIBCXX_ENABLE_GLOBAL_FILESYSTEM_NAMESPACE OFF)
+set(LIBCXX_ENABLE_THREADS OFF)
+set(LIBCXX_ENABLE_THREAD_UNSAFE_C_FUNCTIONS OFF)
+set(LIBCXX_ENABLE_MONOTONIC_CLOCK OFF)
+set(PACKAGE_VERSION 11.0.0git)
+
+add_subdirectory(libcxx)
 
 add_subdirectory(libcxxrt)
 

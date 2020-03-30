@@ -1,23 +1,33 @@
+set (LIBC_ROOT ${CMAKE_SOURCE_DIR}/libcrt/libc)
+
+
+# Try to keep important files early, it helps deduplication when other heuristics fail
 set(LIBCRT_SRCS
-    ${CMAKE_SOURCE_DIR}/libcrt/memcpy.S
-    ${CMAKE_SOURCE_DIR}/libcrt/memset.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strlen.c
-    ${CMAKE_SOURCE_DIR}/libcrt/subr_prf.c
+    ${LIBC_ROOT}/memcpy_l.S
+    ${LIBC_ROOT}/freebsd_ports/memset.c
+    ${LIBC_ROOT}/freebsd_ports/strlen.c
+    ${LIBC_ROOT}/freebsd_ports/subr_prf.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
     ${CMAKE_SOURCE_DIR}/libcrt/cp0.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strcmp.c
-    ${CMAKE_SOURCE_DIR}/libcrt/mem_cmp.c
-    ${CMAKE_SOURCE_DIR}/libcrt/atoi.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strchr.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strstr.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strbprk.c
-    ${CMAKE_SOURCE_DIR}/libcrt/qsort.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strcat.c
-    ${CMAKE_SOURCE_DIR}/libcrt/memchr.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strcpy.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strdup.c
-    ${CMAKE_SOURCE_DIR}/libcrt/strtol.c
+    ${LIBC_ROOT}/freebsd_ports/strcmp.c
+    ${LIBC_ROOT}/mem_cmp.c
+    ${LIBC_ROOT}/atoi.c
+# String stuff
+    ${LIBC_ROOT}/strchr.c
+    ${LIBC_ROOT}/freebsd_ports/strstr.c
+    ${LIBC_ROOT}/freebsd_ports/strbprk.c
+    ${LIBC_ROOT}/freebsd_ports/qsort.c
+    ${LIBC_ROOT}/freebsd_ports/strcat.c
+    ${LIBC_ROOT}/freebsd_ports/memchr.c
+    ${LIBC_ROOT}/freebsd_ports/strcpy.c
+    ${LIBC_ROOT}/strdup.c
+    ${LIBC_ROOT}/freebsd_ports/strtol.c
+    ${LIBC_ROOT}/freebsd_ports/strrchr.c
+    ${LIBC_ROOT}/freebsd_ports/strcspn.c
+# Maths (currently nothing provided, built ins should cover common cases)
+# Wide chars
+
 )
 
 set(LIBUSER_ASM_SRCS
@@ -62,8 +72,8 @@ set(LIBUSER_SRCS
 # On the way to proper dynamic linking.
 
 set(LIBCRT_LIGHT_SRCS
-    ${CMAKE_SOURCE_DIR}/libcrt/memcpy.S
-    ${CMAKE_SOURCE_DIR}/libcrt/memset.c
+    ${LIBC_ROOT}/memcpy_l.S
+    ${LIBC_ROOT}/freebsd_ports/memset.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
 )

@@ -35,7 +35,7 @@
 #include "sockets.h"
 #include "assert.h"
 #include "stdio.h"
-#include "unistd.h"
+#include "cheristd.h"
 
 #define REQ1    "POST somefile.txt HTTP/1.0\n" \
                 "Content-Length: 14\n" \
@@ -84,7 +84,7 @@ int main(__unused register_t arg, __unused capability carg) {
     res = socket_fulfill_progress_bytes_unauthorised(netsock->sock.read.push_reader, SOCK_INF, F_CHECK | F_PROGRESS,
             TRUSTED_CROSS_DOMAIN(ful_print), NULL, 0, NULL, NULL, TRUSTED_DATA, NULL);
 
-    close((FILE_t)netsock);
+    close_file((FILE_t)netsock);
 
     bind.port = 1235;
     do {

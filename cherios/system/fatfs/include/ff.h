@@ -21,6 +21,7 @@
 
 #include "sockets.h"
 #include "spinlock.h"
+#include "stdio.h"
 
 typedef struct fs_proxy {
 	size_t offset;
@@ -292,12 +293,6 @@ TCHAR* f_gets (TCHAR* buff, int len, FIL* fp);						/* Get a string from the fil
 #define f_size(fp) ((fp)->obj.objsize)
 #define f_rewind(fp) f_lseek((fp), 0)
 #define f_rewinddir(dp) f_readdir((dp), 0)
-
-#ifndef EOF
-#define EOF (-1)
-#endif
-
-
 
 
 /*--------------------------------------------------------------*/

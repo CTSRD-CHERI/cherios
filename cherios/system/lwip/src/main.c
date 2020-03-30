@@ -30,7 +30,7 @@
 
 
 #include "sockets.h"
-#include "unistd.h"
+#include "cheristd.h"
 #include "cheric.h"
 #include "stdlib.h"
 #include "assert.h"

@@ -34,7 +34,8 @@
 #include "dylink.h"
 #include "nano/nanotypes.h"
 #include "string.h"
-#include "mman.h"
+#include "stdarg.h"
+#include "types.h"
 
 // All the functions that this library exports
 
@@ -127,6 +128,8 @@ typedef int vprintf_t(const char *fmt, va_list ap);
 #define FORCE_WAIT_SOCKET_RECV 1
 
 #define SOCKET_CONNECT_IPC_NO       (0xbeef)
+
+// The socket errors all begin E_ to not confuse with the linux ones
 
 #define E_AGAIN                     (-1)
 #define E_OOB                       (-17)

@@ -253,6 +253,13 @@ li  $zero, 0xdead
 	.endif
 .endm
 
+# Does for i in range(start, stop, step) { macro(global, i) }
+.macro for_range macro, global, start, stop, step
+    .if \start != \stop
+        \macro \global, \start
+        for_range \macro, \global, (\start+\step), \stop, \step
+    .endif
+.endm
 
     #
     # Context switch save; step all over k0 and k1 as is usual
@@ -466,12 +473,20 @@ nop
     LOG_NOT \R, \R
 .endm
 
+.macro LOG_EQUAL_I R, X, I
+    daddiu  \R, \X, \Y
+    LOG_NOT \R, \R
+.endm
+
 .macro LOG_NOT_EQUAL_I R, X, I
     daddiu  \R, \X, -\I
     LOG_NON_ZERO \R, \R
 .endm
 
-
+.macro LOG_NOT_EQUAL R, X, Y
+    dsubu   \R, \X, \Y
+    LOG_NON_ZERO \R, \R
+.endm
 
 .macro LOG_AND R, X, Y
     and     \R, \X, \Y
@@ -501,4 +516,10 @@ nop
     andi        \T2, \X, 0xCC
     daddiu      \X, \T1, 2
     movz        \X, \T1, \T2
+.endm
+
+.macro RSWAP X, Y
+    xor         \X, \X, \Y
+    xor         \Y, \X, \Y
+    xor         \X, \X, \Y
 .endm

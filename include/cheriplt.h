@@ -46,7 +46,6 @@
 #include "cheric.h"
 #include "ccall.h"
 #include "utils.h"
-#include "misc.h"
 #include "types.h"
 
 // FIXME: alias needs size too
@@ -209,7 +208,7 @@ typedef void common_t(void);
     extern void entry_stub(void);
 
     #define OTHER_DOMAIN_FP(X) (&(X ## _dummy))
-    #define OTHER_DOMAIN_DATA(X) (typeof(PLT_UNIQUE_OBJECT(X)))(&(PLT_UNIQUE_OBJECT(X))) // The data is inlined into the table
+    #define OTHER_DOMAIN_DATA(X) (__typeof(PLT_UNIQUE_OBJECT(X)))(&(PLT_UNIQUE_OBJECT(X))) // The data is inlined into the table
 
 
     typedef void init_if_func_t(capability plt_if, capability data, capability trust_mode);

@@ -30,7 +30,7 @@
 
 #include "cheric.h"
 #include "net.h"
-#include "unistd.h"
+#include "cheristd.h"
 #include "mman.h"
 
 #define PING_DUMP_PORT 12345
@@ -137,7 +137,7 @@ int main(__unused register_t arg, __unused capability carg) {
 
         char buf[2];
 
-        read(&ns->sock, buf, 2);
+        read_file(&ns->sock, buf, 2);
 
         assert(buf[1] == '\n');
 
@@ -166,6 +166,6 @@ int main(__unused register_t arg, __unused capability carg) {
                 break;
         }
 
-        close(&ns->sock);
+        close_file(&ns->sock);
     }
 }

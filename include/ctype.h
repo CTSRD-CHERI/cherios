@@ -28,6 +28,12 @@
  * SUCH DAMAGE.
  */
 
+#ifndef __CTYPE_H__
+#define	__CTYPE_H__
+
+#include "locale.h"
+#include "_ctype.h"
+
 int toupper(int c);
 int tolower(int c);
 
@@ -39,3 +45,12 @@ int isupper(int c);
 int islower(int c);
 int isascii(int c);
 int isalpha(int c);
+int isalnum(int c);
+int isblank(int c);
+int iscntrl(int c);
+int isgraph(int c);
+int isprint(int c);
+int ispunct(int c);
+int isxdigit(int c);
+
+#endif

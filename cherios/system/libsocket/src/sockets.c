@@ -36,6 +36,7 @@
 #include "assert.h"
 #include "cheric.h"
 #include "atomic.h"
+#include "misc.h"
 
 __thread vprintf_t* vprintf_ptr;
 __thread capability vprintf_data;

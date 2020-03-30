@@ -29,7 +29,7 @@
  */
 
 #include "lwip/apps/fs.h"
-#include "unistd.h"
+#include "cheristd.h"
 
 // TODO move this out of the stack
 
@@ -38,24 +38,24 @@
 int fs_open_custom(struct fs_file *file, const char *name) {
     file->data = NULL;
     file->index = 0;
-    file->pextension = open(name, FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE); // Mine
+    file->pextension = open_file(name, FA_OPEN_ALWAYS | FA_WRITE | FA_READ, MSG_NONE); // Mine
     if(file->pextension == NULL)
         return 0;
     file->len = (int)filesize(file->pextension);
     if(file->len == 0) {
         // Only because we don't supported open flags...
-        close(file->pextension);
+        close_file(file->pextension);
         return 0;
     }
     return 1;
 }
 
 void fs_close_custom(struct fs_file *file) {
-    close(file->pextension);
+    close_file(file->pextension);
 }
 
 int fs_read_custom(struct fs_file *file, char *buffer, int count) {
-    ssize_t res = read(file->pextension, buffer, (size_t)count);
+    ssize_t res = read_file(file->pextension, buffer, (size_t)count);
     if(res < 0) return -1;
     file->index += res;
     return (int)res;

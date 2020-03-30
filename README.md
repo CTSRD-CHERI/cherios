@@ -58,7 +58,7 @@ CheriOS has most of its programs at the top level. The nano kernel and boot code
 * __cherios/core/namespace__: provides a directory of registered activations (see /include/namespace.h)
 * __cherios/core/memmgt__: provides the system-wide mmap (see /include/sys.mman.h)
 * __cherios/core/proc_manager__: provides the process model for c/c++ programs (see include/thread.h)
-* __cherios/system/fatfs__: simple FAT filesystem module (see use include/unistd.h for wrappers)
+* __cherios/system/fatfs__: simple FAT filesystem module (see use include/cheristd.h for wrappers)
 * __cherios/system/lwip__: Web stack (see include/net.h for wrappers)
 
 

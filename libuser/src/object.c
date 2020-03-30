@@ -46,7 +46,7 @@
 #include "exceptions.h"
 #include "exception_cause.h"
 #include "temporal.h"
-#include "unistd.h"
+#include "cheristd.h"
 #include "sys/deduplicate.h"
 #include "dylink_client.h"
 
@@ -222,7 +222,13 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 #if (AUTO_DEDUP_ALL_FUNCTIONS && AUTO_DEDUP_STATS)
     if(did_dedup) {
         const char* name = syscall_get_name(act_self_ref);
-        printf("%s Ran deduplication on all. Processed %ld. %ld RO. Probably funcs %ld of %ld (%ld of %ld bytes). Other RO %ld of %ld (%ld of %ld bytes). %ld too large\n",
+        printf(
+#if(AUTO_DEDUP_STATS_COPYABLE)
+        "%s, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld, %ld\n"
+#else
+        "%s Ran deduplication on all. Processed %ld. %ld RO. Probably funcs %ld of %ld (%ld of %ld bytes). Other RO %ld of %ld (%ld of %ld bytes). %ld too large\n"
+#endif
+               ,
                name,
                stats.processed,
                stats.tried,
@@ -257,8 +263,8 @@ __attribute__((noreturn))
 void object_destroy() {
 #if !(LIGHTWEIGHT_OBJECT)
     #ifndef USE_SYSCALL_PUTS
-        flush(stdout);
-        flush(stderr);
+        flush_file(stdout);
+        flush_file(stderr);
     #endif
     process_async_closes(1);
 #endif // !LIGHTWEIGHT

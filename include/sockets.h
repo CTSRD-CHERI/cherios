@@ -35,6 +35,7 @@
 #include "dylink.h"
 #include "object.h"
 #include "string.h"
+#include "mman.h"
 
 PLT_thr(lib_socket_if_t, SOCKET_LIB_IF_LIST)
 #define ALLOCATE_PLT_SOCKETS PLT_ALLOCATE_tls(lib_socket_if_t, SOCKET_LIB_IF_LIST)
@@ -129,7 +130,15 @@ typedef struct unix_like_socket {
     locked_t encrypt_lock;
 } unix_like_socket;
 
+extern unix_like_socket* ns_inverse_map[];
 
+static inline int socket_to_posix_handle(unix_like_socket* sock) {
+    return (sock->flags & SOCKF_GIVE_SOCK_N) ? sock->sockn : -1;
+}
+
+static inline unix_like_socket* posix_handle_to_socket(int handle) {
+    return ns_inverse_map[handle];
+}
 
 int init_data_buffer(data_ring_buffer* buffer, char* char_buffer, uint32_t data_buffer_size);
 

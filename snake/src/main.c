@@ -31,7 +31,7 @@
 #include "cheric.h"
 #include "net.h"
 #include "ansi_escapes.h"
-#include "unistd.h"
+#include "cheristd.h"
 
 // Implements multiplayer snake over TCP
 
@@ -310,7 +310,7 @@ void kill_players(board_t* board) {
                     tail = next_tail;
                 } while(tail != HEAD_SLOT);
             }
-            close((FILE_t)players[i].ns);
+            close_file((FILE_t)players[i].ns);
             players[i] = players[free_hd-1];
             free_hd--;
             i--;

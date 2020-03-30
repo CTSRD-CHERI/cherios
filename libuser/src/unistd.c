@@ -83,7 +83,7 @@ FRESULT unlink(const char* name) {
     return (int)message_send(0,0,0,0,name,NULL,NULL,NULL,dest, SYNC_CALL, 3);
 }
 
-ssize_t truncate(FILE_t file) {
+ssize_t truncate_file(FILE_t file) {
     ssize_t flush = socket_flush_drb(file);
     if(flush < 0) return flush;
     assert(file->con_type & CONNECT_PUSH_WRITE);
@@ -269,7 +269,7 @@ void process_async_closes(int force) {
 
 
 
-ssize_t close(FILE_t file) {
+ssize_t close_file(FILE_t file) {
     process_async_closes(0); // Now is a good time to do this
 
     if(file->custom_close) return file->custom_close(file);
@@ -281,7 +281,7 @@ ssize_t close(FILE_t file) {
     return 0;
 }
 
-ssize_t lseek(FILE_t file, int64_t offset, int whence) {
+ssize_t lseek_file(FILE_t file, int64_t offset, int whence) {
 
     ssize_t flush = socket_flush_drb(file);
     if(flush < 0) return flush;
@@ -321,7 +321,7 @@ __unused ssize_t soft_flush(__unused FILE_t file) {
     return 0;
 }
 
-ssize_t flush(FILE_t file) {
+ssize_t flush_file(FILE_t file) {
     if(file->con_type & CONNECT_PUSH_WRITE) {
         socket_flush_drb(file);
         socket_requester_wait_all_finish(file->write.push_writer, 0);

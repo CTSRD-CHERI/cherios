@@ -30,33 +30,28 @@
  * SUCH DAMAGE.
  */
 
-#if 0
-#if defined(LIBC_SCCS) && !defined(lint)
-static char sccsid[] = "@(#)strcmp.c	8.1 (Berkeley) 6/4/93";
-#endif /* LIBC_SCCS and not lint */
-#include <sys/cdefs.h>
-__FBSDID("$FreeBSD$");
-#endif
-
+#include "cdefs.h"
 #include "mips.h"
-#include "string.h"
-
 /*
- * Compare strings.
+ * Concatenate src on the end of dst.  At most strlen(dst)+n+1 bytes
+ * are written at dst (at most n+1 bytes being appended).  Return dst.
  */
-int
-strcmp(const char *s1, const char *s2)
+char *
+strncat(char *dst, const char *src, size_t n)
 {
-	while (*s1 == *s2++)
-		if (*s1++ == '\0')
-			return (0);
-	return (*(const unsigned char *)s1 - *(const unsigned char *)(s2 - 1));
-}
 
-int	strncmp(const char * cs,const char * ct, size_t count) {
-	while (*cs == *ct++)
-		if (*cs++ == '\0' || --count == 0)
-			return (0);
+    if (n != 0) {
+        char *d = dst;
+        const char *s = src;
 
-	return (*(const unsigned char *)cs - *(const unsigned char *)(ct - 1));
+        while (*d != 0)
+            d++;
+        do {
+            if ((*d = *s++) == '\0')
+                break;
+            d++;
+        } while (--n != 0);
+        *d = '\0';
+    }
+    return (dst);
 }

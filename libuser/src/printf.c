@@ -37,7 +37,8 @@
 #include "object.h"
 #include "assert.h"
 #include "namespace.h"
-#include "unistd.h"
+#include "cheristd.h"
+#include "stdlib.c"
 
 // If the uart driver is not up we can't write to stdout
 // Instead we just use a syscall, currently the kernel has its own uart driver

@@ -31,6 +31,13 @@
 #ifndef STDDEF_H
 #define STDDEF_H
 
+#include "mips.h"
+
+// Apparently this is a built-in type in  C++ but not C =/
+#if !defined(__cplusplus)
+typedef int wchar_t;
+#endif
+
 #define offsetof(X, Y) __builtin_offsetof(X, Y)
 
 #endif
