@@ -7,4 +7,4 @@ set(X_SRCS
         src/main.cpp
         )
 
-add_cherios_executable(${ACT_NAME} ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
+add_cherios_executable(${ACT_NAME} ADD_TO_FILESYSTEM NEED_LIBCXX LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})

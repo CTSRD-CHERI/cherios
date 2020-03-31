@@ -34,6 +34,8 @@ extern "C" {
 #include "stdio.h"
 }
 
+#pragma clang diagnostic ignored "-Wunused-parameter"
+#include <vector>
 
 class Base {
 public:
@@ -103,6 +105,20 @@ int test() {
     call_some_funcs(FR);
     call_some_funcs(BR);
     call_some_funcs(&W);
+
+    printf("Using some LibCXX\n");
+
+    std::vector<int> some_ints;
+
+    some_ints.push_back(1);
+    some_ints.push_back(2);
+    some_ints.push_back(3);
+    some_ints.push_back(4);
+    some_ints.push_back(5);
+
+    for(auto i : some_ints) {
+        printf("An int: %d\n", i);
+    }
 
     return 0;
 }
