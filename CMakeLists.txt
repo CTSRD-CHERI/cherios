@@ -435,7 +435,7 @@ set(TEMP_16 "SHELL:-mllvm -TemporalExpandLimit=16")
 set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
 
 function(add_cherios_module _target)
-  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS NEED_LIBCXXRT)
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS NEED_LIBCXXRT NEED_LIBCXX)
   set(oneValueArgs LINKER_SCRIPT)
   set(multiValueArgs SOURCES)
   cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -505,9 +505,14 @@ function(add_cherios_module _target)
     COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
     )
 
+    if(add_exe_NEED_LIBCXX)
+        target_compile_options(${_target} PUBLIC -include "${CMAKE_BINARY_DIR}/libcxx/__config_site")
+        target_include_directories(${_target} BEFORE PUBLIC ${CMAKE_SOURCE_DIR}/libcxx/include)
+        target_link_libraries(${_target} cxx_static)
+    endif()
 
     if(add_exe_NEED_LIBCXXRT)
-        #target_link_libraries(${_target} cxxrt-static)
+        target_link_libraries(${_target} cxxrt-static)
     endif()
 endfunction()
 
@@ -556,6 +561,7 @@ set(LIBCXX_ENABLE_GLOBAL_FILESYSTEM_NAMESPACE OFF)
 set(LIBCXX_ENABLE_THREADS OFF)
 set(LIBCXX_ENABLE_THREAD_UNSAFE_C_FUNCTIONS OFF)
 set(LIBCXX_ENABLE_MONOTONIC_CLOCK OFF)
+
 set(PACKAGE_VERSION 11.0.0git)
 
 add_subdirectory(libcxx)
