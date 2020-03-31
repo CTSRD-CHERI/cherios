@@ -60,6 +60,8 @@ __asm__ (
     "daddiu      $a0, $a0, 1                                        \n"
     "ccall       $c1, $idc, 2                                       \n"
     "nop                                                            \n"
+    "bench_exp_handle_end:\n"
+    ".size bench_exp_handle, bench_exp_handle_end - bench_exp_handle\n"
 );
 
 extern void bench_exp_handle(void);

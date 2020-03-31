@@ -319,5 +319,6 @@ no_ret:
 .p2align CAP_SIZE_BITS
 .global checksum_foundation_data_end
 checksum_foundation_data_end:
+.size checksum_foundation_data_end, 1
 .end checksum_foundation_data
 #.size    checksum_foundation_data, checksum_foundation_data - checksum_foundation_data_end
