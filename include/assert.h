@@ -30,9 +30,13 @@
 
 #include "cdefs.h"
 
+__BEGIN_DECLS
+
 void	__assert(const char *, const char *, int, const char *) __dead2;
 void	__assert_int_ex(const char *, const char *, int, const char *,  const char *,  const char *,
                         unsigned long long int, unsigned long long int) __dead2;
+
+__END_DECLS
 
 #if (GO_FAST)
     #define	assert(e) (void)(e)
