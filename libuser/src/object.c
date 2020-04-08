@@ -258,8 +258,20 @@ void object_init_post_compact(startup_flags_e startup_flags, __unused int first_
 #endif // !LIGHTWEIGHT
 }
 
+__dead2
+void main_returns() {
+    // Its not the model we want to end up with, but currently if this is set threads that return from
+    // main with msg_enable set start to wait on a message queue rather than exit.
+    if(msg_enable) {
+        msg_entry(-1, 0);
+    }
+
+    object_destroy();
+}
+
 // Called when any thread exits
-__attribute__((noreturn))
+
+__dead2
 void object_destroy() {
 #if !(LIGHTWEIGHT_OBJECT)
     #ifndef USE_SYSCALL_PUTS

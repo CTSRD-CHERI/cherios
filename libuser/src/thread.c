@@ -215,15 +215,7 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
 
     start(arg, carg);
 
-    if(msg_enable) {
-        msg_entry(-1, 0);
-    } else {
-        object_destroy();
-    }
-}
-
-act_control_kt get_control_for_thread(thread t) {
-    return (act_control_kt)t;
+    main_returns();
 }
 
 process_kt thread_create_process(const char* name, capability file, int secure_load) {

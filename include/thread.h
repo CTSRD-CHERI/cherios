@@ -65,6 +65,10 @@ typedef void thread_start_func_t(register_t arg, capability carg);
 /* Map a user thread onto a single activation */
 typedef act_control_kt thread;
 
+static inline act_control_kt get_control_for_thread(thread t) {
+    return (act_control_kt)t;
+}
+
 /* We will get sealed handles from the process manager that represent a process */
 typedef capability process_kt;
 
@@ -80,8 +84,6 @@ thread thread_new(const char* name, register_t arg, capability carg, thread_star
 thread thread_new_hint(const char* name, register_t arg, capability carg, thread_start_func_t* start, uint8_t cpu_hint);
 
 void thread_init(void);
-
-act_control_kt get_control_for_thread(thread t);
 
 /* These are wrappers for messages to the process manager */
 
