@@ -56,6 +56,8 @@ typedef struct timeval {
     suseconds_t tv_usec;
 } timeval;
 
+struct timespec;
+
 // Not implemented
 
 __BEGIN_DECLS
