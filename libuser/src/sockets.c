@@ -355,6 +355,8 @@ ssize_t socket_send(unix_like_socket* sock, const char* buf, size_t length, enum
             return length;
 
         } else {
+            // This write may not complete before any reads
+            sock->write_before_read = 1;
 
             register_t perms = CHERI_PERM_LOAD;
             if(!((flags | sock->flags) & MSG_NO_CAPS)) perms |= CHERI_PERM_LOAD_CAP;
@@ -400,6 +402,13 @@ ssize_t socket_recv(unix_like_socket* sock, char* buf, size_t length, enum SOCKE
 
     int dont_wait;
     dont_wait = (flags | sock->flags) & MSG_DONT_WAIT;
+
+    // In the case that we have written in a way that may not have completed we force a flush of the writer
+    if(sock->write_before_read) {
+        ssize_t failed_wait = socket_requester_wait_all_finish(sock->write.push_writer, dont_wait);
+        if(failed_wait < 0) return failed_wait;
+        sock->write_before_read = 0;
+    }
 
     ssize_t ret = E_SOCKET_WRONG_TYPE;
     if(sock->con_type & CONNECT_PULL_READ) {

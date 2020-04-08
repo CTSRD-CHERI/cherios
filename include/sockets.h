@@ -117,6 +117,7 @@ typedef struct unix_like_socket {
     enum socket_connect_type con_type;
     asyn_close_state_e close_state;
     uint8_t sockn;
+    uint8_t write_before_read;
     close_fun* custom_close;
     custom_poll_f* custom_poll;
     struct unix_like_socket* delay_close_next;
