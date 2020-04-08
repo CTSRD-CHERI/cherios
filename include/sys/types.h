@@ -35,6 +35,7 @@
 #include "macroutils.h"
 #include "statcounters.h"
 
+
 #define DEBUG_COUNT_CALLS 0
 #define STATS_COMMON_DOMAIN_OFFSET  0
 #define STATS_COMPLETE_TRUST_OFFSET 8
@@ -171,6 +172,7 @@ typedef struct act_info_s {
     uint64_t had_time_epoch;
 } act_info_t;
 
+#define ACT_NAME_MAX_LEN (0x10)
 #define ACT_REQUIRED_SPACE ((8 * 1024) - (RES_META_SIZE * 2))
 
 typedef capability act_kt;
