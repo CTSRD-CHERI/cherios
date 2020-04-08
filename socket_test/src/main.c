@@ -79,8 +79,8 @@ static void big_test_2_recv(unix_like_socket* sock) {
     // Test sending a large number of bytes in large chunks
 
     for(size_t i = 0; i != 3; i++) {
-        res = socket_recv(sock, big_buf, DATA_SIZE/2, MSG_NONE);
-        assert(res == DATA_SIZE/2);
+        res = socket_recv(sock, big_buf, DATA_SIZE/2, MSG_NO_COPY_READ);
+        assert_int_ex(res, ==, DATA_SIZE/2);
         for(size_t j = 0; j < DATA_SIZE/2; j++) {
             assert(big_buf[j] == (char)j);
         }
@@ -515,9 +515,9 @@ int main(__unused register_t arg, __unused capability carg) {
     size_t p1 = 13;
     size_t p2 = size2 + size3 - p1;
 
-    ssize_t rec = socket_recv(sock, buf, p1, MSG_NO_COPY_WRITE);
+    ssize_t rec = socket_recv(sock, buf, p1, MSG_NO_COPY_READ);
     assert_int_ex(rec, ==, p1);
-    rec = socket_recv(sock, buf + p1, p2, MSG_NO_COPY_WRITE);
+    rec = socket_recv(sock, buf + p1, p2, MSG_NO_COPY_READ);
     assert_int_ex(rec, ==, p2);
 
     // Test multiple sends with partial reads
@@ -583,7 +583,7 @@ int main(__unused register_t arg, __unused capability carg) {
 
     // Test the closing mechanic
 
-    rec = socket_recv(sock, buf, 1, MSG_NO_COPY_WRITE);
+    rec = socket_recv(sock, buf, 1, MSG_NO_COPY_READ);
     assert_int_ex(rec, ==, E_SOCKET_CLOSED);
     rec = socket_send(sock, buf, 1, MSG_NONE);
     assert_int_ex(rec, ==, E_SOCKET_CLOSED);
