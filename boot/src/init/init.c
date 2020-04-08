@@ -55,7 +55,7 @@
 #define B_T2 0
 #define B_T3 0
 
-#define TESTS 0
+#define TESTS 1
 
 #define B_DEMO 0
 
@@ -205,6 +205,7 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user,    "dedup_test.elf", 0, !B_BENCH && TESTS)
     B_PENTRY(m_user,    "socket_test.elf", 0 ,!B_BENCH && TESTS)
     B_PENTRY(m_user, "fs_test.elf", 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user, "pthread_test.elf", 0, !B_BENCH && TESTS)
 //    B_DENTRY(m_user, "server.elf", 0, 1)
 //    B_PENTRY(m_user, "client.elf", 0, 1)
     B_PENTRY(m_user,    "churn.elf",        0,  0)
@@ -213,7 +214,7 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user, "top.elf", 0, !B_BENCH && 0)
     B_PENTRY(m_user, "nc_shell.elf", 0, !B_BENCH && BUILD_WITH_NET)
 //    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
-    B_PENTRY(m_user,"cpptest.elf",0,1)
+    B_PENTRY(m_user,"cpptest.elf",0,!B_BENCH && TESTS)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)

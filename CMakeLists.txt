@@ -1,5 +1,3 @@
-set(CMAKE_SYSTEM_NAME "Generic" CACHE STRING "Target system" FORCE)
-set(CMAKE_SYSTEM_PROCESSOR "Mips" CACHE STRING "Target CPU" FORCE)
 set(CMAKE_CROSSCOMPILING ON)
 cmake_minimum_required(VERSION 3.13)
 # We have to set LANGUAGES to none so that we can set CMAKE_C_COMPILER
@@ -7,10 +5,12 @@ cmake_minimum_required(VERSION 3.13)
 # to initialize all the C and ASM rules
 project(CheriOS LANGUAGES NONE VERSION 0.0.1)
 
+# Apparently this needs to come after project(...) ot it doesn't really take
+set(CMAKE_SYSTEM_NAME "CheriOS" CACHE STRING "Target system" FORCE)
+set(CMAKE_SYSTEM_PROCESSOR "Cheri" CACHE STRING "Target CPU" FORCE)
+
 # Allow override of options using set
 cmake_policy(SET CMP0077 NEW)
-#
-set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # Configure hardare at compile time.  Default to "qemu" for CHERI QEMU MALTA.
 # Other option are "fpga" for CHERI on FPGA and "l3" for the L3 simulator.
@@ -57,6 +57,14 @@ if(CHERI_SDK_DIR)
         set(CheriSDK_RANLIB "${CheriSDK_TOOLCHAIN_DIR}/llvm-ranlib")
     endif()
 endif()
+
+# Threading is built into CheriOS's libuser
+
+set(CMAKE_THREAD_LIBS_INIT "")
+set(CMAKE_HAVE_THREADS_LIBRARY 1)
+set(CMAKE_USE_WIN32_THREADS_INIT 0)
+set(CMAKE_USE_PTHREADS_INIT 1)
+set(CMAKE_THREAD_PREFER_PTHREAD ON)
 
 if(EXISTS "${CheriSDK_CC}")
     message(STATUS "Found CHERI Clang: ${CheriSDK_CC}")
@@ -612,6 +620,7 @@ add_subdirectory(demos)
 #add_subdirectory(test2a)
 #add_subdirectory(test2b)
 #add_subdirectory(test3)
+add_subdirectory(pthread_test)
 
 add_subdirectory(cpptest)
 

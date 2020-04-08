@@ -37,6 +37,7 @@
 #include "cheric.h"
 #include "atomic.h"
 #include "misc.h"
+#include "condition.h"
 
 __thread vprintf_t* vprintf_ptr;
 __thread capability vprintf_data;
@@ -82,86 +83,6 @@ static inline size_t data_buf_space(data_ring_buffer* data_buffer) {
     return (data_buffer->buffer_size - (data_buffer->requeste_ptr - data_buffer->fulfill_ptr));
 }
 
-/* Sets a condition and notifies anybody waiting on it */
-static act_notify_kt socket_internal_set(volatile uint16_t* ptr, uint16_t new_val, volatile act_kt* waiter_cap) {
-
-    act_notify_kt waiter;
-
-    __asm__ __volatile(
-            SANE_ASM
-            "cllc   %[res], %[waiting_cap]                     \n"
-            "csh    %[new_requeste], $zero, 0(%[new_cap])      \n"
-            "cscc   $at, %[res], %[waiting_cap]                \n" // FIXME: Might be wrong. We might fail to fail the other process as our own store fails
-            "clc    %[res], $zero, 0(%[waiting_cap])           \n"
-    : [res]"=&C"(waiter)
-    : [waiting_cap]"C"(waiter_cap), [new_cap]"C"(ptr), [new_requeste]"r"(new_val)
-    : "at", "memory"
-    );
-
-    return waiter;
-}
-
-static int socket_internal_set_and_notify(volatile uint16_t* ptr, uint16_t new_val, volatile act_kt* waiter_cap) {
-    act_notify_kt waiter = socket_internal_set(ptr, new_val, waiter_cap);
-
-    if(waiter) {
-        *waiter_cap = NULL;
-        syscall_cond_notify(waiter);
-    }
-
-    return 0;
-}
-/* Checks condition - or sleeps waiting for it */
-/* Condition is not((*monitor - im_off) &0xFFFF < comp_val. Also breaks if *closed_cap = 1. This condition can
- * be coerced into doing all the sleeping needs with judicious overflowing */
-
-static int socket_internal_sleep_for_condition(volatile act_kt* wait_cap, volatile uint8_t* closed_cap,
-                                               volatile uint16_t* monitor_cap,
-                                                uint16_t im_off, uint16_t comp_val, int delay_sleep, act_notify_kt n_token) {
-    int result;
-
-    do {
-        __asm__ __volatile(
-                SANE_ASM
-                "2: cllc   $c1, %[wc]               \n"
-                        MAGIC_SAFE
-                "li     %[res], 1                   \n"
-                "clb    %[res], $zero, 0(%[cc])     \n"
-                        MAGIC_SAFE
-                "bnez   %[res], 1f                  \n"
-                "li     %[res], 2                   \n"
-                "clhu   %[res], $zero, 0(%[mc])     \n"
-                        MAGIC_SAFE
-                "subu   %[res], %[res], %[im]       \n"
-                "andi   %[res], %[res], 0xFFFF      \n"
-                "sltu   %[res], %[res], %[cmp]      \n"
-                "beqz   %[res], 1f                  \n"
-                "li     %[res], 0                   \n"
-                "cscc   %[res], %[self], %[wc]      \n"
-                "beqz   %[res], 2b                  \n"
-                "li     %[res], 1                   \n"
-                "1:                                 \n"
-        : [res]"=&r"(result)
-        : [wc]"C"(wait_cap), [cc]"C"(closed_cap), [mc]"C"(monitor_cap),[self]"C"(n_token),
-                [im]"r"(im_off), [cmp]"r"(comp_val)
-        : "$c1", "memory"
-        );
-
-        if(result == 2) {
-            *wait_cap = NULL;
-            return E_SOCKET_CLOSED;
-        }
-
-        if(delay_sleep) return result;
-
-        if(result) syscall_cond_wait(0, 0);
-
-    } while(result);
-
-    *wait_cap = NULL;
-    return 0;
-}
-
 // Until we use exceptions properly this can check whether a requester closed their end even if unmapped
 static int socket_internal_fulfiller_closed_safe(uni_dir_socket_fulfiller* fulfiller) {
     if(!fulfiller->connected) return 0;
@@ -174,8 +95,6 @@ static int socket_internal_fulfiller_closed_safe(uni_dir_socket_fulfiller* fulfi
 
     return rc || fc;
 }
-
-#define TRUNCATE16(X) ({uint16_t _tmpx; __asm ("andi   %[out], %[in], 0xFFFF\n":[out]"=r"(_tmpx):[in]"r"(X):); _tmpx;})
 
 static int socket_internal_requester_space_wait(uni_dir_socket_requester* requester, uint16_t need_space, int dont_wait, int delay_sleep) {
 
@@ -195,16 +114,15 @@ static int socket_internal_requester_space_wait(uni_dir_socket_requester* reques
 
     if(dont_wait) return E_AGAIN;
 
-    uint16_t amount = ((~(requester->buffer_size - need_space)));
-    amount = TRUNCATE16(amount);
+    return condition_sleep_for_condition2(&requester->fulfiller_component.requester_waiting,
+                                          &requester->fulfiller_component.fulfiller_closed,
+                                          &(requester->fulfiller_component.fulfill_ptr),
+                                          requester->buffer_size,
+                                          requester->requeste_ptr,
+                                          need_space,
+                                          delay_sleep,
+                                          act_self_notify_ref);
 
-
-    // Funky use of common code, with lots of off by 1 adjustments to be able to use the same comparison
-    return socket_internal_sleep_for_condition(&requester->fulfiller_component.requester_waiting,
-                                               &requester->fulfiller_component.fulfiller_closed,
-                                               &(requester->fulfiller_component.fulfill_ptr),
-                                               requester->requeste_ptr+1,
-                                               amount, delay_sleep, act_self_notify_ref);
 }
 
 __attribute__((used))
@@ -234,7 +152,7 @@ static int socket_internal_fulfill_outstanding_wait(uni_dir_socket_fulfiller* fu
 
     if(dont_wait) return E_AGAIN;
 
-    return socket_internal_sleep_for_condition(&access->fulfiller_waiting,
+    return condition_sleep_for_condition(&access->fulfiller_waiting,
                                                &fulfiller->requester->requester_closed,
                                                &(fulfiller->requester->requeste_ptr),
                                                access->fulfill_ptr, amount, delay_sleep,
@@ -264,7 +182,7 @@ static ssize_t socket_internal_fulfiller_wait_proxy(uni_dir_socket_fulfiller* fu
     if(fulfiller->proxy_times != fulfiller->proxy_fin_times) {
         if(dont_wait) return E_IN_PROXY;
         uni_dir_socket_requester* proxying = fulfiller->proxyied_in;
-        int ret = socket_internal_sleep_for_condition(&proxying->fulfiller_component.requester_waiting,
+        int ret = condition_sleep_for_condition(&proxying->fulfiller_component.requester_waiting,
                                                    &proxying->fulfiller_component.fulfiller_closed,
                                                    &fulfiller->proxy_fin_times, fulfiller->proxy_times+1, 0xFFFFu, delay_sleep,
                                                    act_self_notify_ref);
@@ -312,7 +230,7 @@ ssize_t socket_request_im(requester_t r, uint8_t length, char** buf_out, char* b
     if(buf_out) *buf_out = req->request.im;
 
     requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
+    return condition_set_and_notify(&requester->requeste_ptr,
                                           request_ptr+1,
                                           &requester->fulfiller_component.fulfiller_waiting);
 }
@@ -330,7 +248,7 @@ static ssize_t socket_internal_request_ind(uni_dir_socket_requester* requester, 
     req->request.ind = buf;
     req->drb_fullfill_inc = drb_off;
     requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
+    return condition_set_and_notify(&requester->requeste_ptr,
                                           request_ptr+1,
                                           &requester->fulfiller_component.fulfiller_waiting);
 }
@@ -347,7 +265,7 @@ ssize_t socket_request_ind(requester_t r, char* buf, uint64_t length, uint32_t d
 static int socket_internal_fulfill_proxy_outstanding_wait(uni_dir_socket_fulfiller* fulfiller, uint16_t amount, act_notify_kt proxy_token) {
 
     uni_dir_socket_requester_fulfiller_component* access = fulfiller->requester->access;
-    int ret = socket_internal_sleep_for_condition(&access->fulfiller_waiting,
+    int ret = condition_sleep_for_condition(&access->fulfiller_waiting,
                                                   &fulfiller->requester->requester_closed,
                                                   &(fulfiller->requester->requeste_ptr),
                                                   access->fulfill_ptr, amount, 1,
@@ -405,7 +323,7 @@ ssize_t socket_request_proxy(requester_t r, fulfiller_t f, uint64_t length, uint
     //  Waiting on a proxy to an empty queue is stupid.
     // Instead if somebody is waiting on this requester, transfer to the proxy queue
 
-    act_notify_kt notify = socket_internal_set(&requester->requeste_ptr,
+    act_notify_kt notify = condition_set(&requester->requeste_ptr,
                                                request_ptr+1,
                                                &requester->fulfiller_component.fulfiller_waiting);
 
@@ -442,7 +360,7 @@ ssize_t socket_request_join(requester_t pull_req, requester_t push_req, data_rin
     // push->joined = 1;
 
     pull->requested_bytes +=length;
-    return socket_internal_set_and_notify(&pull->requeste_ptr,
+    return condition_set_and_notify(&pull->requeste_ptr,
                                           request_ptr+1,
                                           &pull->fulfiller_component.fulfiller_waiting);
 }
@@ -490,6 +408,8 @@ ssize_t socket_internal_drb_space_alloc(data_ring_buffer* data_buffer, uint64_t 
     if(size >= sizeof(capability) && align != (uint64_t)(-1)) {
         extra_to_align = (buf_align - data_buf_align) & align_mask;
     }
+
+    if(size + extra_to_align > data_buffer->buffer_size) return E_MSG_SIZE;
 
     copy_from = (copy_from + extra_to_align) & mask;
     size_t part_1 = data_buffer->buffer_size - copy_from;
@@ -586,7 +506,7 @@ ssize_t socket_request_ind_db(requester_t r, const char* buf, uint32_t size,
 
     if(!data_buffer->buffer) return E_NO_DATA_BUFFER;
 
-    if(size + sizeof(capability) > data_buffer->buffer_size) return E_MSG_SIZE;
+    if(size > data_buffer->buffer_size) return E_MSG_SIZE;
 
     if(size == 0) return 0;
 
@@ -643,7 +563,7 @@ ssize_t socket_request_oob(requester_t r, request_type_e r_type, intptr_t oob_va
     req->drb_fullfill_inc = drb_off;
 
     requester->requested_bytes += length;
-    return socket_internal_set_and_notify(&requester->requeste_ptr,
+    return condition_set_and_notify(&requester->requeste_ptr,
                                           request_ptr+1,
                                           &requester->fulfiller_component.fulfiller_waiting);
 }
@@ -997,7 +917,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                     // If it was a proxy we tell our proxier we are done too
                     uint16_t set_to = proxy->proxy_fin_times+1;
                     uint16_t cmp = proxy->proxy_times;
-                    if(set_to == cmp) socket_internal_set_and_notify(&proxy->proxy_fin_times, set_to, &requester->access->requester_waiting);
+                    if(set_to == cmp) condition_set_and_notify(&proxy->proxy_fin_times, set_to, &requester->access->requester_waiting);
                     else proxy->proxy_fin_times = set_to;
                 }
                 if(req->type == REQUEST_JOIN) {
@@ -1005,7 +925,7 @@ static ssize_t socket_internal_fulfill_progress_bytes_impl(uni_dir_socket_fulfil
                     // push_to->joined = 0;
                 }
                 if(requester->drb_fulfill_ptr) *requester->drb_fulfill_ptr += req->drb_fullfill_inc;
-                socket_internal_set_and_notify(&access->fulfill_ptr, fptr, &access->requester_waiting);
+                condition_set_and_notify(&access->fulfill_ptr, fptr, &access->requester_waiting);
                 required = 1;
             }
             if(progress_this & F_SET_MARK) {

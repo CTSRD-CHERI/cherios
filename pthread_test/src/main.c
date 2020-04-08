@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Hadrien Barral
+ * Copyright (c) 2020 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,22 +28,45 @@
  * SUCH DAMAGE.
  */
 
+#include "cheric.h"
+#include "pthread.h"
 #include "stdio.h"
-#include "stdlib.h"
+#include "assert.h"
 
-int rand(void) {
-	// WOW such secure.
-	return (int)syscall_now();
+void* start_func(void* arg) {
+    return arg;
 }
 
-__dead2
-void abort(void) {
-	syscall_act_terminate(act_self_ctrl);
-	for(;;){}
-}
 
-__dead2
-void exit(int status __unused) {
-    // FIXME: This should exit the process, not the thread (as it currently does)
-	object_destroy();
+int main(__unused register_t arg,__unused capability carg) {
+    pthread_t t1, t2, t3, t4, t5;
+
+    // Create a bunch of threads
+
+    pthread_create(&t1, NULL, start_func, (void*)1);
+    pthread_create(&t2, NULL, start_func, (void*)2);
+    pthread_create(&t3, NULL, start_func, (void*)3);
+    pthread_create(&t4, NULL, start_func, (void*)4);
+    pthread_create(&t5, NULL, start_func, (void*)5);
+
+    // Join them in opposite order
+
+    void* ret;
+
+    pthread_join(t5, &ret);
+    assert_int_ex((int)ret, ==, 5);
+    pthread_join(t4, &ret);
+    assert_int_ex((int)ret, ==, 4);
+    pthread_join(t3, &ret);
+    assert_int_ex((int)ret, ==, 3);
+    pthread_join(t2, &ret);
+    assert_int_ex((int)ret, ==, 2);
+    pthread_join(t1, &ret);
+    assert_int_ex((int)ret, ==, 1);
+
+    printf("PThread test passes!\n");
+
+    // Done
+
+    return 0;
 }
