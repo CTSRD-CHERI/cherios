@@ -48,16 +48,16 @@ start:
     # We will not have a stack set up because bootstrapping is hard.
     # Rather than have the kernel do it, its going to be done here
 
-    dla         $t0, __start_init_stack
+    la_relative         $t0, __start_init_stack
     cgetdefault $c11
-    dla         $t1, __size_init_stack
+    la_relative         $t1, __size_init_stack
     cincoffset  $c11, $c11, $t0
     csetboundsexact  $c11, $c11, $t1
     cincoffset  $c11, $c11, $t1
 
 	# Initialise globals. We need to use dla to call this function. Can only do this because dla was loaded contiguously
 	cgetpcc		$c12
-	dla		$t0, crt_init_globals_init
+	la_relative		$t0, crt_init_globals_init
 	csetoffset	$c12, $c12, $t0
 	csetbounds  $idc, $c11, $zero
 	cjalr		$c12, $c17

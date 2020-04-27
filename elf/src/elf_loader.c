@@ -120,7 +120,7 @@ int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
 		ERRORM("Bad EI_ABIVERSION: %X", hdr->e_ident[EI_ABIVERSION]);
 		return 0;
 	}
-	if(hdr->e_type != 2) {
+	if(hdr->e_type != 2 && hdr->e_type != 3) {
 		ERRORM("Bad e_type: %X", hdr->e_type);
 		return 0;
 	}
@@ -133,11 +133,12 @@ int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
 		return 0;
 	}
 #ifdef _CHERI256_
-#define ELF_E_FLAGS 0x30C2C005
+#define ELF_E_FLAGS 0x30C2C000
 #else
-#define ELF_E_FLAGS 0x30C1C005
+#define ELF_E_FLAGS 0x30C1C000
 #endif
-	if((hdr->e_flags != 0x30000007) && (hdr->e_flags != ELF_E_FLAGS)) {
+#define ELF_E_MASK  0xFFFFFFF0
+	if((hdr->e_flags != 0x30000007) && ((hdr->e_flags & ELF_E_MASK) != ELF_E_FLAGS)) {
 		ERRORM("Bad e_flags: %X", hdr->e_flags);
 		return 0;
 	}
@@ -241,7 +242,7 @@ static void load_seg(Elf_Env* env, size_t i, Elf64_Phdr *seg, image* out_im) {
 	cap_pair seg_cap_pair = env->alloc(seg->p_memsz, env);
 	capability seg_cap = (seg->p_flags & PF_X) ? seg_cap_pair.code : seg_cap_pair.data;
     if(seg->p_flags & PF_X) out_im->load_type.basic.code_write_cap = seg_cap_pair.data;
-	out_im->load_type.basic.seg_table[i+1] = cheri_setbounds(seg_cap, seg->p_memsz);
+	out_im->load_type.basic.tables.seg_table[i+1] = cheri_setbounds(seg_cap, seg->p_memsz);
 	char* src = ((char*)out_im->hdr) + seg->p_offset;
 	memcpy(seg_cap_pair.data, src, seg->p_filesz);
 }
@@ -277,8 +278,9 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 					}
 					if (seg->p_type == PT_TLS) {
 						// This is the prototype
-						capability data_seg = out_im->load_type.basic.seg_table[out_im->data_index];
-						capability proto_tls_seg = cheri_incoffset(data_seg, out_im->tls_vaddr - out_im->data_vaddr);
+						capability data_seg = out_im->load_type.basic.tables.seg_table[out_im->data_index];
+						capability proto_tls_seg = cheri_incoffset(data_seg,
+						        ELF_IMAGE_VADDR(out_im, tls) - ELF_IMAGE_VADDR(out_im, data));
 						proto_tls_seg = cheri_setbounds(proto_tls_seg, seg->p_filesz);
 						out_im->load_type.basic.tls_prototype = proto_tls_seg;
 					}
@@ -289,7 +291,7 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 					out_im->tls_num++;
 					capability seg_tls = env->alloc(out_im->tls_mem_size, env).data;
 					assert(seg_tls != NULL);
-					out_im->load_type.basic.seg_table[out_im->tls_index] = seg_tls;
+					out_im->load_type.basic.tables.seg_table[out_im->tls_index] = seg_tls;
 					// We dont memcpy from proto here as fixups may need to occur
 				}
 		}
@@ -321,6 +323,7 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 					if(seg->p_type == PT_LOAD) {
 						memcpy((char*)pair.data + seg->p_vaddr, ((char*)out_im->hdr) + seg->p_offset, seg->p_filesz);
 					}
+					// TODO: Also have to load the dynamic segment
 				}
 			case storage_process:
                 res_size_needed = FOUNDATION_META_SIZE(MAX_FOUND_ENTRIES, contig_size) + contig_size;
@@ -353,6 +356,14 @@ int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_loa
 #endif
 
 	bzero(out_elf, sizeof(image));
+
+	// Undefined segments defined to have a vaddr of all ones
+	if(!secure_load) {
+        for(size_t i = 0; i != MAX_SEGS; i++) {
+            out_elf->load_type.basic.tables.seg_table_vaddrs[i] = (~0);
+        }
+	}
+
 	out_elf->hdr = hdr;
 
 	Elf64_Addr e_entry = hdr->e_entry;
@@ -375,31 +386,41 @@ int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_loa
 		}
 		if(seg->p_type == PT_LOAD) {
 
-			assert((seg->p_flags & (PF_W | PF_X)) != (PF_W |PF_X));
+            assert((seg->p_flags & (PF_W | PF_X)) != (PF_W | PF_X));
 
-			size_t seg_bound = seg->p_vaddr + seg->p_memsz;
-			image_size = umax(image_size, seg_bound);
+            size_t seg_bound = seg->p_vaddr + seg->p_memsz;
+            image_size = umax(image_size, seg_bound);
 
-			if(seg->p_flags & PF_W) {
-				assert(found_data == 0);
-				found_data = 1;
-				out_elf->data_index = (size_t)i + 1;
-				out_elf->data_vaddr = seg->p_vaddr;
-			} else if(seg->p_flags & PF_X) {
-				assert(found_code == 0);
-				found_code = 1;
-				out_elf->code_index = (size_t)i + 1;
-				out_elf->code_vaddr = seg->p_vaddr;
-			}
-		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO) {
+            if (seg->p_flags & PF_W) {
+                assert(found_data == 0);
+                found_data = 1;
+                out_elf->data_index = (size_t) i + 1;
+            } else if (seg->p_flags & PF_X) {
+                assert(found_code == 0);
+                found_code = 1;
+                out_elf->code_index = (size_t) i + 1;
+            }
+
+            if(!secure_load) {
+                out_elf->load_type.basic.tables.seg_table_vaddrs[(size_t) i + 1] = seg->p_vaddr;
+            }
+
+        } else if (seg->p_type == PT_DYNAMIC) {
+		    out_elf->dynamic_vaddr = seg->p_vaddr;
+		    out_elf->dynamic_size = seg->p_memsz;
+		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO || seg->p_type == PT_INTERP) {
 			/* Ignore these headers */
 		} else if(seg->p_type == PT_TLS) {
 			assert(has_tls == 0);
 			has_tls = 1;
 			out_elf->tls_index = (size_t)i + 1;
-			out_elf->tls_vaddr = seg->p_vaddr;
 			out_elf->tls_mem_size = seg->p_memsz;
 			out_elf->tls_fil_size = seg->p_filesz;
+
+            if(!secure_load) {
+                out_elf->load_type.basic.tables.seg_table_vaddrs[(size_t) i + 1] = seg->p_vaddr;
+            }
+
 		} else {
 			ERROR("Unknown section");
 			return -1;
@@ -450,7 +471,7 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
 			allocsize = umax(allocsize, bound);
 			lowaddr = umin(lowaddr, seg->p_vaddr);
 			TRACE("lowaddr:%lx allocsize:%lx bound:%lx", lowaddr, allocsize, bound);
-		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO) {
+		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO || seg->p_type == PT_INTERP) {
             /* Ignore these headers */
         } else if(seg->p_type == PT_TLS) {
             assert(has_tls == 0);

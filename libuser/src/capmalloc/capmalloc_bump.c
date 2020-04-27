@@ -491,6 +491,7 @@ static res_t allocate_with_request(size_t size, size_t* dma_off) {
     return res;
 }
 
+VIS_EXTERNAL
 res_t  cap_malloc(size_t size) {
     return cap_malloc_arena_dma(size, &default_arena, NULL);
 }
@@ -593,6 +594,7 @@ int cap_claim(capability mem) {
     }
 }
 
+VIS_EXTERNAL
 void cap_free(capability mem) {
     res_nfo_t nfo = memhandle_nfo(mem);
 

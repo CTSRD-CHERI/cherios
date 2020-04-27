@@ -23,6 +23,7 @@ set(LIBCRT_SRCS
     ${LIBC_ROOT}/freebsd_ports/strcpy.c
     ${LIBC_ROOT}/strdup.c
     ${LIBC_ROOT}/freebsd_ports/strtol.c
+    ${LIBC_ROOT}/freebsd_ports/strncpy.c
     ${LIBC_ROOT}/freebsd_ports/strrchr.c
     ${LIBC_ROOT}/freebsd_ports/strcspn.c
 # Maths (currently nothing provided, built ins should cover common cases)
@@ -93,16 +94,30 @@ set(LIBUSER_LIGHT_SRCS
     src/lightdummies.c
 )
 
+set(LIBUSER_CLIENT ${CMAKE_SOURCE_DIR}/cherios/system/dylink/src/client.c)
+set(LIBUSER_SERVER ${CMAKE_SOURCE_DIR}/cherios/system/dylink/src/server.c)
+
 add_library(user_early STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
-target_compile_definitions(user_early PUBLIC -DUSE_SYSCALL_PUTS)
+target_compile_definitions(user_early PUBLIC -DUSE_SYSCALL_PUTS -DLIB_EARLY)
 add_library(CheriOS::LibUserEarly ALIAS user_early)
 
-add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS})
+add_library(user STATIC ${LIBCRT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_SRCS} ${LIBUSER_CLIENT})
 add_library(CheriOS::LibUser ALIAS user)
 
 add_library(user_light STATIC ${LIBCRT_LIGHT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_LIGHT_SRCS})
 target_compile_definitions(user_light PUBLIC -DLIGHTWEIGHT_OBJECT=1)
 add_library(CheriOS::LibUserLight ALIAS user_light)
 
+
+add_library(link_serv STATIC ${LIBCRT_LIGHT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_LIGHT_SRCS} ${INIT_ASM}
+        ${LIBUSER_CLIENT} ${LIBUSER_SERVER} ${LIBC_ROOT}/freebsd_ports/strlen.c ${LIBC_ROOT}/atoi.c)
+target_link_libraries(link_serv PRIVATE "-Wl,-Bdynamic -Wl,-no-pie")
+target_compile_definitions(link_serv PRIVATE -DLIGHTWEIGHT_OBJECT=1)
+target_compile_options(link_serv PRIVATE -fvisibility=hidden)
+
 add_library(libcrt STATIC ${LIBCRT_SRCS})
 add_library(CheriOS::LibCRT ALIAS libcrt)
+
+add_library(libcrt_kern STATIC ${LIBCRT_SRCS})
+target_compile_definitions(libcrt_kern PUBLIC -DIS_KERNEL=1)
+add_library(CheriOS::LibCRTKern ALIAS libcrt_kern)

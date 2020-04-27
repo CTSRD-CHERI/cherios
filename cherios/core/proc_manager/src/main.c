@@ -192,7 +192,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
         if(process->im.secure_loaded) {
            base = foundation_entry_vaddr(process->im.load_type.secure.secure_entry) - process->im.entry;
         } else {
-            base = cheri_getbase(im->load_type.basic.seg_table[im->code_index]);
+            base = cheri_getbase(im->load_type.basic.tables.seg_table[im->code_index]);
         }
         process->load_base = base;
     } else base = process->load_base;

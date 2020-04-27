@@ -76,6 +76,45 @@ li  $zero, 0xdead
 #    daddiu  \reg, \reg, %tprel_lo(\sym)
 #.endm
 
+.macro la_relative reg, sym
+    lui \reg, %hi(\sym)
+    daddiu \reg, \reg, %lo(\sym)
+.endm
+
+.macro dla_relative reg, sym, tmp
+    lui     \reg, %highest(\sym)
+    daddiu  \reg, \reg, %higher(\sym)
+    dsll    \reg, \reg, 16
+    daddiu  \reg, \reg, %hi(\sym)
+    dsll    \reg, \reg, 16
+    daddiu  \reg, \reg, %lo(\sym)
+.endm
+
+.macro cgetpcc_incoffset creg, reg
+    cgetpcc    \creg
+    cincoffset \creg, \creg, \reg
+.endm
+
+.macro la_different_seg reg, sym, code_seg_cap, ctmp
+    lui \reg, %pcrel_hi(\sym-8)
+    daddiu \reg, \reg, %pcrel_lo(\sym-4)
+    cgetpcc_incoffset \ctmp, \reg
+    csub    \reg, \ctmp, \code_seg_cap
+.endm
+
+.macro get_sym_in_code_seg creg, sym, tmp
+    lui \tmp, %pcrel_hi(\sym-8)
+    daddiu \tmp, \tmp, %pcrel_lo(\sym-4)
+    cgetpcc_incoffset \creg, \tmp
+.endm
+
+.macro jmp_in_segment sym, reg, creg
+    lui \reg, %pcrel_hi(\sym-8)
+    daddiu \reg, \reg, %pcrel_lo(\sym-4)
+    cgetpcc_incoffset \creg, \reg
+    cjr \creg
+.endm
+
 .macro invalidate_entry index, tmp
         dmtc0   \index, MIPS_CP0_REG_INDEX
         dsll    \tmp, \index, MIPS_ENTRYHI_VPN_SHIFT
@@ -128,6 +167,10 @@ li  $zero, 0xdead
 
 .macro load_func f
    clcbi    $c12, %capcall20(\f)($c25)
+.endm
+
+.macro load_func_reg f reg
+    clcbi    \reg, %capcall20(\f)($c25)
 .endm
 
 .macro call_func f

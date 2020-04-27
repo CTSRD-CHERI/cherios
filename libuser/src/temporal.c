@@ -224,7 +224,7 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
 // A function that does nothing but perform the check sequence we use for unsafe stacks then returns
 __asm (
 SANE_ASM
-".text; .global try_replace_usp; .ent try_replace_usp; try_replace_usp: \n"
+".text; .global try_replace_usp; .ent try_replace_usp; .hidden try_replace_usp; try_replace_usp: \n"
 "cgetoffset      $1, $c10     \n"
 "tltiu           $1, 0x4000   \n"
 "ccall           $c17, $c18, 2\n"

@@ -222,7 +222,7 @@ __used void kernel_syscall_puts(char *msg) {
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_panic_proxy(act_t* act) __dead2);
-__used void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
+__used void kernel_syscall_panic_proxy(act_t* act) { //fixme: debug only
 	// Turn of interrupts makes the panic print not get screwed up
 	cp0_status_ie_disable();
 
@@ -238,6 +238,14 @@ __used void kernel_syscall_panic_proxy(act_t* act) { //fixme: temporary
 		backtrace(cheri_getreg(11),cheri_getpcc(),cheri_getidc(),cheri_getreg(17),cheri_getreg(18));
 	}
 	kernel_freeze();
+}
+
+DECLARE_WITH_CD(void, kernel_syscall_panic_caller(capability token) __dead2);
+        __used void kernel_syscall_panic_caller(capability token) { // fixme: debug only
+    token = cheri_unseal(token, sync_token_sealer);
+    sync_indirection* si= cheri_setoffset(token, 0);
+    act_t* ccaller = si->act;
+    kernel_syscall_panic_proxy(ccaller);
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_panic(void) __dead2);

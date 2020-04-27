@@ -35,6 +35,8 @@
 #include "string.h"
 #include "namespace.h"
 #include "stdio.h"
+#include "string.h"
+#include "crt.h"
 
 typedef struct {
 	void * act_reference;
@@ -44,6 +46,18 @@ typedef struct {
 bind_t bind[BIND_LEN];
 found_id_t* ids[BIND_LEN];
 int count;
+
+#define DYNAMIC_BINDS 0x10
+#define MAX_NAME_LENGTH 0x30
+
+typedef struct {
+    void * act_reference;
+    char name[MAX_NAME_LENGTH];
+} dynamic_bind_t;
+
+size_t dy_count;
+
+dynamic_bind_t dy_binds[DYNAMIC_BINDS];
 
 void ns_init(void) {
 	/* We need to bootstrap the namespace refs ourselves using our
@@ -126,4 +140,35 @@ int ns_register_found_id(cert_t cert) {
 
 found_id_t* ns_get_found_id(int nb) {
     return validate_idx(nb) ? NULL : ids[nb];
+}
+
+const char* normalise_name(const char* name) {
+    const char* end = strrchr(name, '/');
+    return end ? (end + 1) : name;
+}
+
+int ns_register_name(const char* name, act_kt ref) {
+    if(dy_count == DYNAMIC_BINDS) return -1;
+
+    printf("Registering by name: %s\n", name);
+
+    dynamic_bind_t* dy_bind = &dy_binds[dy_count++];
+    dy_bind->act_reference = ref;
+
+    name = normalise_name(name);
+    strncpy(dy_bind->name, name, MAX_NAME_LENGTH);
+
+    return 0;
+}
+
+act_kt ns_get_ref_by_name(const char* name) {
+
+    name = normalise_name(name);
+
+    for(size_t i = 0; i != dy_count; i++) {
+        if(strncmp(name, dy_binds[i].name, MAX_NAME_LENGTH) == 0)
+            return dy_binds[i].act_reference;
+    }
+
+    return NULL;
 }

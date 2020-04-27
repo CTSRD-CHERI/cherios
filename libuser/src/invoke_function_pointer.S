@@ -38,12 +38,21 @@
 # This stub is used to call function pointers (paired with a data argument). We short circuit when its in the same doamin #
 .ent call_function_pointer_arg_mem
 .global call_function_pointer_arg_mem
+.hidden call_function_pointer_arg_mem
 call_function_pointer_arg_mem:
 .type invoke_c1, "tls_object"
 .weak invoke_c1
+.hidden invoke_c1
 .type invoke_c2, "tls_object"
 .weak invoke_c2
+.hidden invoke_c2
+
+clcbi   $c2, CTLP_OFFSET_CDS($idc)
+load_func_reg plt_common_complete_trusting, $c1
 load_func plt_common_untrusting
+cgettag $at, $c2
+cmovz   $c12, $c1, $at      # c12 = (CDS tag set) ? plt_common_untrusting : plt_common_complete_trusting
+
 get_tls_sym $c1, invoke_c1
 get_tls_sym $c2, invoke_c2
 call_function_pointer:

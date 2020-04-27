@@ -120,7 +120,7 @@
 
 
 .text
-
+.hidden user_exception_trampoline_vector
 .global user_exception_trampoline_vector
 .ent user_exception_trampoline_vector
 

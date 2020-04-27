@@ -131,6 +131,59 @@ typedef struct {
 	Elf64_Xword	p_align;	/*  Alignment  of  segment  */
 }  Elf64_Phdr;
 
+typedef struct {
+    Elf64_Xword d_tag;
+    union {
+        Elf64_Xword     d_val;
+        Elf64_Addr      d_ptr;
+    } d_un;
+} Elf64_Dyn;
+
+typedef struct {
+    Elf64_Word nbucket;
+    Elf64_Word nchain;
+    Elf64_Word values[];
+} Elf64_Hash;
+
+typedef struct {
+    Elf64_Word nbucket;
+    Elf64_Word nchain;
+    Elf64_Word values[];
+} Elf32_Hash;
+
+typedef struct {
+    Elf64_Word      st_name;
+    unsigned char   st_info;
+    unsigned char   st_other;
+    Elf64_Half      st_shndx;
+    Elf64_Addr      st_value;
+    Elf64_Xword     st_size;
+} Elf64_Sym;
+
+typedef struct {
+    Elf64_Addr      r_offset;
+    Elf64_Xword     r_info;
+} Elf64_Rel;
+
+typedef struct {
+    Elf64_Addr      r_offset;
+    Elf64_Xword     r_info;
+    Elf64_Sxword    r_addend;
+} Elf64_Rela;
+
+enum reloc_type
+{
+  R_MIPS_NONE = 0,
+  R_MIPS_16,		R_MIPS_32,
+  R_MIPS_REL32,		R_MIPS_26,
+  R_MIPS_HI16,		R_MIPS_LO16,
+  R_MIPS_GPREL16,	R_MIPS_LITERAL,
+  R_MIPS_GOT16,		R_MIPS_PC16,
+  R_MIPS_CALL16,	R_MIPS_GPREL32,
+  R_MIPS_CHERI_CAPABILITY = 0x5A,
+  R_MIPS_CHERI_CAPABILITY_CALL
+};
+
 _Static_assert(sizeof(Elf64_Phdr) == PHDR_SIZE, "Wrong phdr size");
 #define CHK_PHDR(X) _Static_assert(__CONCAT(PHDR_OFF_, X) == __offsetof(Elf64_Phdr, X), #X " offset macro is wrong")
 CHK_PHDR(p_type);
@@ -196,9 +249,11 @@ typedef struct image {
 	size_t data_index;
 	size_t code_index;
 
-	size_t tls_vaddr;
-	size_t code_vaddr;
-	size_t data_vaddr;
+#define ELF_IMAGE_VADDR(Im, Seg) (Im->load_type.basic.tables.seg_table_vaddrs[Im-> Seg ## _index])
+
+    size_t dynamic_vaddr; // 0 if none
+    size_t dynamic_size;
+
 	size_t image_size;
 
 	size_t tls_mem_size;
@@ -217,7 +272,10 @@ typedef struct image {
 			res_t foundation_res;
 		} secure;
 		struct {
-			capability seg_table[MAX_SEGS];
+		    struct {
+                capability seg_table[MAX_SEGS];
+                size_t seg_table_vaddrs[MAX_SEGS];
+		    } tables;
 			capability tls_prototype; // The prototype for tls - actually a part of data
 			capability code_write_cap; // Needed for PLT stubs. I don't like having this, we should move the stub data
 		} basic;
@@ -236,8 +294,8 @@ static inline capability make_global_pcc(image* im) {
 
     if(im->secure_loaded) return NULL;
 
-	capability pcc = im->load_type.basic.seg_table[im->code_index];
-	pcc = cheri_setoffset(pcc, im->entry - im->code_vaddr);
+	capability pcc = im->load_type.basic.tables.seg_table[im->code_index];
+	pcc = cheri_setoffset(pcc, im->entry - ELF_IMAGE_VADDR(im, code));
 	pcc = cheri_andperm(pcc, (CHERI_PERM_GLOBAL | CHERI_PERM_EXECUTE | CHERI_PERM_LOAD
 							  | CHERI_PERM_LOAD_CAP | CHERI_PERM_CCALL));
 	return pcc;
@@ -258,7 +316,8 @@ cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum
 int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type store_type);
 int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_load);
 
-#endif
+
+#endif // Assembly
 
 #define MAX_THREADS_FOR_OLD 1 // We no longer over allocate TLS by this much, but this number is still used for boot
 					  // and for secure loading
@@ -283,5 +342,67 @@ int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_loa
 #define PF_X		1
 #define PF_W		2
 #define PF_R		4
+
+// Dynamic section entry types
+
+#define DT_NULL     0x0
+#define DT_NEEDED   0x1
+
+#define DT_REL      0x11
+#define DT_RELSZ    0x12
+#define DT_RELENT   0x13
+
+#define DT_JMPREL   0x17
+#define DT_PLTRELSZ 0x2
+#define DT_PLTREL   0x14
+
+#define DT_STRTAB   0x5
+#define DT_STRSZ    0xa
+
+#define DT_SYMTAB   0x6
+#define DT_SYMENT   0xb
+
+#define DT_HASH     0x4
+
+#define MIPS_CHERI___CAPRELOC       0x000000007000c000
+#define MIPS_CHERI___CAPRELOCSSZ    0x000000007000c001
+
+// Symbols table binding types
+
+#define STB_LOCAL 	0
+#define STB_GLOBAL 	1
+#define STB_WEAK 	2
+#define STB_LOOS 	10
+#define STB_HIOS 	12
+#define STB_LOPROC 	13
+#define STB_HIPROC 	15
+
+// Symbol table symbol types
+
+#define STT_NOTYPE 	0
+#define STT_OBJECT 	1
+#define STT_FUNC 	2
+#define STT_SECTION 3
+#define STT_FILE 	4
+#define STT_COMMON 	5
+#define STT_TLS 	6
+#define STT_LOOS 	10
+#define STT_HIOS 	12
+#define STT_LOPROC 	13
+#define STT_HIPROC 	15
+
+#define ELF64_ST_BIND(info)          ((info) >> 4)
+#define ELF64_ST_TYPE(info)          ((info) & 0xf)
+#define ELF64_ST_INFO(bind, type)    (((bind)<<4)+((type)&0xf))
+
+#define ELF32_ST_VISIBILITY(o)       ((o)&0x3)
+#define ELF64_ST_VISIBILITY(o)       ((o)&0x3)
+
+#define STN_UNDEF 0
+
+#define ELF64_R_SYM(info)             ((info)>>32)
+#define ELF64_R_TYPE(info)            ((Elf64_Word)(info))
+#define ELF64_R_INFO(sym, type)       (((Elf64_Xword)(sym)<<32)+ \
+                                        (Elf64_Xword)(type))
 
 #endif

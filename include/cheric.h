@@ -400,6 +400,10 @@ cheri_ptrpermoff(const void *ptr, size_t len, register_t perm, off_t off)
  * capability, including that CHERI_PERM_SEAL is set.
  */
 
+#define cheri_dla_asm(reg, symbol)      \
+    "lui " reg ", %hi(" symbol ")\n"    \
+    "daddiu " reg ", " reg ", %lo(" symbol ")\n"
+
 #define cheri_dla(symbol, result)               \
 __asm __volatile (                              \
     "lui %[res], %%hi(" #symbol ")\n"            \

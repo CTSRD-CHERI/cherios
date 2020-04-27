@@ -60,6 +60,8 @@ __thread queue_t * act_self_queue = NULL;
 
 __thread user_stats_t* own_stats;
 
+char* dynamic_segment;
+
 int    was_secure_loaded;
 auth_t own_auth;
 found_id_t* own_found_id;
@@ -67,6 +69,7 @@ startup_flags_e default_flags;
 
 
 #if !(LIGHTWEIGHT_OBJECT)
+
 #ifndef USE_SYSCALL_PUTS
 
 #define STD_BUF_SIZE 0x100
@@ -186,7 +189,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     // This creates two sockets with the UART driver and sets stdout/stderr to them
 #ifndef USE_SYSCALL_PUTS
 
-    // Dynamic link now.
+    // Dynamic socks so we can create stdout.
     dylink_sockets(self_ctrl, queue, startup_flags, first_thread);
 
     act_kt uart;
@@ -247,6 +250,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 #endif // !LIGHTWEIGHT
 
     get_ctl()->cdl = &entry_stub;
+
 }
 
 void object_init_post_compact(startup_flags_e startup_flags, __unused int first_thread) {

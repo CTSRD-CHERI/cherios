@@ -49,6 +49,9 @@ int	namespace_register(int nb, act_kt ref);
 int	namespace_get_num_services(void);
 int namespace_register_found_id(cert_t cert);
 
+int namespace_register_name(const char* name, act_kt ref);
+act_kt namespace_get_ref_by_name(const char* name);
+
 extern act_kt namespace_ref;
 
 // TODO this is not a good way to handle names, we probably want string ids, or a string to integer id
@@ -82,6 +85,7 @@ static const int namespace_num_bench = 0x73;
 
 static const int namespace_id_num_blockcache = 0x10;
 static const int namespace_id_num_bob = 0x11;
+
 __END_DECLS
 
 #endif

@@ -55,7 +55,7 @@
 #define B_T2 0
 #define B_T3 0
 
-#define TESTS 1
+#define TESTS 0
 
 #define B_DEMO 0
 
@@ -105,16 +105,20 @@ const char* nginx_args[] = {"nginx",NULL};
     #define DEFAULT_TO(X) X
 #endif
 
-#define B_ENTRY(_type, _name, _arg, _daemon, _cond) \
-	{_type,	_cond, _name, _arg, _daemon, 0, NULL},
+#define B_ENTRY(_type, _name, _arg, _daemon, _cond, carg) \
+	{_type,	_cond, _name, _arg, _daemon, 0, NULL, carg},
 #define B_DENTRY(_type, _name, _arg, _cond) \
-	 B_ENTRY(_type, _name, _arg, 1, _cond)
+	 B_ENTRY(_type, _name, _arg, 1, _cond, NULL)
 #define B_PENTRY(_type, _name, _arg, _cond) \
-	 B_ENTRY(_type, _name, _arg, 0, _cond)
+	 B_ENTRY(_type, _name, _arg, 0, _cond, NULL)
+#define B_LIB_ENTRY(_type, _name, _arg, _cond) \
+	 B_ENTRY(_type, _name, _arg, 0, _cond, __DECONST(void*, "lib" _name))
 #define B_FENCE \
-	{m_fence, 1, NULL, 0, 0, 0, NULL},
+	{m_fence, 1, NULL, 0, 0, 0, NULL, NULL},
 #define B_WAIT_FOR(X) \
-    {m_fence, 1, NULL, X, 0, 0, NULL},
+    {m_fence, 1, NULL, X, 0, 0, NULL, NULL},
+#define B_WAIT_FOR_NAME(X) \
+    {m_fence, 1, X, 0, 0, 0, NULL, NULL},
 
 init_elem_t init_list[] = {
   /*
@@ -215,6 +219,13 @@ init_elem_t init_list[] = {
     B_PENTRY(m_user, "nc_shell.elf", 0, !B_BENCH && BUILD_WITH_NET)
 //    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
     B_PENTRY(m_user,"cpptest.elf",0,!B_BENCH && TESTS)
+    B_LIB_ENTRY(m_user, "lib1.so",0, !B_BENCH && TESTS)
+    B_LIB_ENTRY(m_user, "lib2.so",0, !B_BENCH && TESTS)
+#if (!B_BENCH && TESTS)
+    B_WAIT_FOR_NAME("liblib1.so")
+    B_WAIT_FOR_NAME("liblib2.so")
+#endif
+    B_PENTRY(m_user,"app.elf",0, !B_BENCH && TESTS)
 #if 0
 	#define T3(_arg) \
 	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
@@ -236,7 +247,7 @@ init_elem_t init_list[] = {
     B_PENTRY(m_secure, "alice.elf", 0, 1)
 #endif
 
-	{m_fence, 0, NULL, 0, 0, 0, NULL}
+	{m_fence, 0, NULL, 0, 0, 0, NULL, NULL}
 };
 
 const size_t init_list_len = countof(init_list);
@@ -272,8 +283,8 @@ static act_kt dedup_act;
 Elf_Env env;
 
 /* Return the capability needed by the activation */
-static void * get_act_cap(module_t type, init_info_t* info) {
-    type = (type & ~m_secure);
+static void * get_act_cap(init_elem_t* elem, init_info_t* info) {
+    module_t type = (elem->type & ~m_secure);
     switch(type) {
         case m_uart:
             return info->uart_cap;
@@ -291,8 +302,6 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             cap_pair pair;
             get_physical_capability(BLK_MMIO_BASE, BLK_MMIO_SIZE, 1, 0, own_mop, &pair);
             return pair.data;
-        case m_virtnet:
-            return NULL;
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;
             procman_arg.nano_if = info->nano_if;
@@ -302,12 +311,13 @@ static void * get_act_cap(module_t type, init_info_t* info) {
             return nginx_args;
         case m_dedup_init:
             return dedup_act;
+        case m_virtnet:
         case m_namespace:
         case m_core:
         case m_user:
         case m_fence:
         default:
-            return NULL;
+            return elem->carg;
     }
 }
 
@@ -350,7 +360,7 @@ static void load_modules(init_info_t * init_info) {
     /* Namespace */
     namebe->ctrl =
             simple_start(&env, namebe->name, load_check(namebe->name),
-                         namebe->arg, get_act_cap(m_namespace, init_info), NULL, &namespace_im);
+                         namebe->arg, get_act_cap(namebe, init_info), NULL, &namespace_im);
 
 
     namespace_init(syscall_act_ctrl_get_ref(namebe->ctrl));
@@ -364,7 +374,7 @@ static void load_modules(init_info_t * init_info) {
     capability memmgt_file = load_check(memgtbe->name);
 
     procbe->ctrl =
-            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(m_proc, init_info), NULL, &proc_im);
+            simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(procbe, init_info), NULL, &proc_im);
 
     /* No longer a race, procman while wait for this */
 
@@ -380,7 +390,7 @@ static void load_modules(init_info_t * init_info) {
 
     startup_desc_t desc;
     desc.arg = memgtbe->arg;
-    desc.carg = get_act_cap(m_memmgt, init_info);
+    desc.carg = get_act_cap(memgtbe, init_info);
     desc.stack_args = NULL;
     desc.stack_args_size = 0;
     desc.cpu_hint = 0;
@@ -465,7 +475,11 @@ static void load_modules(init_info_t * init_info) {
 		module_t type = be->type & ~m_secure;
 
 		if(type == m_fence) {
-            if(be->arg) {
+		    if(be->name) {
+                while(namespace_get_ref_by_name(be->name) == NULL) {
+                    PAUSE;
+                }
+		    } else if(be->arg) {
                 while(namespace_get_ref((int)be->arg) == NULL) {
                     PAUSE;
                 }
@@ -475,7 +489,7 @@ static void load_modules(init_info_t * init_info) {
 			continue;
 		}
 
-        void *carg = get_act_cap(type, init_info);
+        void *carg = get_act_cap(be, init_info);
         capability  addr = load_check(be->name);
 
         desc.arg = be->arg;

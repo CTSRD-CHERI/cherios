@@ -68,13 +68,26 @@ extern struct capreloc __stop___cap_relocs; // Stops making sense after compacti
 
 extern size_t cap_relocs_size;
 extern capability crt_segment_table[MAX_SEGS];
+extern size_t crt_segment_table_vaddrs[MAX_SEGS];
+
 extern size_t crt_code_seg_offset;
+extern size_t crt_code_seg_addr;
 extern size_t crt_tls_seg_size;
 
 extern size_t crt_cap_tab_local_addr;
 extern capability crt_tls_proto;
 extern size_t crt_tls_proto_size;
 extern size_t crt_tls_seg_off; // _offset_ (not index)
+
+#ifndef IS_KERNEL
+extern __thread __attribute__((weak)) capability thread_local_tls_seg; // Use &thread_local_tls_seg to get
+#endif
+
+// Sadly we need this function to map pointers in the elf format that are not segment relative.
+// If someone put in the effort, we could define a pointer type where the top bits were segment index and this could
+// go away.
+
+char* crt_logical_to_cap(size_t logical_address, size_t size, int tls, char* tls_seg);
 
 // Need inlining as calling functions requires globals
 

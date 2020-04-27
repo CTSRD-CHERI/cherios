@@ -67,3 +67,15 @@ int namespace_get_num_services(void) {
 		return -1;
 	return (int)message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 2);
 }
+
+int namespace_register_name(const char* name, act_kt ref) {
+    if (namespace_ref == NULL)
+        return -1;
+    return (int)message_send(0, 0, 0, 0, __DECONST(capability, name), ref, NULL, NULL,  namespace_ref, SYNC_CALL, 5);
+}
+
+act_kt namespace_get_ref_by_name(const char* name) {
+    if (namespace_ref == NULL)
+        return NULL;
+    return (act_kt)message_send_c(0, 0, 0, 0, __DECONST(capability, name), NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 6);
+}

@@ -160,6 +160,7 @@
     .p2align 3
     .global \name
     .ent \name
+    .protected \name
     \name :
 .endmacro
 
@@ -258,19 +259,16 @@ STUB_END entry_stub
 # These stubs are used by the callee for cross domain calls       #
 ###################################################################
 
-# We have one of these stubs per function
+# This is the stub used by the dynamic linker. The more manual stubs are in cheriplt.h
 
 STUB_BEGIN plt_stub
 
 .p2align CAP_SIZE_BITS
 
-clc         $c12, $zero, (2* CAP_SIZE)($c12)   # Load common stub (or unsealed target for single domain)
-clc         $c1, $zero, (1*CAP_SIZE)($c12)
-cjr         $c12                               # jump to mode stub (can we use ccall here to make single domain faster?)
-clc         $c2, $zero, 0(ctlp)                 # Load target domain data (0 replaced with %captab(lib_sym)
-
-.p2align CAP_SIZE_BITS
-.space (2 * CAP_SIZE) # Each stub is followed by padding to the size of one cap, then c1, then mode
+clc         $c1, $zero, (-CAP_SIZE)($c12)       # Load target code
+clcbi       $c12, 0(cgp)                        # Load mode (offset filled by linker)
+cjr         $c12                                # Jump to mode
+clcbi       $c2, 0(ctlp)                        # Load target data in delay slot (offset filled by linker)
 
 STUB_END plt_stub
 

@@ -56,8 +56,8 @@ start:
 
 	# Set up an exception stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
-	dla		$t0, __start_exception_stack
-	dla		$t1, __size_exception_stack
+	la_relative $t0, __start_exception_stack
+	la_relative	$t1, __size_exception_stack
 	cgetdefault	$c11
 	cincoffset	$c11, $c11, $t0
 	csetboundsexact	$c11, $c11, $t1
@@ -69,7 +69,7 @@ start:
 
 	# Initialise globals. We need to use dla to call this function. Can only do this because dla was loaded contiguously
 	cgetpcc		$c12
-	dla		$t0, crt_init_globals_kernel
+	la_relative	$t0, crt_init_globals_kernel
 	csetoffset	$c12, $c12, $t0
 	csetbounds  $idc, $c11, $zero
 	cjalr		$c12, $c17

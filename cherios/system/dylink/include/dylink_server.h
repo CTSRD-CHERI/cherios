@@ -30,6 +30,8 @@
 #ifndef CHERIOS_DYLINK_SERVER_H
 #define CHERIOS_DYLINK_SERVER_H
 
+// DEPRACATED: This is for the old manual dynamic linking.
+
 int server_start(void);
 
 #endif // CHERIOS_DYLINK_SERVER_H

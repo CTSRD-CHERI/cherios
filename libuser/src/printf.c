@@ -38,7 +38,7 @@
 #include "assert.h"
 #include "namespace.h"
 #include "cheristd.h"
-#include "stdlib.c"
+#include "stdlib.h"
 
 // If the uart driver is not up we can't write to stdout
 // Instead we just use a syscall, currently the kernel has its own uart driver
@@ -159,6 +159,7 @@ vprintf(const char *fmt, va_list ap)
 	return (kvprintf(fmt, (kvprintf_putc_f*)fputc, stdout, 10, ap));
 }
 
+VIS_EXTERNAL
 int
 printf(const char *fmt, ...)
 {

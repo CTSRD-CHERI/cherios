@@ -207,8 +207,8 @@ nano_kernel_init:
 
     cmove       $c15, $c3                               # save this for the end
 
-    dla         $k0, locals_start
-    dli         $k1, locals_size
+    dla_relative $k0, locals_start, $t0
+    dla_relative $k1, locals_size, $t0
     csetoffset  $kr1c, $kdc, $k0
 
     // Don't bother with exact bounds here.
@@ -306,7 +306,7 @@ nano_kernel_init:
 
     # This setus up stuff for sha256
 
-    dla         $t0, k_words
+    dla_relative $t0, k_words, $t1
     dli         $t1, 64 * 4
     csetoffset  $c13, $kdc, $t0
     csetbounds  $c13, $c13, $t1
@@ -315,7 +315,7 @@ nano_kernel_init:
     # Some symbols that are nice to not have to keep materializing
 
 .macro MAT_SYM sym_label, table_name
-    dla         $t0, \sym_label
+    dla_relative $t0, \sym_label, $t1
     cincoffset  $c13, $kcc, $t0
     cscbi       $c13, \table_name($kr1c)
 .endm
@@ -445,19 +445,11 @@ nano_kernel_init:
     dli         $k0, NANO_KERNEL_TYPE
     csetoffset  $kr2c, $kdc, $k0                         # kr2c holds the sealing capability for our plt.got
 
-.macro init_table name
-    dla         $k0,   \name
-    csetoffset  $c13, $kcc, $k0
-    cseal       $c13, $c13, $kr2c
-    csc         $c13, $k1, 0($kr1c)
-    daddiu      $k1, CAP_SIZE
-.endm
-
 get_pcc_label:
     cgetpcc     $c13
     li         $k1, create_context_cap
     cincoffset   $c1, $kr1c, $k1
-    dla         $t1, if_offset_table
+    dla_relative $t1, if_offset_table, $t2
     daddiu      $t2, $t1, (2 * N_NANO_CALLS)
 
 init_table_loop:
@@ -4036,7 +4028,7 @@ get_interface: # (safe)
     beqz        $k0, skip_and_return
     cnull       $c1
 
-    dla         $k0, locals_start
+    dla_relative $k0, locals_start, $k1
     dli         $k1, locals_size
     csetoffset  $kr2c, $kdc, $k0
     csetboundsexact  $kr2c, $kr2c, $k1                        # kr1c will hold a capability to our locals
@@ -4169,7 +4161,7 @@ tlb_trampoline: # TODO
 ################################################################################################
 # dont use kr2c unless context switch restores it
     dmfc0       $k0, cp0_badvaddr
-    dla         $k1, top_virt_page_label                            # k1 = phy poiter to L0
+    la_relative $k1, top_virt_page_label                            # k1 = phy poiter to L0
 
     EXTRACT_AND_SCALE_L0 $k0, $k0, PAGE_TABLE_ENT_BITS
     daddu       $k1, $k1, $k0

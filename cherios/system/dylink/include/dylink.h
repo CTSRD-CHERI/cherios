@@ -32,6 +32,11 @@
 
 #include "string_enums.h"
 #include "cheric.h"
+#include "nonce.h"
+
+#define VIS_EXTERNAL __attribute__((visibility("default")))
+#define VIS_HIDDEN __attribute__((visibility("hidden")))
+
 
 #define DOMAIN_TYPE_LIST(ITEM)  \
     ITEM(callable_taken, 0)     \
@@ -69,9 +74,23 @@ DECLARE_ENUM(domain_type_t, DOMAIN_TYPE_LIST)
 
 #define STACK_LINK_SIZE (2 * CAP_SIZE)
 
+#define DYLINK_GET_REQUIREMENTS_PORT_NO 0
+#define DYLINK_NEW_PROCESS_PORT_NO      1
+
+// To avoid having to do any dynamic allocation yet
+#define MAX_LIBS_BASE_16 0, 0, 2, 0
+#define MAX_LIBS 0x20
+
+#define PLT_STUB_CODE_SIZE (4*4)
+#define PLT_STUB_SIZE (4*4 + sizeof(capability)) // 4 instructions + a cap
+
+#define MODE_NDX_OFF 6
+#define DATA_NDX_OFF 14
+
 #ifndef __ASSEMBLY__
 
 #include "stddef.h"
+#include "elf.h"
 
 #define MAKE_USER_GUARD_TYPE(info) (((info) << DOMAIN_INFO_SHIFT) | user_type)
 #define GET_GUARD_TYPE(guard) ((domain_type_t)((guard) & DOMAIN_TYPE_MASK))
@@ -134,6 +153,35 @@ capability* __ret;                                             \
 __asm__ ("cmove %[ret], $c25" : [ret]"=C"(__ret) ::);     \
 __ret;}))
 
+#define CLCBI_IM_OFFSET 2
+#define CLCBI_IM_SCALE  4
+
+#define get_sym_captable_offset32(Sym) (uint32_t)({                     \
+uint32_t __ret;                                                           \
+__asm__ ("lui %[ret], %%captab_hi(" X_STRINGIFY(Sym) ")\n"              \
+         "daddiu %[ret], %[ret], %%captab_lo(" X_STRINGIFY(Sym) ")\n"   \
+: [ret]"=r"(__ret) ::);     \
+__ret;})
+
+#define get_sym_call_captable_offset32(Sym) (uint32_t)({                \
+uint32_t __ret;                                                         \
+__asm__ ("lui %[ret], %%capcall_hi(" X_STRINGIFY(Sym) ")\n"              \
+         "daddiu %[ret], %[ret], %%capcall_lo(" X_STRINGIFY(Sym) ")\n"   \
+: [ret]"=r"(__ret) ::);     \
+__ret;})
+
+// There is currently no TLS captab_hi/lo so we are forced to extract the bits from a clcbi
+
+#define get_tls_sym_captable_ndx16(Sym) (uint16_t)({                \
+uint16_t __ret;                                                     \
+__asm__ (".weak " X_STRINGIFY(Sym) "\n"                             \
+         ".hidden "  X_STRINGIFY(Sym) "\n"                          \
+         "clcbi $c1, %%captab_tls20(" X_STRINGIFY(Sym) ")($c26)\n"  \
+         "cgetpcc $c1 \n"                                           \
+         "clh %[ret], $zero, -2($c1) \n"                            \
+: [ret]"=r"(__ret) ::"$c1");     \
+__ret;})
+
 // Actually has a type of whatever function pointer is passed in invoke_c1
 extern void call_function_pointer_arg_mem(void);
 
@@ -143,6 +191,88 @@ extern void call_function_pointer_arg_mem(void);
     SET_TLS_SYM(invoke_c1,ptr);\
     SET_TLS_SYM(invoke_c2,ptr_data);\
     ((typeof(ptr))(&call_function_pointer_arg_mem))(__VA_ARGS__);})
+
+#define SYM_NOT_FOUND ((capability)(-1))
+
+typedef struct parsed_dynamic {
+    unsigned const char* needed[MAX_LIBS];
+    unsigned const char* strtab;
+    const Elf64_Sym* symtab;
+    const Elf64_Rel* jmprel;
+    const Elf64_Rel* rel;
+    const Elf64_Hash* hash;
+
+    size_t jmprel_ents;
+    size_t rel_ents;
+    size_t needed_ents;
+    size_t symtab_ents;
+
+} parsed_dynamic_t;
+
+typedef struct lib_info lib_info_t;
+
+typedef struct link_partner {
+    act_kt server_act;
+    found_id_t* id;
+    lib_info_t* info;
+    size_t ndx;
+} link_partner_t;
+
+typedef struct link_session {
+    link_partner_t partners[MAX_LIBS+1];
+    size_t n_libs;
+} link_session_t;
+
+// To cut an annoying knot
+typedef capability mop_t;
+
+typedef union {
+    cert_t as_signed;
+    lib_info_t* as_unsigned;
+} lib_unchecked_info_t;
+
+typedef struct new_thread_request {
+    res_t locals_res;
+    res_t stack_res;
+    res_t ustack_res;
+} new_thread_request_t;
+
+typedef struct new_process_request {
+    nonce_t nonce;
+    found_id_t* client_id;
+    res_t globals_res;
+    res_t session_res;
+    new_thread_request_t first_thread;
+} new_process_request_t;
+
+struct lib_info {
+    // Only needed when starting a new process
+    size_t space_for_globals;
+    size_t space_for_session;
+    size_t space_for_plt_stubs;
+    // Needed when starting a new process or thread
+    size_t space_for_locals;
+    // These functions are used for symbol linking after a new process is created with the server
+    void (*provide_common)(act_control_kt self_ctrl, act_kt self_ref, mop_t mop);
+    void (*provide_session)(link_session_t* session, res_t plt_res, int first_thread, capability* data_args);
+    void (*resolve_syms)(const unsigned char** in, capability* out, size_t n_syms, int functions);
+    // This last one is server only, and can be called BEFORE a new thread is created
+    capability (*new_library_thread)(new_thread_request_t* thread_request);
+};
+
+extern lib_info_t own_info;
+extern parsed_dynamic_t own_pd;
+
+// Parses dynamic section
+void parse_dynamic_section(parsed_dynamic_t* pd);
+
+// Executables calls this to dylink
+void auto_dylink_new_process(link_session_t* session, capability* data_args);
+void auto_dylink_pre_new_thread(link_session_t* session, capability* data_args);
+void auto_dylink_post_new_thread(link_session_t* session, capability* data_args);
+
+// Link-interface functions
+void set_info_functions(lib_info_t* info);
 
 #endif // ASSEMBLY
 

@@ -54,17 +54,14 @@ start:
 # c4 (seg table)
 
 # tls_seg_offset (s1)
-# tls seg size (s5(
-# tls_seg_vaddr (a6)
+# tls seg size (s5)
 # c5 (tls proto)
 # size of tls proto (s3)
 
 # code_segment_offset (a4)
-# code_seg_vaddr (a5)
 # c6 (code write cap)
 
 # data_seg_offset (a2)
-# data_seg_vaddr (a3)
 
 # And the new arguments:
 
@@ -72,13 +69,13 @@ start:
 # c8    : our contiguous data (provided by foundation_enter)
 # c2    : our auth key
 
-# First build a segment table
+# First build a segment table + segment addr table
 # WARN: We assume the order of segments is code/data and there are no there are no others (aprt from the one TLS)
 
     #
     cmove       $c9, $c2                            # auth key going in c9
     # Create a stack for the first thread (just stored in our data section)
-    dla         $t0, secure_stack
+    la_relative  $t0, secure_stack
     li          $t1, DEFAULT_STACK_SIZE
     cincoffset  $c11, $c8, $t0
     cincoffset  $c13, $c11, $t1                     # the lock. Easier to materialise here
@@ -95,12 +92,11 @@ start:
     beqz        $t1, 1b
     li          $a7, 0                              # a7 will be where our first (non proto) tls segment is
 
-    # Now construct a segment tabble. We loop through our program headers
+    # Now construct a segment tabble. We loop through our program headers to fill it out.
+    # This table should go on the stack. CRT will copy it, and then reclaim the space.
 
-
-    dla         $t0, crt_segment_table  # This is global so we can do relative to idc
-    cincoffset  $c4, $c8, $t0
-    csetbounds  $c4, $c4, MAX_SEGS * CAP_SIZE
+    cincoffset  $c11, $c11, -(MAX_SEGS * (CAP_SIZE + REG_SIZE))
+    csetbounds  $c4, $c11, MAX_SEGS * (CAP_SIZE + REG_SIZE)
 
     clh         $t0, $zero, EHDR_OFF_e_phnum($c8)   # t0 = e_phnum
     cld         $t1, $zero, EHDR_OFF_e_phoff($c8)   # t1 = e_phoff
@@ -131,14 +127,14 @@ is_pt_load:
     movn        $a7, $t9, $at                       # a7 = max(a7, t9)
 
     andi        $t2, $t2, PF_W
+    dsrl        $at, $t1, (CAP_SIZE_BITS - REG_SIZE_BITS)
+    csd         $t8, $at, (MAX_SEGS * CAP_SIZE)($c4)    # store vaddr in table
     bnez        $t2, is_w
-    csc         $c14, $t1, 0($c4)
+    csc         $c14, $t1, 0($c4)                       # store seg cap in table
 is_e:
-    move        $a5, $t8                            # set code_seg_vaddr
     b           loop_footer
     move        $a4, $t1                            # set code_seg_offset
 is_w:
-    move        $a3, $t8                            # set data_seg_vaddr
     b           loop_footer
     move        $a2, $t1                            # set data_seg_offset
 
@@ -152,7 +148,8 @@ is_tls:
     # We want the executable version in the seg table for the code segment. Swap it.
     cld         $s3, $zero, PHDR_OFF_p_filesz($c13) # tls proto size
     move        $s1, $t1                            # tls seg offset
-    move        $a6, $t8                            # tls seg vaddr
+    dsrl        $at, $t1, (CAP_SIZE_BITS - REG_SIZE_BITS)
+    csd         $t8, $at, (MAX_SEGS * CAP_SIZE)($c4)    # store tls vaddr in table
     move        $s5, $t9                            # _real_ tls memsize. We use this later
     csetbounds  $c5, $c14, $s3                      # tls proto
 
@@ -185,7 +182,8 @@ loop_footer: # with checks inlined at all the ends of the loop
     # TODO (maybe). Do we want to create our on own queue? Currently it was given to us. We can probably do this later
 
 # Now we can go to common code
-	j start_common
+    jmp_in_segment start_common, $at, $c1
+    cmove $c8, $c16
     cmove       $c8, $c16                                 # c16 had what should be in c8 on entry to common
 
 .end start

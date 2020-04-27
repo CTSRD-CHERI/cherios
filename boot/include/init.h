@@ -67,6 +67,7 @@ typedef struct init_elem_s {
 	int          daemon;
 	int          status;
 	act_control_kt ctrl;
+	void*        carg;
 } init_elem_t;
 
 /*

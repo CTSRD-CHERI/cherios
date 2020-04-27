@@ -34,17 +34,11 @@
 #include "dylink.h"
 #include "crt.h"
 
-extern void	__start_bss;
-extern void __bss_size;
-
-#define BSS_START ((size_t)(&__start_bss))
-#define BSS_SIZE ((size_t)(&__bss_size))
-
 typedef unsigned long long mips_function_ptr;
 typedef void (*cheri_function_ptr)(void);
 
 
-void	crt_init_bss(void);
+void	crt_init_bss(capability auth);
 void	crt_call_constructors(void);
 
 /*
@@ -69,6 +63,7 @@ size_t cap_relocs_size;
 // Of the main thread. We should probably null out the TLS only bit before creating new threads.
 // This is used for dedup in main thread. And also by the secure loader for making new threads.
 capability crt_segment_table[MAX_SEGS];
+size_t crt_segment_table_vaddrs[MAX_SEGS];
 size_t crt_code_seg_offset;
 size_t crt_tls_seg_size;
 
@@ -91,6 +86,8 @@ extern mips_function_ptr __DTOR_END__;
  * as CHERI code generation continues to use 64-bit integers for pointers.  If
  * that changes, this might need to become more capability-appropriate.
  */
+
+VIS_HIDDEN
 void
 crt_call_constructors(void)
 {
@@ -108,29 +105,102 @@ crt_call_constructors(void)
 	}
 }
 
-volatile int _int;
+#if (IS_BOOT == 1)
+
+extern void	__start_bss;
+extern void __bss_size;
+
+#define BSS_START ((size_t)(&__start_bss))
+#define BSS_SIZE ((size_t)(&__bss_size))
 
 void
-crt_init_bss(void)
+crt_init_bss(capability auth)
 {
-	// The nano kernel is eventually going to zero everything (if it doesn't already) so we are guaranteed zeroes
-}
-
-void
-crt_init_boot_bss(capability auth)
-{
+    // Boot BSS may not be zero
 	char* bss = cheri_incoffset(auth, BSS_START - (size_t)auth);
 	bzero(bss, BSS_SIZE);
 }
 
+#else // Not boot
+
+void
+crt_init_bss(__unused capability auth)
+{
+    // All allocators that use reservations guarentee zeros
+}
+
+#endif
+
+VIS_HIDDEN
 void __attribute__((always_inline)) crt_init_new_globals(capability* segment_table, struct capreloc* start, struct capreloc* end) {
     crt_init_common(segment_table, start, end, RELOC_FLAGS_TLS);
 }
 
+VIS_HIDDEN
 void crt_init_new_locals(capability* segment_table, struct capreloc* start, struct capreloc* end) {
     crt_init_common(segment_table, start, end, 0);
+#ifndef IS_KERNEL
+#ifndef IS_BOOT
+    size_t ndx = get_tls_sym_captable_ndx16(thread_local_tls_seg);
+    char* tls_seg = segment_table[crt_tls_seg_off/sizeof(capability)];
+    ((capability*)(tls_seg + crt_cap_tab_local_addr))[ndx] = tls_seg;
+#endif
+#endif
 }
 
+VIS_HIDDEN
 void __attribute__((always_inline)) crt_init_new_locals_inline(capability* segment_table, struct capreloc* start, struct capreloc* end) {
 	crt_init_common(segment_table, start, end, 0);
+}
+
+// sorted in increasing order
+uint8_t crt_sorted_table_map[MAX_SEGS];
+
+VIS_HIDDEN
+char* crt_logical_to_cap(size_t logical_address, size_t size, int tls, char* tls_seg) {
+
+    static int map_sorted = 0;
+
+    if(!map_sorted) {
+        map_sorted = 1;
+
+
+        for(size_t i = 0; i != MAX_SEGS; i++) {
+            crt_sorted_table_map[i] = i;
+        }
+
+        size_t i = 1;
+
+        // Sort increasing order, dont want to include quicksort in crt, and this is very small, so just bubble sort.
+        while(i != MAX_SEGS) {
+            if(crt_segment_table_vaddrs[crt_sorted_table_map[i]] <
+                    crt_segment_table_vaddrs[crt_sorted_table_map[i-1]]) {
+                uint8_t tmp = crt_sorted_table_map[i];
+                crt_sorted_table_map[i] = crt_sorted_table_map[i-1];
+                crt_sorted_table_map[i-1] = tmp;
+                if(i != 1) i--;
+            } else i++;
+        }
+    }
+
+    uint8_t ndx = 0;
+
+    while(logical_address >= crt_segment_table_vaddrs[crt_sorted_table_map[ndx+1]]) {
+        ndx++;
+    }
+
+    size_t tls_ndx = crt_tls_seg_off / sizeof(capability);
+    int current_is_tls = crt_sorted_table_map[ndx] == tls_ndx;
+    // There may be two segments at this address because one is our TLS segment
+    if(current_is_tls || (ndx != 0 && crt_sorted_table_map[ndx-1] == tls_ndx)) {
+        if(!current_is_tls != !tls) ndx--;
+    }
+
+    ndx = crt_sorted_table_map[ndx];
+
+    char* seg = ((ndx == tls_ndx) && tls_seg) ? tls_seg : (char*)(crt_segment_table[ndx]);
+
+    size_t offset = logical_address - crt_segment_table_vaddrs[ndx];
+    char* cap = (char*)cheri_setbounds(seg + offset, size);
+    return cap;
 }

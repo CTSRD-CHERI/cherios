@@ -9,6 +9,8 @@ project(CheriOS LANGUAGES NONE VERSION 0.0.1)
 set(CMAKE_SYSTEM_NAME "CheriOS" CACHE STRING "Target system" FORCE)
 set(CMAKE_SYSTEM_PROCESSOR "Cheri" CACHE STRING "Target CPU" FORCE)
 
+SET_PROPERTY(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS true)
+
 # Allow override of options using set
 cmake_policy(SET CMP0077 NEW)
 
@@ -115,7 +117,7 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 set(CMAKE_ASM_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
 set(CMAKE_C_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
 set(CMAKE_CXX_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_EXE_LINKER_FLAGS "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld -static"
+set(CMAKE_EXE_LINKER_FLAGS "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 
@@ -233,6 +235,8 @@ set(ASMC_COMPILER_FLAGS
     ${BFAST_FLAGS}
     ${VARY_FLAGS}
     ${VARY_SECURE_FLAGS}
+    -fvisibility=hidden
+    -DASM_VISIBILITY=.hidden
     -mcpu=${CHERI_CPU}
     -mabi=purecap
     -march=${CHERI_CPU}
@@ -240,7 +244,7 @@ set(ASMC_COMPILER_FLAGS
     -integrated-as
     -msoft-float
     -fcolor-diagnostics
-    -fno-pic
+    -fpic
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
 )
 set(ASM_COMPILER_FLAGS
@@ -256,7 +260,6 @@ set(C_COMPILER_FLAGS
     -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
     ${MSGDMA_FLAGS}
-    -fpic
 )
 set(C_WARNING_FLAGS
     -Wall
@@ -334,8 +337,7 @@ add_compile_options("$<$<COMPILE_LANGUAGE:ASM>:${ASM_COMPILER_FLAGS}>")
 set(CHERIOS_FILESYSTEM_DIR "${CMAKE_BINARY_DIR}/fs")
 set(CHERIOS_FILESYSTEM_DEPENDS "" CACHE INTERNAL "dependencies for filesystem")
 
-function(add_to_filesystem _target)
-  set(_fs_target_path "${CHERIOS_FILESYSTEM_DIR}/${_target}.elf")
+function(add_to_filesystem _target _fs_target_path)
   add_custom_command(TARGET ${_target} POST_BUILD
     # make sure the directory exists
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
@@ -360,17 +362,17 @@ endfunction()
 
 function(add_cherios_executable _target)
   add_cherios_module(${_target} ${ARGN})
-  target_link_libraries(${_target} CheriOS::LibUser)
+  target_link_libraries(${_target} PRIVATE CheriOS::LibUser)
 endfunction()
 
 function(add_cherios_executable_early _target)
     add_cherios_module(${_target} ${ARGN})
-    target_link_libraries(${_target} CheriOS::LibUserEarly)
+    target_link_libraries(${_target} PRIVATE CheriOS::LibUserEarly)
 endfunction()
 
 function(add_cherios_executable_light _target)
     add_cherios_module(${_target} ${ARGN})
-    target_link_libraries(${_target} CheriOS::LibUserLight)
+    target_link_libraries(${_target} PRIVATE CheriOS::LibUserLight)
     target_compile_definitions(${_target} PUBLIC -DLIGHTWEIGHT_OBJECT=1)
 endfunction()
 
@@ -378,36 +380,41 @@ endfunction()
 function(add_cherios_kernel _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibCRT)
+  target_link_libraries(${_target} PRIVATE CheriOS::LibCRTKern)
   target_compile_definitions(${_target} PUBLIC -DIS_KERNEL=1)
+  target_link_libraries(${_target} PRIVATE "-static")
 endfunction()
 
 function(add_cherios_nano _target)
  add_cherios_module(${_target} ${ARGN})
  set_core_ld_deps(${_target})
+ target_compile_options(${_target} PUBLIC -fno-pic)
 endfunction()
 
 function(add_cherios_boot _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
+  target_compile_definitions(${_target} PUBLIC -DIS_BOOT=1)
+  target_link_libraries(${_target} PRIVATE "-static")
 endfunction()
 
 function(add_cherios_init _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUserEarly)
+  target_link_libraries(${_target} PRIVATE CheriOS::LibUserEarly)
+  target_link_libraries(${_target} PRIVATE "-static")
 endfunction()
 
 function(add_cherios_memmgr _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUserEarly)
+  target_link_libraries(${_target} PRIVATE CheriOS::LibUserEarly)
 endfunction()
 
 function(add_cherios_namespace _target)
   add_cherios_module(${_target} ${ARGN})
   set_core_ld_deps(${_target})
-  target_link_libraries(${_target} CheriOS::LibUserEarly)
+  target_link_libraries(${_target} PRIVATE CheriOS::LibUserEarly)
 endfunction()
 
 function(make_usage _target)
@@ -442,8 +449,17 @@ set(TEMP_64 "SHELL:-mllvm -TemporalExpandLimit=64")
 set(TEMP_16 "SHELL:-mllvm -TemporalExpandLimit=16")
 set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
 
+
+function(add_cherios_library _target)
+    add_cherios_module(${_target} IS_DYN ${ARGN})
+    # The link_serv will be an embedded executable that
+    target_link_libraries(${_target} PRIVATE link_serv)
+    # target_compile_options(${_target} PRIVATE -fvisibility=hidden)
+    target_compile_definitions(${_target} PUBLIC -DLIGHTWEIGHT_OBJECT=1)
+endfunction()
+
 function(add_cherios_module _target)
-  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS NEED_LIBCXXRT NEED_LIBCXX)
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS NEED_LIBCXXRT NEED_LIBCXX IS_DYN)
   set(oneValueArgs LINKER_SCRIPT)
   set(multiValueArgs SOURCES)
   cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -456,15 +472,19 @@ function(add_cherios_module _target)
       endif()
   endif()
 
-
   if(ALWAYS_LTO)
     set(add_exe_USE_LTO "ON")
   endif()
 
-  if(NOT add_exe_LINKER_SCRIPT)
-    message(FATAL_ERROR "Missing LINKER_SCRIPT parameter!")
+  if((NOT add_exe_LINKER_SCRIPT) OR (add_exe_LINKER_SCRIPT STREQUAL "sandbox.ld"))
+    # Sandbox is no just no script plus a few flags
+    set(LINKER_SCRIPT_ARG "-e start -Wl,--image-base,0,--no-rosegment -z max-page-size=16")
   elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
     message(FATAL_ERROR "Chosen LINKER_SCRIPT ${add_exe_LINKER_SCRIPT} does not exist!")
+  else()
+    set(LINKER_SCRIPT_ARG
+            "-L${CMAKE_SOURCE_DIR}/ldscripts"
+            "-Wl,-T,${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
   endif()
   set(_srcs ${add_exe_SOURCES})
   list(LENGTH _srcs _src_count)
@@ -473,25 +493,33 @@ function(add_cherios_module _target)
     message(FATAL_ERROR "No sources passed to add_cherios_executable()")
   endif()
 
-  add_executable(${_target} ${_srcs})
-  # Tell the compiler to use the specified linker script
-  target_link_libraries(${_target}
-    "-L${CMAKE_SOURCE_DIR}/ldscripts"
-    "-Wl,-T,${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}"
-    )
-  target_link_libraries(${_target}
-    -G0
-    -nostartfiles
-    -nodefaultlibs
-    -mabi=purecap
-    -Wl,-z,norelro
-    )
+  if(add_exe_IS_DYN)
+      add_library(${_target} SHARED ${_srcs})
+  else()
+      add_executable(${_target} ${_srcs})
+  endif()
 
-  set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
+  # Tell the compiler to use the specified linker script. No need for a dynamic linker because we embed it.
+  target_link_libraries(${_target}
+        PRIVATE
+        ${LINKER_SCRIPT_ARG}
+        "-Wl,-Bdynamic -Wl,-no-pie"
+        -G0
+        -nostartfiles
+        -nodefaultlibs
+        -mabi=purecap
+        -Wl,-z,norelro
+   )
+
+  if(NOT add_exe_IS_DYN)
+       set_target_properties(${_target} PROPERTIES OUTPUT_NAME "${_target}.elf")
+  endif()
+
   if(${add_exe_USE_LTO} OR ${add_exe_TEMPORAL_A})
       message("Using LTO for ${_target}")
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
+              PRIVATE
               -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
       )
       target_compile_options(${_target} PUBLIC "-flto")
@@ -499,14 +527,19 @@ function(add_cherios_module _target)
 
   if(${add_exe_TEMPORAL_A})
       target_link_libraries(${_target}
+           PRIVATE
           -Wl,-mllvm,-TemporalType=analysis,-mllvm,-TemporalExpandLimit=${EXPAND_LIMIT}
       )
   endif()
 
-
   # add it to the filesystem dir if requested
   if(add_exe_ADD_TO_FILESYSTEM)
-    add_to_filesystem(${_target})
+      if(add_exe_IS_DYN)
+          set(_output_extention "so")
+      else()
+          set(_output_extention "elf")
+      endif()
+    add_to_filesystem(${_target} "${CHERIOS_FILESYSTEM_DIR}/${_target}.${_output_extention}")
   endif()
   # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
   add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
@@ -516,11 +549,11 @@ function(add_cherios_module _target)
     if(add_exe_NEED_LIBCXX)
         target_compile_options(${_target} PUBLIC -include "${CMAKE_BINARY_DIR}/libcxx/__config_site")
         target_include_directories(${_target} BEFORE PUBLIC ${CMAKE_SOURCE_DIR}/libcxx/include)
-        target_link_libraries(${_target} cxx_static)
+        target_link_libraries(${_target} PRIVATE cxx_static)
     endif()
 
     if(add_exe_NEED_LIBCXXRT)
-        target_link_libraries(${_target} cxxrt-static)
+        target_link_libraries(${_target} PRIVATE cxxrt-static)
     endif()
 endfunction()
 
@@ -623,5 +656,6 @@ add_subdirectory(demos)
 add_subdirectory(pthread_test)
 
 add_subdirectory(cpptest)
+add_subdirectory(dylink_test)
 
 add_subdirectory(boot)

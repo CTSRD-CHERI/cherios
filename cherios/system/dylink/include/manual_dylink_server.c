@@ -41,6 +41,8 @@
 #include "crt.h"
 #include "misc.h"
 
+// DEPRACATED: This is for the old manual dynamic linking.
+
 PLT_ty(LIB_IF_T, LIB_IF_LIST)
 PLT_define(LIB_IF_LIST)
 

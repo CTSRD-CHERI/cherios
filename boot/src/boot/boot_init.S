@@ -103,7 +103,7 @@ start:
 	candperm	$c12, $c12, $t0
 
 	# Jump to write-free $pcc.
-	dla		$t0, cherios_init_jump_target
+	dla_relative		$t0, cherios_init_jump_target, $t1
 	csetoffset	$c12, $c12, $t0
 	cjr		$c12
 	nop
@@ -181,8 +181,8 @@ cherios_init_jump_target:
 
 	# Set up a boot-time stack using memory allocated by the linker;
 	# assume that $c0 is a sensible starting capability for this.
-	dla		$t0, __start_boot_stack
-	dla		$t1, __size_boot_stack
+	dla_relative		$t0, __start_boot_stack, $t1
+	dla_relative		$t1, __size_boot_stack, $t2
 	cgetdefault	    $c11
 	cincoffset	    $c11, $c11, $t0
 	csetboundsexact	$c11, $c11, $t1
@@ -194,7 +194,7 @@ cherios_init_jump_target:
 
 	# Initialise globals. We need to use dla to call this function.
 	cgetpcc		$c12
-	dla		$t0, crt_init_globals_boot
+	dla_relative		$t0, crt_init_globals_boot, $t2
 	csetoffset	$c12, $c12, $t0
     csetbounds  $idc, $c11, $zero # need non null
 	cjalr		$c12, $c17
@@ -204,7 +204,7 @@ cherios_init_jump_target:
 
 	# Zero BSS.
 	cgetdefault $c3
-	call_func crt_init_boot_bss
+	call_func crt_init_bss
 
 	# Call C constructors.
 	call_func crt_call_constructors
@@ -220,11 +220,11 @@ bootload_smp_trap:
     # a0 contains our CPU ID
 
     # A vector of characters to signal when to exit this trap. 0 = spin. 1 = try exit. 2 = try exit
-    dla $t0, smp_signal_vector
+    dla_relative $t0, smp_signal_vectorm $t2
     daddu   $t0, $t0, $a0
 
     # A vector of capabilities for when to go on exit
-    dla $t1, smp_destination_vector
+    dla_relative $t1, smp_destination_vector, $t2
     dsll $a0, $a0, CAP_SIZE_BITS
     daddu  $t1, $t1, $a0
 

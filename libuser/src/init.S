@@ -39,6 +39,7 @@
 #include "asm.S"
 #include "syscalls.h"
 #include "dylink.h"
+#include "elf.h"
 
 # Assembly stub on the way to running C code.  Assumes that $c0 and $pcc are
 # global and suitable.  Jump to various startup functions to initialise the C
@@ -50,6 +51,7 @@
 	.text
 	.global start_common
 	.ent start_common
+	.hidden start_common
 start_common:
 
 #########################################################################################################################
@@ -64,18 +66,17 @@ start_common:
 # c22   : process reference                                                                                             #
 #                                                                                                                       #
 #                                                                                                                       #
-# c4    : segment table                                                                                                 #
+# c4    : segment table, followed by segment table vaddrs                                                               #
 # c5    : tls_segment_prototype                                                                                         #
 # c6    : code_write_cap (for compaction)                                                                               #
 # s1    : tls_segment_offset                                                                                            #
 # a2    : data_seg_offset                                                                                               #
-# a3    : data_seg_vaddr                                                                                                #
 # a4    : code_seg_offset                                                                                               #
-# a5    : code_seg_vaddr                                                                                                #
-# a6    : tls_seg_vaddr                                                                                                 #
 # s3    : the size of the tls prototype segment                                                                         #
 # s5    : the size of the tls segment                                                                                   #
-# s2    : startup_args                                                                                                  #
+# s6    : dynamic segment vaddr                                                                                         #
+# s7    : dynamic segment size                                                                                          #
+# s2    : startup_flags                                                                                                 #
 #                                                                                                                       #
 # c9    : auth (null if unsecure, otherwise our auth cap                                                                #
 # c7    : domain type reservation (may be null, be always have one if secure loaded)                                    #
@@ -89,9 +90,8 @@ start_common:
 #########################################################################################################################
 
 	# Save arguments
-
 	cincoffset  $c11, $c11, -(9*CAP_SIZE)
-	move		$s0, $a0
+	move		$s0, $a0                        #   user arg
     csc         $c3, $zero, 0($c11)
     csc         $c19, $zero, (CAP_SIZE*1)($c11)
     csc         $c20, $zero, (CAP_SIZE*2)($c11)
@@ -102,43 +102,51 @@ start_common:
     csc         $c7,  $zero, (CAP_SIZE*7)($c11)
     csc         $c8,  $zero, (CAP_SIZE*8)($c11)
 
+    # load a few vaddrs
+.macro LOAD_VADDR reg, offset_reg
+    dsrl        \reg, \offset_reg, (CAP_SIZE_BITS - REG_SIZE_BITS) # Scale offset
+    cld         \reg, \reg, (MAX_SEGS * CAP_SIZE)($c4)
+.endm
+
+# a5    : code_seg_vaddr
+# a6    : tls_seg_vaddr
+# a3    : data_seg_vaddr
+
+    LOAD_VADDR  $a5, $a4
+    LOAD_VADDR  $a6, $s1
+    LOAD_VADDR  $a3, $a2
+
 	# Initialise BSS and globals before running C constructors, so that C
 	# constructors can take them (and other aspects of the conventional C
 	# runtime) for granted.
 
-    # We cant use captab yet - instead use dla and subtract vaddr of segment start, then derive from the segment table
+    # We cant use captab yet - instead use la and subtract vaddr of segment start, then derive from the segment table
     # The constants we need are provided by the linker
 
-    clc         $c13, $a2, 0($c4)               #   $c13 is data_seg cap
+    clc         $c14, $a2, 0($c4)               #   $c14 is data_seg cap
+    clc         $c13, $a4, 0($c4)               #   $c13 is code_seg cap
 
-    dla         $t0, __cap_table_start
+
+    la_different_seg $t0, __cap_table_start, $c13, $c1
     dsubu       $t0, $t0, $a3
-    cincoffset  $c25, $c13, $t0                 #   Globals (unbounded)
+    cincoffset  $c25, $c14, $t0                 #   Globals (unbounded)
 
 
-    dla         $t0, __cap_table_local_start
-    dsubu       $s6, $t0, $a6
+    la_different_seg $t0, __cap_table_local_start, $c13, $c1
+    dsubu       $a0, $t0, $a6
     clc         $c26, $s1, 0($c4)
-    cincoffset  $c26, $c26, $s6                  #   Locals (unbounded)
+    cincoffset  $c26, $c26, $a0                  #   Locals (unbounded)
 
 
     cscbi       $c7, CTLP_OFFSET_CDS($idc)      # store our sealing type
 
-    dla		    $t0, crt_init_new_globals
-    dsubu       $t0, $t0, $a5
-    clc         $c13, $a4, 0($c4)               #   $c13 is data_seg cap
-    cincoffset  $c12, $c13, $t0                 # crt_init_new_globals
+    get_sym_in_code_seg $c12, crt_init_new_globals, $t0
 
-    # These are in the global address space
-    dla         $t1, __start___cap_relocs
-    dla         $t2, __stop___cap_relocs
-    # Now relative to the code segment
-    dsubu       $t1, $t1, $a5
-    dsubu       $t2, $t2, $a5
+    # We currently assume that the relocs are in the same segment as code
 
     cmove       $c19, $c4                       #   segment_table
-    cincoffset  $c20, $c13, $t1                 #   start_relocs
-    cincoffset  $c21, $c13, $t2                 #   stop_relocs
+    get_sym_in_code_seg $c20, __start___cap_relocs, $t0                 #   start_relocs
+    get_sym_in_code_seg $c21, __stop___cap_relocs, $t0                 #   stop_relocs
     cmove       $c22, $c5                       #   tls_segment_prototype
     move        $s4, $a4                        #   code_seg_offset
 
@@ -155,13 +163,34 @@ start_common:
     cgetlen     $t0, $c13
     csetboundsexact  $c26, $c26, $t0                 # bounds for local cap tab are same as prototype
 
+    # Call memcpy(crt_segment_table_vaddrs, segment_table+(CAP_SIZE*MAX_SEGS), REG_SIZE * MAX_SEGS)
+    get_sym     $c3, crt_segment_table_vaddrs
+    cincoffset  $c4, $c19, (CAP_SIZE*MAX_SEGS)
+    li          $a0, REG_SIZE * MAX_SEGS
+    call_func   memcpy
+
+    # Now we have globals set up we can save a cap to the dynamic segment
+    beqz        $s6, no_dynamic
+    move        $a0, $s6
+    move        $a1, $s7
+    li          $a2, 0
+    cmove       $c3, $cnull
+    call_func   crt_logical_to_cap
+
+    get_sym     $c4, dynamic_segment
+    csc         $c3, $zero, 0($c4)
+
+no_dynamic:
+
     # Store these for future use
     get_sym     $c3, crt_code_seg_offset
     csd         $s4, $zero, 0($c3)
     get_sym     $c3, crt_tls_seg_size
     csd         $s5, $zero, 0($c3)
     get_sym     $c3, crt_cap_tab_local_addr
-    csd         $s6, $zero, 0($c3)              # the seg relative addr of the cap table
+    clc         $c4, $s1, 0($c19)               # tls seg
+    csub        $at,  $idc, $c4                 # offset of locals table
+    csd         $at, $zero, 0($c3)              # the seg relative addr of the cap table
     get_sym     $c3, crt_tls_proto
     csc         $c22, $zero, 0($c3)             # tls proto
     get_sym     $c3, crt_tls_proto_size
@@ -261,6 +290,7 @@ make_call:
 
 # This really HAS to deduplicate, so make sure it touches no globals. It allows compact_code to modify where it returns
 .global compact_code_tramp
+.hidden compact_code_tramp
 .ent compact_code_tramp
 
 

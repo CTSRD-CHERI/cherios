@@ -47,9 +47,10 @@
 #include "ccall.h"
 #include "utils.h"
 #include "types.h"
+#include "dylink.h"
 
 // FIXME: alias needs size too
-#define WEAK_DUMMY(name) ".weak " #name "_dummy \n"
+#define WEAK_DUMMY(name) ".weak " #name "_dummy \n .hidden " #name "_dummy \n"
 
 #if (DEBUG_COUNT_CALLS)
 
@@ -83,12 +84,13 @@ __asm__ (                       \
     ".p2align 3\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
+    X_STRINGIFY(ASM_VISIBILITY) " " #name "\n"\
     "" #name ":\n"              \
     alias                       \
     WEAK_DUMMY(name)            \
     BUMP_CSD_COUNTER            \
     "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
+    "clcbi       $c2, %captab" tls "20(" EVAL1(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     "ccall       $c1, $c2, 2 \n"\
     "nop\n"                     \
     alias2                      \
@@ -102,14 +104,15 @@ __asm__ (                       \
     ".p2align 3\n"              \
     ".global " #name "\n"       \
     ".ent " #name "\n"          \
+    X_STRINGIFY(ASM_VISIBILITY) " " #name "\n"\
     "" #name ":\n"              \
     alias                       \
     WEAK_DUMMY(name)            \
     WEAK_DUMMY(obj)             \
     "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n" \
-    "clcbi       $c12,%capcall20(" EVAL5(STRINGIFY(obj)) "_dummy)($c25)\n"          \
+    "clcbi       $c12,%capcall20(" EVAL1(STRINGIFY(obj)) "_dummy)($c25)\n"          \
     "cjr         $c12                                 \n"                           \
-    "clcbi       $c2, %captab" tls "20(" EVAL5(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
+    "clcbi       $c2, %captab" tls "20(" EVAL1(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
     alias2                      \
     ".end " #name "\n"          \
 );
@@ -141,21 +144,23 @@ typedef void common_t(void);
     #define PLT_INIT_MAIN_THREAD(type)  init_ ## type
     #define PLT_INIT_NEW_THREAD(type) init_ ## type ##_new_thread
 
+    #define DECLARE_WEAK_OBJ_DUMMY(type) ".weak " #type "_data_obj_dummy; .hidden " #type "_data_obj_dummy"
+
     #define DEFINE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
     void PLT_INIT_MAIN_THREAD(type)  (type* plt_if, capability data, capability trust_mode) {      \
         __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
-        __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
+        __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
         LIST(INIT_OBJ)                                                                \
     }\
     void PLT_INIT_NEW_THREAD(type) (capability data) {      \
             __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
     }\
     void init_ ## type ##_change_mode(capability trust_mode) {\
-    __asm__ (".weak " #type "_data_obj_dummy; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
+        __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
     }\
     capability init_ ## type ##_get_mode(void) {\
         capability trust_mode;\
-    __asm__ (".weak " #type "_data_obj_dummy; clcbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n":[d]"=C"(trust_mode)::); \
+        __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; clcbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n":[d]"=C"(trust_mode)::); \
         return trust_mode;  \
     }
 
@@ -175,7 +180,7 @@ typedef void common_t(void);
     LIST(DECLARE_STUB,)                     \
     DECLARE_PLT_INIT(type, LIST, tls_reg, tls) \
     DEFINE_DUMMYS(LIST) \
-    __attribute__((weak)) extern void type ## _data_obj_dummy(void);
+    __attribute__((weak)) VIS_HIDDEN extern void type ## _data_obj_dummy(void);
 
     #define DUMMY_HELP(name, ret, ty, ...) __attribute__((weak)) extern ret name ## _dummy ty;
 

@@ -102,6 +102,8 @@
 		.global memcpy
 		.ent memcpy
 		.global memmove
+		ASM_VISIBILITY memcpy
+		ASM_VISIBILITY memmove
 memmove:
     # Memcpy should just be memmove (its pretty cheap), this avoids bugs
 memcpy:

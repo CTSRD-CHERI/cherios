@@ -33,7 +33,9 @@
 #include "misc.h"
 #include "object.h"
 
-void (*msg_methods[]) = {ns_register, ns_get_reference, ns_get_num_services, ns_get_found_id, ns_register_found_id};
+void (*msg_methods[]) = {ns_register, ns_get_reference,
+                         ns_get_num_services, ns_get_found_id, ns_register_found_id,
+                         ns_register_name, ns_get_ref_by_name};
 size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);

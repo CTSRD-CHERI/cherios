@@ -1332,6 +1332,7 @@ ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags
             {
                 printf("Request from %s", mop->debug_id);
                 printf(KRED"Failed to find a VMEM allocation base %lx. length %lx. flags %x\n"KRST, base, length, flags);
+                syscall_panic_last_caller();
                 panic("Search failed\n");
                 return MAKE_ER(res_t, MEM_REQUEST_NONE_FOUND); // No pages matched
             }

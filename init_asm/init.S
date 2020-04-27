@@ -32,11 +32,14 @@
 .set nobopt
 .set noat
 
+#include "asm.S"
+
 	.text
 	.global start
 	.ent start
+	.hidden start
 start:
-	j start_common
+    jmp_in_segment start_common, $at, $c1
     cmove $c8, $c16
 
     .end start

@@ -39,6 +39,14 @@
 #include "thread.h"
 #include "mman.h"
 
+#if !(LIGHTWEIGHT_OBJECT)
+#ifndef LIB_EARLY
+
+link_session_t own_link_session;
+
+#endif //
+#endif // !LIGHTWEIGHT
+
 void libuser_init(act_control_kt self_ctrl,
 				  act_kt ns_ref,
 				  kernel_if_t* kernel_if_c,
@@ -55,4 +63,9 @@ void libuser_init(act_control_kt self_ctrl,
 	mmap_set_mop(mop);
 	namespace_init(ns_ref);
 	object_init(self_ctrl, queue, kernel_if_c, cds_res, flags, 1);
+#if !(LIGHTWEIGHT_OBJECT)
+#ifndef LIB_EARLY
+    auto_dylink_new_process(&own_link_session, NULL);
+#endif
+#endif // !LIGHTWEIGHT
 }

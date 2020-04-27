@@ -66,7 +66,7 @@
 	.text
 	.global msg_entry
 	.ent msg_entry
-
+    ASM_VISIBILITY msg_entry
 # Load a bunch of symbols using the cap_table
 
 .type act_self_queue, "tls_object"
@@ -77,6 +77,10 @@
 .weak ctrl_methods
 .weak msg_methods_nb
 .weak ctrl_methods_nb
+.hidden msg_methods
+.hidden ctrl_methods
+.hidden msg_methods_nb
+.hidden ctrl_methods_nb
 
 .global msg_entry
 msg_entry:

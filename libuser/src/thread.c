@@ -54,6 +54,7 @@ extern void secure_thread_start(void);
 
 struct start_stack_args {
     thread_start_func_t* start;
+    capability data_args[MAX_LIBS+1];
 };
 
 // This will be symetric locked. It can only be created by the foundation, and only read by the foundation.
@@ -76,6 +77,7 @@ struct secure_start_t {
     register_t arg;
     spinlock_t once;
     capability segment_table[MAX_SEGS];
+    capability data_args[MAX_LIBS+1];
 };
 
 
@@ -90,22 +92,29 @@ struct secure_start_t {
 
 #define SPIN_OFF ((9 * CAP_SIZE) +  REG_SIZE)
 #define SEG_TBL_OFF (10 * CAP_SIZE)
+#define DATA_ARGS_OFF_SEC (SEG_TBL_OFF + (MAX_SEGS * CAP_SIZE))
 
 _Static_assert((offsetof(struct secure_start_t, once)) == SPIN_OFF, "used by assembly below");
 _Static_assert((offsetof(struct secure_start_t, segment_table)) == SEG_TBL_OFF, "used by assembly below");
+_Static_assert((offsetof(struct secure_start_t, data_args)) == DATA_ARGS_OFF_SEC, "used by assembly below");
 
-#define START_OFF 0
-#define CARG_OFF 0
-#define ARG_OFF 0
-#define NONCE_OFF 0
+#define START_OFF       0
+#define DATA_ARGS_OFF   CAP_SIZE
 
-#define ARGS_SIZE (CAP_SIZE)
 
 #define STRFY(X) #X
 #define HELP(X) STRFY(X)
 
 _Static_assert((offsetof(struct start_stack_args, start)) == START_OFF, "used by assembly below");
-_Static_assert((sizeof(struct start_stack_args)) == ARGS_SIZE, "used by assembly below");
+_Static_assert((offsetof(struct start_stack_args, data_args)) == DATA_ARGS_OFF, "used by assembly below");
+
+#define LOAD_VADDR(reg, offset_reg) \
+    "dsrl        " reg ", " offset_reg ", (" HELP(CAP_SIZE_BITS) " - " HELP(REG_SIZE_BITS) ") \n" \
+    "cld         " reg ", " reg ", (" HELP(MAX_SEGS)" * " HELP(CAP_SIZE) ")($c4) \n"
+
+
+// data_args = c3, segment_table = c4, tls_segment_proto = c5, tls_segment_off = a0,
+// queue = c6, self_ctrl = c7, flags = a1, if_c = c8
 
 
 // These will be called instead of normal init for new threads
@@ -118,15 +127,15 @@ __asm__ (
     ".ent thread_start              \n"
     "thread_start:                  \n"
     "clc         $c13, $a2, 0($c4)  \n"
-
+LOAD_VADDR("$a6", "$s1")
+LOAD_VADDR("$a3", "$a2")
 // Get globals
-    "dla         $t0, __cap_table_start                     \n"
+    cheri_dla_asm("$t0", "__cap_table_start")
     "dsubu       $t0, $t0, $a3                              \n"
     "cincoffset  $c25, $c13, $t0                            \n"
     "clcbi       $c25, %captab20(__cap_table_start)($c25)   \n"
-
 // Get locals
-    "dla         $t0, __cap_table_local_start   \n"
+    cheri_dla_asm("$t0", "__cap_table_local_start")
     "dsubu       $t0, $t0, $a6                  \n"
     "clc         $c26, $s1, 0($c4)              \n"
     "cincoffset  $c26, $c26, $t0                \n"
@@ -134,19 +143,32 @@ __asm__ (
     "cgetlen     $t0, $c13                      \n"
     "csetbounds  $c26, $c26, $t0                \n"
 
-    // c3 already carg and a0 already arg
+    // Save c3 and a0
+
+    "move       $s0, $a0    \n"
+    "cmove      $c19, $c3   \n"
+
     // c4 already segment_table
     // c5 already tls_prototype
-    "move       $a1, $s1    \n"     // tls_segment
+    "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
+    "cincoffset $c3, $c11, " HELP(DATA_ARGS_OFF) "\n" // data_args
+    "move       $a0, $s1    \n"     // tls_segment
     "cmove      $c6, $c20   \n"     // queue
     "cmove      $c7, $c21   \n"     // self ctrl
-    "clc        $c8, $zero, " HELP(START_OFF) "($c11)\n"
-    "cmove      $c9, $c24   \n"     // kernel_if_t
-    "move       $a2, $s2    \n"    // startup flags
+    "cmove      $c8, $c24   \n"     // kernel_if_t
+    "move       $a1, $s2    \n"     // startup flags
     // Call c land now globals are set up
-    "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
-    "cjr     $c12\n"
-    "cincoffset  $c11, $c11, " HELP(ARGS_SIZE) "\n" // todo reclaim seg table
+    "cjalr      $c12, $c17  \n"
+    "cmove      $c18, $idc  \n"
+    // Reset stack then finish calling start with restored arguments
+    "cmove      $c12, $c3           \n"
+    "clc        $c4, $zero, " HELP(START_OFF) "($c11)\n"
+    "cmove      $c3, $c19           \n"
+    "move       $s0, $a0            \n"
+    "cmove      $c5, $cnull         \n"
+    "cgetlen    $at, $c11           \n"
+    "cjalr      $c12, $c17  \n"
+    "csetoffset $c11, $c11, $at     \n"
     ".end thread_start"
 );
 
@@ -165,39 +187,54 @@ __asm__ (
         "bnez       $t1, fail\n"
         "cscb       $t1, $t0, $c14\n"
         "beqz       $t1, 1b\n"
-        "cmove      $c13, $idc\n"
+        "cmove      $c19, $idc\n"
     // Load stacks(s)
-        "clc        $c11, $zero, (" HELP(C11_OFF) ")($c13)\n"
-        "clc        $c10, $zero, (" HELP(C10_OFF) ")($c13)\n"
+        "clc        $c11, $zero, (" HELP(C11_OFF) ")($c19)\n"
+        "clc        $c10, $zero, (" HELP(C10_OFF) ")($c19)\n"
     // Load globals
-        "clc        $c25, $zero, (" HELP(CGP_OFF) ")($c13)\n"
+        "clc        $c25, $zero, (" HELP(CGP_OFF) ")($c19)\n"
     // Load idc (at this point we will take exceptions as the caller intended)
-        "clc        $idc, $zero, (" HELP(IDC_OFF) ")($c13)\n"
+        "clc        $idc, $zero, (" HELP(IDC_OFF) ")($c19)\n"
     // Now call the same thread_start func
-        "cld        $a0 , $zero, (" HELP(ARG_OFF_SEC) ")($c13)\n" // arg
-        "clc        $c3 , $zero, (" HELP(CARG_OFF_SEC) ")($c13)\n" // carg
-        "clcbi      $c14, %captab20(crt_tls_seg_off)($c25)\n" // tls seg offset
-        "cld        $a1, $zero, 0($c14)\n"
-        "cincoffset $c4 , $c13, (" HELP(SEG_TBL_OFF) ")\n" // seg table
+        "clcbi      $c14, %captab20(crt_tls_seg_off)($c25)\n" // tls seg offset ptr
+        "cld        $a0, $zero, 0($c14)\n"                  // tls seg offset
+        "cincoffset $c4 , $c19, (" HELP(SEG_TBL_OFF) ")\n" // seg table
         "csetbounds $c4, $c4," HELP(CAP_SIZE * MAX_SEGS) "\n" // and bound it
         "clcbi      $c5, %captab20(crt_tls_proto)($c25)\n" // tls_proto
         "clc        $c5, $zero, 0($c5)\n"
         "cmove      $c6, $c20\n" // queue (make a new one straight away?)
         "cmove      $c7, $c21\n" // self ctrl
-        "clc        $c8 , $zero, (" HELP(START_OFF_SEC) ")($c13)\n" // start
-        "cmove      $c9, $c24   \n"     // kernel_if_t
         "clcbi   $c12, %capcall20(c_thread_start)($c25)\n"
-        "cjr        $c12\n"
-        "move       $a2, $s2    \n"    // startup flags
+        "cmove      $c8, $c24   \n"     // kernel_if_t
+        "cincoffset $c3 , $c19, (" HELP(DATA_ARGS_OFF_SEC) ")\n" // data arg table
+        "move       $a1, $s2    \n"    // startup flags
+        "cjalr      $c12, $c17  \n"
+        "cmove      $c18, $idc  \n"
+// Finish calling start. Clean up will be done for us (argument c5)
+        "cmove      $c12, $c3           \n"
+        "cld        $a0 , $zero, (" HELP(ARG_OFF_SEC) ")($c19)\n" // arg
+        "clc        $c3 , $zero, (" HELP(CARG_OFF_SEC) ")($c19)\n" // carg
+        "clc        $c4 , $zero, (" HELP(START_OFF_SEC) ")($c19)\n" // start
+        "cjalr      $c12, $c17  \n"
+        "cmove      $c5, $c19    \n"        // Get callee to clean up this object
         "fail:      teqi $zero, 0\n"
         "nop\n"
         ".end secure_thread_start\n"
 );
 
-// TODO we now have some globals for some of these arguments. Use those instead?
-void c_thread_start(register_t arg, capability carg, // Things from the user
-                    capability* segment_table, capability tls_segment_prototype, register_t tls_segment_offset,
-                    queue_t* queue, act_control_kt self_ctrl, thread_start_func_t* start, startup_flags_e flags,
+extern link_session_t own_link_session;
+
+void c_thread_call_start(register_t arg, capability carg, thread_start_func_t* start, __unused capability clean_me_up) {
+
+    // TODO: Clean up argument if one is provided. Cant do this right now due to broken cross thread free
+
+    start(arg, carg);
+
+    main_returns();
+}
+
+capability c_thread_start(capability* data_args, capability* segment_table, capability tls_segment_prototype, register_t tls_segment_offset,
+                    queue_t* queue, act_control_kt self_ctrl, startup_flags_e flags,
                     kernel_if_t* kernel_if_c) {
     // We have to do this before we can get any thread locals
     memcpy(segment_table[tls_segment_offset/sizeof(capability)], tls_segment_prototype, crt_tls_proto_size);
@@ -213,9 +250,14 @@ void c_thread_start(register_t arg, capability carg, // Things from the user
 
     object_init(self_ctrl, queue, kernel_if_c, NULL, flags, 0);
 
-    start(arg, carg);
+#ifndef LIB_EARLY
+    auto_dylink_post_new_thread(&own_link_session, data_args);
+#else
+    (void)(data_args);
+#endif
 
-    main_returns();
+    // Return the function to call start rather than call it directly to allow stack recovery
+    return (capability)&c_thread_call_start;
 }
 
 process_kt thread_create_process(const char* name, capability file, int secure_load) {
@@ -274,6 +316,8 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
     startup.flags = default_flags;
 
+    capability* data_args;
+
     if(!was_secure_loaded) {
 
         args.start = start;
@@ -284,6 +328,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         startup.arg = arg;
         startup.pcc = &thread_start;
 
+        data_args = args.data_args;
 
     } else {
 
@@ -328,7 +373,13 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         startup.carg = NULL;
         startup.arg = 0; // DUMMY, passed through the start_message
         startup.pcc = NULL; // DUMMY, passed through the start_message
+
+        data_args = start_message->data_args;
     }
+
+#ifndef LIB_EARLY
+    auto_dylink_pre_new_thread(&own_link_session, data_args);
+#endif
 
     return thread_create_thread(proc_handle, name, &startup);
 }

@@ -46,6 +46,8 @@
 #define AUTO_DEDUP_STATS            0
 #define AUTO_COMPACT                0
 
+extern char* dynamic_segment;
+
 __BEGIN_DECLS
 
 extern if_req_auth_t nanoreq_auth;

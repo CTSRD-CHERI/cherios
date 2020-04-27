@@ -37,3 +37,5 @@ void *	ns_get_reference(int nb);
 int	ns_get_num_services(void);
 int ns_register_found_id(cert_t cert);
 found_id_t* ns_get_found_id(int nb);
+int ns_register_name(const char* name, void* ref);
+void * ns_get_ref_by_name(const char* name);

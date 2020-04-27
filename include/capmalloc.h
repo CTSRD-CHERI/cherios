@@ -41,6 +41,7 @@ struct arena_t;
 __BEGIN_DECLS
 /* Get a reservation capability of size `size'. Will result in a claim being made on all memory the reservation covers,
  * both the metadata and the capability that would result from a take. */
+VIS_EXTERNAL
 res_t       cap_malloc(size_t size);
 
 res_t cap_malloc_arena(size_t size, struct arena_t* arena);

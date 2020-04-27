@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2019 Lawrence Esswood
+ * Copyright (c) 2020 Lawrence Esswood
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -27,27 +27,35 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_DYLINK_CLIENT_H
-#define CHERIOS_DYLINK_CLIENT_H
 
-// DEPRACATED: This is for the old manual dynamic linking.
-
-#include "mman.h"
+#include "cheric.h"
+#include "shared_stuff.h"
+#include "stdio.h"
 #include "thread.h"
 
-#define DYLINK_IPC_NO_GET_IF            1
-#define DYLINK_IPC_NO_GET_TABLE_SIZE    0
-#define DYLINK_IPC_NO_GET               2
+extern const __thread char* dynamic_tls_sym;
+extern const char* dynamic_normal_sym;
 
-typedef void init_other_object_func_t(act_control_kt self_ctrl, mop_t* mop, queue_t * queue, startup_flags_e startup_flags);
+void print_stuff(__unused register_t arg, __unused capability carg) {
+    printf("Normal Sym: %s\n", dynamic_normal_sym);
 
-void dylink(act_control_kt self_ctrl, queue_t * queue, startup_flags_e startup_flags, int first_thread,
-            act_kt dylink_server, init_if_func_t* init_if_func, init_if_new_thread_func_t* init_if_new_thread_func,
-            init_other_object_func_t * init_other_object);
+    printf("TLD Sym: %s\n", dynamic_tls_sym);
 
-#define DYLINK_LIB(lib, self_ctrl, queue, flags, first_thread, server) \
-    dylink(self_ctrl, queue, flags, first_thread, server,  (init_if_func_t*)&PLT_INIT_MAIN_THREAD(lib), \
-            (init_if_new_thread_func_t*)&PLT_INIT_NEW_THREAD(lib), (init_other_object_func_t*)&INIT_OTHER_OBJECT(lib))
+    function_in_another_lib();
+}
 
+int main(__unused register_t arg, __unused capability carg) {
 
-#endif //CHERIOS_DYLINK_CLIENT_H
+    printf("Dynamically linked application hello world!\n");
+
+    print_stuff(0, NULL);
+
+    dynamic_tls_sym = "Changed";
+    dynamic_normal_sym = "Changed";
+
+    thread_new("foo", 0, NULL, &print_stuff);
+
+    function_in_lib2();
+
+    return 0;
+}

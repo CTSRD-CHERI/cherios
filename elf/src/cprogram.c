@@ -52,7 +52,7 @@ act_control_kt simple_start(Elf_Env* env, const char* name, capability file, reg
 queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t arg, capability carg,
                      capability pcc, char* stack_args, size_t stack_args_size, mop_t mop) {
 
-    size_t space_for_segs = im->secure_loaded ? 0 : sizeof(im->load_type.basic.seg_table);
+    size_t space_for_segs = im->secure_loaded ? 0 : sizeof(im->load_type.basic.tables);
 
     size_t queue_size = sizeof(queue_default_t);
 
@@ -119,18 +119,17 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     /* Set up a whole bunch of linking info */
 
     if(!im->secure_loaded) {
-        env->memcpy(seg_tbl, im->load_type.basic.seg_table, sizeof(im->load_type.basic.seg_table));
+        env->memcpy(seg_tbl, &im->load_type.basic.tables, sizeof(im->load_type.basic.tables));
         frame->cf_c4 = seg_tbl;                             // segment_table
         frame->cf_c5 = im->load_type.basic.tls_prototype ;                  // tls_prototype
         frame->cf_c6 = im->load_type.basic.code_write_cap;
         frame->mf_s1 = im->tls_index * sizeof(capability);  // tls_segment_offset
         frame->mf_a2 = im->data_index * sizeof(capability); // data_seg_offset
-        frame->mf_a3 = im->data_vaddr;                      // data_seg_vaddr
         frame->mf_a4 = im->code_index * sizeof(capability); // code_seg_offset
-        frame->mf_a5 = im->code_vaddr;                      // code_seg_vaddr
-        frame->mf_a6 = im->tls_vaddr;                       // tls_seg_vaddr
         frame->mf_s3 = im->tls_fil_size;
         frame->mf_s5 = im->tls_mem_size;
+        frame->mf_s6 = im->dynamic_vaddr;
+        frame->mf_s7 = im->dynamic_size;
     } else {
         frame->cf_c8 = im->load_type.secure.secure_entry;
     }
