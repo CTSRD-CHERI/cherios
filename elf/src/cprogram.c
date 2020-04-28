@@ -36,11 +36,11 @@
 #include "mman.h"
 #include "assert.h"
 
-act_control_kt simple_start(Elf_Env* env, const char* name, capability file, register_t arg, capability carg, mop_t mop, image* im) {
+act_control_kt simple_start(Elf_Env* env, const char* name, const char* file, register_t arg, capability carg, mop_t mop, image* im) {
     reg_frame_t frame;
     bzero(&frame, sizeof(frame));
 
-    elf_loader_mem(env, (Elf64_Ehdr*)file, im, 0);
+    elf_loader_mem(env, (const Elf64_Ehdr*)file, im, 0);
 
     void * pcc = make_global_pcc(im);
 

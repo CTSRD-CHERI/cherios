@@ -92,7 +92,7 @@ static void error_elf_loader(Elf_Env *env, const char *fmt, ...) {
 	va_end(ap);
 }
 
-int elf_check_supported(Elf_Env *env, Elf64_Ehdr *hdr) {
+int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 	if (hdr->e_ident[0] != 0x7f ||
 		hdr->e_ident[1] != 'E'  ||
 		hdr->e_ident[2] != 'L'  ||
@@ -155,11 +155,11 @@ static inline Elf64_Shdr *elf_section(Elf64_Ehdr *hdr, int idx) {
 }
 #endif
 
-static inline Elf64_Phdr *elf_pheader(Elf64_Ehdr *hdr) {
-	return (Elf64_Phdr *)((char *)hdr + hdr->e_phoff);
+static inline const Elf64_Phdr *elf_pheader(const Elf64_Ehdr *hdr) {
+	return (const Elf64_Phdr *)((const char *)hdr + hdr->e_phoff);
 }
 
-static inline Elf64_Phdr *elf_segment(Elf64_Ehdr *hdr, size_t idx) {
+static inline const Elf64_Phdr *elf_segment(const Elf64_Ehdr *hdr, size_t idx) {
 	assert(idx < hdr->e_phnum);
 	return &elf_pheader(hdr)[idx];
 }
@@ -173,7 +173,7 @@ static void load_PT_loads(Elf_Env* env, struct image_old* elf, char* prgmp) {
     assert(elf->hdr != NULL);
 
     for(int i=0; i<elf->hdr->e_phnum; i++) {
-        Elf64_Phdr *seg = elf_segment(elf->hdr, i);
+        const Elf64_Phdr *seg = elf_segment(elf->hdr, i);
         if(seg->p_type == PT_LOAD) {
             TRACE("memcpy: [%lx %lx] <-- [%lx %lx] (%lx bytes)",
                   seg->p_vaddr, seg->p_vaddr + seg->p_filesz,
@@ -238,12 +238,12 @@ cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum
 	return out_elf->loaded_process;
 }
 
-static void load_seg(Elf_Env* env, size_t i, Elf64_Phdr *seg, image* out_im) {
+static void load_seg(Elf_Env* env, size_t i, const Elf64_Phdr *seg, image* out_im) {
 	cap_pair seg_cap_pair = env->alloc(seg->p_memsz, env);
 	capability seg_cap = (seg->p_flags & PF_X) ? seg_cap_pair.code : seg_cap_pair.data;
     if(seg->p_flags & PF_X) out_im->load_type.basic.code_write_cap = seg_cap_pair.data;
 	out_im->load_type.basic.tables.seg_table[i+1] = cheri_setbounds(seg_cap, seg->p_memsz);
-	char* src = ((char*)out_im->hdr) + seg->p_offset;
+    const char* src = ((const char*)out_im->hdr) + seg->p_offset;
 	memcpy(seg_cap_pair.data, src, seg->p_filesz);
 }
 
@@ -260,7 +260,7 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 			case storage_new:
 				// Needs all new segments
 				for(size_t i=0; i<out_im->hdr->e_phnum; i++) {
-					Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
+					const Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
 					if (seg->p_type == PT_LOAD) {
 						if((seg->p_flags & PF_W) == 0) {
 							load_seg(env, i, seg, out_im);
@@ -270,7 +270,7 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 			case storage_process:
 				// Needs new writable parts
 				for(size_t i=0; i<out_im->hdr->e_phnum; i++) {
-					Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
+					const Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
 					if (seg->p_type == PT_LOAD) {
 						if(seg->p_flags & PF_W) {
 							load_seg(env, i, seg, out_im);
@@ -319,9 +319,9 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 				out_im->load_type.secure.contig_ex = pair.code;
 
 				for(size_t i=0; i<out_im->hdr->e_phnum; i++) {
-					Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
+                    const Elf64_Phdr *seg = elf_segment(out_im->hdr, i);
 					if(seg->p_type == PT_LOAD) {
-						memcpy((char*)pair.data + seg->p_vaddr, ((char*)out_im->hdr) + seg->p_offset, seg->p_filesz);
+						memcpy((char*)pair.data + seg->p_vaddr, ((const char*)out_im->hdr) + seg->p_offset, seg->p_filesz);
 					}
 					// TODO: Also have to load the dynamic segment
 				}
@@ -345,7 +345,7 @@ int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type 
 	return 0;
 }
 
-int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_load) {
+int elf_loader_mem(Elf_Env *env, const Elf64_Ehdr* hdr, image* out_elf, int secure_load) {
 	if(!elf_check_supported(env, hdr)) {
 		ERROR("ELF File cannot be loaded");
 		return -1;
@@ -376,7 +376,7 @@ int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_loa
 	size_t image_size = 0;
 
 	for(size_t i=0; i<hdr->e_phnum; i++) {
-		Elf64_Phdr *seg = elf_segment(hdr, i);
+        const Elf64_Phdr *seg = elf_segment(hdr, i);
 		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX filesz:%lX memsz:%lX align:%lX",
 			  seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr,
 			  seg->p_filesz, seg->p_memsz, seg->p_align);
@@ -458,7 +458,7 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
     int has_tls = 0;
 
 	for(int i=0; i<hdr->e_phnum; i++) {
-		Elf64_Phdr *seg = elf_segment(hdr, i);
+        const Elf64_Phdr *seg = elf_segment(hdr, i);
 		TRACE("SGMT: type:%X flags:%X offset:%lX vaddr:%lX filesz:%lX memsz:%lX align:%lX",
 			  seg->p_type, seg->p_flags, seg->p_offset, seg->p_vaddr,
 			  seg->p_filesz, seg->p_memsz, seg->p_align);

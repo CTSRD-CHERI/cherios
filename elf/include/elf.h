@@ -243,7 +243,7 @@ typedef struct image_old {
 
 typedef struct image {
 	/* Pointer to file for when we need the headers again*/
-	Elf64_Ehdr *hdr;
+    const Elf64_Ehdr *hdr;
 
 	size_t tls_index;	// 0 if none
 	size_t data_index;
@@ -314,7 +314,7 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
 cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum e_storage_type store_type);
 
 int create_image(Elf_Env* env, image* in_im, image* out_im, enum e_storage_type store_type);
-int elf_loader_mem(Elf_Env *env, Elf64_Ehdr* hdr, image* out_elf, int secure_load);
+int elf_loader_mem(Elf_Env *env, const Elf64_Ehdr* hdr, image* out_elf, int secure_load);
 
 
 #endif // Assembly

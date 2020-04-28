@@ -87,7 +87,7 @@ void thread_init(void);
 
 /* These are wrappers for messages to the process manager */
 
-process_kt thread_create_process(const char* name, capability file, int secure_load);
+process_kt thread_create_process(const char* name, const char* file, int secure_load);
 thread thread_start_process(process_kt proc, startup_desc_t* desc);
 thread thread_create_thread(process_kt proc, const char* name, startup_desc_t* desc);
 

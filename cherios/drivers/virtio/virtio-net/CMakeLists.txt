@@ -8,4 +8,4 @@ set(VIRTIONET_SRCS
     src/virtio_net.c
 )
 
-add_cherios_executable(virtio-net ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${VIRTIONET_SRCS})
+add_cherios_executable(virtio_net ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${VIRTIONET_SRCS})

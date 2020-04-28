@@ -8,4 +8,4 @@ set(VIRTIOBLK_SRCS
     src/virtio_blk.c
 )
 
-add_cherios_executable(virtio-blk ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${VIRTIOBLK_SRCS})
+add_cherios_executable(virtio_blk ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${VIRTIOBLK_SRCS})

@@ -5,7 +5,6 @@ include_directories(${DRIVERS_DIR}/megacore/include)
 include_directories(${DRIVERS_DIR}/alteraSD/include)
 include_directories(${CMAKE_SOURCE_DIR}/elf/include)
 include_directories(${CMAKE_SOURCE_DIR}/tmpalloc/include)
-include_directories(${UFS_DIR}/include)
 
 set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/libc/freebsd_ports/subr_prf.c
@@ -48,13 +47,12 @@ set(INIT_SRCS
     src/init/init_utils.c
     ${CMAKE_SOURCE_DIR}/tmpalloc/src/alloc.c
     ${CMAKE_SOURCE_DIR}/elf/src/cprogram.c
-    src/init/ufs_module.c
-    ${UFS_DIR}/src/ufs_read.c
+    ${CMAKE_CURRENT_BINARY_DIR}/fs.S
+    ${CMAKE_CURRENT_BINARY_DIR}/init_fs.h
 )
 
 set(INIT_ASM_SRCS
     src/init/init.S
-    src/init/fs.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")
@@ -67,12 +65,9 @@ endif()
 
 # we have to include ${CMAKE_CURRENT_BINARY_DIR} for all files and not just fs.c
 # because CMake strips include paths from the COMPILE_FLAGS source file property
-include_directories(${CMAKE_CURRENT_BINARY_DIR}) # to find fs.img
+include_directories(${CHERIOS_FILESYSTEM_DIR}) # to find files fir fs.S
+include_directories(${CMAKE_CURRENT_BINARY_DIR}) # to find init_fs.h
 
-# fs.S depends on the fs.img file, kernel_elf.S on kernel.elf, init_elf.S on init.elf
-set_source_files_properties(src/init/fs.S PROPERTIES
-  OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/fs.img"
-)
 set_source_files_properties(src/boot/kernel_elf.S PROPERTIES
   OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/kernel.elf"
 )
@@ -113,17 +108,19 @@ target_compile_definitions(cherios PUBLIC -DCHERIOS_BOOT)
 list(LENGTH CHERIOS_FILESYSTEM_DEPENDS _fs_dep_count)
 message(STATUS "Filesystem requires ${_fs_dep_count} files: ${CHERIOS_FILESYSTEM_DEPENDS}")
 
-add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.img DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} VERBATIM
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/fs.S ${CMAKE_CURRENT_BINARY_DIR}/init_fs.h
+        DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${CMAKE_SOURCE_DIR}/boot/generate_fs.py VERBATIM
   COMMAND mkdir -p "${CHERIOS_FILESYSTEM_DIR}" # make sure the directory exists first
   # create the timestamp file
   COMMAND date > "${CHERIOS_FILESYSTEM_DIR}/t1"
   # now build the file system
   # note: if you get "No space left on device" error, increase the -b percentage
   COMMAND ls -l "${CHERIOS_FILESYSTEM_DIR}/t1"
-  COMMAND ${MAKEFS_PROGRAM} -b 30% -f 30% -M 1k -t ffs -o version=2 -B big "${CMAKE_CURRENT_BINARY_DIR}/fs.img" "${CHERIOS_FILESYSTEM_DIR}"
+  COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/boot/generate_fs.py ${CHERIOS_FILESYSTEM_DIR} ${CMAKE_CURRENT_BINARY_DIR}/fs.S ${CMAKE_CURRENT_BINARY_DIR}/init_fs.h
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
-add_custom_target(filesystem DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fs.img)
+
+add_custom_target(filesystem DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/fs.S ${CMAKE_CURRENT_BINARY_DIR}/init_fs.h)
 
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/kernel.elf DEPENDS kernel VERBATIM
   COMMAND cp "$<TARGET_FILE:kernel>" "${CMAKE_CURRENT_BINARY_DIR}/kernel.elf"

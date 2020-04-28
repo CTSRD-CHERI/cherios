@@ -68,6 +68,7 @@ typedef struct init_elem_s {
 	int          status;
 	act_control_kt ctrl;
 	void*        carg;
+	const char*  file_data;
 } init_elem_t;
 
 /*
@@ -83,8 +84,6 @@ int	num_registered_modules(void);
 
 void	stats_init(void);
 void	stats_display(void);
-
-void *	load(const char * filename, int * len);
 
 int init_main(void);
 

@@ -47,6 +47,7 @@
 #include "capmalloc.h"
 #include "../../../cherios/kernel/include/sched.h"
 #include "crt.h"
+#include "init_fs.h"
 
 #define B_FS 0
 #define B_SO 0
@@ -82,8 +83,8 @@ const char* nginx_args[] = {"nginx",NULL};
     #define BLK_MMIO_SIZE   VIRTIO_MMIO_SIZE
     #define BLK_MMIO_IRQ    VIRTIO_MMIO_IRQ
 
-    #define FS_ELF          "fatfs.elf"
-    #define BLK_ELF         "virtio-blk.elf"
+    #define FS_ELF          fatfs
+    #define BLK_ELF         virtio_blk
 #else
     #include "alteraSD.h"
 
@@ -91,8 +92,8 @@ const char* nginx_args[] = {"nginx",NULL};
     #define BLK_MMIO_SIZE   ALTERA_SD_SIZE
     #define BLK_MMIO_IRQ    0
 
-    #define FS_ELF          "fatfs.elf"
-    #define BLK_ELF         "alteraSD.elf"
+    #define FS_ELF          fatfs
+    #define BLK_ELF         alteraSD
 
 #endif
 
@@ -105,20 +106,24 @@ const char* nginx_args[] = {"nginx",NULL};
     #define DEFAULT_TO(X) X
 #endif
 
+#define SYM_FOR_FILE(_name) __ ## _name ## _start
+#define SYM_END_FOR_FILE(_name) __ ## _name ## _end
+#define SYM_SIZE_FOR_FILE(_name) &SYM_END_FOR_FILE(_name) - &SYM_FOR_FILE(_name)
+
 #define B_ENTRY(_type, _name, _arg, _daemon, _cond, carg) \
-	{_type,	_cond, _name, _arg, _daemon, 0, NULL, carg},
+	{_type,	_cond, #_name, _arg, _daemon, 0, NULL, carg, &SYM_FOR_FILE(_name)},
 #define B_DENTRY(_type, _name, _arg, _cond) \
 	 B_ENTRY(_type, _name, _arg, 1, _cond, NULL)
 #define B_PENTRY(_type, _name, _arg, _cond) \
 	 B_ENTRY(_type, _name, _arg, 0, _cond, NULL)
 #define B_LIB_ENTRY(_type, _name, _arg, _cond) \
-	 B_ENTRY(_type, _name, _arg, 0, _cond, __DECONST(void*, "lib" _name))
+	 B_ENTRY(_type, _name, _arg, 0, _cond, __DECONST(void*, "lib" #_name))
 #define B_FENCE \
-	{m_fence, 1, NULL, 0, 0, 0, NULL, NULL},
+	{m_fence, 1, NULL, 0, 0, 0, NULL, NULL, NULL},
 #define B_WAIT_FOR(X) \
-    {m_fence, 1, NULL, X, 0, 0, NULL, NULL},
+    {m_fence, 1, NULL, X, 0, 0, NULL, NULL, NULL},
 #define B_WAIT_FOR_NAME(X) \
-    {m_fence, 1, X, 0, 0, 0, NULL, NULL},
+    {m_fence, 1, #X, 0, 0, 0, NULL, NULL, NULL},
 
 init_elem_t init_list[] = {
   /*
@@ -158,77 +163,77 @@ init_elem_t init_list[] = {
    * manager
    */
 
-	B_DENTRY(m_namespace,	"namespace.elf",	0,	1)
-    B_DENTRY(m_proc,     "proc.elf", 0, 1)
-	B_DENTRY(m_memmgt,	"memmgt.elf",		0, 	1)
+	B_DENTRY(m_namespace,	namespace,	0,	1)
+    B_DENTRY(m_proc,     proc, 0, 1)
+	B_DENTRY(m_memmgt,	memmgt,		0, 	1)
 // NOTE: IDLE processes are loaded here
-    B_DENTRY(m_secure,    "libsocket.elf", 0, 1)
+    B_DENTRY(m_secure,    libsocket, 0, 1)
     B_WAIT_FOR(namespace_num_lib_socket)
-    B_DENTRY(m_uart,	"uart.elf",		0,	1)      // Needed for stdout so bring up asap. This needs the link server for libsocket
-    B_DENTRY(m_user,    "activation_events.elf", 0, 1)
-    B_DENTRY(m_dedup,    "dedup.elf", 0 ,1)
-    B_DENTRY(m_dedup_init, "dedup_init.elf", DEDUP_INIT, 1)
+    B_DENTRY(m_uart,	uart,		0,	1)      // Needed for stdout so bring up asap. This needs the link server for libsocket
+    B_DENTRY(m_user,    activation_events, 0, 1)
+    B_DENTRY(m_dedup,    dedup, 0 ,1)
+    B_DENTRY(m_dedup_init, dedup_init, DEDUP_INIT, 1)
     B_WAIT_FOR(namespace_num_dedup_service)
-    B_DENTRY(m_tman, "type_manager.elf",0,1)
+    B_DENTRY(m_tman, type_manager,0,1)
     B_WAIT_FOR(namespace_num_tman)
-//  B_DENTRY(m_core,	"sockets.elf",		0,	B_SO)
-	B_DENTRY(m_core,	"zlib.elf",		0,	B_ZL)
+//  B_DENTRY(m_core,	sockets,		0,	B_SO)
+//	B_DENTRY(m_core,	zlib,		0,	B_ZL)
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	!B_DEMO)
-    B_DENTRY(DEFAULT_TO(m_secure) | m_user, "block_cache.elf", 0, !B_DEMO)
+    B_DENTRY(DEFAULT_TO(m_secure) | m_user, block_cache, 0, !B_DEMO)
 #if (B_DEMO == 0)
     B_WAIT_FOR(namespace_num_blockcache)
-    B_PENTRY(m_virtnet | DEFAULT_TO(m_user), "lwip.elf", 0, 1 && BUILD_WITH_NET)
+    B_PENTRY(m_virtnet | DEFAULT_TO(m_user), lwip, 0, 1 && BUILD_WITH_NET)
 	B_FENCE
 	B_DENTRY(m_fs | DEFAULT_TO(m_user),	FS_ELF	,		0,	1)
 	B_FENCE
-	B_PENTRY(m_user,	"hello.elf",		0,	TESTS)
+	B_PENTRY(m_user,	hello,		0,	TESTS)
 	B_WAIT_FOR(namespace_num_fs)
 #if(BUILD_WITH_NET)
     B_WAIT_FOR(namespace_num_tcp)
 #endif
 #if (B_BENCH)
-    B_DENTRY(m_user, "bench_collect.elf", 0, B_BENCH_COLLECT)
-    B_DENTRY(m_user, "ping_dump.elf", 0, B_BENCH_PINGER)
+    B_DENTRY(m_user, bench_collect, 0, B_BENCH_COLLECT)
+    B_DENTRY(m_user, ping_dump, 0, B_BENCH_PINGER)
 #if(B_BENCH_COLLECT)
     B_WAIT_FOR(namespace_num_bench)
 #endif
-    B_DENTRY(m_user, "calls.elf", 0, B_BENCH_CALLS)
-    B_DENTRY(m_user, "message_send.elf", 0, B_BENCH_MS)
-    B_DENTRY(m_user, "exceptions.elf", 0, B_BENCH_EXPS)
-    B_DENTRY(m_user, "revoke_bench.elf", 0, B_BENCH_REVOKE)
+    B_DENTRY(m_user, calls, 0, B_BENCH_CALLS)
+    B_DENTRY(m_user, message_send, 0, B_BENCH_MS)
+    B_DENTRY(m_user, exceptions, 0, B_BENCH_EXPS)
+    B_DENTRY(m_user, revoke_bench, 0, B_BENCH_REVOKE)
 #endif
-	B_DENTRY(m_user,	"test1b.elf",		0,	B_T1)
-	B_PENTRY(m_user,	"prga.elf",		1,	B_SO)
-	B_PENTRY(m_user,	"prga.elf",		2,	B_SO)
-	B_PENTRY(m_user,	"zlib_test.elf",	0,	B_ZL)
-	B_PENTRY(m_user,	"test1a.elf",		0,	B_T1)
-	B_PENTRY(m_user,	"test2a.elf",		0,	B_T2)
-	B_PENTRY(m_user,	"test2b.elf",		0,	B_T2)
-    B_PENTRY(m_user,    "exception_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_user, "unsafe_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_user,    "dedup_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_user,    "socket_test.elf", 0 ,!B_BENCH && TESTS)
-    B_PENTRY(m_user, "fs_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_user, "pthread_test.elf", 0, !B_BENCH && TESTS)
-//    B_DENTRY(m_user, "server.elf", 0, 1)
-//    B_PENTRY(m_user, "client.elf", 0, 1)
-    B_PENTRY(m_user,    "churn.elf",        0,  0)
-    B_PENTRY(m_secure,    "foundation_test.elf", 0, !B_BENCH && TESTS)
-    B_PENTRY(m_nginx | DEFAULT_TO(m_secure), "nginx.elf",NGINX_ARGS_L,1 && BUILD_WITH_NET)
-    B_PENTRY(m_user, "top.elf", 0, !B_BENCH && 0)
-    B_PENTRY(m_user, "nc_shell.elf", 0, !B_BENCH && BUILD_WITH_NET)
-//    B_PENTRY(m_user, "snake.elf",0, BUILD_WITH_NET)
-    B_PENTRY(m_user,"cpptest.elf",0,!B_BENCH && TESTS)
-    B_LIB_ENTRY(m_user, "lib1.so",0, !B_BENCH && TESTS)
-    B_LIB_ENTRY(m_user, "lib2.so",0, !B_BENCH && TESTS)
+//	B_DENTRY(m_user,	test1b,		0,	B_T1)
+//	B_PENTRY(m_user,	prga,		1,	B_SO)
+//	B_PENTRY(m_user,	prga,		2,	B_SO)
+//	B_PENTRY(m_user,	zlib_test,	0,	B_ZL)
+//	B_PENTRY(m_user,	test1a,		0,	B_T1)
+//	B_PENTRY(m_user,	test2a,		0,	B_T2)
+//	B_PENTRY(m_user,	test2b,		0,	B_T2)
+    B_PENTRY(m_user,    exception_test, 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user, unsafe_test, 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user,    dedup_test, 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user,    socket_test, 0 ,!B_BENCH && TESTS)
+    B_PENTRY(m_user, fs_test, 0, !B_BENCH && TESTS)
+    B_PENTRY(m_user, pthread_test, 0, !B_BENCH && TESTS)
+//    B_DENTRY(m_user, server, 0, 1)
+//    B_PENTRY(m_user, client, 0, 1)
+    B_PENTRY(m_user,    churn,        0,  0)
+    B_PENTRY(m_secure,    foundation_test, 0, !B_BENCH && TESTS)
+    B_PENTRY(m_nginx | DEFAULT_TO(m_secure), nginx,NGINX_ARGS_L,1 && BUILD_WITH_NET)
+    B_PENTRY(m_user, top, 0, !B_BENCH && 0)
+    B_PENTRY(m_user, nc_shell, 0, !B_BENCH && BUILD_WITH_NET)
+//    B_PENTRY(m_user, snake,0, BUILD_WITH_NET)
+    B_PENTRY(m_user,cpptest,0,!B_BENCH && TESTS)
+    B_LIB_ENTRY(m_user, lib1,0, !B_BENCH && TESTS)
+    B_LIB_ENTRY(m_user, lib2,0, !B_BENCH && TESTS)
 #if (!B_BENCH && TESTS)
-    B_WAIT_FOR_NAME("liblib1.so")
-    B_WAIT_FOR_NAME("liblib2.so")
+    B_WAIT_FOR_NAME(liblib1)
+    B_WAIT_FOR_NAME(liblib2)
 #endif
-    B_PENTRY(m_user,"app.elf",0, !B_BENCH && TESTS)
+    B_PENTRY(m_user,app,0, !B_BENCH && TESTS)
 #if 0
 	#define T3(_arg) \
-	B_PENTRY(m_user,	"test3.elf",		_arg,	B_T3)
+	B_PENTRY(m_user,	test3,		_arg,	B_T3)
 	T3(16) T3(17) T3(18) T3(19)
 	T3(20) T3(21) T3(22) T3(23) T3(24) T3(25) T3(26) T3(27) T3(28) T3(29)
 	T3(30) T3(31) T3(32) T3(33) T3(34) T3(35) T3(36) T3(37) T3(38) T3(39)
@@ -240,29 +245,26 @@ init_elem_t init_list[] = {
 
 #else
 // A much smaller set of programs for demo purposes
-    B_PENTRY(m_secure, "bob.elf", 0, 1)
+    B_PENTRY(m_secure, bob, 0, 1)
     B_WAIT_FOR(namespace_num_bob)
-    B_PENTRY(m_secure, "eve.elf", 0, 1)
+    B_PENTRY(m_secure, eve, 0, 1)
     B_WAIT_FOR(namespace_num_eve)
-    B_PENTRY(m_secure, "alice.elf", 0, 1)
+    B_PENTRY(m_secure, alice, 0, 1)
 #endif
 
-	{m_fence, 0, NULL, 0, 0, 0, NULL, NULL}
+	{m_fence, 0, NULL, 0, 0, 0, NULL, NULL, NULL}
 };
 
 const size_t init_list_len = countof(init_list);
 
-// ALLOCATE_PLT_NANO
-
 static void print_build_date(void) {
-	int filelen=0;
-	char * date = load("t1", &filelen);
+	int filelen= SYM_SIZE_FOR_FILE(t1);
+	const char * date = &SYM_FOR_FILE(t1);
 	if(date == NULL) {
 		printf("%s failed\n", __func__);
 		return;
 	}
-	date[filelen-1] = '\0';
-	printf("%s\n", date);
+	printf("%.*s\n", filelen, date);
 }
 
 static void print_init_info(init_info_t * init_info) {
@@ -321,16 +323,6 @@ static void * get_act_cap(init_elem_t* elem, init_info_t* info) {
     }
 }
 
-static capability load_check(const char* name) {
-    int filelen=0;
-    capability addr = load(name, &filelen);
-    if(!addr) {
-        printf("Could not read file %s", name);
-        assert(0);
-    }
-    return addr;
-}
-
 #define PAUSE sleep(MS_TO_CLOCK(100))
 
 static void load_modules(init_info_t * init_info) {
@@ -359,7 +351,7 @@ static void load_modules(init_info_t * init_info) {
 
     /* Namespace */
     namebe->ctrl =
-            simple_start(&env, namebe->name, load_check(namebe->name),
+            simple_start(&env, namebe->name, namebe->file_data,
                          namebe->arg, get_act_cap(namebe, init_info), NULL, &namespace_im);
 
 
@@ -367,11 +359,11 @@ static void load_modules(init_info_t * init_info) {
 
     /* Proc */
 
-    capability proc_file = load_check(procbe->name);
+    const char* proc_file = procbe->file_data;
 
     /* We have to load this file early as once we hand over the file we will not be able to allocate */
     /* Order VERY important here */
-    capability memmgt_file = load_check(memgtbe->name);
+    const char* memmgt_file = memgtbe->file_data;
 
     procbe->ctrl =
             simple_start(&env, procbe->name, proc_file, procbe->arg, get_act_cap(procbe, init_info), NULL, &proc_im);
@@ -450,8 +442,8 @@ static void load_modules(init_info_t * init_info) {
 
     /* Now load an idle activation for each core */
 
-    const char* idle_name = "idle.elf";
-    capability  idle_addr = load_check(idle_name);
+    const char* idle_name = "idle";
+    const char*  idle_addr = &SYM_FOR_FILE(idle);
 
     for(size_t idle_id = 0; idle_id < SMP_CORES; idle_id++) {
         printf("Creating idle activation %lx\n", idle_id);
@@ -490,7 +482,7 @@ static void load_modules(init_info_t * init_info) {
 		}
 
         void *carg = get_act_cap(be, init_info);
-        capability  addr = load_check(be->name);
+        const char*  addr = be->file_data;
 
         desc.arg = be->arg;
         desc.carg = carg;
