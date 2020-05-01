@@ -57,6 +57,7 @@ set(LIBUSER_SRCS
     src/type_man.c
     src/thread.c
     src/pthread.c
+    src/pthread_mutex.c
     src/panic.c
     src/stdlib.c
     src/unistd.c

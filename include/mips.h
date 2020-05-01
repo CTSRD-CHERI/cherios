@@ -73,7 +73,7 @@
 ".set noat\n"		\
 ".option pic0\n"
 
-#define HW_SYNC __asm__ __volatile__ ("sync")
+#define HW_SYNC __asm__ __volatile__ ("sync":::"memory")
 
 #define TRAP ({__asm__ __volatile__("teqi $zero, 0");0;})
 

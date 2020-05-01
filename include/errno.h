@@ -104,7 +104,8 @@
     ITEM(ECONNABORTED)              \
     ITEM(EINTR)                     \
     ITEM(ENOTDIR)                   \
-    ITEM(ELOOP)
+    ITEM(ELOOP)                     \
+    ITEM(EBUSY)
 
 DECLARE_ENUM(err_e, ER_LIST)
 

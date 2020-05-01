@@ -60,6 +60,13 @@ typedef struct notify_queue {
     // Probably need a better queue structure here
     act_notify_kt notify_me;
     struct notify_queue* next;
+} notify_queue_t;
+
+// currently a lifo queue, which is not fair, but is easy to implement
+typedef struct thread_mutex {
+    notify_queue_t * volatile head;
+    volatile uint64_t owner_id; // act reference cast to an int
+    uint64_t lock_count;
 } pthread_mutex_t;
 
 typedef struct {

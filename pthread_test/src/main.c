@@ -33,13 +33,34 @@
 #include "stdio.h"
 #include "assert.h"
 
+int global_ctr;
+pthread_mutex_t mutex;
+
+void inc_ctr(void) {
+    pthread_mutex_lock(&mutex);
+    assert_int_ex((global_ctr % 1000), ==, 0);
+    for(int i = 0; i != 500; i++) {
+        global_ctr++;
+        __asm__ volatile("" ::: "memory"); // To stop any compiler optimization of this loop
+    }
+    sleep(MS_TO_CLOCK(1000));
+    for(int i = 0; i != 500; i++) {
+        global_ctr++;
+        __asm__ volatile("" ::: "memory"); // To stop any compiler optimization of this loop
+    }
+    pthread_mutex_unlock(&mutex);
+}
+
 void* start_func(void* arg) {
+    inc_ctr();
     return arg;
 }
 
 
 int main(__unused register_t arg,__unused capability carg) {
     pthread_t t1, t2, t3, t4, t5;
+
+    pthread_mutex_init(&mutex, NULL);
 
     // Create a bunch of threads
 
@@ -64,7 +85,9 @@ int main(__unused register_t arg,__unused capability carg) {
     pthread_join(t1, &ret);
     assert_int_ex((int)ret, ==, 1);
 
-    printf("PThread test passes!\n");
+    assert_int_ex((int)global_ctr, ==, 5000);
+
+    printf("PThread test passes %d!\n", global_ctr);
 
     // Done
 
