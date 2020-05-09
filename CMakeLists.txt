@@ -40,7 +40,7 @@ if(NOT CHERI_SDK_DIR)
     endforeach()
 endif()
 
-message(STATUS "CHERI_SDK_DIR set to: ${CHERI_SDK_DIR}")
+message(STATUS "CHERI_SDK_DIR set to: '${CHERI_SDK_DIR}'")
 if(CHERI_SDK_DIR)
     # first look for the CheriSDKConfig.cmake file installed by cheribuild.py
     # if not fall back to finding the sdk build by build_sdk.sh
@@ -500,6 +500,7 @@ function(add_cherios_module _target)
   target_link_libraries(${_target}
         PRIVATE
         ${LINKER_SCRIPT_ARG}
+        -fuse-ld=lld
         "-Wl,-Bdynamic -Wl,-no-pie"
         -G0
         -nostartfiles
