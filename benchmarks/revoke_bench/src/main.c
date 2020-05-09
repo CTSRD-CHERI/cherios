@@ -133,7 +133,7 @@ void print(result_t* r) {
     socket_requester_wait_all_finish(stdout->write.push_writer, 0);
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     act_kt revoke_act = namespace_get_ref(namespace_num_revoke_bench);
 
     assert(revoke_act != NULL);

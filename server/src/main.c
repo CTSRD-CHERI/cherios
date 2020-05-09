@@ -32,7 +32,7 @@
 #include "webserver.h"
 #include "assert.h"
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     handle_loop();
     assert(0);
     while(1);

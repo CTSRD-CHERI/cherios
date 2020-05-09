@@ -37,18 +37,18 @@ __attribute__((noinline)) int* hide_return(int* x) {
     return x;
 }
 
-int* unsafe_useage(int x) {
+int* unsafe_usage(int x) {
     _unsafe volatile int u = x;
     return hide_return(__DEVOLATILE(int*, &u));
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     printf("Unsafe Test Hello World\n");
 
     CHERI_PRINT_CAP(cheri_getreg(10));
-    __unused int* x = unsafe_useage(1);
+    __unused int* x = unsafe_usage(1);
     CHERI_PRINT_CAP(cheri_getreg(10));
-    __unused int* y = unsafe_useage(2);
+    __unused int* y = unsafe_usage(2);
     CHERI_PRINT_CAP(cheri_getreg(10));
 
     assert(x != y);

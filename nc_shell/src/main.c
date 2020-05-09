@@ -73,7 +73,7 @@ void shell_start(__unused register_t arg, capability carg) {
 }
 
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     // Set up a TCP server
 

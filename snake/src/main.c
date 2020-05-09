@@ -320,7 +320,7 @@ void kill_players(board_t* board) {
 
 
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     // Set up a TCP server
 

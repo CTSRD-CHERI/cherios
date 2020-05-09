@@ -38,6 +38,6 @@
 #include "capmalloc.h"
 #include "lorem.h"
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     return 0;
 }

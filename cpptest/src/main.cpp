@@ -124,7 +124,7 @@ int test() {
 }
 
 extern "C" {
-int main(__unused register_t reg, __unused capability cap) {
+int main(void) {
     return test();
 }
 }

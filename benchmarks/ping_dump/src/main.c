@@ -112,7 +112,7 @@ static void dump_help(void) {
     printf("Many of these will need to be enabled in the build first or they will crash / be nonsense\n");
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     // Set up a TCP server
 

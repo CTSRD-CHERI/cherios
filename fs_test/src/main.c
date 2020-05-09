@@ -42,7 +42,7 @@
 
 char dest[BIG_SIZE];
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     while(try_get_fs() == NULL) {
         sleep(0);

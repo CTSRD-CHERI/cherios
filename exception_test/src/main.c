@@ -44,7 +44,7 @@ int exception_handle(__unused register_t cause, __unused register_t ccause, __un
     return 0;
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     printf("Exception test hello world!\n");
 
     register_vectored_cap_exception(&exception_handle, Tag_Violation);

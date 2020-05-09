@@ -51,7 +51,7 @@ static void secure_thread(__unused register_t arg, capability carg) {
     printf("Child thread unlocked message: %s\n", (char*)pair4.data);
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     /* First try sign something */
     printf("Foundation test started.\n");

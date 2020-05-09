@@ -160,7 +160,7 @@ static inline void b_finish(void) {
     }
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     connect_to_host();
 
     namespace_register(namespace_num_bench, act_self_ref);

@@ -162,7 +162,7 @@ void forward_messages(void) {
     }
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     namespace_register(namespace_num_eve, act_self_ref);
 
     forward_messages();

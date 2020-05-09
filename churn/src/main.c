@@ -41,7 +41,7 @@
 
 capability naughty[N];
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     printf("Churn Hello World!\n");
 

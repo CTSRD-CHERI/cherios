@@ -101,7 +101,7 @@ void send(act_kt sync_act, uint64_t* column) {
     return;
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     // Test sync send
 
 

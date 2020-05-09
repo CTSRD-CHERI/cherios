@@ -111,7 +111,7 @@ void do_test(uint64_t* column) {
 }
 
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     bench_start();
 

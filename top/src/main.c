@@ -91,7 +91,7 @@ static n_short make_short(uint64_t large, size_t largest) {
 }
 
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     // This just displays some stats every few seconds
     char table_buffer[LTOTAL];
     act_info_t info[MAX_TRACK];

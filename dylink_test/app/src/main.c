@@ -44,7 +44,7 @@ void print_stuff(__unused register_t arg, __unused capability carg) {
     function_in_another_lib();
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     printf("Dynamically linked application hello world!\n");
 

@@ -128,7 +128,7 @@ int response5(requester_t eve_req) {
 }
 
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     namespace_register_found_id_authed(namespace_id_num_bob);
     namespace_register(namespace_num_bob, act_self_ref);

@@ -723,7 +723,7 @@ int handle_rx(net_session* session) {
     return (int)(tcp_head_before != tcp_head);
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     // Init session
     printf("LWIP Hello World!\n");
 

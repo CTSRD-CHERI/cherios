@@ -57,7 +57,7 @@ void* start_func(void* arg) {
 }
 
 
-int main(__unused register_t arg,__unused capability carg) {
+int main(void) {
     pthread_t t1, t2, t3, t4, t5;
 
     pthread_mutex_init(&mutex, NULL);

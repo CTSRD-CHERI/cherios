@@ -50,7 +50,7 @@ __used ssize_t ful_print(__unused capability arg, char* buf, uint64_t __unused o
     return length;
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     // Connect to server
     struct tcp_bind bind;

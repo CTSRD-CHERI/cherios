@@ -253,7 +253,7 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     bitfield = (type_res_bitfield_t*)tres_get_ro_bitfield();
     top_sealing_cap = get_sealing_cap_from_nano(TOP_SEALING_TYPE);
 

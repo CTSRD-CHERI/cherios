@@ -471,7 +471,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
     assert_int_ex(rec, ==, 0);
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     printf("Socket test Hello World!\n");
 

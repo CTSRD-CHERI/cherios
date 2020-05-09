@@ -152,7 +152,7 @@ PLT_ALLOCATE(bench_t, BENCH_EXT_LIST)
 CTL_t fake_ctl;
 capability fake_stack[10];
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     // Actually sends a lot of messages in order to create new stacks
     syscall_provide_sync(cap_malloc((CAP_SIZE * 13) * SYNC_TIMES));

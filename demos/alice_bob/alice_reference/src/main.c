@@ -144,7 +144,7 @@ static inline void send6(act_kt act, __unused found_id_t* id) {
     socket_close_requester(req, 1, 0);
 }
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
 
     act_kt eve = namespace_get_ref(namespace_num_eve);
 
