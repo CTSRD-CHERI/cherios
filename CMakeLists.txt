@@ -1,11 +1,12 @@
 set(CMAKE_CROSSCOMPILING ON)
 cmake_minimum_required(VERSION 3.13)
+
 # We have to set LANGUAGES to none so that we can set CMAKE_C_COMPILER
 # before it checks the C compiler features. We can then use enable_language()
 # to initialize all the C and ASM rules
 project(CheriOS LANGUAGES NONE VERSION 0.0.1)
 
-# Apparently this needs to come after project(...) ot it doesn't really take
+# Apparently this needs to come after project(...)
 set(CMAKE_SYSTEM_NAME "CheriOS" CACHE STRING "Target system" FORCE)
 set(CMAKE_SYSTEM_PROCESSOR "Cheri" CACHE STRING "Target CPU" FORCE)
 
@@ -14,7 +15,7 @@ SET_PROPERTY(GLOBAL PROPERTY TARGET_SUPPORTS_SHARED_LIBS true)
 # Allow override of options using set
 cmake_policy(SET CMP0077 NEW)
 
-# Configure hardare at compile time.  Default to "qemu" for CHERI QEMU MALTA.
+# Configure hardware at compile time.  Default to "qemu" for CHERI QEMU MALTA.
 # Other option are "fpga" for CHERI on FPGA and "l3" for the L3 simulator.
 #
 set(HARDWARE "qemu" CACHE STRING
@@ -60,7 +61,7 @@ if(CHERI_SDK_DIR)
     endif()
 endif()
 
-find_package (Python3)
+find_package(Python3)
 
 # Threading is built into CheriOS's libuser
 
@@ -76,14 +77,9 @@ else()
     message(FATAL_ERROR "CHERI Clang ${CheriSDK_CC} does not exist!")
 endif()
 
-option(BUILD_FOR_CHERI128 "build for cheri128" ON)
-if(BUILD_FOR_CHERI128)
-  set(CHERI_CPU cheri128)
-  set(CAP_BYTES 16)
-else()
-  set(CHERI_CPU cheri256)
-  set(CAP_BYTES 32)
-endif()
+# Historically, we could choose between `cheri128` and `cheri256`
+set(CHERI_CPU cheri128)
+set(CAP_BYTES 16)
 
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
 set(CMAKE_ASM_COMPILER_ID "Clang")  # for some reason CMake doesn't detect this automatically
@@ -91,7 +87,7 @@ set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_AR ${CheriSDK_AR})
 set(CMAKE_RANLIB ${CheriSDK_RANLIB})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
-# make sure we compile for cheri:
+# Make sure we compile for cheri:
 set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
@@ -194,8 +190,7 @@ endif()
 
 set(VARY_SECURE "UNCHANGED" CACHE STRING "Force secure load and distrust calling ON/OFF for programs that support it")
 set(VARY_SS "UNCHANGED" CACHE STRING "Force safe stacks ON/OFF for programs that support it")
-set(EXPAND_LIMIT "64" CACHE STRING "Default expand limit for temporal anlysis")
-
+set(EXPAND_LIMIT "64" CACHE STRING "Default expand limit for temporal analysis")
 
 if(VARY_SS STREQUAL "OFF")
     set(VARY_FLAGS -DUNSAFE_STACKS_OFF=1)
@@ -336,9 +331,9 @@ set(CHERIOS_FILESYSTEM_DEPENDS "" CACHE INTERNAL "dependencies for filesystem")
 
 function(add_to_filesystem _target _fs_target_path)
   add_custom_command(TARGET ${_target} POST_BUILD
-    # make sure the directory exists
+    # Make sure the directory exists
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
-    # copy the binary to the fs root directory
+    # Copy the binary to the filesystem root directory
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
     # remove some sections to save place (TODO: make this depend on the configuration)
     # NOTE: Had to comment these out as lld was not alligning offsets properly causing build failure.
@@ -437,6 +432,7 @@ function(make_id _target)
     )
 endfunction()
 
+# FIXME documentation: what is this for?
 set(CLANG_LOAD "SHELL:-Xclang -load")
 set(CLANG_LIB_T "SHELL:-Xclang ${CHERI_SDK_DIR}/lib/libTemporal.so")
 set(CLANG_STATS "-save-stats=obj")
@@ -449,9 +445,8 @@ set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
 
 function(add_cherios_library _target)
     add_cherios_module(${_target} IS_DYN ${ARGN})
-    # The link_serv will be an embedded executable that
+    # The link_serv will be an embedded executable that (FIXME comment: that what?)
     target_link_libraries(${_target} PRIVATE link_serv)
-    # target_compile_options(${_target} PRIVATE -fvisibility=hidden)
     target_compile_definitions(${_target} PUBLIC -DLIGHTWEIGHT_OBJECT=1)
 endfunction()
 
