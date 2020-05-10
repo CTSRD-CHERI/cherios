@@ -37,7 +37,7 @@ __attribute__((noinline)) int* hide_return(int* x) {
     return x;
 }
 
-int* unsafe_useage(int x) {
+__attribute__((noinline)) int* unsafe_useage(int x) {
     _unsafe volatile int u = x;
     return hide_return(__DEVOLATILE(int*, &u));
 }
