@@ -253,7 +253,7 @@ extern "C" {
         return 0;
     }
 
-    int main(__unused register_t arg, __unused capability carg) {
+    int main(void) {
         printf("Deduplicate Hello World!\n");
 
         hash_test();

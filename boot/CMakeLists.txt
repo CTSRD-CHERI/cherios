@@ -80,20 +80,20 @@ set_source_files_properties(src/boot/nano_elf.S PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/nano.elf"
 )
 
-add_cherios_init(init LINKER_SCRIPT init.ld SOURCES
+add_cherios_init(init FREESTANDING LINKER_SCRIPT init.ld SOURCES
     ${COMMON_SRCS}
     ${INIT_SRCS}
     ${INIT_ASM_SRCS}
 )
 
-add_cherios_boot(cherios LINKER_SCRIPT boot.ld SOURCES
+add_cherios_boot(cherios FREESTANDING LINKER_SCRIPT boot.ld SOURCES
     ${BOOT_ASM_SRCS}
     ${LIBCRT_SRCS}
     ${COMMON_SRCS}
     ${BOOT_SRCS}
 )
 
-add_cherios_nano(nano LINKER_SCRIPT nano.ld SOURCES
+add_cherios_nano(nano FREESTANDING LINKER_SCRIPT nano.ld SOURCES
     ${NANO_ASM_SRCS}
 )
 

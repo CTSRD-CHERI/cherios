@@ -30,7 +30,9 @@
 
 #include "mips.h"
 
-int memcmp ( const char * ptr1, const char * ptr2, size_t num ) {
+int memcmp ( const void * _ptr1, const void * _ptr2, size_t num ) {
+    const char *ptr1 = (const char *) _ptr1;
+    const char *ptr2 = (const char *) _ptr2;
     // TODO this could be much faster done word by word
     int res = 0;
     do {

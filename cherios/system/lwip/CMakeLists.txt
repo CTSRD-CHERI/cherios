@@ -38,7 +38,8 @@ set(X_SRCS
 # libuser now provides this
 list(REMOVE_ITEM X_SRCS ${LWIP_DIR}/src/core/ipv4/ip4_addr.c)
 
-add_cherios_executable(${ACT_NAME} ADD_TO_FILESYSTEM CAN_VARY_SS LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
+# FIXME: remove freestanding when the unaligned access issue has been solved
+add_cherios_executable(${ACT_NAME} FREESTANDING ADD_TO_FILESYSTEM CAN_VARY_SS LINKER_SCRIPT sandbox.ld SOURCES ${X_SRCS})
 
 if("${HARDWARE}" STREQUAL "fpga")
     if("${MSGDMA}")

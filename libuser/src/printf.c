@@ -139,6 +139,23 @@ int fputc(int character, FILE *f) {
     return character;
 }
 
+int putchar(int character)
+{
+    return fputc(character, stdout);
+}
+
+//FIXME: it only works because be know fputc does not fail
+size_t fwrite(const void *ptr, size_t size, size_t count, FILE *f)
+{
+    const char *cptr = (const char *) ptr;
+    for (size_t block=0; block<count; block++) {
+        for (size_t i=0; i<size; i++) {
+            fputc(cptr[block*size + i], f);
+        }
+    }
+    return count;
+}
+
 int fputs(const char* str, FILE* f) {
     if(f) assert(f->con_type & CONNECT_PUSH_WRITE);
 

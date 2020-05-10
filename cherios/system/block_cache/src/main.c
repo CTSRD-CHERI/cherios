@@ -613,7 +613,7 @@ static inline auth_t make_fake_auth(void) {
 
 #endif
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     while((vblk_ref = namespace_get_ref(namespace_num_virtio)) == NULL) {
         sleep(0);
     }

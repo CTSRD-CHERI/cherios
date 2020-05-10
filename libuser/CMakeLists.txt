@@ -114,7 +114,7 @@ add_library(link_serv STATIC ${LIBCRT_LIGHT_SRCS} ${LIBUSER_ASM_SRCS} ${LIBUSER_
         ${LIBUSER_CLIENT} ${LIBUSER_SERVER} ${LIBC_ROOT}/freebsd_ports/strlen.c ${LIBC_ROOT}/atoi.c)
 target_link_libraries(link_serv PRIVATE "-Wl,-Bdynamic -Wl,-no-pie")
 target_compile_definitions(link_serv PRIVATE -DLIGHTWEIGHT_OBJECT=1)
-target_compile_options(link_serv PRIVATE -fvisibility=hidden)
+target_compile_options(link_serv PRIVATE -ffreestanding -fvisibility=hidden)
 
 add_library(libcrt STATIC ${LIBCRT_SRCS})
 add_library(CheriOS::LibCRT ALIAS libcrt)

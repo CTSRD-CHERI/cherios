@@ -91,7 +91,7 @@ set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
 set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
-# sysroot should not be needed as we are in a freestanding environment
+# Sysroot is not yet part of the SDK.
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 
 # For some reason ranlib doesn't like our static library:
@@ -248,7 +248,6 @@ set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -ftls-model=local-exec
     -fomit-frame-pointer
-    -ffreestanding
     -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
     ${MSGDMA_FLAGS}
@@ -357,7 +356,7 @@ function(add_cherios_executable _target)
 endfunction()
 
 function(add_cherios_executable_early _target)
-    add_cherios_module(${_target} ${ARGN})
+    add_cherios_module(${_target} FREESTANDING ${ARGN})
     target_link_libraries(${_target} PRIVATE CheriOS::LibUserEarly)
 endfunction()
 
@@ -397,7 +396,7 @@ function(add_cherios_init _target)
 endfunction()
 
 function(add_cherios_memmgr _target)
-  add_cherios_module(${_target} ${ARGN})
+  add_cherios_module(${_target} FREESTANDING ${ARGN})
   set_core_ld_deps(${_target})
   target_link_libraries(${_target} PRIVATE CheriOS::LibUserEarly)
 endfunction()
@@ -450,7 +449,7 @@ function(add_cherios_library _target)
 endfunction()
 
 function(add_cherios_module _target)
-  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS NEED_LIBCXXRT NEED_LIBCXX IS_DYN)
+  set(options ADD_TO_FILESYSTEM TEMPORAL_A USE_LTO CAN_VARY_SS NEED_LIBCXXRT NEED_LIBCXX IS_DYN FREESTANDING)
   set(oneValueArgs LINKER_SCRIPT)
   set(multiValueArgs SOURCES)
   cmake_parse_arguments(add_exe "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
@@ -546,6 +545,10 @@ function(add_cherios_module _target)
 
     if(add_exe_NEED_LIBCXXRT)
         target_link_libraries(${_target} PRIVATE cxxrt-static)
+    endif()
+
+    if(add_exe_FREESTANDING)
+        target_compile_options(${_target} PRIVATE -ffreestanding)
     endif()
 endfunction()
 

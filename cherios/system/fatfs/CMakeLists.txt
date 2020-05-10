@@ -9,4 +9,5 @@ set(FATFS_SRCS
     src/ff_sync.c
 )
 
-add_cherios_executable(fatfs ADD_TO_FILESYSTEM CAN_VARY_SS LINKER_SCRIPT sandbox.ld SOURCES ${FATFS_SRCS})
+add_cherios_executable(fatfs ADD_TO_FILESYSTEM FREESTANDING CAN_VARY_SS
+                       LINKER_SCRIPT sandbox.ld SOURCES ${FATFS_SRCS})
