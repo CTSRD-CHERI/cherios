@@ -1,5 +1,6 @@
 /*-
  * Copyright (c) 2020 Lawrence Esswood
+ * Copyright (c) 2020 Hadrien Barral
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -31,18 +32,17 @@
 #ifndef __LIMITS_H__
 #define __LIMITS_H__
 
-#define CHAR_BIT 8
-#define LONG_BIT 64
-
-#define UCHAR_MAX   0xFF
-#define CHAR_MAX    0x7F
-
-#define ULONG_MAX   18446744073709551615ULL
-#define LONG_MAX    9223372036854775807LL
-
-#define UINT_MAX	4294967295UL
-#define INT_MAX     2147483647L
-
+#include_next <limits.h>
+/*
+ * Override `MB_LEN_MAX` to use the `completely future-proof for the next 30 years` value, as clang uses `1`
+ * https://lists.gnu.org/archive/html/bug-gnulib/2015-05/msg00004.html
+ */
+#if MB_LEN_MAX < 16
+#undef MB_LEN_MAX
 #define MB_LEN_MAX  16
+#endif
+
+/* FIXME: CHERI MIPS specific */
+#define LONG_BIT 64
 
 #endif

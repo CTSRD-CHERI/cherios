@@ -79,10 +79,11 @@
 
 #ifndef __ASSEMBLY__
 
+#include <stdint.h>
+
 /*
  * Provide more convenient names for useful qualifiers from gcc/clang.
  */
-#define	__aligned__(x)	__attribute__ ((aligned(x)))
 #define	__packed__	__attribute__ ((packed))
 
 /*
@@ -101,26 +102,13 @@ typedef long		off_t;
  * Useful integer type names that we can't pick up from the compile-time
  * environment.
  */
-typedef char		int8_t;
 typedef unsigned char	u_char;
-typedef unsigned char	uint8_t;
-typedef short		int16_t;
 typedef unsigned short	u_short;
-typedef unsigned short	uint16_t;
-typedef int		int32_t;
 typedef unsigned int	u_int;
-typedef unsigned int	uint32_t;
-typedef long		intmax_t;
 typedef long		quad_t;
 typedef long		ptrdiff_t;
-typedef long		int64_t;
 typedef unsigned long	u_long;
-typedef unsigned long	uint64_t;
-typedef	unsigned long	uintmax_t;
 typedef unsigned long	u_quad_t;
-typedef __uintcap_t	uintptr_t;
-//typedef unsigned long	uintptr_t;
-typedef __intcap_t	intptr_t;
 typedef unsigned long	caddr_t;
 
 typedef u_long		ulong;

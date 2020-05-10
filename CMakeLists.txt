@@ -207,8 +207,8 @@ endif()
 # These files make use of include_next and so need be listed FIRST
 #include_directories(libcxx/include)
 
-include_directories(include)
-include_directories(include/sys)
+include_directories(SYSTEM include)
+include_directories(SYSTEM include/sys)
 include_directories(elf/include)
 include_directories(sha256/include)
 include_directories(cherios/system/dylink/include)
@@ -227,11 +227,12 @@ set(ASMC_COMPILER_FLAGS
     ${BFAST_FLAGS}
     ${VARY_FLAGS}
     ${VARY_SECURE_FLAGS}
-    -fvisibility=hidden
-    -DASM_VISIBILITY=.hidden
+    -march=${CHERI_CPU}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
-    -march=${CHERI_CPU}
+    -isysroot=/dev/null # Remove the default '/usr/include' one...
+    -DASM_VISIBILITY=.hidden
+    -fvisibility=hidden
     -cheri-cap-table-abi=plt
     -integrated-as
     -msoft-float
@@ -246,7 +247,6 @@ set(ASM_COMPILER_FLAGS
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -ftls-model=local-exec
-    -nostdinc
     -fomit-frame-pointer
     -ffreestanding
     -O${O_LVL} # TODO: make this depend on the configuration
@@ -577,6 +577,10 @@ endif()
 set (LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lwip)
 include(lwip/src/Filelists.cmake)
 set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
+
+#
+# Now add our various components
+#
 
 add_subdirectory(libuser)
 
