@@ -122,6 +122,7 @@ void con2_start(__unused register_t arg, __unused capability carg) {
     // The first send file
 
     unix_like_socket socket;
+    bzero(&socket, sizeof(socket));
 
     unix_like_socket* sock = &socket;
 
@@ -155,6 +156,7 @@ void con2_start(__unused register_t arg, __unused capability carg) {
     assert_int_ex(res, ==, 0);
 
     unix_like_socket socket2;
+    bzero(&socket2, sizeof(socket2));
     unix_like_socket* sock2 = &socket2;
     sock2->read.pull_reader = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PULL, NULL).val;
 
@@ -268,6 +270,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
     capability data_buffer[DATA_SIZE/sizeof(capability)];
 
     unix_like_socket socket;
+    bzero(&socket, sizeof(socket));
 
     unix_like_socket* sock = &socket;
 
@@ -314,6 +317,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
     thread_new("socket_part3", 0, act_self_ref, &con2_start);
 
     unix_like_socket socket2;
+    bzero(&socket2, sizeof(socket2));
     unix_like_socket* sock2 = &socket2;
     sock2->write.push_writer = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PUSH, NULL).val;
 
@@ -333,6 +337,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
     thread_new("socket_part4", 0, act_self_ref, &con3_start);
 
     unix_like_socket socket4;
+    bzero(&socket4, sizeof(socket4));
     unix_like_socket* sock4 = &socket4;
     sock4->read.pull_reader = socket_new_requester(cap_malloc(SIZE_OF_request(INDIR_SIZE)), INDIR_SIZE, SOCK_TYPE_PULL, NULL).val;
 
@@ -382,6 +387,7 @@ void connector_start(__unused register_t arg, __unused capability carg) {
     // Test a fulfill -> fulfill send file
 
     unix_like_socket socket3;
+    bzero(&socket3, sizeof(socket3));
     unix_like_socket* sock3 = &socket3;
 
     sock3->write.pull_writer = socket_malloc_fulfiller(SOCK_TYPE_PULL);
@@ -480,7 +486,7 @@ int main(__unused register_t arg, __unused capability carg) {
     capability data_buffer[DATA_SIZE/CAP_SIZE];
 
     unix_like_socket socket;
-
+    bzero(&socket, sizeof(socket));
     unix_like_socket* sock = &socket;
 
     ERROR_T(requester_t) new_req =
@@ -550,6 +556,7 @@ int main(__unused register_t arg, __unused capability carg) {
 
 
     unix_like_socket socket2;
+    bzero(&socket2, sizeof(socket2));
 
     unix_like_socket* sock2 = &socket2;
 
