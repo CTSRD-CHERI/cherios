@@ -142,28 +142,40 @@ found_id_t* ns_get_found_id(int nb) {
     return validate_idx(nb) ? NULL : ids[nb];
 }
 
-const char* normalise_name(const char* name) {
+const char* normalise_name(const char* name, char* tmp_buf) {
     const char* end = strrchr(name, '/');
-    return end ? (end + 1) : name;
+    name = end ? (end + 1) : name;
+    const char* ext = strchr(name, '.');
+
+    if(ext) {
+        strncpy(tmp_buf, name, (ext-name));
+        tmp_buf[ext-name] = '\0';
+        return tmp_buf;
+    } else return name;
 }
 
 int ns_register_name(const char* name, act_kt ref) {
     if(dy_count == DYNAMIC_BINDS) return -1;
 
-    printf("Registering by name: %s\n", name);
+    char tmp[MAX_NAME_LENGTH+1];
+    const char* norm = normalise_name(name, tmp);
+    printf("Registering by name: %s (%s)\n", name, norm);
 
     dynamic_bind_t* dy_bind = &dy_binds[dy_count++];
     dy_bind->act_reference = ref;
 
-    name = normalise_name(name);
-    strncpy(dy_bind->name, name, MAX_NAME_LENGTH);
+
+    strncpy(dy_bind->name, norm, MAX_NAME_LENGTH);
 
     return 0;
 }
 
 act_kt ns_get_ref_by_name(const char* name) {
 
-    name = normalise_name(name);
+    char tmp[MAX_NAME_LENGTH+1];
+    const char* norm = normalise_name(name, tmp);
+
+    name = norm;
 
     for(size_t i = 0; i != dy_count; i++) {
         if(strncmp(name, dy_binds[i].name, MAX_NAME_LENGTH) == 0)
