@@ -620,6 +620,7 @@ add_subdirectory(unsafe_test)
 add_subdirectory(dedup_test)
 add_subdirectory(socket_test)
 add_subdirectory(fs_test)
+add_subdirectory(unaligned_test)
 
 add_subdirectory(server)
 add_subdirectory(client)
