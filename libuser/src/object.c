@@ -93,6 +93,15 @@ static void setup_temporal_handle(startup_flags) {
     }
 }
 
+int handle_unaligned(register_t cause, register_t ccause, exception_restore_frame* restore_frame, exception_restore_saves_frame* saves_frame);
+
+static void setup_unaligned_handle(startup_flags) {
+    if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
+        register_vectored_exception2(&handle_unaligned, MIPS_CP0_EXCODE_ADEL);
+        register_vectored_exception2(&handle_unaligned, MIPS_CP0_EXCODE_ADES);
+    }
+}
+
 // Manually link with other libraries (just the socket lib currently)
 
 #if !(LIGHTWEIGHT_OBJECT)
@@ -126,6 +135,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 	// For secure loaded things this is needed before any calls into the kernel
 	// However this is pre-dedup / compact. Will have to call a couple more times
     setup_temporal_handle(startup_flags);
+    setup_unaligned_handle(startup_flags);
 
     int_cap = get_integer_space_cap();
 
@@ -168,6 +178,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
                 // Re-do these. Will need to do again after compact.
                 init_kernel_if_t_change_mode(was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
                 setup_temporal_handle(startup_flags);
+                setup_unaligned_handle(startup_flags);
         }
     }
 #endif
@@ -256,6 +267,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 void object_init_post_compact(startup_flags_e startup_flags, __unused int first_thread) {
 #if !(LIGHTWEIGHT_OBJECT)
     setup_temporal_handle(startup_flags);
+    setup_unaligned_handle(startup_flags);
     init_kernel_if_t_change_mode(was_secure_loaded ? plt_common_untrusting: &plt_common_complete_trusting);
 #else
     (void)startup_flags;

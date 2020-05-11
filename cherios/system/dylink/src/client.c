@@ -396,6 +396,12 @@ static void discover_libs(link_session_t* session, parsed_dynamic_t* pd, capabil
         act_kt serv = namespace_get_ref_by_name((const char*)pd->needed[i]);
 
         link_partner_t* partner = &session->partners[i+1];
+
+        if(serv == NULL) {
+            printf("Failed to find library: %s\n", (const char*)pd->needed[i]);
+            sleep(MS_TO_CLOCK(1000));
+        }
+
         assert(serv != NULL);
         partner->server_act = serv;
         partner->ndx = i + 1;

@@ -53,6 +53,7 @@ set(LIBUSER_SRCS
     src/exceptions.c
     src/namespace.c
     src/temporal.c
+    src/unaligned.c
     src/msg.c
     src/type_man.c
     src/thread.c
@@ -89,6 +90,7 @@ set(LIBUSER_LIGHT_SRCS
     src/exceptions.c
     src/namespace.c
     src/temporal.c
+    src/unaligned.c
     src/msg.c
     src/type_man.c
     src/errno.c

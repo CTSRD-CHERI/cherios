@@ -65,7 +65,16 @@ typedef struct {
 #endif
 } exception_restore_frame;
 
+// Some handler may need access to these
+typedef struct {
+    register_t mf_s0, mf_s1, mf_s2, mf_s3, mf_s4, mf_s5, mf_s6, mf_s7;
+    capability c19, c20, c21, c22, c23, c24;
+} exception_restore_saves_frame;
+
 typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
+
+typedef int handler2_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame,
+        exception_restore_saves_frame* saves_frame);
 
 void user_exception_trampoline_vector(void);
 
@@ -76,6 +85,9 @@ void user_exception_trampoline_vector(void);
 // Handle specific excode. Capability exception only handled if cap_vector entry not set.
 // Will default to replay
 void register_vectored_exception(handler_t* handler, register_t excode);
+
+// Same as normal handle but will also provide a saved registers frame
+void register_vectored_exception2(handler2_t* handler, register_t excode);
 
 // Handle specific capability exception. Will default to normal exception if null
 void register_vectored_cap_exception(handler_t* handler, register_t excode);
