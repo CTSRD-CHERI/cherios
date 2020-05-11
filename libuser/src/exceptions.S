@@ -68,15 +68,25 @@
 
 .set CAP_START, (24 * REG_SIZE)
 
-#define CAP_LIST     \
+#define CAP_LIST \
     $c2, $c3, $c4, $c5, $c6, $c7, $c8, \
     $c9, $c12, $c13, $c14, $c15, $c16, $c17, $c18, $c25
 
+
+#define REG_LIST_2 \
+    $s0, $s1, $s2, $s3, $s4, $s5, $s6, $s7
+
+.set CAP_START_2, (8 * REG_SIZE)
+
+#define CAP_LIST_2 \
+    $c19, $c20, $c21, $c22, $c23, $c24
+
+
 .macro save_cap reg, index, b
-    cscbi \reg, (CAP_START + (CAP_SIZE * \index))($c11)
+    cscbi \reg, (\b + (CAP_SIZE * \index))($c11)
 .endm
 .macro save_reg reg, index, b
-    csd \reg, $zero, (\index * REG_SIZE)($c11)
+    csd \reg, $zero, (\b + (\index * REG_SIZE))($c11)
 .endm
 
 .macro save_other_reg reg, index, b
@@ -96,16 +106,17 @@
 .endm
 
 .macro load_cap reg, index, b
-    clcbi \reg, (CAP_START + (CAP_SIZE * \index))($c11)
+    clcbi \reg, (\b + (CAP_SIZE * \index))($c11)
 .endm
 
 .macro load_reg reg, index, b
     .if \index != V0_index
-        cld \reg, $zero, (\index * REG_SIZE)($c11)
+        cld \reg, $zero, (\b + (\index * REG_SIZE))($c11)
     .endif
 .endm
 
 .set SAVE_SIZE, ((16 * CAP_SIZE) + (CAP_START))
+.set SAVE_SIZE_2, (10 * CAP_SIZE)
 
 #ifdef USE_EXCEPTION_STACK
     .set SAVE_SIZE, (SAVE_SIZE + CAP_SIZE)
@@ -142,8 +153,8 @@ clcbi       $c10, %captab_tls20(unsafe_exception_stack)($idc)
 cincoffset  $c11, $c11, -(STACK_INC)
 
 # Need to save something for scratch space
-save_cap    $c18, c18_index, 0
-save_cap    $c17, c17_index, 0
+save_cap    $c18, c18_index, CAP_START
+save_cap    $c17, c17_index, CAP_START
 save_reg    $v0, V0_index, 0
 save_reg    $v1, V1_index, 0
 save_reg    $at, AT_index, 0
@@ -183,8 +194,8 @@ nop
 
 trampoline_not_set:
 
-load_cap    $c18, c18_index, 0
-load_cap    $c17, c17_index, 0
+load_cap    $c18, c18_index, CAP_START
+load_cap    $c17, c17_index, CAP_START
 load_reg    $v1, V1_index, 0
 load_reg    $at, AT_index, 0
 clcbi       $idc, %captab20(nano_kernel_if_t_data_obj)($c1)
@@ -194,24 +205,53 @@ cincoffset  $c11, $c11, (STACK_INC)
 
 user_c_exception_common_entry:
 
-foreachi    save_other_cap, 0, 0, CAP_LIST
+foreachi    save_other_cap, 0, CAP_START, CAP_LIST
 foreachi    save_other_reg, 0, 0, REG_LIST
 mfhi        $t0
 save_reg    $t0, 21, 0
 mflo        $t0
 save_reg    $t0, 22, 0
 
-# Put globals in a conventional register
-cmove   $c25, $c1
+cmove   $c12, $c18
 
+cgetoffset  $t0, $c12
+andi        $t0, $t0, 1
+# First cap argument is the non callee-saves that have been spilled
+cmove   $c3, $c11
 move    $a0, $v0
 move    $a1, $v1
-cmove   $c3, $c11
-cmove   $c12, $c18
+
+bnez    $t0, handle_type_2 // A one in the bottom bit of the pointer means also save other registers
+# Put globals in a conventional register
+cmove   $c25, $c1
 
 # Call users exception routine
 
 call_func_reg
+
+b       restore_normal
+nop
+
+handle_type_2:
+
+cincoffset  $c12, $c12, -1
+cincoffset  $c11, $c11, -(SAVE_SIZE_2)
+
+foreachi    save_cap, 0, CAP_START_2, CAP_LIST_2
+foreachi    save_reg, 0, 0, REG_LIST_2
+
+cmove       $c4, $c11
+call_func_reg
+
+# Restore the saves frame
+
+foreachi    load_cap, 0, CAP_START_2, CAP_LIST_2
+foreachi    load_reg, 0, 0, REG_LIST_2
+
+cincoffset  $c11, $c11, (SAVE_SIZE_2)
+
+restore_normal:
+
 
 # Restore everything (but v0 which contains what to do next)
 
@@ -224,7 +264,7 @@ mthi        $t0
 load_reg    $t0, 22, 0
 mtlo        $t0
 
-foreachi    load_cap, 0, 0, CAP_LIST
+foreachi    load_cap, 0, CAP_START, CAP_LIST
 foreachi    load_reg, 0, 0, REG_LIST
 
 cincoffset  $c11, $c11, (STACK_INC)
