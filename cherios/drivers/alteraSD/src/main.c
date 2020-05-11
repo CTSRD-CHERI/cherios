@@ -402,7 +402,7 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, new_session, NULL, vblk_interrupt};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-int main(__unused register_t arg, __unused capability carg) {
+int main(void) {
     printf("AlteraSD: Hello World!\n");
     sealer = get_type_owned_by_process();
     namespace_register(namespace_num_virtio, act_self_ref);
