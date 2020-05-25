@@ -531,9 +531,9 @@ crt_init_globals_init()
 
     // These are all set up by the linker script
     segment_table[0] = NULL;
-    segment_table[2] = (char*)pcc + text_start;
-    segment_table[3] = (char*)gdc + data_start;
-    segment_table[4] = (char*)gdc + tls_start;
+    segment_table[1] = (char*)pcc + text_start;
+    segment_table[2] = (char*)gdc + data_start;
+    segment_table[3] = (char*)gdc + tls_start;
 
     // Get something usable
     uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;
@@ -553,8 +553,8 @@ crt_init_globals_init()
 
     // Provide our own tls segment
 
-    segment_table[4] = (capability)tls_segment;
-    capability local_captab = cheri_setbounds(segment_table[4],cheri_getlen(&__cap_table_local_start));
+    segment_table[3] = (capability)tls_segment;
+    capability local_captab = cheri_setbounds(segment_table[3],cheri_getlen(&__cap_table_local_start));
 
     cheri_setreg(26, local_captab);
 

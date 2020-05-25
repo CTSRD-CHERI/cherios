@@ -235,7 +235,7 @@ set(ASMC_COMPILER_FLAGS
     -fvisibility=hidden
     -DASM_VISIBILITY=.hidden
     -mcpu=${CHERI_CPU}
-    -mabi=purecap
+    -mabi=cherios
     -march=${CHERI_CPU}
     -cheri-cap-table-abi=plt
     -integrated-as
@@ -257,6 +257,7 @@ set(C_COMPILER_FLAGS
     -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
     ${MSGDMA_FLAGS}
+    -g
 )
 set(C_WARNING_FLAGS
     -Wall
@@ -342,7 +343,7 @@ function(add_to_filesystem _target _fs_target_path)
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
     # remove some sections to save place (TODO: make this depend on the configuration)
     # NOTE: Had to comment these out as lld was not alligning offsets properly causing build failure.
-    # COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
+    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
     # COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
     )
   # Using a CACHE INTERNAL variable ensures that changes are globally visible
@@ -500,11 +501,11 @@ function(add_cherios_module _target)
   target_link_libraries(${_target}
         PRIVATE
         ${LINKER_SCRIPT_ARG}
-        "-Wl,-Bdynamic -Wl,-no-pie"
+        "-Wl,-Bdynamic -Wl,-no-pie,-is_cherios,-relative-cap-relocs,-no-dynamic-linker"
         -G0
         -nostartfiles
         -nodefaultlibs
-        -mabi=purecap
+        -mabi=cherios
         -Wl,-z,norelro
    )
 
@@ -517,7 +518,7 @@ function(add_cherios_module _target)
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
               PRIVATE
-              -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+              -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=cherios,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
       )
       target_compile_options(${_target} PUBLIC "-flto")
   endif()
