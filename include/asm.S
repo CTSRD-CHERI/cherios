@@ -401,7 +401,6 @@ li  $zero, 0xdead
 
 .macro ccall_slotless a, b, c
     ccall \a, \b, \c
-    nop # Remove when hardware is fixed
 .endm
 
 .macro CRETURN
