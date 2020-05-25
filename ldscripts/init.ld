@@ -38,8 +38,9 @@ OUTPUT_ARCH(mips)
 ENTRY(start)
 SECTIONS
 {
-    __text_segment_start = .;
 	. += SIZEOF_HEADERS;
+
+    __text_segment_start = .;
 
 	.init : {
 		KEEP (*(.init))
