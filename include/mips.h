@@ -342,8 +342,8 @@ INT_SIZES(define_intypes)
 #define	MIPS_CP0_EXCODE_RES4	20	/* Reserved */
 #define	MIPS_CP0_EXCODE_RES5	21	/* Reserved */
 #define	MIPS_CP0_EXCODE_RES6	22	/* Reserved */
-#define	MIPS_CP0_EXCODE_WATCH	23	/* Watchpoint exception */
-#define	MIPS_CP0_EXCODE_RES7	24	/* Reserved */
+#define	MIPS_CP0_EXCODE_RES7	23	/* Reserved */
+#define	MIPS_CP0_EXCODE_WATCH	24	/* Watchpoint exception */
 #define	MIPS_CP0_EXCODE_RES8	25	/* Reserved */
 #define	MIPS_CP0_EXCODE_RES9	26	/* Reserved */
 #define	MIPS_CP0_EXCODE_RES10	27	/* Reserved */
