@@ -123,7 +123,7 @@ int lwip_driver_init(net_session* session) {
     session->net_hdrs_paddr = translate_address((size_t)session->net_hdrs, 0);
 
     u32 features = (1 << VIRTIO_NET_F_MRG_RXBUF) | (1 << VIRTIO_F_EVENT_IDX);
-    int result = virtio_device_init(session->mmio, net, 1, VIRTIO_QEMU_VENDOR, features);
+    int result = virtio_device_init(session->mmio, net, VIRTIO_VERSION, VIRTIO_QEMU_VENDOR, features);
     assert_int_ex(-result, ==, 0);
     result = virtio_device_queue_add(session->mmio, 0, &session->virtq_recv);
     assert_int_ex(-result, ==, 0);

@@ -89,6 +89,7 @@ int virtio_device_init(virtio_mmio_map* map,
     map->status = 0;
 
     // Check device is what we expect
+
     if(map->magic_value != 0x74726976) return DRIVER_BAD_DEVICE;
     if(map->version != version) return DRIVER_BAD_DEVICE;
     if(map->device_id != (u32)device) return DRIVER_BAD_DEVICE;
