@@ -50,7 +50,7 @@ __BEGIN_DECLS
         ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
                                         const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
                                         act_kt dest, register_t selector, register_t v0), __VA_ARGS__,                          \
-                                         ".global message_send_c \n " X_STRINGIFY(ASM_VISIBILITY) " message_send_c\n message_send_c: \n", "message_send_c_end: .size message_send_c, message_send_c_end-message_send_c\n") \
+                                         ".global message_send_c \n .type message_send_c, \"function\"\n" X_STRINGIFY(ASM_VISIBILITY) " message_send_c\n message_send_c: \n", "message_send_c_end: .size message_send_c, message_send_c_end-message_send_c\n") \
         ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, int hint_switch), __VA_ARGS__)          \
 /* In mips clock ticks*/\
         ITEM(sleep, void, (register_t timeout), __VA_ARGS__)                                                                           \
