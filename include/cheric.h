@@ -471,8 +471,8 @@ static __inline__  void set_idc(capability idc) {
 	       "b:%016jx l:%016zx o:%jx c:%016jx type:%lx\n",				\
 	   __func__,							\
 	   #cap,							\
-	   cheri_gettag(cap),						\
-	   cheri_getsealed(cap),					\
+       (unsigned long)cheri_gettag(cap),						\
+       (unsigned long)cheri_getsealed(cap),					\
 	   cheri_getperm(cap),						\
 	   cheri_getbase(cap),						\
 	   cheri_getlen(cap),						\
