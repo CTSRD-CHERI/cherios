@@ -42,9 +42,9 @@
 #define TLB_ENTRY_GLOBAL                                1
 
 #define TLB_FLAGS_DEFAULT                               (TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT |\
-                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY | TLB_ENTRY_GLOBAL)
+                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY)
 #define TLB_FLAGS_UNCACHED                              (TLB_ENTRY_CACHE_ALGORITHM_UNCACHED |\
-                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY | TLB_ENTRY_GLOBAL)
+                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY)
 
 mop_t	mem_minit(capability mop_sealing_cap);
 
