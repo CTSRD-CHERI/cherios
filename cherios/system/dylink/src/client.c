@@ -43,6 +43,18 @@
 #include "namespace.h"
 #include "macroutils.h"
 
+DEFAULT_IMPL(void, cap_free, (__unused capability mem)) {
+    assert(0);
+}
+
+DEFAULT_IMPL(res_t, cap_malloc, (__unused size_t size)) {
+    assert(0);
+}
+
+DEFAULT_IMPL(int, printf, (__unused const char *fmt, ...)) {
+    return 0;
+}
+
 // We batch symbol exchnage because otherwise there would be far too many domain crossings
 #define SYMBOL_EXCHANGE_MAX 0x20
 

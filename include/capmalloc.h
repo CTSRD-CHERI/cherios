@@ -58,6 +58,7 @@ int         cap_claim(capability mem);
  * undefined if cap was not.
  * Note: If this came from cap_malloc, you may free EITHER the reservation or the resultant capability.
  * If you claim something else, you must free exactly that. */
+VIS_EXTERNAL
 void        cap_free(capability mem);
 
 /* Note on free and claim: You may claim something X times. It will only be freed after calling free X times. */

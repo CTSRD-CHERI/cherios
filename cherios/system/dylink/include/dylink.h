@@ -37,6 +37,14 @@
 #define VIS_EXTERNAL __attribute__((visibility("default")))
 #define VIS_HIDDEN __attribute__((visibility("hidden")))
 
+#define WEAK_ALIAS(X)  __attribute__ ((weak, alias (#X)))
+
+#define DEFAULT_IMPL(RType,Name,Sig) \
+    RType Name ## _default Sig; \
+    WEAK_ALIAS(Name ## _default) RType Name Sig; \
+    __attribute__((weak)) \
+    VIS_HIDDEN \
+    RType Name ## _default Sig
 
 #define DOMAIN_TYPE_LIST(ITEM)  \
     ITEM(callable_taken, 0)     \
