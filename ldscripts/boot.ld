@@ -56,7 +56,7 @@ SECTIONS
 	} :boot = 0x0
 
 
-	.text ALIGN(CAP_ALIGN): {
+	.text ALIGN(1024): {
 	    __text_segment_start = .;
 		*(.text)
 	} :text

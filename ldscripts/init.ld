@@ -45,7 +45,7 @@ SECTIONS
 	.init : {
 		KEEP (*(.init))
 	} = 0
-	.text ALIGN(CAP_ALIGN): {
+	.text ALIGN(64): {
 		*(.text)
 	}
 
@@ -59,7 +59,7 @@ SECTIONS
         *(.data)
     }
 
-	.bss ALIGN(CAP_ALIGN): {
+	.bss ALIGN(0x10000): {
 		*(.bss)
 	}
 

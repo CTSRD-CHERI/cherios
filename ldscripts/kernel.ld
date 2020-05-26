@@ -44,7 +44,7 @@ SECTIONS
 	.init : {
 		KEEP (*(.init))
 	} = 0
-	.text ALIGN(CAP_ALIGN): {
+	.text ALIGN(1024): {
 		*(.text)
 	}
 	.fini ALIGN(CAP_ALIGN): {
