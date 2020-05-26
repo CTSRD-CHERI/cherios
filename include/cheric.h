@@ -61,11 +61,7 @@
 #error Unknown capability size
 #endif
 
-#ifdef HARDWARE_qemu
-    #define CAN_SEAL_ANY 0
-#else
-    #define CAN_SEAL_ANY 1
-#endif
+#define CAN_SEAL_ANY 1
 
 #ifndef __ASSEMBLY__
 
@@ -85,6 +81,7 @@ typedef struct {
     size_t mask;
 } precision_rounded_length;
 
+// TODO this is basically what cram/crap does.
 static inline precision_rounded_length round_cheri_length(size_t length) {
     if(length < SMALL_OBJECT_THRESHOLD) return (precision_rounded_length){.length = length, .mask = 0};
     size_t mask = length >> (LARGE_PRECISION-1);
@@ -169,35 +166,34 @@ typedef unsigned int stype;
  * CHERI-aware Clang/LLVM, and full CP2 context switching, so not yet usable
  * in the kernel.
  */
-#define	cheri_getlen(x)		__builtin_mips_cheri_get_cap_length(		\
+#define	cheri_getlen(x)		__builtin_cheri_length_get(		\
 				    __DECONST(capability, (x)))
-#define	cheri_getbase(x)	__builtin_mips_cheri_get_cap_base(		\
+#define	cheri_getbase(x)	__builtin_cheri_base_get(		\
 				    __DECONST(capability, (x)))
 #define cheri_gettop(x) (cheri_getbase(x) + cheri_getlen(x))
-#define	cheri_getoffset(x)	__builtin_mips_cheri_cap_offset_get(		\
+#define	cheri_getoffset(x)	__builtin_cheri_offset_get(		\
 				    __DECONST(capability, (x)))
-#define	cheri_getperm(x)	__builtin_mips_cheri_get_cap_perms(		\
+#define	cheri_getperm(x)	__builtin_cheri_perms_get(		\
 				    __DECONST(capability, (x)))
-#define	cheri_getsealed(x)	__builtin_mips_cheri_get_cap_sealed(		\
+#define	cheri_getsealed(x)	__builtin_cheri_sealed_get(		\
 				    __DECONST(capability, (x)))
-#define	cheri_gettag(x)		__builtin_mips_cheri_get_cap_tag(		\
+#define	cheri_gettag(x)		__builtin_cheri_tag_get(		\
 				    __DECONST(capability, (x)))
-#define	cheri_gettype(x)	__builtin_mips_cheri_get_cap_type(		\
+#define	cheri_gettype(x)	__builtin_cheri_type_get(		\
 				    __DECONST(capability, (x)))
+#define	cheri_andperm(x, y)	__builtin_cheri_perms_and(		\
+				    __DECONST(capability, (x)), (y))
+#define	cheri_cleartag(x)	__builtin_cheri_tag_clear(		\
+				    __DECONST(capability, (x)))
+#define	cheri_incoffset(x, y)	__builtin_cheri_offset_increment(	\
+				    __DECONST(capability, (x)), (y))
+#define	cheri_setoffset(x, y)	__builtin_cheri_offset_set(		\
+				    __DECONST(capability, (x)), (y))
 
-#define	cheri_andperm(x, y)	__builtin_mips_cheri_and_cap_perms(		\
-				    __DECONST(capability, (x)), (y))
-#define	cheri_cleartag(x)	__builtin_mips_cheri_clear_cap_tag(		\
-				    __DECONST(capability, (x)))
-#define	cheri_incoffset(x, y)	__builtin_mips_cheri_cap_offset_increment(	\
-				    __DECONST(capability, (x)), (y))
-#define	cheri_setoffset(x, y)	__builtin_mips_cheri_cap_offset_set(		\
-				    __DECONST(capability, (x)), (y))
-
-#define	cheri_seal(x, y)	__builtin_mips_cheri_seal_cap(		 \
+#define	cheri_seal(x, y)	__builtin_cheri_seal(		 \
 				    __DECONST(capability, (x)), \
 				    __DECONST(capability, (y)))
-#define	cheri_unseal(x, y)	__builtin_mips_cheri_unseal_cap(		 \
+#define	cheri_unseal(x, y)	__builtin_cheri_unseal(		 \
 				    __DECONST(capability, (x)), \
 				    __DECONST(capability, (y)))
 
@@ -210,96 +206,56 @@ typedef unsigned int stype;
 				    __DECONST(capability, (c)), (t))
 
 #define cheri_getcursor(x) (__builtin_cheri_address_get(x))
+#define cheri_setcursor(x,y) (__builtin_cheri_address_set(x, y))
 
 #define cheri_get_low_ptr_bits(X,M) (__builtin_cheri_address_get((capability)X) & (M))
 #define cheri_clear_low_ptr_bits(X,M) ((X) &~((M)))
 
-// TODO: When we update the compiler use following instead
-
-/*
- * Get the low bits defined in @p mask from the capability/pointer @p ptr.
- * @p mask must be a compile-time constant less than 31.
- * TODO: should we allow non-constant masks?
- *
- * @param ptr the uintptr_t that may have low bits sets
- * @param mask the mask for the low pointer bits to retrieve
- * @return a size_t containing the the low bits from @p ptr
- *
- * Rationale: this function is needed because extracting the low bits using a
- * bitwise-and operation returns a LHS-derived capability with the offset
- * field set to LHS.offset & mask. This is almost certainly not what the user
- * wanted since it will always compare not equal to any integer constant.
- * For example lots of mutex code uses something like `if ((x & 1) == 1)` to
- * detect if the lock is currently contented. This comparison always returns
- * false under CHERI the LHS of the == is a valid capability with offset 3 and
- * the RHS is an untagged intcap_t with offset 3.
- * See https://github.com/CTSRD-CHERI/clang/issues/189
- */
 //#define cheri_get_low_ptr_bits(ptr, mask)                                      \
 //  __cheri_get_low_ptr_bits((uintptr_t)(ptr), __static_assert_sensible_low_bits(mask))
 
-/*
- * Set low bits in a uintptr_t
- *
- * @param ptr the uintptr_t that may have low bits sets
- * @param bits the value to bitwise-or with @p ptr.
- * @return a uintptr_t that has the low bits defined in @p mask set to @p bits
- *
- * @note this function is not strictly required since a plain bitwise or will
- * generally give the behaviour that is expected from other platforms but.
- * However, we can't really make the warning "-Wcheri-bitwise-operations"
- * trigger based on of the right hand side expression since it may not be a
- * compile-time constant.
- */
 //#define cheri_set_low_ptr_bits(ptr, bits)                                      \
 //  __cheri_set_low_ptr_bits((uintptr_t)(ptr), __runtime_assert_sensible_low_bits(bits))
 
-/*
- * Clear the bits in @p mask from the capability/pointer @p ptr. Mask must be
- * a compile-time constant less than 31
- *
- * TODO: should we allow non-constant masks?
- *
- * @param ptr the uintptr_t that may have low bits sets
- * @param mask this is the mask for the low pointer bits, not the mask for
- * the bits that should remain set.
- * @return a uintptr_t that has the low bits defined in @p mask set to zeroes
- *
- * @note this function is not strictly required since a plain bitwise or will
- * generally give the behaviour that is expected from other platforms but.
- * However, we can't really make the warning "-Wcheri-bitwise-operations"
- * trigger based on of the right hand side expression since it may not be a
- * compile-time constant.
- *
- */
 //#define cheri_clear_low_ptr_bits(ptr, mask)                                    \
 //__cheri_clear_low_ptr_bits((uintptr_t)(ptr), __static_assert_sensible_low_bits(mask))
 
-#define cheri_setcursor(x,y) (cheri_setoffset(x, y - cheri_getbase(x)))
+/* TODO: Wrap these
 
-#define	cheri_getdefault()	__builtin_mips_cheri_get_global_data_cap()
+BUILTIN(__builtin_cheri_flags_set, "v*mvC*mz", "nc")
+BUILTIN(__builtin_cheri_seal_entry, "v*mvC*m", "nc")
+BUILTIN(__builtin_cheri_flags_get, "zvC*m", "nc")
+BUILTIN(__builtin_cheri_conditional_seal, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_type_check, "vvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_perms_check, "vvC*mCz", "nc")
+BUILTIN(__builtin_cheri_subset_test, "bvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_callback_create, "v.", "nct")
+BUILTIN(__builtin_cheri_cap_load_tags, "zvC*m", "n")
+BUILTIN(__builtin_cheri_round_representable_length, "zz", "nc")
+BUILTIN(__builtin_cheri_representable_alignment_mask, "zz", "nc")
+BUILTIN(__builtin_cheri_cap_build, "v*mvC*mvC*m", "nc")
+BUILTIN(__builtin_cheri_cap_type_copy, "v*mvC*mvC*m", "nc")
+
+ */
+
+#define	cheri_getdefault()	__builtin_cheri_global_data_get()
 #define	cheri_getidc()		__builtin_mips_cheri_get_invoke_data_cap()
 #define	cheri_getkr0c()		__builtin_mips_cheri_get_kernel_cap1()
 #define	cheri_getkr1c()		__builtin_mips_cheri_get_kernel_cap2()
 #define	cheri_getkcc()		__builtin_mips_cheri_get_kernel_code_cap()
 #define	cheri_getkdc()		__builtin_mips_cheri_get_kernel_data_cap()
 #define	cheri_getepcc()		__builtin_mips_cheri_get_exception_program_counter_cap()
-#define	cheri_getpcc()		__builtin_mips_cheri_get_program_counter_cap()
+#define	cheri_getpcc()		__builtin_cheri_program_counter_get()
 #define	cheri_getstack()	__builtin_cheri_stack_get()
 
 #define	cheri_local(c)		cheri_andperm((c), ~CHERI_PERM_GLOBAL)
 
 #define	cheri_setbounds(x, y)	__builtin_cheri_bounds_set(		\
 				    __DECONST(capability, (x)), (y))
-// TODO find instrinsic
-#define	cheri_setbounds_exact(x, y)	                        \
-({                                                          \
-capability __exact;                                         \
-__asm__ ("csetboundsexact %[out], %[in], %[len]"                 \
-    : [out]"=C"(__exact)                                    \
-    :[in]"C"(x),[len]"r"(y):);                              \
-    __exact; \
-})
+
+#define	cheri_setbounds_exact(x, y)	__builtin_cheri_bounds_set_exact(		\
+				    __DECONST(capability, (x)), (y))
+
 
 /* Names for permission bits */
 #define CHERI_PERM_GLOBAL		(1 <<  0)
@@ -344,61 +300,7 @@ typedef intptr_t er_t;
 #define ER_T_FROM_CAP(T, v) MAKE_VALID(T, v)
 
 #define cheri_unseal_2(cap, sealing_cap) \
-    ((cheri_gettag(cap) == 0 || cheri_gettype(cap) != cheri_getcursor(sealing_cap)) ? NULL : cheri_unseal(cap, sealing_cap))
-
-static __inline capability
-cheri_codeptr(const void *ptr, size_t len)
-{
-#ifdef NOTYET
-	__capability void (*c)(void) = ptr;
-#else
-	capability c = cheri_setoffset(cheri_getpcc(),
-	    (register_t)ptr);
-#endif
-
-	/* Assume CFromPtr without base set, availability of CSetBounds. */
-	return (cheri_setbounds(c, len));
-}
-
-static __inline capability
-cheri_codeptrperm(const void *ptr, size_t len, register_t perm)
-{
-
-	return (cheri_andperm(cheri_codeptr(ptr, len),
-	    perm | CHERI_PERM_GLOBAL));
-}
-
-static __inline capability
-cheri_ptr(const void *ptr, size_t len)
-{
-
-	/* Assume CFromPtr without base set, availability of CSetBounds. */
-	return (cheri_setbounds((const_capability)ptr, len));
-}
-
-static __inline capability
-cheri_ptrperm(const void *ptr, size_t len, register_t perm)
-{
-
-	return (cheri_andperm(cheri_ptr(ptr, len), perm | CHERI_PERM_GLOBAL));
-}
-
-static __inline capability
-cheri_ptrpermoff(const void *ptr, size_t len, register_t perm, off_t off)
-{
-
-	return (cheri_setoffset(cheri_ptrperm(ptr, len, perm), off));
-}
-
-/*
- * Construct a capability suitable to describe a type identified by 'ptr';
- * set it to zero-length with the offset equal to the base.  The caller must
- * provide a root capability (in the old world order, derived from $c0, but in
- * the new world order, likely extracted from the kernel using sysarch(2)).
- *
- * The caller may wish to assert various properties about the returned
- * capability, including that CHERI_PERM_SEAL is set.
- */
+    ((cheri_gettag(cap) == 0 || (unsigned long)cheri_gettype(cap) != cheri_getcursor(sealing_cap)) ? NULL : cheri_unseal(cap, sealing_cap))
 
 #define cheri_dla_asm(reg, symbol)      \
     "lui " reg ", %hi(" symbol ")\n"    \
@@ -413,18 +315,6 @@ __asm __volatile (                              \
 #define SET_FUNC(S, F) __asm (".weak " # S"; cscbi %[arg], %%capcall20(" #S ")($c25)" ::[arg]"C"(F):"memory")
 #define SET_SYM(S, V) __asm (".weak " # S"; cscbi %[arg], %%captab20(" #S ")($c25)" ::[arg]"C"(V):"memory")
 #define SET_TLS_SYM(S, V) __asm (".weak " #S "; cscbi %[arg], %%captab_tls20(" #S ")($c26)" ::[arg]"C"(V):"memory")
-
-static __inline capability
-cheri_maketype(capability root_type, register_t type)
-{
-	capability c;
-
-	c = root_type;
-	c = cheri_setoffset(c, type);	/* Set type as desired. */
-	c = cheri_setbounds(c, 1);	/* ISA implies length of 1. */
-	c = cheri_andperm(c, CHERI_PERM_GLOBAL | CHERI_PERM_SEAL); /* Perms. */
-	return (c);
-}
 
 static __inline capability
 cheri_zerocap(void)
@@ -445,14 +335,6 @@ cheri_zerocap(void)
 	else								\
 		__asm __volatile ("cmove $c" #x ", %0" : : "C" (cap));  \
 } while (0)
-
-static __inline__ capability get_idc(void) {
-	capability object;
-	__asm__ (
-	"cmove %[object], $idc \n"
-	: [object]"=C" (object));
-	return object;
-}
 
 static __inline__  void set_idc(capability idc) {
 	__asm__ (
@@ -519,13 +401,6 @@ static inline int VCAP(const void * cap, size_t len, unsigned flags) {
 static inline int VCAPS(const void * cap, size_t len, unsigned flags) {
 	return VCAP_I(cap, len, flags, 1);
 }
-
-//todo: have real one in compiler
-#ifdef _CHERI128_
-#define	__sealable	__attribute__((aligned(0x1000)))
-#else
-#define	__sealable
-#endif
 
 /*
  * Register frame to be preserved on context switching. The order of

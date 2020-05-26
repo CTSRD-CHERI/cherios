@@ -44,6 +44,7 @@
 
 
 mop_internal_t mmap_mop;
+vpage_range_desc_t* pool_heads[MAX_POOLS];
 
 /* A small fixed size allocator. We can't use virtual memory so we can't use the normal allocator */
 

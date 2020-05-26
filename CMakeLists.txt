@@ -313,7 +313,7 @@ set(C_WARNING_FLAGS
     -Wno-error=unreachable-code-return
     -Wno-error=unused-macros
     -Wno-deprecated-declarations
-    -Werror=mips-cheri-prototypes
+    -Werror=cheri-prototypes
 )
 
 set(CXX_WARNING_FLAGS
@@ -501,7 +501,7 @@ function(add_cherios_module _target)
   target_link_libraries(${_target}
         PRIVATE
         ${LINKER_SCRIPT_ARG}
-        "-Wl,-Bdynamic -Wl,-no-pie,-is_cherios,-relative-cap-relocs,-no-dynamic-linker"
+        "-Wl,-Bdynamic -Wl,-no-pie,-is_cherios,-relative-cap-relocs,-no-dynamic-linker,-no-rosegment"
         -G0
         -nostartfiles
         -nodefaultlibs

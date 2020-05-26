@@ -95,8 +95,7 @@ void free_thread_n(process_t* process, uint8_t threadn) {
 }
 
 process_t* unseal_proc(process_t* process) {
-	if(cheri_gettype(process) != cheri_getcursor(sealer)) return NULL;
-	return cheri_unseal(process, sealer);
+    return cheri_unseal_2(process, sealer);
 }
 
 static process_t* unseal_live_proc(process_t* process) {

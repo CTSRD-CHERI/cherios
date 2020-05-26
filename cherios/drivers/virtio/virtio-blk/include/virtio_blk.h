@@ -74,7 +74,7 @@ struct virtio_blk_config {
 
 	/* number of vqs, only available when VIRTIO_BLK_F_MQ is set */
 	uint16_t num_queues;
-} QEMU_PACKED;
+};
 
 /* These two define direction. */
 #define VIRTIO_BLK_T_IN		0

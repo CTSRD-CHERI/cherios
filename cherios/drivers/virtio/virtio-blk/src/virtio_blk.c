@@ -72,11 +72,9 @@ __unused static void mmio_set32(session_t* session, size_t offset, u32 value) {
 }
 
 static session_t* unseal_session(void* sealed_session) {
-	register_t type = cheri_getcursor(session_sealer);
+	session_t* session = (session_t*)cheri_unseal_2(sealed_session, session_sealer);
 
-	if(cheri_gettype(sealed_session) != type) return NULL;
-
-	session_t* session = (session_t*)cheri_unseal(sealed_session, session_sealer);
+	if(session == NULL) return NULL;
 
 	seassion_state_e state;
 

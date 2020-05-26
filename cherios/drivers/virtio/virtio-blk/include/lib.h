@@ -89,7 +89,7 @@ typedef struct session_s {
 	uint8_t req_sock_map[QUEUE_SIZE];
 } session_t;
 
-capability session_sealer;
+extern capability session_sealer;
 
 void mmio_disk(void*);
 

@@ -46,7 +46,7 @@
  * Routines to handle activations
  */
 
-act_t				kernel_acts[MAX_STATIC_ACTIVATIONS]  __sealable;
+act_t				kernel_acts[MAX_STATIC_ACTIVATIONS];
 aid_t				kernel_next_act;
 
 #if (DEBUG_COUNT_CALLS)
