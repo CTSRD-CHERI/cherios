@@ -110,8 +110,12 @@
 .endm
 
 .macro load_reg reg, index, b
-    .if \index != V0_index
         cld \reg, $zero, (\b + (\index * REG_SIZE))($c11)
+.endm
+
+.macro load_reg_not_v0 reg, index, b
+    .if \index != V0_index
+        load_reg \reg, \index, \b
     .endif
 .endm
 
@@ -265,7 +269,7 @@ load_reg    $t0, 22, 0
 mtlo        $t0
 
 foreachi    load_cap, 0, CAP_START, CAP_LIST
-foreachi    load_reg, 0, 0, REG_LIST
+foreachi    load_reg_not_v0, 0, 0, REG_LIST
 
 cincoffset  $c11, $c11, (STACK_INC)
 
