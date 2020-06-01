@@ -56,7 +56,10 @@ typedef struct timeval {
     suseconds_t tv_usec;
 } timeval;
 
-struct timespec;
+struct timespec {
+    time_t tv_sec;
+    long tv_nsec;
+};
 
 // Not implemented
 

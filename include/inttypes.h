@@ -34,6 +34,8 @@
 #ifndef _MACHINE_INTTYPES_H_
 #define	_MACHINE_INTTYPES_H_
 
+#include <stdint.h>
+
 /*
  * Macros for format specifiers.
  */
@@ -224,4 +226,3 @@
 #define	SCNxPTR		__PRIptr"x"	/* uintptr_t */
 
 #endif /* !_MACHINE_INTTYPES_H_ */
-
