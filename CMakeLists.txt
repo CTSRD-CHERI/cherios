@@ -540,9 +540,9 @@ function(add_cherios_module _target)
     add_to_filesystem(${_target} "${CHERIOS_FILESYSTEM_DIR}/${_target}.${_output_extention}")
   endif()
   # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
-  add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    )
+  #add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+  #  COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+  #  )
 
     if(add_exe_NEED_LIBCXX)
         target_compile_options(${_target} PUBLIC -include "${CMAKE_BINARY_DIR}/libcxx/__config_site")
