@@ -196,6 +196,8 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 	uint32_t csc_i_mask		  = (1 << 11) - 1;
     uint32_t daddiu_i_mask    = 0x0000FFFF;
 
+#define CSC_I_TOP_BIT       (1 << 14)
+
     uint32_t ustack_save_mask 	= 0xffff0000;
 	uint32_t ustack_save_val 	= 0x796a0000;
 	uint32_t ustack_save_i_mask = 0x0000ffff;
@@ -230,10 +232,14 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 		int foundc11 = 0;
 		int32_t offsetc11 = 0;
 
+		int foundc17_after_inc = 0;
+		int foundc18_after_inc = 0;
+
 		if(((size_t)return_address & 0xffffffff80000000) != 0xffffffff80000000) {
 			for(uint32_t* instr = ((uint32_t*)return_address);; instr--) {
+			    if(stack_size != 0 && found && foundc18) break;
 				if(check_cap(instr)) {
-                    if(i == 1) break;
+                    if(i == 1 || (stack_size != 0)) break;
 					printf("***bad frame (ran out of function)***\n");
 					return;
 				}
@@ -242,7 +248,7 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 				if(unsafe && ((val & ustack_save_mask) == ustack_save_val)) {
 					offsetc11 = ((int32_t)((int16_t)(val & ustack_save_i_mask))) * CAP_SIZE;
 					foundc11 = 1;
-					break;
+                    continue;
 				}
 
                 int cinc = (val & cinc_c11_mask) == cinc_from_val;
@@ -265,23 +271,38 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
                         uint32_t prev_val = *(instr-1);
                         stack_size = (int16_t)(prev_val & daddiu_i_mask);
                     }
-                    if(stack_size != 0 && unsafe == 0) break;
+                    continue;
 				}
 
 				if((val & csc_form_mask) == csc_form_val) {
 					found = 1;
+                    foundc17_after_inc = stack_size != 0;
 					offset = (int16_t)((val & csc_i_mask) << 4);
+					// Sign extend
+					offset = offset |- (offset & CSC_I_TOP_BIT);
+                    continue;
 				}
 
 				if((val & csc_form_mask) == csc_form_val18) {
 					foundc18 = 1;
+					foundc18_after_inc = stack_size != 0;
 					offsetc18 = (int16_t)((val & csc_i_mask) << 4);
+                    offsetc18 = offsetc18 |- (offsetc18 & CSC_I_TOP_BIT);
+                    continue;
 				}
 			}
 		} else if(i != 1) {
 			printf("***address in nano kernel***\n");
 			return;
 		}
+
+		if(foundc17_after_inc) {
+            offset -= stack_size;
+        }
+
+		if(foundc18_after_inc) {
+            offsetc18 -= stack_size;
+        }
 
         print_frame_info(stack_size, stack_pointer);
 		capability * ra_ptr = ((capability *)((stack_pointer + offset)));
