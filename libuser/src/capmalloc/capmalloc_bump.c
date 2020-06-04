@@ -506,6 +506,11 @@ res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off) 
 
     if(try_init_memmgt_ref() == NULL) return NULL;
 
+    // This is require to ensure alignment of any type the returned object may be cast to
+    if(size < CAP_SIZE) {
+        round_up_to_nearest_power_2(size);
+    }
+
     if(size <= LARGEST_FIXED_OBJECT) {
         size = size ? size : 1;
         uint32_t pool = size_to_scale((uint32_t)size);
