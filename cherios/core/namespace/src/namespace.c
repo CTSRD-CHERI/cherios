@@ -37,6 +37,7 @@
 #include "stdio.h"
 #include "string.h"
 #include "crt.h"
+#include "strings.h"
 
 typedef struct {
 	void * act_reference;

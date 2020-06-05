@@ -31,6 +31,7 @@
 #include "cheric.h"
 #include "assert.h"
 #include "string.h"
+#include "strings.h"
 #include "stdio.h"
 
 int main(__unused register_t arg,__unused capability carg) {

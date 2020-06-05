@@ -10,3 +10,6 @@
 [submodule "libcxx"]
 	path = libcxx
 	url = https://github.com/CTSRD-CHERI/libcxx.git
+[submodule "mbedtls"]
+	path = mbedtls
+	url = https://github.com/ARMmbed/mbedtls.git

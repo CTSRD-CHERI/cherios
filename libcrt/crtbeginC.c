@@ -31,6 +31,7 @@
 #include "mips.h"
 #include "cheric.h"
 #include "string.h"
+#include "strings.h"
 #include "dylink.h"
 #include "crt.h"
 

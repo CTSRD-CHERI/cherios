@@ -28,43 +28,15 @@
  * SUCH DAMAGE.
  */
 
-#ifndef __STRING_H__
-#define	__STRING_H__
+#ifndef __STRINGS_H__
+#define	__STRINGS_H__
 
-#include "cdefs.h"
+#include <cdefs.h>
 #include "mips.h"
-#include "locale.h"
 
 __BEGIN_DECLS
-void *	memcpy(void *dest, const void *src, size_t n);
-void * memmove ( void * destination, const void * source, size_t num );
-void *	memset(void *, int, size_t);
-char *	strchr(const char * s, int c);
-char *  strrchr(const char *cp, int ch);
-char *	strcpy(char * dest,const char *src);
-char *  strcat ( char * destination, const char * source );
-char * strncat(char *dst, const char *src, size_t n);
-size_t strcspn(const char * __restrict s, const char * __restrict charset);
-size_t strspn(const char *s, const char *charset);
-char * strdup(const char *str1);
-void *  memchr( const void * ptr, int value, size_t num );
-int	strcmp(const char *s1, const char *s2);
-size_t	strlen(const char *str);
-int	strncmp(const char * cs,const char * ct,size_t count);
-char *	strncpy(char * dest,const char *src,size_t count);
-char *  strstr(const char *s, const char *find);
-char *strpbrk(const char *str1, const char *str2);
-
-int memcmp ( const void * ptr1, const void * ptr2, size_t num );
-
-#define strcoll strcmp
-#define strxfrm strncpy
-
-static char *strerror(__unused int errnum) {
-    // TODO: There are actually strings defined via macro in errno.h to use
-    return NULL;
-}
+void	bzero(void *, size_t);
 
 __END_DECLS
 
-#endif /* !__STRING_H__ */
+#endif /* !__STRINGS_H__ */

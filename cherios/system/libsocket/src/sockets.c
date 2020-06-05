@@ -32,6 +32,7 @@
 #include <queue.h>
 #include "object.h"
 #include "string.h"
+#include "strings.h"
 #include "nano/nanokernel.h"
 #include "assert.h"
 #include "cheric.h"

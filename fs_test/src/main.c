@@ -34,6 +34,7 @@
 #include "assert.h"
 #include "stdio.h"
 #include "string.h"
+#include "strings.h"
 #include "aes.h"
 
 #define BIG_SIZE 0x1000

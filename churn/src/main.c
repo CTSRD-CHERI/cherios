@@ -31,6 +31,7 @@
 #include "cheric.h"
 #include "mman.h"
 #include "string.h"
+#include "strings.h"
 #include "assert.h"
 #include "stdio.h"
 #include "syscalls.h"

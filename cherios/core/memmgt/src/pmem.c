@@ -39,6 +39,7 @@
 #include "mmap.h"
 #include "math.h"
 #include "object.h"
+#include "strings.h"
 
 page_t* book;
 
