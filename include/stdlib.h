@@ -95,6 +95,9 @@ static inline void * calloc_debug(size_t n, size_t s) {
 void 	abort(void)      __dead2;
 void	exit(int status) __dead2;
 
+#define EXIT_SUCCESS 0
+#define EXIT_FAILURE 1
+
 char *  itoa ( int value, char * str, int base );
 int     atoi(const char* str);
 
