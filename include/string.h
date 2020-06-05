@@ -56,7 +56,7 @@ char *	strncpy(char * dest,const char *src,size_t count);
 char *  strstr(const char *s, const char *find);
 char *strpbrk(const char *str1, const char *str2);
 
-int memcmp ( const char * ptr1, const char * ptr2, size_t num );
+int memcmp ( const void * ptr1, const void * ptr2, size_t num );
 
 #define strcoll strcmp
 #define strxfrm strncpy
