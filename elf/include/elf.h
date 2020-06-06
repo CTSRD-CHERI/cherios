@@ -58,6 +58,7 @@
 
 #ifndef __ASSEMBLY__
 
+#include <stddef.h>
 #include "mips.h"
 #include "stdarg.h"
 #include "nano/nanotypes.h"

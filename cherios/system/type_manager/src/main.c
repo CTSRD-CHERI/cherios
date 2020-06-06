@@ -33,6 +33,7 @@
 #include "stdlib.h"
 #include "lists.h"
 #include "string.h"
+#include "strings.h"
 #include "type_manager.h"
 #include "misc.h"
 #include "namespace.h"

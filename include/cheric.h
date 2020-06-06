@@ -118,17 +118,17 @@ static inline precision_rounded_length round_cheri_length(size_t length) {
 #define OUT_32i  "i"
 #define OUT_64i  "i"
 
-#define ADD_8_16i	"daddiu"
-#define ADD_16_16i	"daddiu"
-#define ADD_32_16i	"daddiu"
-#define ADD_64_16i	"daddiu"
-#define ADD_c_16i	"cincoffset"
+#define ASM_ADD_8_16i	"daddiu"
+#define ASM_ADD_16_16i	"daddiu"
+#define ASM_ADD_32_16i	"daddiu"
+#define ASM_ADD_64_16i	"daddiu"
+#define ASM_ADD_c_16i	"cincoffset"
 
-#define ADD_8_64	"daddu"
-#define ADD_16_64	"daddu"
-#define ADD_32_64	"daddu"
-#define ADD_64_64	"daddu"
-#define ADD_c_64	"cincoffset"
+#define ASM_ADD_8_64	"daddu"
+#define ASM_ADD_16_64	"daddu"
+#define ASM_ADD_32_64	"daddu"
+#define ASM_ADD_64_64	"daddu"
+#define ASM_ADD_c_64	"cincoffset"
 
 #define CTYPE_8 uint8_t
 #define CTYPE_16	uint16_t
@@ -145,7 +145,7 @@ static inline precision_rounded_length round_cheri_length(size_t length) {
 
 #define BNE(type, a, b, label,tmp) BNE_ ## type(a,b,label,tmp)
 
-#define ADD(type, val_type) ADD_ ## type ## _ ## val_type
+#define ASM_ADD(type, val_type) ASM_ADD_ ## type ## _ ## val_type
 
 #define LOADL(type)  "cll" SUF_ ## type
 #define LOAD(type) "cl" SUF_ ## type

@@ -37,6 +37,7 @@
 #include "boot/boot_info.h"
 #include "object.h"
 #include "string.h"
+#include "strings.h"
 #include "uart.h"
 #include "elf.h"
 #include "utils.h"

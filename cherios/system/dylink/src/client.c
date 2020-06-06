@@ -42,6 +42,7 @@
 #include "misc.h"
 #include "namespace.h"
 #include "macroutils.h"
+#include "strings.h"
 
 // We batch symbol exchnage because otherwise there would be far too many domain crossings
 #define SYMBOL_EXCHANGE_MAX 0x20

@@ -45,6 +45,7 @@
 #include "cheric.h"
 #include "math.h"
 #include "string.h"
+#include "strings.h"
 #include "elf.h"
 #include "nano/nanokernel.h"
 #include "mman.h"

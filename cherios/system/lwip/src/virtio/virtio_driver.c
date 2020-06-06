@@ -31,6 +31,7 @@
 #include "lwip_driver.h"
 #include "mman.h"
 #include "malta_virtio_mmio.h"
+#include "strings.h"
 
 static void alloc_recv(net_session* session) {
 

@@ -79,11 +79,7 @@
 
 #ifndef __ASSEMBLY__
 
-/*
- * Provide more convenient names for useful qualifiers from gcc/clang.
- */
-#define	__aligned__(x)	__attribute__ ((aligned(x)))
-#define	__packed__	__attribute__ ((packed))
+#include <stdint.h>
 
 /*
  * 64-bit MIPS types.
@@ -97,61 +93,7 @@ typedef	unsigned long	size_t;
 
 typedef long		off_t;
 
-/*
- * Useful integer type names that we can't pick up from the compile-time
- * environment.
- */
-typedef char		int8_t;
-typedef unsigned char	u_char;
-typedef unsigned char	uint8_t;
-typedef short		int16_t;
-typedef unsigned short	u_short;
-typedef unsigned short	uint16_t;
-typedef int		int32_t;
-typedef unsigned int	u_int;
-typedef unsigned int	uint32_t;
-typedef long		intmax_t;
-typedef long		quad_t;
-typedef long		ptrdiff_t;
-typedef long		int64_t;
-typedef unsigned long	u_long;
-typedef unsigned long	uint64_t;
-typedef	unsigned long	uintmax_t;
-typedef unsigned long	u_quad_t;
-typedef __uintcap_t	uintptr_t;
-//typedef unsigned long	uintptr_t;
-typedef __intcap_t	intptr_t;
-typedef unsigned long	caddr_t;
-
-typedef u_long		ulong;
-typedef u_char		uchar;
-typedef uint8_t		u8;
-typedef uint16_t	u16;
-typedef uint32_t	u32;
-typedef uint64_t	u64;
-typedef uint16_t	__u16;
-typedef uint32_t	__u32;
-typedef uint8_t		u_int8_t;
-typedef uint16_t	u_int16_t;
-typedef uint32_t	u_int32_t;
-typedef uint64_t	u_int64_t;
-
-#define define_intypes(size)                                \
-typedef int ## size ## _t  int_least ## size ## _t;         \
-typedef uint ## size ## _t  uint_least ## size ## _t;       \
-typedef int ## size ## _t  int_fast ## size ## _t;          \
-typedef uint ## size ## _t  uint_fast ## size ## _t;
-
-#define INT_SIZES(ITEM) ITEM(8) ITEM(16) ITEM(32) ITEM(64)
-
-INT_SIZES(define_intypes)
-
 #define	NBBY		8	/* Number of bits per byte. */
-#ifdef __cplusplus
-#define	NULL		nullptr
-#else
-#define	NULL		((void *)0)
-#endif
 
 /*
  * Useful addresses on MIPS.

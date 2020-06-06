@@ -31,12 +31,12 @@
 #ifndef __STRING_H__
 #define	__STRING_H__
 
+#include <stddef.h>
 #include "cdefs.h"
 #include "mips.h"
 #include "locale.h"
 
 __BEGIN_DECLS
-void	bzero(void *, size_t);
 void *	memcpy(void *dest, const void *src, size_t n);
 void * memmove ( void * destination, const void * source, size_t num );
 void *	memset(void *, int, size_t);
@@ -56,7 +56,7 @@ char *	strncpy(char * dest,const char *src,size_t count);
 char *  strstr(const char *s, const char *find);
 char *strpbrk(const char *str1, const char *str2);
 
-int memcmp ( const char * ptr1, const char * ptr2, size_t num );
+int memcmp ( const void * ptr1, const void * ptr2, size_t num );
 
 #define strcoll strcmp
 #define strxfrm strncpy

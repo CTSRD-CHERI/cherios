@@ -29,6 +29,7 @@
  * SUCH DAMAGE.
  */
 
+#include <stddef.h>
 #include "cheric.h"
 
 /*

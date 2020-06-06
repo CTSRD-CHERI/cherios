@@ -30,6 +30,7 @@
  * SUCH DAMAGE.
  */
 
+#include <stddef.h>
 #include "mips.h"
 
 void *

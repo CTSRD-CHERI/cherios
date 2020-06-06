@@ -34,6 +34,7 @@
 #include "assert.h"
 #include "stdio.h"
 #include "string.h"
+#include "strings.h"
 #include "capmalloc.h"
 
 #define DATA_SIZE 0x800

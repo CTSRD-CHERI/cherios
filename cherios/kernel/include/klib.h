@@ -43,6 +43,7 @@
 #include "math.h"
 #include "sched.h"
 #include "string.h"
+#include "strings.h"
 #include "kutils.h"
 #include "syscalls.h"
 

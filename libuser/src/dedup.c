@@ -39,6 +39,7 @@
 #include "nano/usernano.h"
 #include "stdlib.h"
 #include "crt.h"
+#include "strings.h"
 
 static act_kt dedup_service = NULL;
 

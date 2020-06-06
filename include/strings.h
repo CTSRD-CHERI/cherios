@@ -1,5 +1,5 @@
 /*-
- * Copyright (c) 2016 Lawrence Esswood
+ * Copyright (c) 2016 Robert N. M. Watson
  * All rights reserved.
  *
  * This software was developed by SRI International and the University of
@@ -28,16 +28,15 @@
  * SUCH DAMAGE.
  */
 
-#ifndef STDDEF_H
-#define STDDEF_H
+#ifndef __STRINGS_H__
+#define	__STRINGS_H__
 
+#include <cdefs.h>
 #include "mips.h"
 
-// Apparently this is a built-in type in  C++ but not C =/
-#if !defined(__cplusplus)
-typedef int wchar_t;
-#endif
+__BEGIN_DECLS
+void	bzero(void *, size_t);
 
-#define offsetof(X, Y) __builtin_offsetof(X, Y)
+__END_DECLS
 
-#endif
+#endif /* !__STRINGS_H__ */

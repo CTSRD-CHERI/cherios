@@ -32,6 +32,7 @@
 #include "cprogram.h"
 #include "queue.h"
 #include "string.h"
+#include "strings.h"
 #include "syscalls.h"
 #include "mman.h"
 #include "assert.h"

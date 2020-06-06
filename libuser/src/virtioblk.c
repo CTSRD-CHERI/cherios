@@ -28,5 +28,5 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
+#include <stddef.h>
 void * vblk_ref = NULL;

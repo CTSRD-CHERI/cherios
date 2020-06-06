@@ -33,6 +33,7 @@
 #include "cheristd.h"
 #include "cheric.h"
 #include "stdlib.h"
+#include "strings.h"
 #include "assert.h"
 #include "mman.h"
 #include "misc.h"
