@@ -31,6 +31,7 @@
 #ifndef __STRING_H__
 #define	__STRING_H__
 
+#include <stddef.h>
 #include "cdefs.h"
 #include "mips.h"
 #include "locale.h"

@@ -251,7 +251,19 @@ set(ASM_COMPILER_FLAGS
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
     -ftls-model=local-exec
-    -nostdinc
+
+    # TODO
+    #
+    # Presently we depend on some compiler-provided headers, but there's no way
+    # to get those if we disable the standard includes; so, no -nostdinc for
+    # us.
+    #
+    # There's an upstream LLVM (Darwin-only, which seems odd) flag -ibuiltininc
+    # that restores the compiler-provided headers even if -nostdinc is used.
+    # We should pass both of those when we can.  In the interim, behold what
+    # Jess calls 'our usual "hack"':
+    --sysroot=/no/such/path
+
     -fomit-frame-pointer
     -ffreestanding
     -O${O_LVL} # TODO: make this depend on the configuration

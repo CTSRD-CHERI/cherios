@@ -82,12 +82,6 @@
 #include <stdint.h>
 
 /*
- * Provide more convenient names for useful qualifiers from gcc/clang.
- */
-#define	__aligned__(x)	__attribute__ ((aligned(x)))
-#define	__packed__	__attribute__ ((packed))
-
-/*
  * 64-bit MIPS types.
  */
 typedef unsigned long	register_t;		/* 64-bit MIPS register */
@@ -100,11 +94,6 @@ typedef	unsigned long	size_t;
 typedef long		off_t;
 
 #define	NBBY		8	/* Number of bits per byte. */
-#ifdef __cplusplus
-#define	NULL		nullptr
-#else
-#define	NULL		((void *)0)
-#endif
 
 /*
  * Useful addresses on MIPS.
