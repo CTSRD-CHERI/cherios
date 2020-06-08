@@ -135,7 +135,7 @@ int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 #ifdef _CHERI256_
 #define ELF_E_FLAGS 0x30C2D000
 #else
-#define ELF_E_FLAGS 0x30C1D000
+#define ELF_E_FLAGS 0x30C1C800
 #endif
 #define ELF_E_MASK  0xFFFFFFF0
 	if((hdr->e_flags != 0x30000007) && ((hdr->e_flags & ELF_E_MASK) != ELF_E_FLAGS)) {

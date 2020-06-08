@@ -27,9 +27,9 @@ set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
 if(NOT CHERI_SDK_DIR)
     # guess the location of CHERI SDK by looking for CheriSDKConfig and checking some guessed locations
     set(GUESSED_CHERISDK_LOCATIONS
-        /local/scratch/cheri/output/sdk
-        $ENV{HOME}/sdk/
-        $ENV{HOME}/cheri/output/sdk
+        /local/scratch/cheri/output/cherios-sdk
+        $ENV{HOME}/cherios-sdk/
+        $ENV{HOME}/cheri/output/cherios-sdk
     )
     # try to find clang in one of the guessed locations
     foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
@@ -235,7 +235,8 @@ set(ASMC_COMPILER_FLAGS
     -fvisibility=hidden
     -DASM_VISIBILITY=.hidden
     -mcpu=${CHERI_CPU}
-    -mabi=cherios
+    -mabi=purecap
+    "SHELL:-mllvm -is-cherios"
     -march=${CHERI_CPU}
     -cheri-cap-table-abi=plt
     -integrated-as
@@ -246,7 +247,7 @@ set(ASMC_COMPILER_FLAGS
 )
 set(ASM_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
-    -mllvm -asm-macro-max-nesting-depth=100
+    "SHELL:-mllvm -asm-macro-max-nesting-depth=100"
 )
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
@@ -501,11 +502,11 @@ function(add_cherios_module _target)
   target_link_libraries(${_target}
         PRIVATE
         ${LINKER_SCRIPT_ARG}
-        "-Wl,-Bdynamic -Wl,-no-pie,-is_cherios,-relative-cap-relocs,-no-dynamic-linker,-no-rosegment"
+        "-Wl,-Bdynamic -Wl,-no-pie,-is-cherios,-relative-cap-relocs,-no-dynamic-linker,-no-rosegment"
         -G0
         -nostartfiles
         -nodefaultlibs
-        -mabi=cherios
+        -mabi=purecap
         -Wl,-z,norelro
    )
 
@@ -518,7 +519,7 @@ function(add_cherios_module _target)
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
               PRIVATE
-              -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=cherios,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+              -Wl,-mllvm,-is-cherios,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
       )
       target_compile_options(${_target} PUBLIC "-flto")
   endif()
