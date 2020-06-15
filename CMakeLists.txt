@@ -546,8 +546,6 @@ function(add_cherios_module _target)
   #  )
 
     if(add_exe_NEED_LIBCXX)
-        target_compile_options(${_target} PUBLIC -include "${CMAKE_BINARY_DIR}/libcxx/__config_site")
-        target_include_directories(${_target} BEFORE PUBLIC ${CMAKE_SOURCE_DIR}/libcxx/include)
         target_link_libraries(${_target} PRIVATE cxx_static)
     endif()
 
@@ -585,8 +583,6 @@ set (LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lwip)
 include(lwip/src/Filelists.cmake)
 set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
 
-add_subdirectory(libuser)
-
 # Just include libcxx directly so it picks up the right compiler options
 set(LIBCXX_ENABLE_SHARED OFF)
 set(LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY OFF)
@@ -605,6 +601,11 @@ set(LIBCXX_ENABLE_MONOTONIC_CLOCK OFF)
 set(PACKAGE_VERSION 11.0.0git)
 
 add_subdirectory(libcxx)
+
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_BINARY_DIR}/libcxx/__config_site>")
+include_directories(BEFORE PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/libcxx/include>")
+
+add_subdirectory(libuser)
 
 add_subdirectory(libcxxrt)
 
