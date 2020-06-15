@@ -79,6 +79,8 @@ typedef enum mem_request_flags {
     REPRESENTABLE = 0x20,
 } mem_request_flags;
 
+__BEGIN_DECLS
+
 /* 'You' is defined by a system given token "memory ownership principle" (mop). You must quote this to the system.
  * Each process should be given a mop.
  * Handing your mop to another principle is ok. */
@@ -214,5 +216,7 @@ struct revoke_tracking {
 };
 
 struct revoke_tracking* get_tracking(void);
+
+__END_DECLS
 
 #endif // SYS_MMAN_H
