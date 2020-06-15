@@ -582,6 +582,7 @@ static dy_pool_range_t* find_inuse(size_t base, size_t  length, old_claim_t*** p
     return NULL;
 }
 
+VIS_EXTERNAL
 int cap_claim(capability mem) {
     res_nfo_t nfo = memhandle_nfo(mem);
 
