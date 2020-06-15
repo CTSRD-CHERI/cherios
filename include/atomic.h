@@ -32,10 +32,16 @@
 
 #include "cheric.h"
 
+#if defined(__cplusplus)
+    #define RClass
+#else
+    #define RClass register
+#endif
+
 #define ATOMIC_ADD(pointer, type, val_type, val, result)      \
 {                                                   \
-register register_t tmp;                            \
-register CTYPE(type) added;                         \
+RClass register_t tmp;                              \
+RClass CTYPE(type) added;                           \
 __asm__ __volatile__ (                              \
     SANE_ASM                                        \
     "1:"                                            \
@@ -56,35 +62,35 @@ __asm__ __volatile__ (                              \
 
 #define ATOMIC_CAS(pointer, type, old_val, new_val, result) \
 {                                                           \
-register CTYPE(type) tmp;                                   \
+RClass CTYPE(type) tmp;                                     \
 __asm__ __volatile(                                         \
 SANE_ASM                                                    \
         "1:"                                                \
 LOADL(type) " %[tmp], %[ptr]            \n"                 \
 BNE(type, "%[tmp]", "%[old]", "2f","%[res]") "\n"           \
 "li     %[res], 0                       \n"                 \
-STOREC(type) " %[res], %[new], %[ptr]    \n"                \
+STOREC(type) " %[res], %[newv], %[ptr]    \n"                \
 "beqz   %[res], 1b                      \n"                 \
 "nop                                    \n"                 \
 "2:                                     \n"                 \
 : [tmp] CLOBOUT(type) (tmp), [res] "=&r" (result)                     \
-: [ptr] "C" (pointer), [old] IN(type) (old_val), [new] IN(type) (new_val) \
+: [ptr] "C" (pointer), [old] IN(type) (old_val), [newv] IN(type) (new_val) \
 : "memory");                                                         \
 }
 
 #define ATOMIC_SWAP(pointer, type, new_val, result) \
 {                                                           \
-register register_t tmp;                                   \
+RClass register_t tmp;                                      \
 __asm__ __volatile(                                         \
 SANE_ASM                                                    \
         "1:"                                                \
 LOADL(type) " %[res], %[ptr]            \n"                 \
-STOREC(type) " %[tmp], %[new], %[ptr]    \n"                \
+STOREC(type) " %[tmp], %[newv], %[ptr]    \n"                \
 "beqz   %[tmp], 1b                      \n"                 \
 "nop                                    \n"                 \
 "2:                                     \n"                 \
 : [tmp] "=&r" (tmp), [res] CLOBOUT(type) (result)           \
-: [ptr] "C" (pointer), [new] IN(type) (new_val)             \
+: [ptr] "C" (pointer), [newv] IN(type) (new_val)             \
 : "memory");                                                \
 }
 
