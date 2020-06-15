@@ -35,7 +35,6 @@
 #include "activations.h"
 #include "klib.h"
 #include "namespace.h"
-#include "msg.h"
 #include "nano/nanokernel.h"
 #include "queue.h"
 #include "nano/nanokernel.h"
