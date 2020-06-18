@@ -218,19 +218,22 @@ STUB_BEGIN entry_stub
 
 # Check our guard
 DOMAIN_CAS_LL ctlp, callable_ready, callable_taken, 0
+DOMAIN_CAS_SC ctlp, callable_ready, callable_taken, 0
+
 # Save callers cra/crd
+clc         csp, $zero, CTLP_OFFSET_CSP(ctlp)
 csc         cra, $zero, -(2 * CAP_SIZE)(csp)                    # save caller state for epilog trampoline
 csc         crd, $zero, -CAP_SIZE(csp)
-DOMAIN_CAS_SC ctlp, callable_ready, callable_taken, 0
-nop
 BUMP_STAT   STATS_UNTRUSTED_OFFSET, ctmp, $t0
 
 cincoffset  csp, csp, -(2 * CAP_SIZE)
 
-# Call intented target
+# cgetpcc always in delay slot of block just before standard cross domain entry
+# We want to skip BOTH the cgetpcc and loading the stack ptr (which we have changed)
+cincoffset  $c12, $c12, 8   #
 cmove       crd, ctlp
 cjalr       $c12, cra
-cincoffset  $c12, $c12, -4
+cincoffset  $c12, $c12, -4  # c12 should point to start of cross domain entry
 
 # Now restore callers cra/crd
 

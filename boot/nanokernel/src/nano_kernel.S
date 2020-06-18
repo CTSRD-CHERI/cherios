@@ -1102,8 +1102,8 @@ context_switch:
     dli         $t1, 0                                      # 0 is not a valid cause an indicates we switched manually
 
 # FIXME: We need to check call perms on c17/18
-    cgetsealed  $t2, $c17
-    beqz        $t2, context_switch_local_entry
+    cgettype    $t2, $c17
+    bltz        $t2, context_switch_local_entry
 
 
     cgettype    $t2, $c17
