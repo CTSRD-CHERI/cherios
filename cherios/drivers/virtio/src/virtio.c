@@ -41,9 +41,9 @@
 
 int virtio_device_device_ready(virtio_mmio_map* map) {
 
-    map->status |= STATUS_DRIVER_OK;
-    map->status |= STATUS_FEATURES_OK;
-    if(map->status & STATUS_DEVICE_NEEDS_RESET) return DRIVER_DEVICE_NEEDS_RESET;
+    map->status |= VIRTIO_SWAP_U32(STATUS_DRIVER_OK);
+    map->status |= VIRTIO_SWAP_U32(STATUS_FEATURES_OK);
+    if(map->status & VIRTIO_SWAP_U32(STATUS_DEVICE_NEEDS_RESET)) return DRIVER_DEVICE_NEEDS_RESET;
 
     return 0;
 }
@@ -51,7 +51,7 @@ int virtio_device_device_ready(virtio_mmio_map* map) {
 int virtio_device_queue_add(virtio_mmio_map* map, u32 queue_n, struct virtq* queue) {
     /* INIT7: set virtqueues */
 
-    if(queue_n >= map->queue_num_max)
+    if(queue_n >= VIRTIO_SWAP_U32(map->queue_num_max))
 
     if(queue->desc == NULL) return DRIVER_QUEUE_MISSING_FIELDS;
     if(queue->avail == NULL) return DRIVER_QUEUE_MISSING_FIELDS;
@@ -62,9 +62,9 @@ int virtio_device_queue_add(virtio_mmio_map* map, u32 queue_n, struct virtq* que
     queue->used->idx = 0;
     queue->last_used_idx = 0;
 
-    map->queue_sel = queue_n;
-    if(queue->num > map->queue_num_max) return DRIVER_QUEUE_TOO_LONG;
-    map->queue_num = queue->num;
+    map->queue_sel = VIRTIO_SWAP_U32(queue_n);
+    if(queue->num > VIRTIO_SWAP_U32(map->queue_num_max)) return DRIVER_QUEUE_TOO_LONG;
+    map->queue_num = VIRTIO_SWAP_U32(queue->num);
 
 #define P_FOR(X) 								\
         TOUCH(queue-> X); 						\
@@ -72,14 +72,14 @@ int virtio_device_queue_add(virtio_mmio_map* map, u32 queue_n, struct virtq* que
 		uint64_t X ## _phy = translate_address((size_t)queue-> X, 0); 							\
 		uint64_t X ## _phy_end = translate_address(((size_t)queue-> X) + X ## _sz -1, 0); 		\
 		if(X ## _phy + X ## _sz - 1 != X ## _phy_end) return DRIVER_QUEUE_CROSSES_PAGE_BOUNDRY;	\
-		map->queue_ ## X ## _low = PADDR_LO(X ## _phy);												\
-		map->queue_ ## X ## _high = PADDR_HI(X ## _phy);
+		map->queue_ ## X ## _low = VIRTIO_SWAP_U32(PADDR_LO(X ## _phy));												\
+		map->queue_ ## X ## _high = VIRTIO_SWAP_U32(PADDR_HI(X ## _phy));
 
     P_FOR(desc);
     P_FOR(avail);
     P_FOR(used);
 
-    map->queue_ready = 1;
+    map->queue_ready = VIRTIO_SWAP_U32(1);
 
     return 0;
 }
@@ -90,22 +90,22 @@ int virtio_device_init(virtio_mmio_map* map,
 
     // Check device is what we expect
 
-    if(map->magic_value != 0x74726976) return DRIVER_BAD_DEVICE;
-    if(map->version != version) return DRIVER_BAD_DEVICE;
-    if(map->device_id != (u32)device) return DRIVER_BAD_DEVICE;
-    if(map->vendor_id != vendor_id) return DRIVER_BAD_DEVICE;
+    if(map->magic_value != VIRTIO_SWAP_U32(VIRTIO_MAGIC)) return DRIVER_BAD_DEVICE;
+    if(map->version != VIRTIO_SWAP_U32(version)) return DRIVER_BAD_DEVICE;
+    if(map->device_id != VIRTIO_SWAP_U32((u32)device)) return DRIVER_BAD_DEVICE;
+    if(map->vendor_id != VIRTIO_SWAP_U32(vendor_id)) return DRIVER_BAD_DEVICE;
 
     /* INIT2: set ACKNOWLEDGE status bit */
     /* INIT3: set DRIVER status bit */
 
-    map->status |= STATUS_ACKNOWLEDGE | STATUS_DRIVER;
+    map->status |= VIRTIO_SWAP_U32(STATUS_ACKNOWLEDGE | STATUS_DRIVER);
 
     /* INIT4: select features */
     map->host_features_sel = 0;
-    u32 device_features = map->host_features;
+    u32 device_features = VIRTIO_SWAP_U32(map->host_features);
     printf("Device %d has features %x\n", device, device_features);
     map->guest_features_sel = 0;
-    map->guest_features = device_features & driver_features;
+    map->guest_features = VIRTIO_SWAP_U32(device_features & driver_features);
 
     if((device_features & driver_features) != driver_features) return DRIVER_BAD_FEATURES;
 
@@ -116,27 +116,30 @@ int virtio_device_init(virtio_mmio_map* map,
 
 void virtio_device_ack_used(virtio_mmio_map* map) {
     //if(map->interrupt_status == 1) {
-        map->interrupt_ack = 1;
+        map->interrupt_ack = VIRTIO_SWAP_U32(1);
     //}
 }
 
+uint32_t virtio_device_get_status(virtio_mmio_map* map) {
+    return VIRTIO_SWAP_U32(map->status);
+}
 
 void virtio_device_notify(virtio_mmio_map* map, u32 queue) {
     HW_SYNC;
-    map->queue_notify = queue;
+    map->queue_notify = VIRTIO_SWAP_U32(queue);
 }
 
 void virtio_q_add_descs(struct virtq* queue, le16 head) {
-    le16 ndx = queue->avail->idx;
-    queue->avail->ring[ndx % queue->num] = head;
+    le16 ndx = VIRTIOQ_SWAP_U16(queue->avail->idx);
+    queue->avail->ring[ndx % queue->num] = VIRTIOQ_SWAP_U16(head);
     HW_SYNC;
-    queue->avail->idx = ndx+1;
+    queue->avail->idx = VIRTIOQ_SWAP_U16(ndx+1);
     return;
 }
 
 void virtio_q_init_free(struct virtq* queue, le16* free_head, le16 start) {
     for(le16 i = start; i != queue->num; i++) {
-        queue->desc[i].next = i+1;
+        queue->desc[i].next = VIRTIOQ_SWAP_U16(i+1);
     }
     *free_head = start;
 }
@@ -144,7 +147,7 @@ void virtio_q_init_free(struct virtq* queue, le16* free_head, le16 start) {
 le16 virtio_q_alloc(struct virtq* queue, le16* free_head) {
     le16 head = *free_head;
     if(head != queue->num) {
-        *free_head = queue->desc[head].next;
+        *free_head = VIRTIOQ_SWAP_U16(queue->desc[head].next);
     }
     return head;
 }
@@ -153,22 +156,22 @@ le16 virtio_q_free_length(struct virtq* queue, le16* free_head) {
     le16 num = 0;
     le16 head = *free_head;
     while(head != queue->num) {
-        head = queue->desc[head].next;
+        head = VIRTIOQ_SWAP_U16(queue->desc[head].next);
         num++;
     }
     return num;
 }
 
 void virtio_q_free(struct virtq* queue, le16* free_head, le16 head, le16 tail) {
-    queue->desc[tail].next = *free_head;
+    queue->desc[tail].next = VIRTIOQ_SWAP_U16(*free_head);
     *free_head = head;
 }
 
 int virtio_q_free_chain(struct virtq* queue, le16* free_head, le16 head) {
     le16 tail = head;
     int num = 1;
-    while(queue->desc[tail].flags & VIRTQ_DESC_F_NEXT) {
-        tail = queue->desc[tail].next;
+    while(queue->desc[tail].flags & VIRTIOQ_SWAP_U16(VIRTQ_DESC_F_NEXT)) {
+        tail = VIRTIOQ_SWAP_U16(queue->desc[tail].next);
         num++;
     }
     virtio_q_free(queue, free_head, head, tail);
@@ -178,14 +181,14 @@ int virtio_q_free_chain(struct virtq* queue, le16* free_head, le16 head) {
 int virtio_q_chain_add(struct virtq *queue, le16 *free_head, le16 *tail, le64 addr, le32 length, le16 flags) {
     le16 new = virtio_q_alloc(queue, free_head);
     if(new == queue->num) return -1;
-    queue->desc[*tail].next = new;
-    queue->desc[*tail].flags |= VIRTQ_DESC_F_NEXT;
+    queue->desc[*tail].next = VIRTIOQ_SWAP_U16(new);
+    queue->desc[*tail].flags |= VIRTIOQ_SWAP_U16(VIRTQ_DESC_F_NEXT);
 
     *tail = new;
     struct virtq_desc* desc = queue->desc + new;
-    desc->len = length;
-    desc->addr = addr;
-    desc->flags = flags;
+    desc->len = VIRTIOQ_SWAP_U32(length);
+    desc->addr = VIRTIOQ_SWAP_U64(addr);
+    desc->flags = VIRTIOQ_SWAP_U16(flags);
 
     return 0;
 }

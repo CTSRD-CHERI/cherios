@@ -56,9 +56,9 @@ static void alloc_recv(net_session* session) {
 
         struct virtq_desc* desc = session->virtq_recv.desc+head;
 
-        desc->addr = NET_HDR_P(head);
-        desc->len = sizeof(struct virtio_net_hdr);
-        desc->flags = VIRTQ_DESC_F_WRITE | VIRTQ_DESC_F_NEXT;
+        desc->addr = VIRTIOQ_SWAP_U64(NET_HDR_P(head));
+        desc->len = VIRTIOQ_SWAP_U32(sizeof(struct virtio_net_hdr));
+        desc->flags = VIRTIOQ_SWAP_U16(VIRTQ_DESC_F_WRITE | VIRTQ_DESC_F_NEXT);
 
         int ret = virtio_q_chain_add(&session->virtq_recv, &session->free_head_recv, &tail,
                                      ((size_t)pb->payload) + ETH_PAD_SIZE + custom->offset, pb->len - ETH_PAD_SIZE,
@@ -78,17 +78,17 @@ static void free_send(net_session* session) {
     struct virtq* sendq = &session->virtq_send;
 
     // First free any pbufs/descs on the out path that have finished
-    while(sendq->last_used_idx != sendq->used->idx) {
+    while(sendq->last_used_idx != VIRTIOQ_SWAP_U16(sendq->used->idx)) {
         // Free pbufs that have been used
         le16 used_idx = (le16)(sendq->last_used_idx & (sendq->num-1));
         struct virtq_used_elem used = sendq->used->ring[used_idx];
 
-        struct pbuf* pb = session->pbuf_send_map[used.id];
+        struct pbuf* pb = session->pbuf_send_map[VIRTIOQ_SWAP_U32(used.id)];
         //struct virtio_net_hdr* net_hdr = &session->net_hdrs[SEND_HDR_START + (used.id)];
 
         pbuf_free(pb);
 
-        virtio_q_free_chain(sendq, &session->free_head_send, (le16)used.id);
+        virtio_q_free_chain(sendq, &session->free_head_send, (le16)VIRTIOQ_SWAP_U16(used.id));
 
         sendq->last_used_idx++;
     }
@@ -157,10 +157,10 @@ int ienabled = 0;
 void lwip_driver_enable_interrupts(net_session* session) {
 
     if(!ienabled) {
-        le16 val = session->virtq_recv.used->idx;
-        *virtq_used_event(&session->virtq_recv) = val;
+        le16 val = VIRTIOQ_SWAP_U16(session->virtq_recv.used->idx);
+        *virtq_used_event(&session->virtq_recv) = VIRTIOQ_SWAP_U16(val);
         // We might miss the event if it arrives just as we are enabling interrupts. This is supposed to catch that.
-        assert(val == session->virtq_recv.used->idx);
+        assert(val == VIRTIOQ_SWAP_U16(session->virtq_recv.used->idx));
     }
 
     ienabled = 1;
@@ -169,7 +169,7 @@ void lwip_driver_enable_interrupts(net_session* session) {
 void lwip_driver_disable_interrupts(net_session* session) {
 
     if(ienabled) {
-        *virtq_used_event(&session->virtq_recv) = QUEUE_SIZE; // Can never write this index
+        *virtq_used_event(&session->virtq_recv) = VIRTIOQ_SWAP_U16(QUEUE_SIZE); // Can never write this index
     }
 
     ienabled = 0;
@@ -189,22 +189,22 @@ void lwip_driver_handle_interrupt(net_session* session, __unused register_t arg,
     // Then process incoming packets and pass them up to lwip
     struct virtq* recvq = &session->virtq_recv;
     int any_in = 0;
-    while(recvq->last_used_idx != recvq->used->idx) {
+    while(recvq->last_used_idx != VIRTIOQ_SWAP_U16(recvq->used->idx)) {
         any_in = 1;
         virtio_device_ack_used(session->mmio);
         size_t used_idx = recvq->last_used_idx & (recvq->num-1);
 
         struct virtq_used_elem used = recvq->used->ring[used_idx];
 
-        struct pbuf* pb = session->pbuf_recv_map[used.id];
-        struct virtio_net_hdr* net_hdr = &session->net_hdrs[used.id];
+        struct pbuf* pb = session->pbuf_recv_map[VIRTIOQ_SWAP_U32(used.id)];
+        struct virtio_net_hdr* net_hdr = &session->net_hdrs[VIRTIOQ_SWAP_U32(used.id)];
 
         assert_int_ex(net_hdr->num_buffers, ==, 1); // Otherwise we will have to gather and I CBA
 
         // NOTE: input will free its pbuf!
         session->nif->input(pb, session->nif);
 
-        int freed = virtio_q_free_chain(recvq, &session->free_head_recv, used.id);
+        int freed = virtio_q_free_chain(recvq, &session->free_head_recv, VIRTIOQ_SWAP_U32(used.id));
         session->recvs_free += freed;
         recvq->last_used_idx++;
     }
@@ -235,9 +235,9 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 
     bzero(net_hdr, sizeof(struct virtio_net_hdr));
 
-    desc->addr = NET_HDR_P(SEND_HDR_START + (head));
-    desc->len = sizeof(struct virtio_net_hdr);
-    desc->flags = VIRTQ_DESC_F_NEXT;
+    desc->addr = VIRTIOQ_SWAP_U64(NET_HDR_P(SEND_HDR_START + (head)));
+    desc->len = VIRTIOQ_SWAP_U32(sizeof(struct virtio_net_hdr));
+    desc->flags = VIRTIOQ_SWAP_U16(VIRTQ_DESC_F_NEXT);
 
 
     struct pbuf* p_head = p;
@@ -313,6 +313,6 @@ err_t lwip_driver_output(struct netif *netif, struct pbuf *p) {
 
 int lwip_driver_poll(net_session* session) {
     return
-            (session->virtq_send.last_used_idx != session->virtq_send.used->idx) ||
-            (session->virtq_recv.last_used_idx != session->virtq_recv.used->idx);
+            (session->virtq_send.last_used_idx != VIRTIOQ_SWAP_U16(session->virtq_send.used->idx)) ||
+            (session->virtq_recv.last_used_idx != VIRTIOQ_SWAP_U16(session->virtq_recv.used->idx));
 }

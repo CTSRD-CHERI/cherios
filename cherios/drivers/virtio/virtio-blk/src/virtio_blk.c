@@ -58,19 +58,6 @@ struct session_sock {
     le16 tail_tmp;
 } socks[VIRTIO_MAX_SOCKS];
 
-static u32 mmio_read32(session_t* session, size_t offset) {
-	return mips_cap_ioread_uint32(session->mmio_cap, offset);
-}
-
-__unused static void mmio_write32(session_t* session, size_t offset, u32 value) {
-	mips_cap_iowrite_uint32(session->mmio_cap, offset, value);
-}
-
-__unused static void mmio_set32(session_t* session, size_t offset, u32 value) {
-	value |= mmio_read32(session, offset);
-	mips_cap_iowrite_uint32(session->mmio_cap, offset, value);
-}
-
 static session_t* unseal_session(void* sealed_session) {
 	session_t* session = (session_t*)cheri_unseal_2(sealed_session, session_sealer);
 
@@ -143,16 +130,16 @@ void * new_session(void * mmio_cap) {
 
     // Most of the setup is the same every time. We can fill the in/out blocks now
     for(le16 i = 0; i != session->req_nb; i++) {
-        queue->desc[DESC_PER_REQ*i+0].addr = session->outhdrs_phy + (i * sizeof(struct virtio_blk_outhdr));
-        queue->desc[DESC_PER_REQ*i+0].len  = sizeof(struct virtio_blk_outhdr);
-        queue->desc[DESC_PER_REQ*i+0].flags  = VIRTQ_DESC_F_NEXT;
-        queue->desc[DESC_PER_REQ*i+0].next  = DESC_PER_REQ*i + 1;
+        queue->desc[DESC_PER_REQ*i+0].addr = VIRTIOQ_SWAP_U64(session->outhdrs_phy + (i * sizeof(struct virtio_blk_outhdr)));
+        queue->desc[DESC_PER_REQ*i+0].len  = VIRTIOQ_SWAP_U32(sizeof(struct virtio_blk_outhdr));
+        queue->desc[DESC_PER_REQ*i+0].flags  = VIRTIOQ_SWAP_U16(VIRTQ_DESC_F_NEXT);
+        queue->desc[DESC_PER_REQ*i+0].next  = VIRTIOQ_SWAP_U32(DESC_PER_REQ*i + 1);
 
-        queue->desc[DESC_PER_REQ*i+2].next = DESC_PER_REQ*i + 3;
+        queue->desc[DESC_PER_REQ*i+2].next = VIRTIOQ_SWAP_U32(DESC_PER_REQ*i + 3);
 
-        queue->desc[DESC_PER_REQ*i+3].addr = session->inhdrs_phy + (i * sizeof(struct virtio_blk_inhdr));
-        queue->desc[DESC_PER_REQ*i+3].len  = sizeof(struct virtio_blk_inhdr);
-        queue->desc[DESC_PER_REQ*i+3].flags  = VIRTQ_DESC_F_WRITE;
+        queue->desc[DESC_PER_REQ*i+3].addr = VIRTIOQ_SWAP_U32(session->inhdrs_phy + (i * sizeof(struct virtio_blk_inhdr)));
+        queue->desc[DESC_PER_REQ*i+3].len  = VIRTIOQ_SWAP_U32(sizeof(struct virtio_blk_inhdr));
+        queue->desc[DESC_PER_REQ*i+3].flags  = VIRTIOQ_SWAP_U16(VIRTQ_DESC_F_WRITE);
         queue->desc[DESC_PER_REQ*i+3].next  = 0;
     }
 
@@ -253,11 +240,11 @@ static void translate_sock(struct session_sock* ss) {
         assert(head != ss->session->queue.num && "No descriptors");
 
         struct virtq_desc* desc_head = ss->session->queue.desc + head;
-        desc_head->len = sizeof(struct virtio_blk_outhdr);
-        desc_head->addr = out_phy;
-        desc_head->flags = VIRTQ_DESC_F_NEXT;
+        desc_head->len = VIRTIOQ_SWAP_U32(sizeof(struct virtio_blk_outhdr));
+        desc_head->addr = VIRTIOQ_SWAP_U32(out_phy);
+        desc_head->flags = VIRTIOQ_SWAP_U16(VIRTQ_DESC_F_NEXT);
 
-        outhdr->type = ss->hdr_type;
+        outhdr->type = VIRTIOQ_SWAP_U32(ss->hdr_type);
 
         inhdr->status = VIRTIO_BLK_S_IOERR;
 
@@ -268,7 +255,7 @@ static void translate_sock(struct session_sock* ss) {
                                                                               (capability)ss,0,TRUSTED_CROSS_DOMAIN(full_oob), NULL,
                                                                               TRUSTED_DATA, TRUSTED_DATA);
 
-        outhdr->sector = ss->sector++;
+        outhdr->sector = VIRTIOQ_SWAP_U64(ss->sector++);
 
         tail = ss->tail_tmp;
 
@@ -367,7 +354,7 @@ int vblk_status(session_t* session) {
 	if(session->init == 0) {
 		return 1;
 	}
-	if(mmio_read32(session, VIRTIO_MMIO_STATUS) & STATUS_DEVICE_NEEDS_RESET) {
+	if(virtio_device_get_status((virtio_mmio_map*)session->mmio_cap) & STATUS_DEVICE_NEEDS_RESET) {
 		return 1;
 	}
 	return 0;
@@ -380,7 +367,10 @@ size_t vblk_size(session_t* session) {
 	//printf(KBLU"%s\n"KRST, __func__);
 	struct virtio_blk_config * config =
 	   (struct virtio_blk_config *)(session->mmio_cap + VIRTIO_MMIO_CONFIG);
-	return config->capacity;
+
+	uint64_t capacity = VIRTIO_BLKCONFIG_SWAP_U64(config->capacity);
+
+	return capacity;
 }
 
 static void vblk_send_result(req_t* req, int result) {
@@ -399,9 +389,9 @@ static void vblk_rw_ret(session_t* session) {
 	req_t * reqs = session->reqs;
 
     /* Process everything since last used to used index */
-    for(le16 ndx = queue->last_used_idx; ndx != queue->used->idx; ndx++) {
-        le32 used_desc_id =  queue->used->ring[ndx % queue->num].id;
-        le32 used_len = queue->used->ring[ndx % queue->num].len;
+    for(le16 ndx = queue->last_used_idx; ndx != VIRTIOQ_SWAP_U16(queue->used->idx); ndx++) {
+        le32 used_desc_id =  VIRTIOQ_SWAP_U32(queue->used->ring[ndx % queue->num].id);
+        le32 used_len = VIRTIOQ_SWAP_U32(queue->used->ring[ndx % queue->num].len);
         //printf(KMAJ"Used %x (%x)- %x %x\n"KRST, queue->used->idx, queue->last_used_idx, used_desc_id, used_len);
 
         if(used_desc_id < SIMPLE_QUEUE_SIZE) { // simple directly mapped
@@ -459,7 +449,7 @@ int vblk_rw(session_t* session, void * buf, size_t sector,
     assert(session->init);
 
     struct virtq * queue = &(session->queue);
-    assert(!(mmio_read32(session, VIRTIO_MMIO_STATUS)&(STATUS_DEVICE_NEEDS_RESET)));
+    assert(!(virtio_device_get_status((virtio_mmio_map*)session->mmio_cap) & STATUS_DEVICE_NEEDS_RESET));
 
     /* find free request slot */
     le16 i;
@@ -485,8 +475,8 @@ int vblk_rw(session_t* session, void * buf, size_t sector,
     } else {
         msg_delay_return(&reqs[i].sync_caller);
     }
-    outhdr->type = type;
-    outhdr->sector = sector;
+    outhdr->type = VIRTIOQ_SWAP_U32(type);
+    outhdr->sector = VIRTIOQ_SWAP_U64(sector);
     le16 flag_type = type == VIRTIO_BLK_T_IN ? ( VIRTQ_DESC_F_WRITE | VIRTQ_DESC_F_NEXT) : VIRTQ_DESC_F_NEXT;
 
     size_t paddr_start = translate_address((size_t)buf, 0);
@@ -500,22 +490,22 @@ int vblk_rw(session_t* session, void * buf, size_t sector,
 
     /* This sets up for a r/w, the buffer may be split in two parts if it crosses a physical page boundry
      * It cannot cross more than one as it is only of length SECTOR_SIZE*/
-    queue->desc[DESC_PER_REQ*i+1].addr = paddr_start;
-    queue->desc[DESC_PER_REQ*i+1].flags  = flag_type;
+    queue->desc[DESC_PER_REQ*i+1].addr = VIRTIOQ_SWAP_U64(paddr_start);
+    queue->desc[DESC_PER_REQ*i+1].flags  = VIRTIOQ_SWAP_U16(flag_type);
     if(one_piece) {
-        queue->desc[DESC_PER_REQ*i+1].next  = (DESC_PER_REQ*i) + 3;
-        queue->desc[DESC_PER_REQ*i+1].len  = SECTOR_SIZE*sizeof(u8);
+        queue->desc[DESC_PER_REQ*i+1].next  = VIRTIOQ_SWAP_U16((DESC_PER_REQ*i) + 3);
+        queue->desc[DESC_PER_REQ*i+1].len  = VIRTIOQ_SWAP_U32(SECTOR_SIZE*sizeof(u8));
     } else {
         size_t len_1 = PHY_PAGE_SIZE - (paddr_start & (PHY_PAGE_SIZE-1));
         size_t len_2 = SECTOR_SIZE - len_1;
         size_t paddr_2 = paddr_end & ~(PHY_PAGE_SIZE-1);
 
-        queue->desc[DESC_PER_REQ*i+1].next  = (DESC_PER_REQ*i) + 2;
-        queue->desc[DESC_PER_REQ*i+1].len  = len_1*sizeof(u8);
+        queue->desc[DESC_PER_REQ*i+1].next  = VIRTIOQ_SWAP_U16((DESC_PER_REQ*i) + 2);
+        queue->desc[DESC_PER_REQ*i+1].len  = VIRTIOQ_SWAP_U32(len_1*sizeof(u8));
 
-        queue->desc[DESC_PER_REQ*i+2].addr  = paddr_2;
-        queue->desc[DESC_PER_REQ*i+2].flags  = flag_type;
-        queue->desc[DESC_PER_REQ*i+2].len  = len_2*sizeof(u8);
+        queue->desc[DESC_PER_REQ*i+2].addr  = VIRTIO_SWAP_U64(paddr_2);
+        queue->desc[DESC_PER_REQ*i+2].flags  = VIRTIOQ_SWAP_U16(flag_type);
+        queue->desc[DESC_PER_REQ*i+2].len  = VIRTIOQ_SWAP_U32(len_2*sizeof(u8));
     }
 
     add_desc(session, (le16)DESC_PER_REQ*i);
