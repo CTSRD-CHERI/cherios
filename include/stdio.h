@@ -63,6 +63,7 @@ int	vprintf(const char *fmt, va_list ap);
 int	fprintf(FILE * f, const char *fmt, ...) __printflike(2, 3);
 int sprintf ( char * str, const char * format, ... );
 int snprintf(char *str, size_t size, const char *format, ...);
+VIS_EXTERNAL
 int	puts(const char *s);
 int	fputc(int character, FILE * stream);
 static int putc(int ch, FILE *stream) {

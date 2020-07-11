@@ -551,6 +551,7 @@ static void batch_symbols(link_session_t* session, parsed_dynamic_t* parsed, cap
 
     for(size_t i = 0; i != n_syms; i++) {
         if(out[i] == SYM_NOT_FOUND) {
+            /* Note: if this assert fails, check the visibility (should be VIS_EXTERNAL) of the missing symbol. */
             assert(lib_ndx != (session->n_libs-1));
             size_t next_block_ndx = ((lib_ndx+1) * SYMBOL_EXCHANGE_MAX) + block_fills[lib_ndx+1]++;
             in_blocks[next_block_ndx] = in[i];
