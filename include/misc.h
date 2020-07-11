@@ -38,3 +38,5 @@ void nssleep(int n);
 
 #define countof(a) (sizeof(a) / sizeof(*(a)))
 #define typeof __typeof
+
+#define ALIAS(X) __attribute__((alias(#X)));

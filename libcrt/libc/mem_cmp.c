@@ -29,6 +29,7 @@
  */
 
 #include "mips.h"
+#include "misc.h"
 
 int memcmp ( const void * _ptr1, const void * _ptr2, size_t num ) {
     const char *ptr1 = (const char *) _ptr1;
@@ -40,3 +41,5 @@ int memcmp ( const void * _ptr1, const void * _ptr2, size_t num ) {
     } while(--num && res == 0);
     return res;
 }
+
+int bcmp(const void *ptr1, const void* ptr2, size_t num) ALIAS(memcmp);
