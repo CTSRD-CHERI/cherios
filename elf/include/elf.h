@@ -335,8 +335,9 @@ int elf_loader_mem(Elf_Env *env, const Elf64_Ehdr* hdr, image* out_elf, int secu
 #define PT_HIOS 	0x6fffffff
 #define PT_LOPROC 	0x70000000
 #define PT_HIPROC 	0x7fffffff
-#define PT_GNURELRO 0x6474E552
-#define PT_GNUSTACK 0x6474E551
+#define PT_GNUEHFRAME 0x6474E550
+#define PT_GNUSTACK   0x6474E551
+#define PT_GNURELRO   0x6474E552
 
 #define PT_MIPS_REGINFO		0x70000000
 #define PT_MIPS_RTPROC		0x70000001

@@ -81,8 +81,7 @@ static void trace_elf_loader(Elf_Env *env, const char *fmt, ...) {
 
 #endif
 
-#define ERROR(s) error_elf_loader(env, KRED"elf_loader: " s KRST"\n")
-#define ERRORM(s, ...) error_elf_loader(env, KRED"elf_loader: " s KRST"\n", __VA_ARGS__)
+#define ERROR(s, ...) error_elf_loader(env, KRED"elf_loader: " s KRST"\n", ##__VA_ARGS__)
 static void error_elf_loader(Elf_Env *env, const char *fmt, ...) {
 	va_list ap;
 	va_start(ap, fmt);
@@ -113,19 +112,19 @@ int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 		return 0;
 	}
 	if(hdr->e_ident[EI_OSABI] != 9) {
-		ERRORM("Bad EI_OSABI: %X", hdr->e_ident[EI_OSABI]);
+		ERROR("Bad EI_OSABI: %X", hdr->e_ident[EI_OSABI]);
 		return 0;
 	}
 	if(hdr->e_ident[EI_ABIVERSION] > 3) {
-		ERRORM("Bad EI_ABIVERSION: %X", hdr->e_ident[EI_ABIVERSION]);
+		ERROR("Bad EI_ABIVERSION: %X", hdr->e_ident[EI_ABIVERSION]);
 		return 0;
 	}
 	if(hdr->e_type != 2 && hdr->e_type != 3) {
-		ERRORM("Bad e_type: %X", hdr->e_type);
+		ERROR("Bad e_type: %X", hdr->e_type);
 		return 0;
 	}
 	if(hdr->e_machine != 8) {
-		ERRORM("Bad e_machine: %X", hdr->e_machine);
+		ERROR("Bad e_machine: %X", hdr->e_machine);
 		return 0;
 	}
 	if(hdr->e_version != 1) {
@@ -139,7 +138,7 @@ int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 #endif
 #define ELF_E_MASK  0xFFFFFFF0
 	if((hdr->e_flags != 0x30000007) && ((hdr->e_flags & ELF_E_MASK) != ELF_E_FLAGS)) {
-		ERRORM("Bad e_flags: %X", hdr->e_flags);
+		ERROR("Bad e_flags: %X", hdr->e_flags);
 		return 0;
 	}
 	return 1;
@@ -430,10 +429,11 @@ int elf_loader_mem(Elf_Env *env, const Elf64_Ehdr* hdr, image* out_elf, int secu
 		    case PT_MIPS_RTPROC:
 		    case PT_MIPS_OPTIONS:
 		    case PT_MIPS_ABI_FLAGS:
+		    case PT_GNUEHFRAME:
                 /* Ignore these headers */
                 break;
             default:
-            ERROR("Unknown section");
+                ERROR("Unknown section");
                 return -1;
 		}
 	}
@@ -501,10 +501,11 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
             case PT_MIPS_RTPROC:
             case PT_MIPS_OPTIONS:
             case PT_MIPS_ABI_FLAGS:
+            case PT_GNUEHFRAME:
                 /* Ignore these headers */
                 break;
             default:
-            ERROR("Unknown section");
+                ERROR("Unknown section");
                 return NULL_PAIR;
 		}
 	}
