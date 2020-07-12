@@ -52,7 +52,7 @@ typedef enum {
 } request_type_oob_bc_e;
 
 extern void * vblk_ref;
-capability virt_session;
+extern capability virt_session;
 
 static inline void virtio_check_refs(void) {
 	if(vblk_ref == NULL) {

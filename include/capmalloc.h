@@ -44,6 +44,10 @@ __BEGIN_DECLS
 VIS_EXTERNAL
 res_t       cap_malloc(size_t size);
 
+/* If you plan to call split you need to use this version */
+VIS_EXTERNAL
+res_t  cap_malloc_need_split(size_t size);
+
 res_t cap_malloc_arena(size_t size, struct arena_t* arena);
 res_t cap_malloc_arena_dma(size_t size, struct arena_t* arena, size_t* dma_off);
 
@@ -53,12 +57,19 @@ struct arena_t* new_arena(int dma);
  * came from cap_malloc it will also be temporally safe. You may call claim multiple times. */
 int         cap_claim(capability mem);
 
-/* Free a capability. Afterwards use of this capability (by you) will be:
- * either an exception or unchanged data if cap was a result of cap_malloc, or
- * undefined if cap was not.
+/* Free a capability. Afterwards use of this capability (by you) will be either:
+ * an exception or
+ * unchanged data if cap was a result of cap_malloc, or
+ * undefined if the cap was not.
  * Note: If this came from cap_malloc, you may free EITHER the reservation or the resultant capability.
- * If you claim something else, you must free exactly that. */
+ * But, if you do the latter, also call cap_free_handle.
+ * If you claim a reservation, you must do the same thing to free. */
+VIS_EXTERNAL
 void        cap_free(capability mem);
+
+// If free will be called on the result of rescap_take, then you should also call cap_free_handle on the reservation handle.
+VIS_EXTERNAL
+void cap_free_handle(res_t res);
 
 /* Note on free and claim: You may claim something X times. It will only be freed after calling free X times. */
 

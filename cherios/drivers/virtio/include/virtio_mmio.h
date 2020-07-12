@@ -74,6 +74,8 @@
 #define STATUS_FEATURES_OK      (8)
 #define STATUS_DEVICE_NEEDS_RESET	(64)
 
+#define VIRTIO_MAGIC         0x74726976
+
 typedef struct virtio_mmio_map {
     volatile u32 magic_value;
     volatile u32 version;

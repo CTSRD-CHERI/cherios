@@ -984,7 +984,7 @@ tlb_shootdown_local:
     tlbwi
 
 2:
-
+    dmtc0       $zero, MIPS_CP0_REG_ENTRYHI
     mtc0        $t2, MIPS_CP0_REG_STATUS
 
     daddiu      $t8, $t8, -1
@@ -1102,8 +1102,8 @@ context_switch:
     dli         $t1, 0                                      # 0 is not a valid cause an indicates we switched manually
 
 # FIXME: We need to check call perms on c17/18
-    cgetsealed  $t2, $c17
-    beqz        $t2, context_switch_local_entry
+    cgettype    $t2, $c17
+    bltz        $t2, context_switch_local_entry
 
 
     cgettype    $t2, $c17
@@ -2150,6 +2150,7 @@ l2_retry:       clld        $a0, $c8
 
 
     revoke_shootdown_continue:
+    dmtc0       $zero, MIPS_CP0_REG_ENTRYHI
 
     # We are now revoking. No errors from now on.
 
@@ -4103,6 +4104,10 @@ kernel_exception_trampoline:
 # If k0 is zero (this is a HW interrupt) We can supress with ex level. o/w it is a software exception.
 # These can be user handled or skipped with magic
         cld         $k1, $zero, in_switch($kr1c)
+        dmtc0       $zero, MIPS_CP0_REG_ENTRYHI # Why is this here you ask? Mips sucks and there is no way of reading
+                                                # the TLB without changing address space. This may leave ENTRYHI in a bad
+                                                # state if an interrupt is taken in the middle of it
+                                                # This is possible if the user prompts a shootdown (as interrupts will be enabled)
         bnez        $k1, nano_kernel_die
         nop
         beqz        $k0, hw_ex

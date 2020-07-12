@@ -28,9 +28,9 @@ set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
 if(NOT CHERI_SDK_DIR)
     # guess the location of CHERI SDK by looking for CheriSDKConfig and checking some guessed locations
     set(GUESSED_CHERISDK_LOCATIONS
-        /local/scratch/cheri/output/sdk
-        $ENV{HOME}/sdk/
-        $ENV{HOME}/cheri/output/sdk
+        /local/scratch/cheri/output/cherios-sdk
+        $ENV{HOME}/cherios-sdk/
+        $ENV{HOME}/cheri/output/cherios-sdk
     )
     # try to find clang in one of the guessed locations
     foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
@@ -230,6 +230,7 @@ set(ASMC_COMPILER_FLAGS
     -march=${CHERI_CPU}
     -mcpu=${CHERI_CPU}
     -mabi=purecap
+    "SHELL:-mllvm -is-cherios"
     -isysroot=/dev/null # Remove the default '/usr/include' one...
     -DASM_VISIBILITY=.hidden
     -fvisibility=hidden
@@ -242,7 +243,7 @@ set(ASMC_COMPILER_FLAGS
 )
 set(ASM_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
-    -mllvm -asm-macro-max-nesting-depth=100
+    "SHELL:-mllvm -asm-macro-max-nesting-depth=100"
 )
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
@@ -251,6 +252,7 @@ set(C_COMPILER_FLAGS
     -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
     ${MSGDMA_FLAGS}
+    -g
 )
 set(C_WARNING_FLAGS
     -Wall
@@ -306,7 +308,7 @@ set(C_WARNING_FLAGS
     -Wno-error=unreachable-code-return
     -Wno-error=unused-macros
     -Wno-deprecated-declarations
-    -Werror=mips-cheri-prototypes
+    -Werror=cheri-prototypes
 )
 
 set(CXX_WARNING_FLAGS
@@ -494,7 +496,7 @@ function(add_cherios_module _target)
         PRIVATE
         ${LINKER_SCRIPT_ARG}
         -fuse-ld=lld
-        "-Wl,-Bdynamic -Wl,-no-pie"
+        "-Wl,-Bdynamic -Wl,-no-pie,-is-cherios,-relative-cap-relocs,-no-dynamic-linker,-no-rosegment"
         -G0
         -nostartfiles
         -nodefaultlibs
@@ -511,7 +513,7 @@ function(add_cherios_module _target)
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
               PRIVATE
-              -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+              -Wl,-mllvm,-is-cherios,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
       )
       target_compile_options(${_target} PUBLIC "-flto")
   endif()
@@ -533,13 +535,11 @@ function(add_cherios_module _target)
     add_to_filesystem(${_target} "${CHERIOS_FILESYSTEM_DIR}/${_target}.${_output_extention}")
   endif()
   # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
-  add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    )
+  #add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+  #  COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+  #  )
 
     if(add_exe_NEED_LIBCXX)
-        target_compile_options(${_target} PUBLIC -include "${CMAKE_BINARY_DIR}/libcxx/__config_site")
-        target_include_directories(${_target} BEFORE PUBLIC ${CMAKE_SOURCE_DIR}/libcxx/include)
         target_link_libraries(${_target} PRIVATE cxx_static)
     endif()
 
@@ -605,6 +605,9 @@ set(LIBCXX_ENABLE_MONOTONIC_CLOCK OFF)
 set(PACKAGE_VERSION 11.0.0git)
 
 add_subdirectory(libcxx)
+
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_BINARY_DIR}/libcxx/__config_site>")
+include_directories(BEFORE PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/libcxx/include>")
 
 add_subdirectory(libcxxrt)
 

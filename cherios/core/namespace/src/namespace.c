@@ -129,7 +129,7 @@ int ns_get_num_services(void) {
 int ns_register_found_id(cert_t cert) {
     _safe cap_pair pair;
     found_id_t* id = rescap_check_cert(cert, &pair);
-    int nb = (int)pair.code;
+    int nb = (int)(uintptr_t)pair.code;
 
     if(!id || validate_idx(nb)) return -1;
 

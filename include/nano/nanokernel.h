@@ -169,7 +169,7 @@ static inline size_t scale_to_size(size_t scale) {
 // 0010 -> 1
 // 0011 -> 2
 // 0100 -> 3
-// 0100 -> 4
+// 0101 -> 4
 // 0110 -> 5
 // 0111 -> 6
 // 1000 -> 7
@@ -181,7 +181,7 @@ static inline size_t scale_to_size(size_t scale) {
 // WARN: Handle a size of zero yourself, this will blow up
 
 #define LOG_2_SMALLEST_SIZE 0
-#define LOG_2_LARGEST_SIZE 10
+#define LOG_2_LARGEST_SIZE 18
 #define LOG_2_DIFF (LOG_2_LARGEST_SIZE - LOG_2_SMALLEST_SIZE)
 #define RES_SIZE_TYPE uint32_t // combats a bug where the compiler doesn't know sltiu doesn't need trucating
 

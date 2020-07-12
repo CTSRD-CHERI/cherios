@@ -86,8 +86,8 @@
 
 #else // __ASSEMBLY__
 
-#define SET2(name, val) .set name, val
-#define SET1(name) .set name, enum_ctr; .set enum_ctr, enum_ctr + 1
+#define SET2(name, val) .set name, val;
+#define SET1(name) .set name, enum_ctr; .set enum_ctr, enum_ctr + 1;
 
 #define SET_SELECT_MACRO(_1, _2, NAME, ...) NAME
 #define SET_SELECT(...) SET_SELECT_MACRO(__VA_ARGS__, SET2, SET1)(__VA_ARGS__)

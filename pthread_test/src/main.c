@@ -75,17 +75,17 @@ int main(void) {
     void* ret;
 
     pthread_join(t5, &ret);
-    assert_int_ex((int)ret, ==, 5);
+    assert_int_ex((int)(uintptr_t)ret, ==, 5);
     pthread_join(t4, &ret);
-    assert_int_ex((int)ret, ==, 4);
+    assert_int_ex((int)(uintptr_t)ret, ==, 4);
     pthread_join(t3, &ret);
-    assert_int_ex((int)ret, ==, 3);
+    assert_int_ex((int)(uintptr_t)ret, ==, 3);
     pthread_join(t2, &ret);
-    assert_int_ex((int)ret, ==, 2);
+    assert_int_ex((int)(uintptr_t)ret, ==, 2);
     pthread_join(t1, &ret);
-    assert_int_ex((int)ret, ==, 1);
+    assert_int_ex((int)(uintptr_t)ret, ==, 1);
 
-    assert_int_ex((int)global_ctr, ==, 5000);
+    assert_int_ex((int)(uintptr_t)global_ctr, ==, 5000);
 
     printf("PThread test passes %d!\n", global_ctr);
 

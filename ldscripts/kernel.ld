@@ -37,13 +37,14 @@ OUTPUT_ARCH(mips)
 ENTRY(start)
 SECTIONS
 {
-    __text_segment_start = .;
 	. += SIZEOF_HEADERS;
+
+    __text_segment_start = .;
 
 	.init : {
 		KEEP (*(.init))
 	} = 0
-	.text ALIGN(CAP_ALIGN): {
+	.text ALIGN(1024): {
 		*(.text)
 	}
 	.fini ALIGN(CAP_ALIGN): {

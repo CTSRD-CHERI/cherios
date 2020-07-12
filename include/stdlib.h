@@ -43,8 +43,10 @@ __BEGIN_DECLS
 static inline capability malloc(size_t size) {
     res_t res = cap_malloc(size);
     _safe cap_pair pair;
+    pair.data = NULL;
     rescap_take(res, &pair);
     capability taken = pair.data;
+    cap_free_handle(res);
     assert_int_ex(cheri_getlen(taken), >=, size);
     //taken = cheri_setbounds(taken, size); screws with free
     return taken;

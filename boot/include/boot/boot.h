@@ -55,8 +55,8 @@ extern char	__init_entry_point;
 		    "b:%016jx l:%016zx o:%jx\n",			\
 		    __func__,						\
 		    #cap,						\
-		    cheri_gettag(cap),					\
-		    cheri_getsealed(cap),				\
+            (long unsigned)cheri_gettag(cap),	\
+		    (long unsigned)cheri_getsealed(cap),\
 		    cheri_getperm(cap),					\
 		    cheri_getbase(cap),					\
 		    cheri_getlen(cap),					\

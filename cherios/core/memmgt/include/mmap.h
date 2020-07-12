@@ -167,7 +167,7 @@ typedef struct vpage_range_desc_t {
 
 } vpage_range_desc_t;
 
-vpage_range_desc_t* pool_heads[MAX_POOLS];
+extern vpage_range_desc_t* pool_heads[MAX_POOLS];
 
 typedef struct vpage_range_desc_table_t {
     // Our structure mirrors the actual vtables - when we can free a desc-table we can also free the corresponding vtable

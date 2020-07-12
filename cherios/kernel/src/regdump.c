@@ -380,6 +380,8 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 
 static inline void dump_tlb() {
 
+    obtain_super_powers();
+
 #define STRINGIFY(X) #X
 #define ASM_MTCO(var, reg) "mtc0 %[" #var "], " STRINGIFY(reg) "\n"
 #define ASM_MFCO(var, reg) "dmfc0 %[" #var "], " STRINGIFY(reg) "\n"

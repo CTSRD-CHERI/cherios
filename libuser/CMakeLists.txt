@@ -48,7 +48,7 @@ set(LIBUSER_SRCS
     src/assert.c
     src/stdio.c
     src/sockets.c
-    src/capmalloc/capmalloc_bump.c
+    src/capmalloc/capmalloc_slabs.cpp
     src/mmap.c
     src/exceptions.c
     src/namespace.c

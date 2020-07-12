@@ -162,7 +162,8 @@ cmove               $c18, $c14
 
 slow_path:
 clcbi  $c14, (CTLP_OFFSET_CDL)($idc)
-cjalr  $c14, $c12
+cjr     $c14
+cgetpcc $c12
 clcbi  $c11, (CTLP_OFFSET_CSP)($idc)
 clcbi  $c10, (CTLP_OFFSET_CUSP)($idc)
 cincoffset  $c11, $c11, -((2 * CAP_SIZE))
@@ -379,7 +380,8 @@ csb                 $zero, $zero, 0($c17)
 .ent __cross_domain_kernel_message_send
 __cross_domain_kernel_message_send:
 clcbi  $c14, (CTLP_OFFSET_CDL)($idc)
-cjalr  $c14, $c12
+cjr     $c14
+cgetpcc $c12
 clcbi  $c11, (CTLP_OFFSET_CSP)($idc)
 clcbi  $c10, (CTLP_OFFSET_CUSP)($idc)
 clcbi  $c25, (CTLP_OFFSET_CGP)($idc)

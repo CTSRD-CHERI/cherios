@@ -105,7 +105,7 @@ static inline void __attribute__((always_inline)) crt_init_common(capability* se
         size_t size = reloc->size;
         size_t offset = reloc->offset;
 
-        if ((size != 0))
+        if ((size != 0) && (ob_cap != NULL))
         {
             //ob_cap = cheri_setbounds_exact(ob_cap, reloc->size);
             /*

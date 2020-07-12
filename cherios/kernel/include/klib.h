@@ -195,6 +195,6 @@ void setup_syscall_interface(kernel_if_t* kernel_if);
 
 void kernel_exception(context_t swap_to, context_t own_context);
 
-#define CALLER (get_idc())
+#define CALLER (cheri_getidc())
 
 #endif /* _CHERIOS_KLIB_H_ */
