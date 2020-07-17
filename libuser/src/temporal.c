@@ -90,8 +90,9 @@ capability new_stack(capability old_c10) {
     // if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
 
     if(!IS_VALID(stack_res)) {
-        __asm __volatile("li $0, 0xbeef     \n"
-                         "move $v0, %[er]   \n"::[er]"r"((ssize_t)stack_res.er):"v0");
+        HW_TRACE_ON;
+        __asm __volatile("move $v0, %[er]   \n"::[er]"r"((ssize_t)stack_res.er):"v0");
+        HW_TRACE_OFF;
     }
     assert(IS_VALID(stack_res));
 

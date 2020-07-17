@@ -100,7 +100,7 @@ int main(int argc, char *argv[] __unused)
 	}
 
 	if(first == n) {
-		__asm("li $0, 0xbeef");
+		HW_TRACE_ON;
 		printf("Test3_%d First!\n", n);
 		ft();
 		printf("Test3_%d Sent last message!\n", n);
