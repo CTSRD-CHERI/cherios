@@ -335,6 +335,24 @@ __used void kernel_syscall_hang_debug(void) {
 	dump_sched();
 }
 
+DECLARE_WITH_CD(void, kernel_syscall_backtrace(void));
+__used void kernel_syscall_backtrace(void) {
+    capability rd;
+    capability pcc;
+    capability frame;
+    capability ra;
+    // This is a horrible hack and is not expected to work
+    __asm__ __inline(SANE_ASM
+        "cgetpcc %[c1]\n"
+        "cmove   %[c2], $c18\n"
+        "cmove   %[c3], $c11\n"
+        "cmove   %[c4], $c17\n"
+        : [c1]"=C"(pcc), [c2]"=C"(rd), [c3]"=C"(frame), [c4]"=C"(ra)
+    );
+    capability idc = cheri_getidc();
+    backtrace(frame, pcc, idc, ra, rd);
+}
+
 DECLARE_WITH_CD(int, kernel_message_reply(capability c3, register_t v0, register_t v1, act_t* caller, capability sync_token, int hint_switch));
 DECLARE_WITH_CD(void, kernel_fastpath_wait(capability c3, register_t v0, register_t v1, act_reply_kt reply_token, int64_t timeout, int notify_is_timeout));
 
