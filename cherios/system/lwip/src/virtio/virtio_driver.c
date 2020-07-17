@@ -159,8 +159,10 @@ void lwip_driver_enable_interrupts(net_session* session) {
     if(!ienabled) {
         le16 val = VIRTIOQ_SWAP_U16(session->virtq_recv.used->idx);
         *virtq_used_event(&session->virtq_recv) = VIRTIOQ_SWAP_U16(val);
+#if 0 /* This is not an issue with our specific implementation in CheriOS */
         // We might miss the event if it arrives just as we are enabling interrupts. This is supposed to catch that.
         assert(val == VIRTIOQ_SWAP_U16(session->virtq_recv.used->idx));
+#endif
     }
 
     ienabled = 1;
