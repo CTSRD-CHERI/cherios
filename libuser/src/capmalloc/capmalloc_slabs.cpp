@@ -738,6 +738,12 @@ VIS_EXTERNAL
 void cap_free(capability mem) {
     res_nfo_t nfo = memhandle_nfo(mem);
 
+    if(nfo.length > BIG_OBJECT_THRESHOLD) {
+        nfo = round_nfo_to_page(nfo);
+        mem_release(nfo.base, nfo.length, 1, own_mop);
+        return;
+    }
+
     free_range(nfo);
 
     if((cheri_gettype(mem) == RES_TYPE) && !IN_SAME_PAGE(cheri_getbase(mem), nfo.base)) {
