@@ -107,7 +107,7 @@
     ITEM(zero_page_range, void, (register_t, pagen), __VA_ARGS__)\
 /* FIXME for debug ONLY. When we have proper debugging, this must be removed. It defeats the whole point. */\
 /* For debugging. Returns a global cap and gives your pcc all the permission bits it can */\
-    ITEM(obtain_super_powers, capability, (void), __VA_ARGS__)\
+    ITEM(obtain_super_powers, capability, (capability*, pcc), __VA_ARGS__)\
 /* Get the victim context and cause register for the last exception. */\
     ITEM(get_last_exception, void, (exection_cause_t*, out), __VA_ARGS__)\
 /* Create a new founded code block. The entry returned will be at offset entry0. */\

@@ -721,11 +721,14 @@ if_req_and_mask:
     CRETURN
 
 ####################################### (safe)
-# capability obtain_super_powers(void)
+# capability obtain_super_powers(capability* pcc)
 .global obtain_super_powers
 obtain_super_powers:
 #######################################
+    cbtu        $c3, obtain_no_pcc
     cgetbase    $t0, $c17
+    csc         $kcc, $zero, 0($c3)
+obtain_no_pcc:
     cgetlen     $t1, $c17
     csetoffset  $c13, $kcc, $t0
     cgetoffset  $t2, $c17

@@ -88,9 +88,9 @@ set(CMAKE_AR ${CheriSDK_AR})
 set(CMAKE_RANLIB ${CheriSDK_RANLIB})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # Make sure we compile for cheri:
-set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
+set(CMAKE_ASM_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_C_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_CXX_COMPILER_TARGET mips64-unknown-freebsd)
 # Sysroot is not yet part of the SDK.
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 
@@ -107,10 +107,10 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
 
 # The --target flag line is needed so that CLion can detect the include paths (it doesn't add the CMAKE_C_COMPILER_TARGET)
-set(CMAKE_ASM_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_C_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_CXX_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_EXE_LINKER_FLAGS "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld"
+set(CMAKE_ASM_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_C_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_CXX_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_EXE_LINKER_FLAGS "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 
