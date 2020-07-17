@@ -122,7 +122,7 @@ void push_to_free_chain(T* first, T*last, T*volatile* head) {
 }
 
 __thread res_t tracking_res_chunk;
-size_t tracking_res_sz = 0;
+__thread size_t tracking_res_sz = 0;
 
 void* new_tracking_object(size_t size) {
     if(size > tracking_res_sz) {
