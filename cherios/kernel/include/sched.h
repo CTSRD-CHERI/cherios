@@ -92,7 +92,7 @@ void    dump_sched(void);
 
 void    sched_set_idle_act(act_t* idle_act, uint8_t pool_id);
 
-#define SCHED_QUEUE_LENGTH 0x0f // one less than a power of 2
+#define SCHED_QUEUE_LENGTH 0x1f // one less than a power of 2
 #define LEVEL_TO_NDX(level) ((level > PRIO_IO) ? PRIO_IO : level)
 
 

@@ -91,7 +91,8 @@ __BEGIN_DECLS
         ITEM(syscall_info_epoch, void, (void), __VA_ARGS__)\
         ITEM(syscall_bench_start, uint64_t, (void), __VA_ARGS__)\
         ITEM(syscall_bench_end, uint64_t, (void), __VA_ARGS__)\
-        ITEM(syscall_hang_debug, void, (void), __VA_ARGS__)
+        ITEM(syscall_hang_debug, void, (void), __VA_ARGS__)\
+        ITEM(syscall_backtrace, void, (void), __VA_ARGS__)
 
 #define syscall_panic_last_caller() syscall_panic_caller(sync_state.sync_caller)
 

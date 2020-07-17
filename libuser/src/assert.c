@@ -38,6 +38,7 @@ void __assert(const char *assert_function, const char *assert_file,
 			int assert_lineno, const char *assert_message) {
 	syscall_printf(KRED"assertion failure in %s at %s:%d: %s"KRST"\n", assert_function,
 			assert_file, assert_lineno, assert_message);
+    syscall_backtrace();
 	abort();
 }
 
@@ -46,5 +47,6 @@ void __assert_int_ex(const char *assert_function, const char *assert_file,
                      unsigned long long int a, unsigned long long int b) {
 	syscall_printf(KRED"assertion failure in %s at %s:%d: Expected %s (%llx) %s %s(%llx)"KRST"\n", assert_function,
 		   assert_file, assert_lineno, am, a, opm, bm, b);
+    syscall_backtrace();
 	abort();
 }

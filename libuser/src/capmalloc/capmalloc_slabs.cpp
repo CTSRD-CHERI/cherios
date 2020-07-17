@@ -122,7 +122,7 @@ void push_to_free_chain(T* first, T*last, T*volatile* head) {
 }
 
 __thread res_t tracking_res_chunk;
-size_t tracking_res_sz = 0;
+__thread size_t tracking_res_sz = 0;
 
 void* new_tracking_object(size_t size) {
     if(size > tracking_res_sz) {
@@ -737,6 +737,12 @@ struct arena_t* new_arena(int dma) {
 VIS_EXTERNAL
 void cap_free(capability mem) {
     res_nfo_t nfo = memhandle_nfo(mem);
+
+    if(nfo.length > BIG_OBJECT_THRESHOLD) {
+        nfo = round_nfo_to_page(nfo);
+        mem_release(nfo.base, nfo.length, 1, own_mop);
+        return;
+    }
 
     free_range(nfo);
 
