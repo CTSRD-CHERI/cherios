@@ -56,8 +56,9 @@
 
 #define __REGDUMP(elem, cond, name, bits) { \
 	printf("%s"name":"KFNT"0x", cond?"":KFNT); \
-	int elem_lead_0 = bits - 3 - slog2(elem); \
-	for(int i=0; i<elem_lead_0; i+=4) { printf("0");} \
+	int elem_lead_0_bits = bits - 1 - slog2(elem); \
+	int elem_lead_0_chars = elem_lead_0_bits / 4; \
+	for(int i=0; i<elem_lead_0_chars; i++) { printf("0");} \
 	if(elem) { printf(KREG"%jx ", elem); } else { printf(" "KREG);} \
 	}
 
@@ -72,11 +73,15 @@ static void regdump_c(const char * str_cap, int hl, const void * cap, const char
 	size_t offset = cheri_getoffset(cap);
 	__REGDUMP(offset, offset, "o", 64);
 	size_t perm = cheri_getperm(cap);
-	__REGDUMP(perm, perm||tag, "p", 32);
+	__REGDUMP(perm, perm||tag, "p", 20);
 	int seal = cheri_getsealed(cap);
-	printf("%s", seal?"s:1 ":KFNT"s:0 "KREG);
-	size_t otype = cheri_gettype(cap);
-	__REGDUMP(otype, otype||seal, "otype", 24);
+	if (seal) {
+		intmax_t otype = (uintmax_t) cheri_gettype(cap);
+		uintmax_t otype_print = ((uintmax_t) otype) & UINTMAX_C(0xFFFFF);
+		__REGDUMP(otype_print, 1, "sealed", 20);
+	} else {
+		printf(KFNT"unsealed"KREG);
+	}
 	printf("%s"KRST"\n", extra);
 }
 
