@@ -10,3 +10,6 @@
 [submodule "libcxx"]
 	path = libcxx
 	url = https://github.com/CTSRD-CHERI/libcxx.git
+[submodule "nimble/mynewt-nimble"]
+	path = nimble/mynewt-nimble
+	url = https://github.com/hbcam/mynewt-nimble.git
