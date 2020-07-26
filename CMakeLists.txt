@@ -645,6 +645,7 @@ target_compile_options(nginx PRIVATE
 add_subdirectory(top)
 add_subdirectory(nc_shell)
 add_subdirectory(snake)
+add_subdirectory(nimble)
 
 add_subdirectory(benchmarks)
 add_subdirectory(demos)
