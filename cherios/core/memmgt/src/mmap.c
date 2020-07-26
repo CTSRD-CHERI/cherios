@@ -42,7 +42,6 @@
 #include "string.h"
 #include "pmem.h"
 
-
 mop_internal_t mmap_mop;
 vpage_range_desc_t* pool_heads[MAX_POOLS];
 
@@ -216,12 +215,31 @@ static void init_desc(res_t big_res) {
 
 #define NDX(N,lvl) (((N) >> (PAGE_TABLE_BITS_PER_LEVEL * (2-(lvl)))) & (PAGE_TABLE_ENT_PER_TABLE -1))
 
+static const char* desc_allocation_type_str(enum allocation_type_t allocation_type)
+{
+    switch(allocation_type) {
+        case free_node:
+            return "free";
+        case open_node:
+            return "open";
+        case allocation_node:
+            return "allocation";
+        case internal_node:
+            return "internal";
+        case tomb_node:
+            return "tomb";
+        default:
+            return "unknown";
+    }
+}
+
 static void mmap_dump_desc(vpage_range_desc_t* desc) {
     if(desc == NULL) {
         printf("NULL\n");
         return;
     }
-    printf("\nStart: %lx (%lx). End %lx (%lx). Len %lx (%lx). Prev %lx. State %s.\n",
+    printf("\nDescriptor %p. Start: %lx (%lx). End %lx (%lx). Len %lx (%lx). Prev %lx. State %s.\n",
+           desc,
            desc->start << UNTRANSLATED_BITS,
            desc->start,
            (desc->start + desc->length) << UNTRANSLATED_BITS,
@@ -229,8 +247,8 @@ static void mmap_dump_desc(vpage_range_desc_t* desc) {
            desc->length << UNTRANSLATED_BITS,
            desc->length,
            (desc->prev) << UNTRANSLATED_BITS,
-           desc->allocation_type == open_node ? "open" : (desc->allocation_type == allocation_node ? "allocation" :
-                                                          (desc->allocation_type == internal_node ? "internal" : "tomb")));
+           desc_allocation_type_str(desc->allocation_type)
+          );
     printf("|---Allocation length %lx\n", desc->allocated_length);
     if(desc->allocated_length != 0 || desc->allocation_type == open_node) {
         printf("|---");
