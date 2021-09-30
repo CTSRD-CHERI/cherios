@@ -209,7 +209,7 @@ cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum
 			out_elf->tls_num = 0;
 
 			char *prgmp = out_elf->loaded_process.data;
-			if(!prgmp) {
+			if(CAP_NULL(prgmp)) {
 				ERROR("alloc failed");
 				return NULL_PAIR;
 			}

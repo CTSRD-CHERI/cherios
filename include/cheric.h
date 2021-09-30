@@ -402,6 +402,9 @@ static inline int VCAPS(const void * cap, size_t len, unsigned flags) {
 	return VCAP_I(cap, len, flags, 1);
 }
 
+// A better NULL check if you have almighty caps floating around
+#define CAP_NULL(X) (((unsigned long)(X) == 0) && !cheri_gettag(X))
+
 /*
  * Register frame to be preserved on context switching. The order of
  * save/restore is very important for both reasons of correctness and security.
