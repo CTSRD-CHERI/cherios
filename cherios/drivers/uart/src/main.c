@@ -43,7 +43,7 @@ static void user_putc(char c) {
 	printf(KGRN KBLD"%c"KRST, c);
 }
 
-static void user_puts(const void * s) {
+static void user_puts(const char * s) {
 	printf(KGRN KBLD"%s"KRST, s);
 }
 
