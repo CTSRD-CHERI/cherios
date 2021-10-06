@@ -379,6 +379,8 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
 #ifndef LIB_EARLY
     auto_dylink_pre_new_thread(&own_link_session, data_args);
+#else
+    (void)data_args;
 #endif
 
     return thread_create_thread(proc_handle, name, &startup);
