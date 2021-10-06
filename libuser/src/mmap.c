@@ -113,11 +113,13 @@ void *mmap(__unused void *addr, size_t length, int prot, int flags, __unused int
 
 	if(res != NULL) {
 		rescap_take(res, &pair);
+		capability result;
 		if((prot & PROT_EXECUTE) == 0) {
-			return pair.data;
+			result = pair.data;
 		} else {
-			return pair.code;
+			result = pair.code;
 		}
+		return cheri_andperm(result, perms);
 	} else return NULL;
 }
 
