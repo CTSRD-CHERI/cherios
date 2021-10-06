@@ -502,7 +502,7 @@ function(add_cherios_module _target)
   target_link_libraries(${_target}
         PRIVATE
         ${LINKER_SCRIPT_ARG}
-        "-Wl,-Bdynamic -Wl,-no-pie,-is-cherios,-relative-cap-relocs,-no-dynamic-linker,-no-rosegment"
+        "-Wl,-Bdynamic -Wl,-no-pie,-is-cherios,-relative-cap-relocs,-no-dynamic-linker,--no-rosegment"
         -G0
         -nostartfiles
         -nodefaultlibs
