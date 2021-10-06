@@ -422,6 +422,7 @@ int elf_loader_mem(Elf_Env *env, const Elf64_Ehdr* hdr, image* out_elf, int secu
                     out_elf->load_type.basic.tables.seg_table_vaddrs[(size_t) i + 1] = seg->p_vaddr;
                 }
                 break;
+            case PT_GNU_EH_FRAME:
 		    case PT_GNUSTACK:
 		    case PT_PHDR:
 		    case PT_GNURELRO:
@@ -493,6 +494,7 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
                 out_elf->tls_size = seg->p_memsz;
                 tls_align = seg->p_align;
                 break;
+		    case PT_GNU_EH_FRAME:
 		    case PT_GNUSTACK:
 		    case PT_PHDR:
 		    case PT_GNURELRO:
