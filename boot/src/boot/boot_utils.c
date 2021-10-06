@@ -132,7 +132,7 @@ size_t load_nano() {
 	maxaddr = im.maxaddr;
 	entry = im.entry;
 
-	if(!prgmp) {
+	if(CAP_NULL(prgmp)) {
         boot_printf(KRED"Could not load nano kernel file"KRST"\n");
         goto err;
     }
@@ -165,7 +165,7 @@ size_t load_kernel() {
 	maxaddr = im.maxaddr;
 	entry = im.entry;
 
-	if(!prgmp) {
+	if(CAP_NULL(prgmp)) {
 		boot_printf(KRED"Could not load kernel file"KRST"\n");
 		goto err;
 	}
@@ -199,7 +199,7 @@ boot_info_t *load_init() {
 	maxaddr = im.maxaddr;
 	entry = im.entry;
 
-	if(!prgmp) {
+	if(CAP_NULL(prgmp)) {
 		boot_printf(KRED"Could not load init file"KRST"\n");
 		goto err;
 	}

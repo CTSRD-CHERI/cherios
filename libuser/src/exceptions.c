@@ -53,21 +53,21 @@ void register_vectored_exception(handler_t* handler, register_t excode) {
     assert(excode < MIPS_CP0_EXCODE_NUM);
 
     handle_vector[excode] = handler;
-    register_exception_raw(&user_exception_trampoline_vector, get_idc());
+    register_exception_raw(&user_exception_trampoline_vector, cheri_getidc());
 }
 
 void register_vectored_exception2(handler2_t* handler, register_t excode) {
     assert(excode < MIPS_CP0_EXCODE_NUM);
 
     handle_vector[excode] = (handler_t*)((char*)(handler)+1);
-    register_exception_raw(&user_exception_trampoline_vector, get_idc());
+    register_exception_raw(&user_exception_trampoline_vector, cheri_getidc());
 }
 
 void register_vectored_cap_exception(handler_t* handler, register_t excode) {
     assert(excode < CAP_CAUSE_NUM);
 
     chandle_vector[excode] = handler;
-    register_exception_raw(&user_exception_trampoline_vector, get_idc());
+    register_exception_raw(&user_exception_trampoline_vector, cheri_getidc());
 }
 
 void register_exception_raw(ex_pcc_t* exception_pcc, capability exception_idc) {

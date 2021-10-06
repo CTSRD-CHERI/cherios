@@ -359,7 +359,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         start_message->c11 = stack;
         start_message->cgp = get_cgp();
 
-        size_t locals_len = cheri_getlen(get_idc());
+        size_t locals_len = cheri_getlen(cheri_getidc());
         size_t locals_off = crt_cap_tab_local_addr;
 
         start_message->idc = cheri_setbounds((char*)tls_seg+locals_off, locals_len);
@@ -379,6 +379,8 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
 
 #ifndef LIB_EARLY
     auto_dylink_pre_new_thread(&own_link_session, data_args);
+#else
+    (void)data_args;
 #endif
 
     return thread_create_thread(proc_handle, name, &startup);

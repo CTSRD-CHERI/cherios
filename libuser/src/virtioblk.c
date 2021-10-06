@@ -29,4 +29,7 @@
  */
 
 #include "mips.h"
+#include "cheric.h"
+
 void * vblk_ref = NULL;
+capability virt_session;

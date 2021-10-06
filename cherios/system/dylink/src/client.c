@@ -43,6 +43,18 @@
 #include "namespace.h"
 #include "macroutils.h"
 
+DEFAULT_IMPL(void, cap_free, (__unused capability mem)) {
+    assert(0);
+}
+
+DEFAULT_IMPL(res_t, cap_malloc, (__unused size_t size)) {
+    assert(0);
+}
+
+DEFAULT_IMPL(int, printf, (__unused const char *fmt, ...)) {
+    return 0;
+}
+
 // We batch symbol exchnage because otherwise there would be far too many domain crossings
 #define SYMBOL_EXCHANGE_MAX 0x20
 
@@ -551,7 +563,6 @@ static void batch_symbols(link_session_t* session, parsed_dynamic_t* parsed, cap
 
     for(size_t i = 0; i != n_syms; i++) {
         if(out[i] == SYM_NOT_FOUND) {
-            /* Note: if this assert fails, check the visibility (should be VIS_EXTERNAL) of the missing symbol. */
             assert(lib_ndx != (session->n_libs-1));
             size_t next_block_ndx = ((lib_ndx+1) * SYMBOL_EXCHANGE_MAX) + block_fills[lib_ndx+1]++;
             in_blocks[next_block_ndx] = in[i];

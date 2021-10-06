@@ -116,7 +116,7 @@ net_session_sealed netsession_create(virtio_mmio_map* mmio, uint8_t irq) {
     session->virtq_recv.used = (struct virtq_used*)GET_A_PAGE;
 
     u32 features = (1 << VIRTIO_NET_F_MRG_RXBUF);
-    int result = virtio_device_init(mmio, net, 1, VIRTIO_QEMU_VENDOR, features);
+    int result = virtio_device_init(mmio, net, VIRTIO_VERSION, VIRTIO_QEMU_VENDOR, features);
     assert_int_ex(-result, ==, 0);
     result = virtio_device_queue_add(mmio, 0, &session->virtq_recv);
     assert_int_ex(-result, ==, 0);

@@ -70,9 +70,10 @@ uint64_t get_high_res_time(uint8_t cpu_id) {
 	do {
 		// Although we do not plan to update the high res counter here (we do that in a timer interrupt) we still need
 		// to guard cp0_count_get inside a LL/SC otherwise we might double count the wrap around
-		LOAD_LINK(old_ptr, 64, old_high_res);
+        old_high_res = *old_ptr;
 		uint32_t low_res = (uint32_t)cp0_count_get();
-		STORE_COND(old_ptr, 64, old_high_res, success);
+		// Ensure it hasnt changed
+		ATOMIC_CAS(old_ptr, 64, old_high_res, old_high_res, success);
         if(success) {
             new_high_res = ((old_high_res >> 32) << 32) | (low_res);
             if(new_high_res < old_high_res) {

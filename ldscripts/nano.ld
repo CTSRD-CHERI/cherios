@@ -50,7 +50,7 @@ SECTIONS
 	    KEEP(*(.text))
 	} :text = 0
 
-	.bss ALIGN(CAP_ALIGN): { *(.bss) }
+	.bss ALIGN(0x10000): { *(.bss) }
 
     /DISCARD/ :
     {

@@ -102,6 +102,7 @@
 		.global memcpy
 		.ent memcpy
 		.global memmove
+		.type memmove, "function"
 		ASM_VISIBILITY memcpy
 		ASM_VISIBILITY memmove
 memmove:

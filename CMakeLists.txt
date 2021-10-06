@@ -28,9 +28,9 @@ set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
 if(NOT CHERI_SDK_DIR)
     # guess the location of CHERI SDK by looking for CheriSDKConfig and checking some guessed locations
     set(GUESSED_CHERISDK_LOCATIONS
-        /local/scratch/cheri/output/sdk
-        $ENV{HOME}/sdk/
-        $ENV{HOME}/cheri/output/sdk
+        /local/scratch/cheri/output/cherios-sdk
+        $ENV{HOME}/cherios-sdk/
+        $ENV{HOME}/cheri/output/cherios-sdk
     )
     # try to find clang in one of the guessed locations
     foreach(guess ${GUESSED_CHERISDK_LOCATIONS})
@@ -87,11 +87,11 @@ set(CMAKE_C_COMPILER ${CheriSDK_CC})
 set(CMAKE_AR ${CheriSDK_AR})
 set(CMAKE_RANLIB ${CheriSDK_RANLIB})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
-# Make sure we compile for cheri:
-set(CMAKE_ASM_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_C_COMPILER_TARGET cheri-unknown-freebsd)
-set(CMAKE_CXX_COMPILER_TARGET cheri-unknown-freebsd)
-# Sysroot is not yet part of the SDK.
+# make sure we compile for cheri:
+set(CMAKE_ASM_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_C_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_CXX_COMPILER_TARGET mips64-unknown-freebsd)
+# sysroot should not be needed as we are in a freestanding environment
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 
 # For some reason ranlib doesn't like our static library:
@@ -107,10 +107,10 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
 
 # The --target flag line is needed so that CLion can detect the include paths (it doesn't add the CMAKE_C_COMPILER_TARGET)
-set(CMAKE_ASM_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_C_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_CXX_FLAGS_INIT "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_EXE_LINKER_FLAGS "--target=cheri-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld"
+set(CMAKE_ASM_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_C_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_CXX_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
+set(CMAKE_EXE_LINKER_FLAGS "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 
@@ -233,6 +233,8 @@ set(ASMC_COMPILER_FLAGS
     -isysroot=/dev/null # Remove the default '/usr/include' one...
     -DASM_VISIBILITY=.hidden
     -fvisibility=hidden
+    "SHELL:-mllvm -is-cherios"
+    -march=${CHERI_CPU}
     -cheri-cap-table-abi=plt
     -integrated-as
     -msoft-float
@@ -242,7 +244,7 @@ set(ASMC_COMPILER_FLAGS
 )
 set(ASM_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
-    -mllvm -asm-macro-max-nesting-depth=100
+    "SHELL:-mllvm -asm-macro-max-nesting-depth=100"
 )
 set(C_COMPILER_FLAGS
     ${ASMC_COMPILER_FLAGS}
@@ -251,6 +253,7 @@ set(C_COMPILER_FLAGS
     -O${O_LVL} # TODO: make this depend on the configuration
     -DCONSOLE_${CONSOLE}
     ${MSGDMA_FLAGS}
+    -g
 )
 set(C_WARNING_FLAGS
     -Wall
@@ -306,7 +309,7 @@ set(C_WARNING_FLAGS
     -Wno-error=unreachable-code-return
     -Wno-error=unused-macros
     -Wno-deprecated-declarations
-    -Werror=mips-cheri-prototypes
+    -Werror=cheri-prototypes
 )
 
 set(CXX_WARNING_FLAGS
@@ -334,9 +337,10 @@ function(add_to_filesystem _target _fs_target_path)
     COMMAND ${CMAKE_COMMAND} -E make_directory "${CHERIOS_FILESYSTEM_DIR}"
     # Copy the binary to the filesystem root directory
     COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:${_target}> "${_fs_target_path}"
-    # Remove some sections to save place (TODO: make this depend on the configuration)
+    # remove some sections to save place (TODO: make this depend on the configuration)
+    # NOTE: Had to comment these out as lld was not alligning offsets properly causing build failure.
     COMMAND "${CheriSDK_TOOLCHAIN_DIR}/strip" "${_fs_target_path}"
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
+    # COMMAND "${CheriSDK_TOOLCHAIN_DIR}/objcopy" -R .comment -R .pdr -R .apple_names -R .apple_objc -R .apple_namespaces -R .apple_types -R .MIPS.options -R .MIPS.abiflags "${_fs_target_path}"
     )
   # Using a CACHE INTERNAL variable ensures that changes are globally visible
   set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
@@ -494,7 +498,7 @@ function(add_cherios_module _target)
         PRIVATE
         ${LINKER_SCRIPT_ARG}
         -fuse-ld=lld
-        "-Wl,-Bdynamic -Wl,-no-pie"
+        "-Wl,-Bdynamic -Wl,-no-pie,-is-cherios,-relative-cap-relocs,-no-dynamic-linker,--no-rosegment"
         -G0
         -nostartfiles
         -nodefaultlibs
@@ -511,7 +515,7 @@ function(add_cherios_module _target)
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
               PRIVATE
-              -Wl,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+              -Wl,-mllvm,-is-cherios,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
       )
       target_compile_options(${_target} PUBLIC "-flto")
   endif()
@@ -533,13 +537,11 @@ function(add_cherios_module _target)
     add_to_filesystem(${_target} "${CHERIOS_FILESYSTEM_DIR}/${_target}.${_output_extention}")
   endif()
   # create a .dump file of the binary (added to byproducts so that ninja clean removes it)
-  add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
-    )
+  #add_custom_command(TARGET ${_target} POST_BUILD BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+  #  COMMAND "${CheriSDK_TOOLCHAIN_DIR}/llvm-objdump" -d -S "$<TARGET_FILE:${_target}>" > "${CMAKE_CURRENT_BINARY_DIR}/${_target}.dump"
+  #  )
 
     if(add_exe_NEED_LIBCXX)
-        target_compile_options(${_target} PUBLIC -include "${CMAKE_BINARY_DIR}/libcxx/__config_site")
-        target_include_directories(${_target} BEFORE PUBLIC ${CMAKE_SOURCE_DIR}/libcxx/include)
         target_link_libraries(${_target} PRIVATE cxx_static)
     endif()
 
@@ -585,8 +587,6 @@ set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
 # Now add our various components
 #
 
-add_subdirectory(libuser)
-
 # Just include libcxx directly so it picks up the right compiler options
 set(LIBCXX_ENABLE_SHARED OFF)
 set(LIBCXX_ENABLE_EXPERIMENTAL_LIBRARY OFF)
@@ -598,6 +598,7 @@ set(LIBCXX_ABI_FORCE_ITANIUM ON)
 set(LIBCXX_ENABLE_EXCEPTIONS OFF)
 set(LIBCXX_ENABLE_RTTI OFF)
 set(LIBCXX_ENABLE_GLOBAL_FILESYSTEM_NAMESPACE OFF)
+# Eventually we want this on, but that requires a sched.h plus some extra rubbish in time.h, which is a TODO
 set(LIBCXX_ENABLE_THREADS OFF)
 set(LIBCXX_ENABLE_THREAD_UNSAFE_C_FUNCTIONS OFF)
 set(LIBCXX_ENABLE_MONOTONIC_CLOCK OFF)
@@ -605,6 +606,11 @@ set(LIBCXX_ENABLE_MONOTONIC_CLOCK OFF)
 set(PACKAGE_VERSION 11.0.0git)
 
 add_subdirectory(libcxx)
+
+add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_BINARY_DIR}/libcxx/__config_site>")
+include_directories(BEFORE PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/libcxx/include>")
+
+add_subdirectory(libuser)
 
 add_subdirectory(libcxxrt)
 

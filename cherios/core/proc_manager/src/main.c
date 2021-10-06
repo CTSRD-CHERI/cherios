@@ -44,6 +44,7 @@
 #include "act_events.h"
 #include "capmalloc.h"
 #include "tman.h"
+#include "stdlib.h"
 
 /* See init.S in libuser for conventions */
 
@@ -95,8 +96,7 @@ void free_thread_n(process_t* process, uint8_t threadn) {
 }
 
 process_t* unseal_proc(process_t* process) {
-	if(cheri_gettype(process) != cheri_getcursor(sealer)) return NULL;
-	return cheri_unseal(process, sealer);
+    return cheri_unseal_2(process, sealer);
 }
 
 static process_t* unseal_live_proc(process_t* process) {
@@ -218,7 +218,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 
 	frame.mf_s2 = flags;
 
-	act_control_kt ctrl = syscall_act_register(&frame, name, queue, bootstrapping ? NULL : cap_malloc(ACT_REQUIRED_SPACE), cpu_hint);
+	act_control_kt ctrl = syscall_act_register(&frame, name, queue, bootstrapping ? NULL : cap_malloc_need_split(ACT_REQUIRED_SPACE), cpu_hint);
 
 	act_kt act = syscall_act_ctrl_get_ref(ctrl);
 

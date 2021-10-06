@@ -65,7 +65,7 @@ int main(void) {
 
     // ASM makes sure the compiler does no optimisation and so things can be put in delay slots
 
-    uint32_t val1_out;
+    uint32_t val1_out, val1_out2;
     int32_t val2_out;
 
     __asm__ __volatile (
@@ -83,12 +83,17 @@ int main(void) {
         "nop                            \n"
         "L2: teq  $zero, $zero          \n"
         "L3: nop\n"
-        : [v1_out]"=r"(val1_out), [v2_out]"=r"(val2_out)
+        "clwu $s1, $zero, 8(%[c1])       \n"
+        "move %[v1_out2], $s1           \n"
+        : [v1_out]"=r"(val1_out), [v2_out]"=r"(val2_out), [v1_out2]"=r"(val1_out2)
         : [v1]"r"(val1), [v2]"r"(val2), [x1]"r"(77), [x2]"r"(77), [c1]"C"(ptr1), [c2]"C"(ptr2)
-        : "a0", "memory"
+        : "a0", "s1", "memory"
     );
 
+    sleep(MS_TO_CLOCK(1000));
+
     assert_int_ex(val1, ==, val1_out);
+    assert_int_ex(val1, ==, val1_out2);
     assert_int_ex(val2, ==, val2_out);
 
     printf("Unaligned test complete!\n");

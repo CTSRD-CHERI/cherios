@@ -201,6 +201,10 @@ void sched_change_prio(act_t* act, enum sched_prio new_prio) {
 	if(act->priority != new_prio) {
 		uint8_t out_pool_id; // This is the pool id of the currently running thing
 		CRITICAL_LOCKED_BEGIN_ID(&act->sched_access_lock, out_pool_id);
+		// FIXME: compiler just found that out_pool_id was not being used. This smells to me, possibly this fine as
+		// act->pool_id will (at least in a critical section) always be the same as out_pool_id. Should look into this
+		// later and see if using out_pool_id is just a better choice.
+        (void)out_pool_id;
 		if(act->sched_status <= sched_running) {
 			delete_act_from_queue(&sched_pools[act->pool_id], act, act->sched_status);
 			act->priority = new_prio;

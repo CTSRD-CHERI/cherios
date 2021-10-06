@@ -43,6 +43,22 @@ __BEGIN_DECLS
 extern capability message_send_c(register_t a0, register_t a1, register_t a2, register_t a3,
                           capability c3, capability c4, capability c5, capability c6,
                           act_kt dest, ccall_selector_t selector, register_t v0);
+
+typedef struct sync_state_t {
+    act_reply_kt sync_caller;
+} sync_state_t;
+
+_Static_assert(offsetof(sync_state_t, sync_caller) == 0, "used by assembly");
+
+extern __thread sync_state_t sync_state;
+
+extern __thread long msg_enable;
+
+void next_msg(void);
+msg_t* get_message(void);
+void pop_msg(msg_t * msg);
+int msg_queue_empty(void);
+
 __END_DECLS
 
 #endif //CHERIOS_MSG_H

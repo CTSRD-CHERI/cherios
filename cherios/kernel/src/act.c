@@ -35,7 +35,6 @@
 #include "activations.h"
 #include "klib.h"
 #include "namespace.h"
-#include "msg.h"
 #include "nano/nanokernel.h"
 #include "queue.h"
 #include "nano/nanokernel.h"
@@ -46,7 +45,7 @@
  * Routines to handle activations
  */
 
-act_t				kernel_acts[MAX_STATIC_ACTIVATIONS]  __sealable;
+act_t				kernel_acts[MAX_STATIC_ACTIVATIONS];
 aid_t				kernel_next_act;
 
 #if (DEBUG_COUNT_CALLS)
@@ -150,17 +149,14 @@ static void add_act_to_end_of_list(act_t* act) {
 	act->list_del_prog = 0;
 
 	act_t* trial_last = act_list_end;
-	act_t* end;
 
 	// Inserts into chain, fast forwards if act_list_end is wrong
 	do {
 		act_t* volatile * last_link = &trial_last->list_next;
-		LOAD_LINK(last_link, c, end);
-		if(end != NULL) {
-			trial_last = end;
-			continue;
+		success = ATOMIC_CAS_RV(last_link, c, NULL, act);
+		if(!success) {
+		    trial_last = *last_link;
 		}
-		STORE_COND(last_link, c, act, success);
 	} while(!success);
 
 	// Sets act_list_end if need be, might not need to be done if something else inserts concurrently
@@ -185,15 +181,18 @@ static void remove_from_list(act_t* act) {
         while(cur != NULL) {
             if(cur->list_del_prog) {
                 // delete cur
-                act_t* next;
-                act_t* volatile * last_link = &cur->list_next;
-                again:
-                LOAD_LINK(last_link, c, next);
-                prev->list_next = next;
-                if(!next) {
+                act_t* volatile * prev_link = &prev->list_next;
+                act_t* next = cur->list_next;
+                success = ATOMIC_CAS_RV(prev_link, c, cur, next);
+                kernel_assert(success);
+                if(next == NULL) {
                     act_list_end = prev;
-                    STORE_COND(last_link, c, next, success);
-                    if(!success) goto again;
+                    next = cur->list_next;
+                    if(next) {
+                        // We must have removed the last item as somebody added one!
+                        add_act_to_end_of_list(next);
+                        break;
+                    }
                 }
                 cur = next;
             } else {

@@ -116,7 +116,7 @@ int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 		ERRORM("Bad EI_OSABI: %X", hdr->e_ident[EI_OSABI]);
 		return 0;
 	}
-	if(hdr->e_ident[EI_ABIVERSION] > 1) {
+	if(hdr->e_ident[EI_ABIVERSION] > 3) {
 		ERRORM("Bad EI_ABIVERSION: %X", hdr->e_ident[EI_ABIVERSION]);
 		return 0;
 	}
@@ -133,9 +133,9 @@ int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 		return 0;
 	}
 #ifdef _CHERI256_
-#define ELF_E_FLAGS 0x30C2C000
+#define ELF_E_FLAGS 0x30C2D000
 #else
-#define ELF_E_FLAGS 0x30C1C000
+#define ELF_E_FLAGS 0x30C1C800
 #endif
 #define ELF_E_MASK  0xFFFFFFF0
 	if((hdr->e_flags != 0x30000007) && ((hdr->e_flags & ELF_E_MASK) != ELF_E_FLAGS)) {
@@ -209,7 +209,7 @@ cap_pair create_image_old(Elf_Env *env, image_old* elf, image_old* out_elf, enum
 			out_elf->tls_num = 0;
 
 			char *prgmp = out_elf->loaded_process.data;
-			if(!prgmp) {
+			if(CAP_NULL(prgmp)) {
 				ERROR("alloc failed");
 				return NULL_PAIR;
 			}
@@ -384,46 +384,57 @@ int elf_loader_mem(Elf_Env *env, const Elf64_Ehdr* hdr, image* out_elf, int secu
 			ERROR("Section is larger in file than in memory");
 			return -1;
 		}
-		if(seg->p_type == PT_LOAD) {
+		switch(seg->p_type) {
+		    case PT_LOAD: {
+                assert((seg->p_flags & (PF_W | PF_X)) != (PF_W | PF_X));
 
-            assert((seg->p_flags & (PF_W | PF_X)) != (PF_W | PF_X));
+                size_t seg_bound = seg->p_vaddr + seg->p_memsz;
+                image_size = umax(image_size, seg_bound);
 
-            size_t seg_bound = seg->p_vaddr + seg->p_memsz;
-            image_size = umax(image_size, seg_bound);
+                if (seg->p_flags & PF_W) {
+                    assert(found_data == 0);
+                    found_data = 1;
+                    out_elf->data_index = (size_t) i + 1;
+                } else if (seg->p_flags & PF_X) {
+                    assert(found_code == 0);
+                    found_code = 1;
+                    out_elf->code_index = (size_t) i + 1;
+                }
 
-            if (seg->p_flags & PF_W) {
-                assert(found_data == 0);
-                found_data = 1;
-                out_elf->data_index = (size_t) i + 1;
-            } else if (seg->p_flags & PF_X) {
-                assert(found_code == 0);
-                found_code = 1;
-                out_elf->code_index = (size_t) i + 1;
+                if (!secure_load) {
+                    out_elf->load_type.basic.tables.seg_table_vaddrs[(size_t) i + 1] = seg->p_vaddr;
+                }
+
+                break;
             }
+		    case PT_DYNAMIC:
+                out_elf->dynamic_vaddr = seg->p_vaddr;
+                out_elf->dynamic_size = seg->p_memsz;
+                break;
+		    case PT_TLS:
+                assert(has_tls == 0);
+                has_tls = 1;
+                out_elf->tls_index = (size_t)i + 1;
+                out_elf->tls_mem_size = seg->p_memsz;
+                out_elf->tls_fil_size = seg->p_filesz;
 
-            if(!secure_load) {
-                out_elf->load_type.basic.tables.seg_table_vaddrs[(size_t) i + 1] = seg->p_vaddr;
-            }
-
-        } else if (seg->p_type == PT_DYNAMIC) {
-		    out_elf->dynamic_vaddr = seg->p_vaddr;
-		    out_elf->dynamic_size = seg->p_memsz;
-		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO || seg->p_type == PT_INTERP) {
-			/* Ignore these headers */
-		} else if(seg->p_type == PT_TLS) {
-			assert(has_tls == 0);
-			has_tls = 1;
-			out_elf->tls_index = (size_t)i + 1;
-			out_elf->tls_mem_size = seg->p_memsz;
-			out_elf->tls_fil_size = seg->p_filesz;
-
-            if(!secure_load) {
-                out_elf->load_type.basic.tables.seg_table_vaddrs[(size_t) i + 1] = seg->p_vaddr;
-            }
-
-		} else {
-			ERROR("Unknown section");
-			return -1;
+                if(!secure_load) {
+                    out_elf->load_type.basic.tables.seg_table_vaddrs[(size_t) i + 1] = seg->p_vaddr;
+                }
+                break;
+		    case PT_GNUSTACK:
+		    case PT_PHDR:
+		    case PT_GNURELRO:
+		    case PT_INTERP:
+		    case PT_MIPS_REGINFO:
+		    case PT_MIPS_RTPROC:
+		    case PT_MIPS_OPTIONS:
+		    case PT_MIPS_ABI_FLAGS:
+                /* Ignore these headers */
+                break;
+            default:
+            ERROR("Unknown section");
+                return -1;
 		}
 	}
 
@@ -466,23 +477,35 @@ cap_pair elf_loader_mem_old(Elf_Env *env, void *p, image_old* out_elf, int secur
 			ERROR("Section is larger in file than in memory");
 			return NULL_PAIR;
 		}
-		if(seg->p_type == PT_LOAD) {
-			size_t bound = seg->p_vaddr + seg->p_memsz;
-			allocsize = umax(allocsize, bound);
-			lowaddr = umin(lowaddr, seg->p_vaddr);
-			TRACE("lowaddr:%lx allocsize:%lx bound:%lx", lowaddr, allocsize, bound);
-		} else if(seg->p_type == PT_GNUSTACK || seg->p_type == PT_PHDR || seg->p_type == PT_GNURELRO || seg->p_type == PT_INTERP) {
-            /* Ignore these headers */
-        } else if(seg->p_type == PT_TLS) {
-            assert(has_tls == 0);
-            has_tls = 1;
-            out_elf->tls_load_start = addr + seg->p_offset;
-            out_elf->tls_load_size = seg->p_filesz;
-            out_elf->tls_size = seg->p_memsz;
-            tls_align = seg->p_align;
-		} else {
-			ERROR("Unknown section");
-			return NULL_PAIR;
+		switch(seg->p_type) {
+		    case PT_LOAD: {
+                size_t bound = seg->p_vaddr + seg->p_memsz;
+                allocsize = umax(allocsize, bound);
+                lowaddr = umin(lowaddr, seg->p_vaddr);
+                TRACE("lowaddr:%lx allocsize:%lx bound:%lx", lowaddr, allocsize, bound);
+                break;
+		    }
+		    case PT_TLS:
+                assert(has_tls == 0);
+                has_tls = 1;
+                out_elf->tls_load_start = addr + seg->p_offset;
+                out_elf->tls_load_size = seg->p_filesz;
+                out_elf->tls_size = seg->p_memsz;
+                tls_align = seg->p_align;
+                break;
+		    case PT_GNUSTACK:
+		    case PT_PHDR:
+		    case PT_GNURELRO:
+		    case PT_INTERP:
+            case PT_MIPS_REGINFO:
+            case PT_MIPS_RTPROC:
+            case PT_MIPS_OPTIONS:
+            case PT_MIPS_ABI_FLAGS:
+                /* Ignore these headers */
+                break;
+            default:
+            ERROR("Unknown section");
+                return NULL_PAIR;
 		}
 	}
 

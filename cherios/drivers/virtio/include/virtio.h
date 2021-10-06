@@ -40,6 +40,38 @@
 #define DRIVER_QUEUE_CROSSES_PAGE_BOUNDRY 	(-5)
 #define DRIVER_DEVICE_NEEDS_RESET			(-6)
 
+// Oh yes, these are different on QEMU... (and device specific config is yet a third)
+#define VIRTIO_IS_LITTLE_ENDIAN 1
+#define VIRTIO_QUEUE_IS_LITTLE_ENDIAN 0
+
+#if (VIRTIO_IS_LITTLE_ENDIAN)
+
+#define VIRTIO_SWAP_U64(X)  __builtin_bswap64(X)
+#define VIRTIO_SWAP_U32(X)  __builtin_bswap32(X)
+#define VIRTIO_SWAP_U16(X)  __builtin_bswap16(X)
+
+#else
+
+#define VIRTIO_SWAP_U64(X) X
+#define VIRTIO_SWAP_U32(X) X
+#define VIRTIO_SWAP_U16(X) X
+
+#endif
+
+#if (VIRTIO_QUEUE_IS_LITTLE_ENDIAN)
+
+#define VIRTIOQ_SWAP_U64(X)  __builtin_bswap64(X)
+#define VIRTIOQ_SWAP_U32(X)  __builtin_bswap32(X)
+#define VIRTIOQ_SWAP_U16(X)  __builtin_bswap16(X)
+
+#else
+
+#define VIRTIOQ_SWAP_U64(X) X
+#define VIRTIOQ_SWAP_U32(X) X
+#define VIRTIOQ_SWAP_U16(X) X
+
+#endif
+
 enum virtio_devices {
     reserved 			= 0,
     net 				= 1,
@@ -64,6 +96,8 @@ int virtio_device_device_ready(virtio_mmio_map* map);
 int virtio_device_queue_add(virtio_mmio_map* map, u32 queue_n, struct virtq* queue);
 int virtio_device_init(virtio_mmio_map* map,
                        enum virtio_devices device, u32 version, u32 vendor_id, u32 driver_features);
+
+uint32_t virtio_device_get_status(virtio_mmio_map* map);
 void virtio_device_ack_used(virtio_mmio_map* map);
 void virtio_device_notify(virtio_mmio_map* map, u32 queue);
 

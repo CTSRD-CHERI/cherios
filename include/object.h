@@ -85,20 +85,6 @@ void object_init_post_compact(startup_flags_e startup_flags, int first_thread);
 void	ctor_null(void);
 void	dtor_null(void);
 
-typedef struct sync_state_t {
-    act_reply_kt sync_caller;
-} sync_state_t;
-
-_Static_assert(offsetof(sync_state_t, sync_caller) == 0, "used by assembly");
-
-extern __thread sync_state_t sync_state;
-
-extern __thread long msg_enable;
-
-void next_msg(void);
-msg_t* get_message(void);
-void pop_msg(msg_t * msg);
-int msg_queue_empty(void);
 // A timeout of < 0 means wait forever. Timeout will return from the routine/
 
 #define MSG_ENTRY_TIMEOUT_ON_NOTIFY 1   // Notify is a timeout

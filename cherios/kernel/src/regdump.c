@@ -152,11 +152,12 @@ int check_cap(capability cap) {
 void backtrace(char* stack_pointer, capability return_address, capability idc, capability r17, capability c18) {
 	int i = 0;
 
-	capability all_power = obtain_super_powers();
+	capability all_power_pcc;
+	capability all_power = obtain_super_powers(&all_power_pcc);
 
-
+#define UNSEAL_SENTRY(X) cheri_setoffset(all_power_pcc, cheri_getcursor(X))
 #define UNSEAL(X) cheri_unseal(X,cheri_setoffset(all_power,cheri_gettype(X)))
-#define NONSEALED(X) (cheri_getsealed(X) ? UNSEAL(X) : X)
+#define NONSEALED(X) ((cheri_gettype(X) == -2) ? UNSEAL_SENTRY(X) : (cheri_getsealed(X) ? UNSEAL(X) : X))
 
 	// Function prolog:
 	// cincoffset $c11, $c11, -size // allocates space
@@ -205,6 +206,8 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 	// FIXME maybe use frame pointer?
 
     int unsafe = 0;
+
+    return_address = NONSEALED(return_address);
 
 	do {
 		print_frame(i++, return_address);
@@ -345,6 +348,8 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
             print_change_stack(stack_pointer,"unsafe usage");
         }
 
+        return_address = NONSEALED(return_address);
+
 		if(last_idc != idc) {
 			// we are backtracking across a boundry
 
@@ -352,7 +357,6 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 			int sealed = cheri_getsealed(idc);
 
 			idc = NONSEALED(idc);
-			return_address = NONSEALED(return_address);
 
 			if(sealed) {
 				// Untusting call creates a closure. Puts IDC here:
@@ -379,6 +383,8 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
 }
 
 static inline void dump_tlb() {
+
+    obtain_super_powers(NULL);
 
 #define STRINGIFY(X) #X
 #define ASM_MTCO(var, reg) "mtc0 %[" #var "], " STRINGIFY(reg) "\n"
@@ -458,7 +464,7 @@ static inline void dump_tlb() {
 }
 
 void kernel_dump_tlb(void) {
-	__unused capability all_powerfull = obtain_super_powers(); // Super magic wow!
+	__unused capability all_powerfull = obtain_super_powers(NULL); // Super magic wow!
 	dump_tlb();
 }
 
@@ -469,7 +475,7 @@ void regdump(int reg_num, act_t* kernel_curr_act) {
 		kernel_curr_act = sched_get_current_act_in_pool(cp0_get_cpuid());
 	}
 
-    capability all_powerfull = obtain_super_powers(); // Super magic wow!
+    capability all_powerfull = obtain_super_powers(NULL); // Super magic wow!
 
 	int creg = 0;
 	printf("Regdump:\n");

@@ -230,6 +230,8 @@ int proxy_file_to_cache(struct sessions_t* session, uint8_t service_write) {
             }
             set_encrypt_lock(proxy, session->encrypt_lock);
             fresult = rw_f(&session->fil, fulfiller, (UINT)res, &bytes_handled);
+            // FIXME: we are ignoring fresult here!
+            (void)fresult;
             assert(bytes_handled == res);
             *fptr +=res;
             any_proxy = 1;

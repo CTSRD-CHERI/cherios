@@ -26,9 +26,8 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE. */
 
-//#include "standard-headers/linux/virtio_ids.h"
-//#include "standard-headers/linux/virtio_config.h"
 #include "virtio_types.h"
+#include "virtio.h"
 
 /* Feature bits */
 #define VIRTIO_BLK_F_SIZE_MAX	1	/* Indicates maximum segment size */
@@ -40,6 +39,11 @@
 #define VIRTIO_BLK_F_MQ		12	/* support more than one vq */
 
 #define VIRTIO_BLK_ID_BYTES	20	/* ID string length */
+
+// QEMU is all sorts of broken.
+// It appears that the 64 bit field is broken into two 32-bit fields (big-endian)
+// and then the two 32 bit fields are then ordered depending on the virtio ordering
+// (little or host order depending on version).
 
 struct virtio_blk_config {
 	/* The capacity (in 512-byte sectors). */
@@ -74,7 +78,18 @@ struct virtio_blk_config {
 
 	/* number of vqs, only available when VIRTIO_BLK_F_MQ is set */
 	uint16_t num_queues;
-} QEMU_PACKED;
+};
+
+#if (VIRTIO_IS_LITTLE_ENDIAN)
+    #define VIRTIO_BLKCONFIG_SWAP_U64(X)                                      \
+        ({uint64_t Y = X;                                               \
+        (((uint64_t)__builtin_bswap32((uint32_t)((Y) >> 32))) << 32) |  \
+        (uint64_t)__builtin_bswap32((uint32_t)(Y) & 0xFFFFFFFFU);})
+#else
+    #define VIRTIO_BLKCONFIG_SWAP_U64(X) (X)
+#endif
+
+
 
 /* These two define direction. */
 #define VIRTIO_BLK_T_IN		0

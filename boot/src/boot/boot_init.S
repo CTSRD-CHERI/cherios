@@ -90,6 +90,10 @@ start:
 #endif
 	CClearHi	0xffff
 
+    # Clear watchpoint registers
+    mtc0    $zero, MIPS_CP0_REG_WATCHLO
+    mtc0    $zero, MIPS_CP0_REG_WATCHHI
+
 	# W^X for pointers: ensure $c0 is never executable.
 	cgetdefault	$c3
 	dli		$t0, ~(1<<1)
@@ -196,7 +200,7 @@ cherios_init_jump_target:
 	cgetpcc		$c12
 	dla_relative		$t0, crt_init_globals_boot, $t2
 	csetoffset	$c12, $c12, $t0
-    csetbounds  $idc, $c11, $zero # need non null
+    candperm    $idc, $c11, $zero # need non null
 	cjalr		$c12, $c17
 	cmove   $c18, $idc
 
