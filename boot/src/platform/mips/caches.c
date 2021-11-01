@@ -72,7 +72,7 @@ static void cache_invalidate(size_t addr, size_t size) {
 		cache_inv_low(line);
 		line += line_size;
 	}
-	__asm volatile("sync");
+	HW_SYNC;
 }
 
 void caches_invalidate(void * addr, size_t size) {

@@ -155,7 +155,7 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
 #ifdef USE_EXCEPTION_UNSAFE_STACK
     old_c10 = restore_frame->c10;
 #else
-    old_c10 = cheri_getreg(10);
+    old_c10 = get_unsafe_stack_reg();
 #endif
 
     capability old_link = NULL;
@@ -194,7 +194,7 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
 #ifdef USE_EXCEPTION_UNSAFE_STACK
     restore_frame->c10 = new_c10;
 
-    capability  old_ex_c10 = cheri_getreg(10);
+    capability  old_ex_c10 = get_unsafe_stack_reg();
 
     if(replaced_first_c10 == 0 || cheri_getoffset(old_ex_c10) < MinStackSize) {
         capability new_ex_c10 = new_stack(replaced_first_c10 ? old_ex_c10 : NULL);

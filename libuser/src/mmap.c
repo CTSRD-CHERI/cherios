@@ -30,7 +30,7 @@
 
 #include <math.h>
 #include "elf.h"
-#include "mips.h"
+#include "stddef.h"
 #include "sys/mman.h"
 #include "object.h"
 #include "namespace.h"

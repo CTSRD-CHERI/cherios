@@ -77,8 +77,25 @@ else()
     message(FATAL_ERROR "CHERI Clang ${CheriSDK_CC} does not exist!")
 endif()
 
-# Historically, we could choose between `cheri128` and `cheri256`
-set(CHERI_CPU cheri128)
+if("${PLATFORM}" STREQUAL "mips" OR "${PLATFORM}" STREQUAL "mips64")
+    set(PLATFORM mips)
+    set(TARGET_TRIP mips64-unknown-freebsd)
+    set(ABI_NAME purecap)
+    set(PLATFORM_ARGS -msoft-float)
+    # Historically, we could choose between `cheri128` and `cheri256`
+    set(CHERI_CPU cheri128)
+    set(BAREBONES 0)
+elseif("${PLATFORM}" STREQUAL "riscv" OR "${PLATFORM}" STREQUAL "riscv64")
+    set(PLATFORM riscv)
+    set(TARGET_TRIP riscv64-unknown-freebsd)
+    set(ABI_NAME l64pc128)
+    set(PLATFORM_ARGS -mno-relax)
+    set(CHERI_CPU rv64imacxcheri)
+    set(BAREBONES 1)
+else()
+    message(FATAL_ERROR "Unknown platform: ${PLATFORM}")
+endif()
+
 set(CAP_BYTES 16)
 
 set(CMAKE_ASM_COMPILER ${CheriSDK_CC})
@@ -88,9 +105,9 @@ set(CMAKE_AR ${CheriSDK_AR})
 set(CMAKE_RANLIB ${CheriSDK_RANLIB})
 set(CMAKE_CXX_COMPILER ${CheriSDK_CXX})
 # make sure we compile for cheri:
-set(CMAKE_ASM_COMPILER_TARGET mips64-unknown-freebsd)
-set(CMAKE_C_COMPILER_TARGET mips64-unknown-freebsd)
-set(CMAKE_CXX_COMPILER_TARGET mips64-unknown-freebsd)
+set(CMAKE_ASM_COMPILER_TARGET ${TARGET_TRIP})
+set(CMAKE_C_COMPILER_TARGET ${TARGET_TRIP})
+set(CMAKE_CXX_COMPILER_TARGET ${TARGET_TRIP})
 # sysroot should not be needed as we are in a freestanding environment
 # set(CMAKE_SYSROOT ${CheriSDK_SYSROOT_DIR})
 
@@ -107,10 +124,10 @@ set(CMAKE_RANLIB : CACHE INTERNAL "noop for ranlib")
 # adding -cheri-linker here causes a segfault when detecting compiler features! TODO: report bug
 
 # The --target flag line is needed so that CLion can detect the include paths (it doesn't add the CMAKE_C_COMPILER_TARGET)
-set(CMAKE_ASM_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_C_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_CXX_FLAGS_INIT "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU}")
-set(CMAKE_EXE_LINKER_FLAGS "--target=mips64-unknown-freebsd -mcpu=${CHERI_CPU} -nostartfiles -nodefaultlibs -fuse-ld=lld"
+set(CMAKE_ASM_FLAGS_INIT "--target=${TARGET_TRIP} ${PLATFORM_ARGS} -march=${CHERI_CPU} -mabi=${ABI_NAME}")
+set(CMAKE_C_FLAGS_INIT "--target=${TARGET_TRIP} ${PLATFORM_ARGS} -march=${CHERI_CPU} -mabi=${ABI_NAME}")
+set(CMAKE_CXX_FLAGS_INIT "--target=${TARGET_TRIP} ${PLATFORM_ARGS} -march=${CHERI_CPU} -mabi=${ABI_NAME}")
+set(CMAKE_EXE_LINKER_FLAGS "--target=${TARGET_TRIP} ${PLATFORM_ARGS} -nostartfiles -nodefaultlibs -fuse-ld=lld -march=${CHERI_CPU} -mabi=${ABI_NAME}"
     CACHE INTERNAL "Flags used by the linker" FORCE)
 cmake_policy(SET CMP0056 NEW) # add CMAKE_EXE_LINKER_FLAGS when using try_compile()
 
@@ -212,10 +229,14 @@ include_directories(SYSTEM include/sys)
 include_directories(elf/include)
 include_directories(sha256/include)
 include_directories(cherios/system/dylink/include)
+include_directories(cherios/system/dylink/include/platform/${PLATFORM})
 include_directories(cherios/system/lwip/include)
 include_directories(cherios/system/fatfs/include)
 include_directories(libcrt/include)
 include_directories(lwip/src/include)
+
+# Include the platform specific directories
+include_directories(SYSTEM include/platform/${PLATFORM})
 
 set(O_LVL 3)
 
@@ -228,8 +249,8 @@ set(ASMC_COMPILER_FLAGS
     ${VARY_FLAGS}
     ${VARY_SECURE_FLAGS}
     -march=${CHERI_CPU}
-    -mcpu=${CHERI_CPU}
-    -mabi=purecap
+    -march=${CHERI_CPU}
+    -mabi=${ABI_NAME}
     -isysroot=/dev/null # Remove the default '/usr/include' one...
     -DASM_VISIBILITY=.hidden
     -fvisibility=hidden
@@ -237,7 +258,7 @@ set(ASMC_COMPILER_FLAGS
     -march=${CHERI_CPU}
     -cheri-cap-table-abi=plt
     -integrated-as
-    -msoft-float
+    ${PLATFORM_ARGS}
     -fcolor-diagnostics
     -fpic
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
@@ -502,7 +523,7 @@ function(add_cherios_module _target)
         -G0
         -nostartfiles
         -nodefaultlibs
-        -mabi=purecap
+        -mabi=${ABI_NAME}
         -Wl,-z,norelro
    )
 
@@ -515,7 +536,7 @@ function(add_cherios_module _target)
       # In order to do lto we need to pass all these flags
       target_link_libraries(${_target}
               PRIVATE
-              -Wl,-mllvm,-is-cherios,-mllvm,-float-abi=soft,-mllvm,-mcpu=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
+              -Wl,-mllvm,-is-cherios,-mllvm,-float-abi=soft,-mllvm,-march=${CHERI_CPU},-mllvm,-mattr=+soft-float,-mllvm,-mattr=+${CHERI_CPU},-mllvm,-target-abi=purecap,-mllvm,-cheri-cap-table-abi=plt,--lto-O${O_LVL}
       )
       target_compile_options(${_target} PUBLIC "-flto")
   endif()
@@ -556,10 +577,10 @@ endfunction()
 
 set(CHERIOS_DIR         "${CMAKE_SOURCE_DIR}/cherios")
 set(DRIVERS_DIR         "${CHERIOS_DIR}/drivers")
-set(INIT_ASM_DIR        "${CMAKE_SOURCE_DIR}/init_asm")
+set(INIT_ASM_DIR        "${CMAKE_SOURCE_DIR}/init_asm/platform/${PLATFORM}")
 set(UFS_DIR             "${CMAKE_SOURCE_DIR}/ufs")
 set(INIT_ASM            "${INIT_ASM_DIR}/init.S")
-set(PLT_ASM             "${CHERIOS_DIR}/system/dylink/src/stubs.S")
+set(PLT_ASM             "${CHERIOS_DIR}/system/dylink/src/platform/${PLATFORM}/stubs.S")
 set(SECURE_INIT_ASM     "${INIT_ASM_DIR}/secure_init.S")
 
 if(${VARY_SECURE} STREQUAL "UNCHANGED")
@@ -582,6 +603,8 @@ endif()
 set (LWIP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/lwip)
 include(lwip/src/Filelists.cmake)
 set (LWIP_INCLUDE       "${CMAKE_SOURCE_DIR}/lwip/src/include")
+
+if(NOT ${BAREBONES})
 
 #
 # Now add our various components
@@ -610,12 +633,15 @@ add_subdirectory(libcxx)
 add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:-include${CMAKE_BINARY_DIR}/libcxx/__config_site>")
 include_directories(BEFORE PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CMAKE_SOURCE_DIR}/libcxx/include>")
 
+endif()
+
 add_subdirectory(libuser)
 
 add_subdirectory(libcxxrt)
 
 add_subdirectory(cherios)
 
+if(NOT ${BAREBONES})
 
 add_subdirectory(hello)
 #add_subdirectory(zlib)
@@ -663,5 +689,7 @@ add_subdirectory(pthread_test)
 
 add_subdirectory(cpptest)
 add_subdirectory(dylink_test)
+
+endif()
 
 add_subdirectory(boot)

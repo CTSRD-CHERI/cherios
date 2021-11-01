@@ -29,7 +29,7 @@
  */
 
 #include "elf.h"
-#include "mips.h"
+#include "stddef.h"
 #include "misc.h"
 #include "stdlib.h"
 #include "sys/mman.h"

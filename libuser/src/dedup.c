@@ -249,8 +249,8 @@ capability compact_code(capability* segment_table, struct capreloc* start, struc
 
     // This is all a bit hacky, but I don't want to write this in assembly
     // Hopefully these run before we clobber c17?
-    size_t here = (size_t)cheri_getreg(12); // better to use &compact_code?
-    size_t called_from = (size_t)cheri_getreg(17);
+    size_t here = (size_t)get_return_reg() ; // better to use &compact_code?
+    size_t called_from = (size_t)get_return_reg() ;
 
     if((flags & (STARTUP_NO_COMPACT | STARTUP_NO_DEDUP)) || (dedup_service == NULL)) return ret;
 

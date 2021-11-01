@@ -34,7 +34,10 @@
 #include "cheric.h"
 
 #include "string_enums.h"
-#include "nano_reg_list.h"
+#include "nano/nano_reg_list.h"
+
+#define REG_LIST_TO_ENUM_LIST(Name, Reg, Select, Mask, X, ...) X(NANO_REG_SELECT_ ## Name)
+#define NANO_REG_LIST_FOR_ENUM(ITEM) NANO_REG_LIST(REG_LIST_TO_ENUM_LIST, ITEM)
 
 #define TYPE_SPACE_BITS     16
 #define TYPE_SPACE          (1 << TYPE_SPACE_BITS)
@@ -444,30 +447,7 @@ typedef struct {
 typedef register_t ex_lvl_t;
 typedef register_t cause_t;
 
-#define MAGIC_SAFE         "ori    $zero, $zero, 0xd00d            \n"
-
-#define ENUM_VMEM_SAFE_DEREFERENCE(location, result, edefault)  \
-    __asm__ (                                                   \
-        SANE_ASM                                                \
-        "li     %[res], %[def]               \n"                \
-        "clw    %[res], $zero, 0(%[state])   \n"                \
-        MAGIC_SAFE \
-    : [res]"=r"(result)                                         \
-    : [state]"C"(location),[def]"i"(edefault)                   \
-    :                                                           \
-    )
-
-#define VMEM_SAFE_DEREFERENCE(var, result, type)                \
-__asm__ (                                                       \
-        SANE_ASM                                                \
-        LOAD(type)" %[res], $zero, 0(%[loc])   \n"              \
-        MAGIC_SAFE \
-    : [res]INOUT(type)(result)                                  \
-    : [loc]"C"(var)                                             \
-    :                                                           \
-    )
-
-
+#include "nano/nanotypes_platform.h"
 typedef struct res_nfo_t {
     size_t length;
     size_t base;

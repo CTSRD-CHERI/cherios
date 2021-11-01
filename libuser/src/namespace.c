@@ -29,7 +29,7 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
+#include "stddef.h"
 #include "object.h"
 #include "cheric.h"
 #include "assert.h"

@@ -35,7 +35,7 @@
 
 #include "kernel.h"
 #include "boot_info.h"
-#include "mips.h"
+#include "stddef.h"
 #include "activations.h"
 #include "cdefs.h"
 #include "cheric.h"

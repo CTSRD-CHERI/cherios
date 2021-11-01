@@ -45,11 +45,11 @@ __attribute__((noinline)) int* unsafe_usage(int x) {
 int main(void) {
     printf("Unsafe Test Hello World\n");
 
-    CHERI_PRINT_CAP(cheri_getreg(10));
+    CHERI_PRINT_CAP(get_unsafe_stack_reg());
     __unused int* x = unsafe_usage(1);
-    CHERI_PRINT_CAP(cheri_getreg(10));
+    CHERI_PRINT_CAP(get_unsafe_stack_reg());
     __unused int* y = unsafe_usage(2);
-    CHERI_PRINT_CAP(cheri_getreg(10));
+    CHERI_PRINT_CAP(get_unsafe_stack_reg());
 
     assert(x != y);
     assert(*x != *y);

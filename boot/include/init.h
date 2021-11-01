@@ -33,7 +33,6 @@
 #ifndef _INIT_H_
 #define _INIT_H_
 
-#include "mips.h"
 #include "cdefs.h"
 #include "stdio.h"
 #include "boot/boot_info.h"

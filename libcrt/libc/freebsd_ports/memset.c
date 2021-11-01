@@ -36,7 +36,7 @@ static char sccsid[] = "@(#)memset.c	8.1 (Berkeley) 6/4/93";
 /* #include <sys/cdefs.h> */
 /* __FBSDID("$FreeBSD$"); */
 
-#include "mips.h"
+#include "cheric.h"
 #include "string.h"
 
 #define	wsize	sizeof(u_int)

@@ -29,7 +29,7 @@
 
 /* __FBSDID("$FreeBSD: stable/8/sys/libkern/strlen.c 199583 2009-11-20 15:27:52Z jhb $"); */
 
-#include "mips.h"
+#include "cheric.h"
 
 size_t
 strlen(const char *str)

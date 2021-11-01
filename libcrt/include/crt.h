@@ -132,12 +132,7 @@ static inline void __attribute__((always_inline)) crt_init_common(capability* se
     }
 
     if(globals == 0) {
-        __asm __volatile (
-        "cscbi  %[cgp], (%[i])($idc)\n"
-        :
-        :[i]"i"(CTLP_OFFSET_CGP), [cgp]"C"(&__cap_table_start)
-        :
-        );
+        STORE_IDC_INDEX(CTLP_OFFSET_CGP, &__cap_table_start)
     } else {
         cap_relocs_size = (size_t)end - (size_t)start;
         memcpy(crt_segment_table, segment_table, umin(sizeof(crt_segment_table), cheri_getlen(segment_table)));

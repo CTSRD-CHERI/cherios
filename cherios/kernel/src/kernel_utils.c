@@ -41,7 +41,7 @@ void __kernel_assert(const char *assert_function, const char *assert_file,
 			assert_file, assert_lineno, assert_message);
 	//regdump(-1, NULL);
 	kernel_dump_tlb();
-	backtrace(cheri_getreg(11),cheri_getpcc(),cheri_getidc(),cheri_getreg(17),cheri_getreg(18));
+	backtrace(get_safe_stack_reg(),cheri_getpcc(),cheri_getidc(),get_return_reg() ,get_return_reg() );
 	kernel_freeze();
 }
 

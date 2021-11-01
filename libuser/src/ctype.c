@@ -29,7 +29,7 @@
  */
 
 #include "ctype.h"
-#include "mips.h"
+#include "cheric.h"
 
 int toupper(int c) {
 	if(islower(c)) {

@@ -52,7 +52,6 @@
 
 #ifndef __ASSEMBLY__
 
-#include "mips.h"
 #include "stddef.h"
 
 typedef uint32_t msg_nb_t;

@@ -1,15 +1,19 @@
 set (LIBC_ROOT ${CMAKE_SOURCE_DIR}/libcrt/libc)
 
+if("${PLATFORM}" STREQUAL "mips")
+set(EXTRA_PLAT_LIBCRT       ${CMAKE_SOURCE_DIR}/libcrt/platform/${PLATFORM}/cp0.c)
+set(EXTRA_PLAT_LIBUSER      src/platform/${PLATFORM}/unaligned.c)
+endif()
 
 # Try to keep important files early, it helps deduplication when other heuristics fail
 set(LIBCRT_SRCS
-    ${LIBC_ROOT}/memcpy_l.S
+    ${CMAKE_SOURCE_DIR}/libcrt/platform/${PLATFORM}/memcpy_l.S
     ${LIBC_ROOT}/freebsd_ports/memset.c
     ${LIBC_ROOT}/freebsd_ports/strlen.c
     ${LIBC_ROOT}/freebsd_ports/subr_prf.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
-    ${CMAKE_SOURCE_DIR}/libcrt/cp0.c
+    ${EXTRA_PLAT_LIBCRT}
     ${LIBC_ROOT}/freebsd_ports/strcmp.c
     ${LIBC_ROOT}/mem_cmp.c
     ${LIBC_ROOT}/atoi.c
@@ -32,11 +36,11 @@ set(LIBCRT_SRCS
 )
 
 set(LIBUSER_ASM_SRCS
-    src/init.S
-    src/msg.S
-    src/exceptions.S
+    src/platform/${PLATFORM}/init.S
+    src/platform/${PLATFORM}/msg.S
+    src/platform/${PLATFORM}/exceptions.S
     ${PLT_ASM}
-    src/invoke_function_pointer.S
+    src/platform/${PLATFORM}/invoke_function_pointer.S
 )
 
 set(LIBUSER_SRCS
@@ -53,7 +57,7 @@ set(LIBUSER_SRCS
     src/exceptions.c
     src/namespace.c
     src/temporal.c
-    src/unaligned.c
+    ${EXTRA_PLAT_LIBUSER}
     src/msg.c
     src/type_man.c
     src/thread.c
@@ -76,7 +80,7 @@ set(LIBUSER_SRCS
 # On the way to proper dynamic linking.
 
 set(LIBCRT_LIGHT_SRCS
-    ${LIBC_ROOT}/memcpy_l.S
+    ${CMAKE_SOURCE_DIR}/libcrt/platform/${PLATFORM}/memcpy_l.S
     ${LIBC_ROOT}/freebsd_ports/memset.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
@@ -90,7 +94,7 @@ set(LIBUSER_LIGHT_SRCS
     src/exceptions.c
     src/namespace.c
     src/temporal.c
-    src/unaligned.c
+    ${EXTRA_PLAT_LIBUSER}
     src/msg.c
     src/type_man.c
     src/errno.c

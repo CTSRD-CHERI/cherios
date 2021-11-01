@@ -30,7 +30,7 @@
 
 #include <sockets.h>
 #include <sys/deduplicate.h>
-#include "mips.h"
+#include "stddef.h"
 #include "object.h"
 #include "cheric.h"
 #include "assert.h"
@@ -142,7 +142,7 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
 #if !(LIGHTWEIGHT_OBJECT)
     own_stats = syscall_act_user_info_ref(self_ctrl);
 
-    if(cheri_getreg(10) != NULL) {
+    if(get_unsafe_stack_reg() != NULL) {
         // temporal will have failed to bump stats correctly
         own_stats->temporal_reqs = 2;
         own_stats->temporal_depth = 2;

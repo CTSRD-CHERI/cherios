@@ -147,42 +147,10 @@ _Static_assert(offsetof(CTL_t, cgp) == CTLP_OFFSET_CGP,  "CGP offsets need to ma
 #define get_cds() (get_ctl()->cds)
 
 static inline size_t ctl_get_num_table_entries(CTL_t* ctl) {
-    return (cheri_getlen(ctl) / sizeof(capability)) - 9;
+  return (cheri_getlen(ctl) / sizeof(capability)) - 9;
 }
 
-#define get_cgp() ((capability*)({                           \
-capability* __ret;                                             \
-__asm__ ("cmove %[ret], $c25" : [ret]"=C"(__ret) ::);     \
-__ret;}))
-
-#define CLCBI_IM_OFFSET 2
-#define CLCBI_IM_SCALE  4
-
-#define get_sym_captable_offset32(Sym) (uint32_t)({                     \
-uint32_t __ret;                                                           \
-__asm__ ("lui %[ret], %%captab_hi(" X_STRINGIFY(Sym) ")\n"              \
-         "daddiu %[ret], %[ret], %%captab_lo(" X_STRINGIFY(Sym) ")\n"   \
-: [ret]"=r"(__ret) ::);     \
-__ret;})
-
-#define get_sym_call_captable_offset32(Sym) (uint32_t)({                \
-uint32_t __ret;                                                         \
-__asm__ ("lui %[ret], %%capcall_hi(" X_STRINGIFY(Sym) ")\n"              \
-         "daddiu %[ret], %[ret], %%capcall_lo(" X_STRINGIFY(Sym) ")\n"   \
-: [ret]"=r"(__ret) ::);     \
-__ret;})
-
-// There is currently no TLS captab_hi/lo so we are forced to extract the bits from a clcbi
-
-#define get_tls_sym_captable_ndx16(Sym) (uint16_t)({                \
-uint16_t __ret;                                                     \
-__asm__ (".weak " X_STRINGIFY(Sym) "\n"                             \
-         ".hidden "  X_STRINGIFY(Sym) "\n"                          \
-         "clcbi $c1, %%captab_tls20(" X_STRINGIFY(Sym) ")($c26)\n"  \
-         "cgetpcc $c1 \n"                                           \
-         "clh %[ret], $zero, -2($c1) \n"                            \
-: [ret]"=r"(__ret) ::"$c1");     \
-__ret;})
+#include "dylink_platform.h"
 
 // Actually has a type of whatever function pointer is passed in invoke_c1
 extern void call_function_pointer_arg_mem(void);

@@ -32,7 +32,6 @@
 #define CHERIOS_MUTEX_H
 
 #include "stddef.h"
-#include "mips.h"
 #include "nano/nanokernel.h"
 #include "spinlock.h"
 #include "cp0.h"

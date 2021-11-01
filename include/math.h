@@ -35,7 +35,7 @@
 
 #include "math_utils.h"
 #include "cdefs.h"
-#include "mips.h"
+#include "cheric.h"
 
 #ifndef __ASSEMBLY__
 

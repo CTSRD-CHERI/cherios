@@ -31,7 +31,8 @@
  */
 
 #include "cdefs.h"
-#include "mips.h"
+#include "stddef.h"
+
 /*
  * Concatenate src on the end of dst.  At most strlen(dst)+n+1 bytes
  * are written at dst (at most n+1 bytes being appended).  Return dst.

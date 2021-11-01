@@ -31,7 +31,7 @@
 #ifndef CHERIOS_USERNANO_H
 #define CHERIOS_USERNANO_H
 
-#include "nanokernel.h"
+#include "nano/nanokernel.h"
 #include "cheric.h"
 #include "macroutils.h"
 

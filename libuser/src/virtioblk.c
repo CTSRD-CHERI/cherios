@@ -28,7 +28,6 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
 #include "cheric.h"
 
 void * vblk_ref = NULL;

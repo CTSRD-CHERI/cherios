@@ -28,7 +28,7 @@
  */
 
 #include "cdefs.h"
-#include "mips.h"
+#include "cheric.h"
 #include "limits.h"
 
 #define	IDX(c)	((u_char)(c) / LONG_BIT)

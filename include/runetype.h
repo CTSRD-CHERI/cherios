@@ -40,7 +40,7 @@
 
 #include <cdefs.h>
 #include <sys/_types.h>
-#include "mips.h"
+#include "stddef.h"
 
 typedef size_t __size_t;
 

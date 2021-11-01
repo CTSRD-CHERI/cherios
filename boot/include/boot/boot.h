@@ -32,7 +32,6 @@
 #ifndef _BOOT_H_
 #define _BOOT_H_
 
-#include "mips.h"
 #include "cdefs.h"
 #include "stdio.h"
 #include "boot_info.h"

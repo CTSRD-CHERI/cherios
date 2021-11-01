@@ -46,7 +46,7 @@ __asm__ __volatile__ (                              \
     SANE_ASM                                        \
     "1:"                                            \
     LOADL(type) "    %[out], %[ptr]          \n"    \
-    ADD(type, val_type)" %[add], %[out], %[v]      \n"    \
+    ASMADD(type, val_type)" %[add], %[out], %[v]      \n"    \
     STOREC(type) "   %[tmp], %[add], %[ptr]  \n"    \
     "beqz           %[tmp], 1b              \n"     \
     "nop                                    \n"     \

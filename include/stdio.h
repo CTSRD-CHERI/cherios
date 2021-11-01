@@ -32,7 +32,7 @@
 #define __STDIO_H__
 
 #include "sockets.h"
-#include "mips.h"
+#include "stddef.h"
 #include "cdefs.h"
 #include "stdarg.h"
 #include "colors.h"

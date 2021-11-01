@@ -30,7 +30,7 @@
 #ifndef CHERIOS_CC_H
 #define CHERIOS_CC_H
 
-#include "mips.h"
+#include "stddef.h"
 #include "cheric.h"
 #define LWIP_NO_UNISTD_H 1
 //#include "unistd.h"

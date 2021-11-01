@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
+#include "stddef.h"
 #include "stdio.h"
 #include "syscalls.h"
 

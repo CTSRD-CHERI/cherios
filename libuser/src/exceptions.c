@@ -37,8 +37,8 @@
 
 __thread int trampoline_registered = 0;
 
-handler_t* handle_vector[MIPS_CP0_EXCODE_NUM];
-handler_t* chandle_vector[CAP_CAUSE_NUM];
+handler_t* handle_vector[N_USER_EXCEPTIONS];
+handler_t* chandle_vector[N_USER_CAP_EXCEPTIONS];
 
 #ifdef USE_EXCEPTION_STACK
 // Really want an annotation to set offset for this, but it doesn't exit. Will hack it in assembly in register.
@@ -50,21 +50,21 @@ __thread capability unsafe_exception_stack[EXCEPTION_UNSAFE_STACK_SIZE/sizeof(ca
 
 
 void register_vectored_exception(handler_t* handler, register_t excode) {
-    assert(excode < MIPS_CP0_EXCODE_NUM);
+    assert(excode < N_USER_EXCEPTIONS);
 
     handle_vector[excode] = handler;
     register_exception_raw(&user_exception_trampoline_vector, cheri_getidc());
 }
 
 void register_vectored_exception2(handler2_t* handler, register_t excode) {
-    assert(excode < MIPS_CP0_EXCODE_NUM);
+    assert(excode < N_USER_EXCEPTIONS);
 
     handle_vector[excode] = (handler_t*)((char*)(handler)+1);
     register_exception_raw(&user_exception_trampoline_vector, cheri_getidc());
 }
 
 void register_vectored_cap_exception(handler_t* handler, register_t excode) {
-    assert(excode < CAP_CAUSE_NUM);
+    assert(excode < N_USER_CAP_EXCEPTIONS);
 
     chandle_vector[excode] = handler;
     register_exception_raw(&user_exception_trampoline_vector, cheri_getidc());
@@ -75,17 +75,7 @@ void register_exception_raw(ex_pcc_t* exception_pcc, capability exception_idc) {
     get_ctl()->ex_idc = exception_idc;
 
     if(trampoline_registered == 0) {
-        // Dont know how to get relocations with offsets in C so...
-#define INC_STACK(SN, I)    \
-        __asm__ (\
-                "clcbi  $c1, %%captab_tls20("SN")($c26)      \n"\
-                "li     $t0, %[im]                                      \n"\
-                "cincoffset $c1, $c1, $t0                               \n"\
-                "cscbi  $c1, %%captab_tls20("SN")($c26)      \n"\
-                    :\
-                    : [im]"i"(I)\
-                    : "t0", "$c1"\
-                )
+
 #ifdef USE_EXCEPTION_STACK
         INC_STACK("exception_stack", EXCEPTION_STACK_SIZE);
 #endif

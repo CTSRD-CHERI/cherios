@@ -36,7 +36,7 @@
 
 /* __FBSDID("$FreeBSD: stable/8/sys/kern/subr_prf.c 210305 2010-07-20 18:55:13Z jkim $"); */
 
-#include "mips.h"
+#include "stddef.h"
 #include "stdarg.h"
 #include "stdio.h"
 #include "string.h"

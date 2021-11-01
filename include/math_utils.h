@@ -5,9 +5,9 @@
 #ifndef CHERIOS_MATH_UTILS_H
 #define CHERIOS_MATH_UTILS_H
 
-#include "mips.h"
-
 #ifndef __ASSEMBLY__
+
+#include "stddef.h"
 
 static inline int imax(int a, int b) {
     return (a>b ? a : b);

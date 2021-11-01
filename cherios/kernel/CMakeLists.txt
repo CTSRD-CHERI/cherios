@@ -25,8 +25,8 @@ set(KERNEL_SRCS
     ${KERNEL_DEBUG_SRCS}
 )
 set(KERNEL_ASM_SRCS
-    src/init.S
-    src/message_send.S
+    src/platform/${PLATFORM}/init.S
+    src/platform/${PLATFORM}/message_send.S
     ${PLT_ASM}
 )
 

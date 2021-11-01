@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
+#include "stddef.h"
 #include "misc.h"
 
 int memcmp ( const void * _ptr1, const void * _ptr2, size_t num ) {

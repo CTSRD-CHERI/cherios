@@ -32,7 +32,6 @@
 #define	_OBJECT_H_
 
 #include "cdefs.h"
-#include "mips.h"
 #include "cheric.h"
 #include "queue.h"
 #include "ccall.h"

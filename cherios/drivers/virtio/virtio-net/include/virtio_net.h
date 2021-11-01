@@ -31,7 +31,7 @@
 #define CHERIOS_VIRTIO_NET_H_H
 
 #include "virtio_types.h"
-#include "mips.h"
+#include "stddef.h"
 #include "cheric.h"
 #include "virtio_queue.h"
 

@@ -32,7 +32,6 @@
 #define	_PLAT_H_
 
 #include "cdefs.h"
-#include "mips.h"
 
 void	hw_reboot(void) __dead2;
 

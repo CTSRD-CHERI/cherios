@@ -29,7 +29,6 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
 #include "cheric.h"
 #include "cp0.h"
 #include "object.h"

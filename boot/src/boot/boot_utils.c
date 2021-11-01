@@ -30,7 +30,6 @@
  */
 
 #include <elf.h>
-#include "mips.h"
 #include "cheric.h"
 #include "plat.h"
 #include "boot/boot.h"
@@ -138,7 +137,7 @@ size_t load_nano() {
     }
 
 
-	__asm__ ("sync");
+    HW_SYNC;
 
 	bi.nano_begin = 0;
 	bi.nano_end = (size_t)&(__nano_size);

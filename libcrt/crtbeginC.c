@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#include "mips.h"
+#include "stddef.h"
 #include "cheric.h"
 #include "string.h"
 #include "dylink.h"

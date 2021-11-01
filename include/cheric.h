@@ -31,42 +31,81 @@
 #ifndef _MIPS_INCLUDE_CHERIC_H_
 #define	_MIPS_INCLUDE_CHERIC_H_
 
-/*
- * Derive CHERI-flavor from capability size
- */
-
-#if _MIPS_SZCAP == 256
-#define _CHERI256_
-	#define U_PERM_BITS 4
-    #define CAP_SIZE 0x20
-	#define CAP_SIZE_S "0x20"
-    #define CAP_SIZE_BITS 5
-	#define BOTTOM_PRECISION 64
-	#define SMALL_PRECISION 64
-	#define LARGE_PRECISION 64
-    #define CAP_EXTRA_ALIGN 0
-    #define SMALL_OBJECT_THRESHOLD (~0)
-#elif _MIPS_SZCAP == 128
-#define _CHERI128_
-	#define U_PERM_BITS 4
-    #define CAP_SIZE 0x10
-	#define CAP_SIZE_S "0x10"
-    #define CAP_SIZE_BITS 4
-	#define BOTTOM_PRECISION 14
-	#define SMALL_PRECISION (BOTTOM_PRECISION - 1)
-	#define LARGE_PRECISION	(BOTTOM_PRECISION - 4)
-    #define SMALL_OBJECT_THRESHOLD  (1 << (SMALL_PRECISION)) // Can set bounds with byte align on objects less than this
-
-#else
-#error Unknown capability size
-#endif
-
-#define CAN_SEAL_ANY 1
+#define HW_SYNC __asm__ __volatile__ ("sync":::"memory")
 
 #ifndef __ASSEMBLY__
 
+/*
+ * Canonical C-language representation of a capability.
+ */
+typedef __capability void * capability;
+typedef __capability const void *  const_capability;
+typedef capability sealing_cap;
+typedef unsigned int stype;
+
 #include "cdefs.h"
-#include "mips.h"
+
+// TODO resolve PR#8 to do this properly. Some appears to already have been done
+// TODO now we are picking up the compiler headers, we can hopefully pickup a lot of this from cheri.h
+#include "stdint.h"
+
+#endif
+
+#include "platform.h"
+
+#ifndef __ASSEMBLY__
+/*
+ * Useful integer type names that we can't pick up from the compile-time
+ * environment.
+ */
+
+/*
+ * Provide more convenient names for useful qualifiers from gcc/clang.
+ */
+#define	__packed__	__attribute__ ((packed))
+
+/*
+ * Useful integer type names that we can't pick up from the compile-time
+ * environment.
+ */
+typedef unsigned char	u_char;
+typedef unsigned short	u_short;
+typedef unsigned int	u_int;
+typedef long		quad_t;
+typedef long		ptrdiff_t;
+typedef unsigned long	u_long;
+typedef unsigned long	u_quad_t;
+typedef unsigned long	caddr_t;
+
+typedef u_long		ulong;
+typedef u_char		uchar;
+typedef uint8_t		u8;
+typedef uint16_t	u16;
+typedef uint32_t	u32;
+typedef uint64_t	u64;
+typedef uint16_t	__u16;
+typedef uint32_t	__u32;
+typedef uint8_t		u_int8_t;
+typedef uint16_t	u_int16_t;
+typedef uint32_t	u_int32_t;
+typedef uint64_t	u_int64_t;
+
+#define define_intypes(size)                                \
+typedef int ## size ## _t  int_least ## size ## _t;         \
+typedef uint ## size ## _t  uint_least ## size ## _t;       \
+typedef int ## size ## _t  int_fast ## size ## _t;          \
+typedef uint ## size ## _t  uint_fast ## size ## _t;
+
+#define INT_SIZES(ITEM) ITEM(8) ITEM(16) ITEM(32) ITEM(64)
+
+INT_SIZES(define_intypes)
+
+#define	NBBY		8	/* Number of bits per byte. */
+#ifdef __cplusplus
+#define	NULL		nullptr
+#else
+#define	NULL		((void *)0)
+#endif
 
 #define _safe __attribute__((temporal_safe))
 
@@ -115,51 +154,17 @@ static inline precision_rounded_length round_cheri_length(size_t length) {
 #define OUT_32i  "i"
 #define OUT_64i  "i"
 
-#define ADD_8_16i	"daddiu"
-#define ADD_16_16i	"daddiu"
-#define ADD_32_16i	"daddiu"
-#define ADD_64_16i	"daddiu"
-#define ADD_c_16i	"cincoffset"
-
-#define ADD_8_64	"daddu"
-#define ADD_16_64	"daddu"
-#define ADD_32_64	"daddu"
-#define ADD_64_64	"daddu"
-#define ADD_c_64	"cincoffset"
-
 #define CTYPE_8 uint8_t
 #define CTYPE_16	uint16_t
 #define CTYPE_32	uint32_t
 #define CTYPE_64 uint64_t
 #define CTYPE_c	capability
 
-#define BNE_8(a,b,l,t) "bne " a ", " b ", " l
-#define BNE_16(a,b,l,t) "bne " a ", " b ", " l
-#define BNE_32(a,b,l,t) "bne " a ", " b ", " l
-#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
-#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
-#define BNE_c(a,b,l,t) "cexeq " t ", " a ", " b "; beqz " t ", " l
-
-#define BNE(type, a, b, label,tmp) BNE_ ## type(a,b,label,tmp)
-
-#define ADD(type, val_type) ADD_ ## type ## _ ## val_type
-
-#define LOADL(type)  "cll" SUF_ ## type
-#define LOAD(type) "cl" SUF_ ## type
-#define STOREC(type) "csc" SUF_ ## type
-#define STORE(type) "cs" SUF_ ## type
 #define OUT(type) "=" OUT_ ## type
 #define CLOBOUT(type) "=&" OUT_ ## type
 #define IN(type) OUT_ ## type
 #define INOUT(type) "+" OUT_ ## type
 #define CTYPE(type) CTYPE_ ## type
-/*
- * Canonical C-language representation of a capability.
- */
-typedef __capability void * capability;
-typedef __capability const void *  const_capability;
-typedef capability sealing_cap;
-typedef unsigned int stype;
 
 /*
  * Programmer-friendly macros for CHERI-aware C code -- requires use of
@@ -197,14 +202,6 @@ typedef unsigned int stype;
 				    __DECONST(capability, (x)), \
 				    __DECONST(capability, (y)))
 
-#define	cheri_getcause()	__builtin_mips_cheri_get_cause()
-#define	cheri_setcause(x)	__builtin_mips_cheri_set_cause(x)
-
-#define	cheri_ccheckperm(c, p)	__builtin_mips_cheri_check_perms(		\
-				    __DECONST(capability, (c)), (p))
-#define	cheri_cchecktype(c, t)	__builtin_mips_cheri_check_type(		\
-				    __DECONST(capability, (c)), (t))
-
 #define cheri_getcursor(x) (__builtin_cheri_address_get(x))
 #define cheri_setcursor(x,y) (__builtin_cheri_address_set(x, y))
 
@@ -239,12 +236,6 @@ BUILTIN(__builtin_cheri_cap_type_copy, "v*mvC*mvC*m", "nc")
  */
 
 #define	cheri_getdefault()	__builtin_cheri_global_data_get()
-#define	cheri_getidc()		__builtin_mips_cheri_get_invoke_data_cap()
-#define	cheri_getkr0c()		__builtin_mips_cheri_get_kernel_cap1()
-#define	cheri_getkr1c()		__builtin_mips_cheri_get_kernel_cap2()
-#define	cheri_getkcc()		__builtin_mips_cheri_get_kernel_code_cap()
-#define	cheri_getkdc()		__builtin_mips_cheri_get_kernel_data_cap()
-#define	cheri_getepcc()		__builtin_mips_cheri_get_exception_program_counter_cap()
 #define	cheri_getpcc()		__builtin_cheri_program_counter_get()
 #define	cheri_getstack()	__builtin_cheri_stack_get()
 
@@ -302,45 +293,6 @@ typedef intptr_t er_t;
 #define cheri_unseal_2(cap, sealing_cap) \
     ((cheri_gettag(cap) == 0 || (unsigned long)cheri_gettype(cap) != cheri_getcursor(sealing_cap)) ? NULL : cheri_unseal(cap, sealing_cap))
 
-#define cheri_dla_asm(reg, symbol)      \
-    "lui " reg ", %hi(" symbol ")\n"    \
-    "daddiu " reg ", " reg ", %lo(" symbol ")\n"
-
-#define cheri_dla(symbol, result)               \
-__asm __volatile (                              \
-    "lui %[res], %%hi(" #symbol ")\n"            \
-    "daddiu %[res], %[res], %%lo(" #symbol ")\n" \
-: [res]"=r"(result) ::)
-
-#define SET_FUNC(S, F) __asm (".weak " # S"; cscbi %[arg], %%capcall20(" #S ")($c25)" ::[arg]"C"(F):"memory")
-#define SET_SYM(S, V) __asm (".weak " # S"; cscbi %[arg], %%captab20(" #S ")($c25)" ::[arg]"C"(V):"memory")
-#define SET_TLS_SYM(S, V) __asm (".weak " #S "; cscbi %[arg], %%captab_tls20(" #S ")($c26)" ::[arg]"C"(V):"memory")
-
-static __inline capability
-cheri_zerocap(void)
-{
-	return (__capability void *)0;
-}
-
-#define	cheri_getreg(x) ({						\
-	__capability void *_cap;					\
-	__asm __volatile ("cmove %0, $c" #x : "=C" (_cap));		\
-	_cap;								\
-})
-
-#define	cheri_setreg(x, cap) do {					\
-	if ((x) == 0)							\
-		__asm __volatile ("cmove $c" #x ", %0" : : "C" (cap) :	\
-		    "memory");						\
-	else								\
-		__asm __volatile ("cmove $c" #x ", %0" : : "C" (cap));  \
-} while (0)
-
-static __inline__  void set_idc(capability idc) {
-	__asm__ (
-	"cmove $idc, %[cookie] \n"
-	:: [cookie]"C" (idc));
-}
 
 #define CHERI_PRINT_PTR(ptr)						\
 	printf("%s: " #ptr " b:%016jx l:%016zx o:%jx\n", __func__,	\
@@ -405,60 +357,6 @@ static inline int VCAPS(const void * cap, size_t len, unsigned flags) {
 // A better NULL check if you have almighty caps floating around
 #define CAP_NULL(X) (((unsigned long)(X) == 0) && !cheri_gettag(X))
 
-/*
- * Register frame to be preserved on context switching. The order of
- * save/restore is very important for both reasons of correctness and security.
- * Assembler routines know about this layout, so great care should be taken.
- */
-typedef struct reg_frame {
-	/*
-	 * General-purpose MIPS registers.
-	 */
-	/* No need to preserve $zero. */
-	register_t	mf_at, mf_v0, mf_v1;
-	register_t	mf_a0, mf_a1, mf_a2, mf_a3, mf_a4, mf_a5, mf_a6, mf_a7;
-	register_t	mf_t0, mf_t1, mf_t2, mf_t3;
-	register_t	mf_s0, mf_s1, mf_s2, mf_s3, mf_s4, mf_s5, mf_s6, mf_s7;
-	register_t	mf_t8, mf_t9;
-	/* No need to preserve $k0, $k1. */
-	register_t	mf_gp, mf_sp, mf_fp, mf_ra;
-
-	/* Multiply/divide result registers. */
-	register_t	mf_hi, mf_lo;
-
-	/* Program counter. */
-	/* register_t	mf_pc; <-- this really isn't needed, and its nice to keep to 32 regs */
-
-    /* User local kernel register */
-    register_t mf_user_loc;
-	/*
-	 * Capability registers.
-	 */
-	/* c0 has special properties for MIPS load/store instructions. */
-	capability	cf_default;
-
-	/*
-	 * General purpose capability registers.
-	 */
-	capability	cf_c1, cf_c2, cf_c3, cf_c4;
-	capability	cf_c5, cf_c6, cf_c7;
-	capability	cf_c8, cf_c9, cf_c10, cf_c11, cf_c12;
-	capability	cf_c13, cf_c14, cf_c15, cf_c16, cf_c17;
-	capability	cf_c18, cf_c19, cf_c20, cf_c21, cf_c22;
-	capability	cf_c23, cf_c24, cf_c25;
-
-	/*
-	 * Special-purpose capability registers that must be preserved on a
-	 * user context switch.  Note that kernel registers are omitted.
-	 */
-	capability	cf_idc;
-
-	/* Program counter capability. */
-	capability	cf_pcc; // WARN: Must be last for restore to work
-
-
-} reg_frame_t;
-
 #if defined(__cplusplus)
 #define C_REGCLASS
 #else
@@ -466,14 +364,5 @@ typedef struct reg_frame {
 #endif
 
 #endif // ASSEMBLY
-
-#define MIPS_FRAME_SIZE        (32*REG_SIZE)
-#define CHERI_CAP_FRAME_SIZE   (28 * CAP_SIZE)
-#define CHERI_FRAME_SIZE       (MIPS_FRAME_SIZE + CHERI_CAP_FRAME_SIZE)
-#define FRAME_C1_OFFSET         (MIPS_FRAME_SIZE + CAP_SIZE)
-#define FRAME_C3_OFFSET        (MIPS_FRAME_SIZE + (3 * CAP_SIZE))
-#define FRAME_a0_OFFSET        (3 * REG_RIZE)
-#define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
-#define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
 
 #endif /* _MIPS_INCLUDE_CHERIC_H_ */

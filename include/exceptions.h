@@ -44,37 +44,9 @@
     #define USE_EXCEPTION_STACK
 #endif
 
+#include "exceptions_platform.h"
+
 #ifndef __ASSEMBLY__
-
-typedef struct {
-    register_t	mf_at, mf_v0, mf_v1;
-    register_t	mf_a0, mf_a1, mf_a2, mf_a3, mf_a4, mf_a5, mf_a6, mf_a7;
-    register_t	mf_t0, mf_t1, mf_t2, mf_t3;
-    register_t	mf_t8, mf_t9;
-    register_t	mf_gp, mf_sp, mf_fp, mf_ra;
-    register_t	mf_hi, mf_lo;
-
-    register_t  padding;
-
-    capability c2,c3,c4,c5,c6,c7,c8,c9, c12, c13,c14,c15,c16,c17,c18,c25;
-#ifdef USE_EXCEPTION_UNSAFE_STACK
-    capability c10;
-#endif
-#ifdef USE_EXCEPTION_STACK
-    capability c11;
-#endif
-} exception_restore_frame;
-
-// Some handler may need access to these
-typedef struct {
-    register_t mf_s0, mf_s1, mf_s2, mf_s3, mf_s4, mf_s5, mf_s6, mf_s7;
-    capability c19, c20, c21, c22, c23, c24;
-} exception_restore_saves_frame;
-
-typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
-
-typedef int handler2_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame,
-        exception_restore_saves_frame* saves_frame);
 
 void user_exception_trampoline_vector(void);
 

@@ -31,7 +31,6 @@
 #ifndef _VIRTIO_BLK_H
 #define _VIRTIO_BLK_H
 
-#include "mips.h"
 #include "object.h"
 #include "namespace.h"
 #include "assert.h"

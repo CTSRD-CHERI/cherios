@@ -30,7 +30,7 @@ set(X_SRCS
     src/sys_arch.c
     src/main.c
     src/httpd.c
-    src/checksum.S
+    src/platform/${PLATFORM}/checksum.S
     ${DRIVERS_DIR}/virtio/src/virtio.c
     ${DRIVER_SRCS}
 )

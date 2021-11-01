@@ -32,7 +32,7 @@
 #define	__STRING_H__
 
 #include "cdefs.h"
-#include "mips.h"
+#include "stddef.h"
 #include "locale.h"
 
 __BEGIN_DECLS

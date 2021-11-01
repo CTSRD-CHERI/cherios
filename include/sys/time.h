@@ -30,7 +30,7 @@
 #ifndef CHERIOS_TIME_H
 #define CHERIOS_TIME_H
 
-#include "mips.h"
+#include "stddef.h"
 #include "cdefs.h"
 #include "syscalls.h"
 

@@ -30,7 +30,6 @@
 #ifndef FASTBOOT_MEGA_CORE_H
 #define FASTBOOT_MEGA_CORE_H
 
-#include "mips.h"
 #include "cdefs.h"
 
 #ifdef SGDMA

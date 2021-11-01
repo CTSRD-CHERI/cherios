@@ -235,7 +235,7 @@ __used void kernel_syscall_panic_proxy(act_t* act) { //fixme: debug only
 		regdump(-1, act);
     } else {
 		kernel_dump_tlb();
-		backtrace(cheri_getreg(11),cheri_getpcc(),cheri_getidc(),cheri_getreg(17),cheri_getreg(18));
+		backtrace(get_safe_stack_reg(),cheri_getpcc(),cheri_getidc(),get_return_reg() ,get_return_reg() );
 	}
 	kernel_freeze();
 }

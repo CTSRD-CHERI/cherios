@@ -1,4 +1,5 @@
 include_directories(include)
+include_directories(include/platform/${PLATFORM})
 include_directories(${DRIVERS_DIR}/uart/include)
 include_directories(${DRIVERS_DIR}/virtio/include)
 include_directories(${DRIVERS_DIR}/megacore/include)
@@ -10,15 +11,15 @@ set(LIBCRT_SRCS
     ${CMAKE_SOURCE_DIR}/libcrt/libc/freebsd_ports/subr_prf.c
     ${CMAKE_SOURCE_DIR}/libcrt/libc/freebsd_ports/strlen.c
     ${CMAKE_SOURCE_DIR}/libcrt/libc/freebsd_ports/memset.c
-    ${CMAKE_SOURCE_DIR}/libcrt/libc/memcpy_l.S
+    ${CMAKE_SOURCE_DIR}/libcrt/platform/${PLATFORM}/memcpy_l.S
     ${CMAKE_SOURCE_DIR}/libcrt/crtbeginC.c
     ${CMAKE_SOURCE_DIR}/libcrt/crtendC.c
 )
 
 set(COMMON_SRCS
     ${CMAKE_SOURCE_DIR}/elf/src/elf_loader.c
-    src/plat.c
-    src/caches.c
+    src/platform/${PLATFORM}/plat.c
+    src/platform/${PLATFORM}/caches.c
 )
 
 set(BOOT_SRCS
@@ -29,17 +30,21 @@ set(BOOT_SRCS
 )
 
 set(BOOT_ASM_SRCS
-    src/boot/boot_tramp.S
-    src/boot/boot_init.S
+    src/boot/platform/${PLATFORM}/boot_tramp.S
+    src/boot/platform/${PLATFORM}/boot_init.S
     src/boot/kernel_elf.S
     src/boot/init_elf.S
     src/boot/nano_elf.S
 )
 
+if("${PLATFORM}" STREQUAL "mips")
+    set(MIPS_NANO_SRCS     nanokernel/src/platform/${PLATFORM}/ccall_soft.S)
+endif()
+
 set(NANO_ASM_SRCS
-    nanokernel/src/nano_kernel.S
-    nanokernel/src/ccall_soft.S
-    ${CMAKE_SOURCE_DIR}/sha256/src/sha256_k.S
+    nanokernel/src/platform/${PLATFORM}/nano_kernel.S
+    ${MIPS_NANO_SRCS}
+    ${CMAKE_SOURCE_DIR}/sha256/src/platform/${PLATFORM}/sha256_k.S
 )
 
 set(INIT_SRCS
@@ -52,7 +57,7 @@ set(INIT_SRCS
 )
 
 set(INIT_ASM_SRCS
-    src/init/init.S
+    src/init/platform/${PLATFORM}/init.S
 )
 
 if("${CONSOLE}" STREQUAL "malta")

@@ -30,7 +30,7 @@
  */
 
 #include "cdefs.h"
-#include "mips.h"
+#include "stddef.h"
 
 char *
 strrchr(const char *cp, int ch)

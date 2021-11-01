@@ -2,7 +2,7 @@
 
 #ifndef __DUMMY_H
 #define __DUMMY_H
-#include "mips.h"
+
 #include "stdlib.h"
 #include "stdio.h"
 
