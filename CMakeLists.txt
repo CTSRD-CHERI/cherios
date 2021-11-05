@@ -253,6 +253,7 @@ set(ASMC_COMPILER_FLAGS
     -mabi=${ABI_NAME}
     -isysroot=/dev/null # Remove the default '/usr/include' one...
     -DASM_VISIBILITY=.hidden
+    -DPLATFORM_${PLATFORM}
     -fvisibility=hidden
     "SHELL:-mllvm -is-cherios"
     -march=${CHERI_CPU}

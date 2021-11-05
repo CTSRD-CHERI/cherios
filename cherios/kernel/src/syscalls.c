@@ -33,6 +33,7 @@
 #include "sys/types.h"
 #include "klib.h"
 #include "syscalls.h"
+#include "cpu.h"
 
 /*
  * These functions are those that are available by dynamic linking with the kernel
@@ -48,13 +49,13 @@ __used uint64_t kernel_syscall_bench_start(void) {
 	kernel_interrupts_off();
 	// start a timer
 	in_bench = 1;
-	return get_high_res_time(cp0_get_cpuid());
+	return get_high_res_time(cpu_get_cpuid());
 }
 
 DECLARE_WITH_CD(uint64_t, kernel_syscall_bench_end(void));
 __used uint64_t kernel_syscall_bench_end(void) {
 	// finish time
-	uint64_t time = get_high_res_time(cp0_get_cpuid());
+	uint64_t time = get_high_res_time(cpu_get_cpuid());
 	// enable interrupts again
 
 	in_bench = 0;
@@ -155,7 +156,7 @@ __used void kernel_sleep(register_t timeout) {
 DECLARE_WITH_CD(register_t , kernel_syscall_now(void));
 __used register_t kernel_syscall_now(void) {
 	// FIXME: Will break if core is moved. Currently core is never moved so this is fine.
-	return get_high_res_time(cp0_get_cpuid());
+	return get_high_res_time(cpu_get_cpuid());
 }
 
 DECLARE_WITH_CD(void, kernel_syscall_vmem_notify(act_kt waiter, int suggest_switch));

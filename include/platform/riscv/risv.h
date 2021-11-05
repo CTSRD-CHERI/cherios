@@ -46,6 +46,48 @@
 #define SMALL_PRECISION (BOTTOM_PRECISION - 1)
 #define LARGE_PRECISION	(BOTTOM_PRECISION - 4)
 #define SMALL_OBJECT_THRESHOLD  (1 << (SMALL_PRECISION)) // Can set bounds with byte align on objects less than this
+#define CAN_SEAL_ANY 1
+
+// I have not added a yield nop to RISCV
+#define HW_YIELD
+#define HW_TRACE_ON __asm__ __volatile__ ("slti zero, zero, 1b");
+#define HW_TRACE_OFF __asm__ __volatile__ ("slti zero, zero, 1e");
+// Note, I have chosen fence rather than fence.i here. Some consumers may want fence.i,
+// especially around boot / program loading
+#define HW_SYNC __asm__ __volatile__ ("fence":::"memory")
+#define HW_SYNC_I __asm__ __volatile__ ("fence.i":::"memory")
+
+// Some macros for some asm instructions
+
+#define ASMADD_8_16i	"addi"
+#define ASMADD_16_16i	"addi"
+#define ASMADD_32_16i	"addi"
+#define ASMADD_64_16i	"addi"
+#define ASMADD_c_16i	"cincoffsetimm"
+
+#define ASMADD_8_64	    "add"
+#define ASMADD_16_64	"add"
+#define ASMADD_32_64	"add"
+#define ASMADD_64_64	"add"
+#define ASMADD_c_64	    "cincoffset"
+
+#define BNE_8(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_16(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_32(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_64(a,b,l,t) "bne " a ", " b ", " l
+#define BNE_c(a,b,l,t) "CSetEqualExact " t ", " a ", " b "; beqz " t ", " l
+
+#define BNE(type, a, b, label,tmp) BNE_ ## type(a,b,label,tmp)
+
+#define ASMADD(type, val_type) ASMADD_ ## type ## _ ## val_type
+
+#define LOADL(type)  "clr." SUF_ ## type
+#define LOAD(type) "cl" SUF_ ## type
+#define STOREC(type) "csc." SUF_ ## type
+#define STORE(type) "cs" SUF_ ## type
+
+#ifndef __ASSEMBLY__
 
 /*
  * 64-bit RISCV types.
@@ -60,12 +102,48 @@ typedef	unsigned long	size_t;
 
 typedef long		off_t;
 
-// TODO RISCV everything below is a dummy to get things to compile
+#define cheri_getreg(X)                                         \
+    ({  capability _getreg_tmp;                                 \
+        __asm("cmove %[dst], " X:[dst]"=C"(_getreg_tmp)::);     \
+        _getreg_tmp;                                            \
+    })
 
-#define STORE_IDC_INDEX(index, value)
+#define cheri_setreg(X, V) __asm("cmove " X ", %[src]" ::[src]"C"(V):)
+
+#define	cheri_getidc() cheri_getreg("c31")
+
+#define SET_FUNC(S, F)                              \
+__asm (".weak " # S";"                              \
+       "lui t0, %%captab_call_hi(" #S ");"          \
+       "cincoffset ct0, c3, t0;"                    \
+       "csc %[arg], %%captab_call_lo(" #S ")(ct0)"  \
+       ::[arg]"C"(F):"memory","t0","ct0")
+
+#define SET_SYM(S, V)                               \
+__asm (".weak " # S";"                              \
+       "lui t0, %%captab_hi(" #S ");"               \
+       "cincoffset ct0, c3, t0;"                    \
+       "csc %[arg], %%captab_lo(" #S ")(ct0)"       \
+       ::[arg]"C"(V):"memory","t0","ct0")
+
+#define SET_TLS_SYM(S, V)                           \
+__asm (".weak " # S";"                              \
+       "lui t0, %%captab_tls_hi(" #S ");"           \
+       "cincoffset ct0, c31, t0;"                   \
+       "csc %[arg], %%captab_tls_lo(" #S ")(ct0)"   \
+       ::[arg]"C"(V):"memory","t0","ct0")
+
+#define STORE_IDC_INDEX(index, value)               \
+__asm ("cincoffset ct0, c31, %[off];"               \
+       "csc %[arg], 0(ct0)"                         \
+       ::[arg]"C"(value),[off]"r"(index):"memory","t0","ct0");
+
+// TODO RISCV everything below is a dummy to get things to compile
 
 typedef struct reg_frame {
 
 } reg_frame_t;
+
+#endif
 
 #endif //CHERIOS_RISV_H

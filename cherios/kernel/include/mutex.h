@@ -34,7 +34,6 @@
 #include "stddef.h"
 #include "nano/nanokernel.h"
 #include "spinlock.h"
-#include "cp0.h"
 
 #define CRITICAL_LOCKED_BEGIN_ID(lock, id) \
     id = critical_section_enter();         \

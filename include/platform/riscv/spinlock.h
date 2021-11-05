@@ -31,6 +31,45 @@
 #ifndef CHERIOS_SPINLOCK_H
 #define CHERIOS_SPINLOCK_H
 
+#include "cheric.h"
+
 //TODO RISCV
+
+typedef struct spinlock_t{
+    volatile char lock;
+} spinlock_t;
+
+__BEGIN_DECLS
+
+static inline void spinlock_init(spinlock_t* lock) {
+    lock->lock = 0;
+}
+static inline void spinlock_acquire(spinlock_t* lock) {
+    C_REGCLASS register_t tmp;
+    __asm__ volatile (""
+    : [tmp] "=r" (tmp)
+    : [lock]"C"(&lock->lock)
+    :
+    );
+}
+
+static inline int spinlock_try_acquire(spinlock_t* lock, register_t times) {
+    int result;
+    C_REGCLASS register_t tmp0;
+    __asm__ volatile (""
+    :  [result]"=&r"(result), [tmp]"=&r"(tmp0)
+    : [lock]"C"(&lock->lock), [times]"r"(times)
+    :
+    );
+
+    return result;
+}
+
+static inline void spinlock_release(spinlock_t* lock) {
+    lock->lock = 0;
+    HW_SYNC;
+}
+
+__END_DECLS
 
 #endif //CHERIOS_SPINLOCK_H

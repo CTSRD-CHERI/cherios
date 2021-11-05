@@ -57,10 +57,12 @@ set(LIBUSER_SRCS
     src/exceptions.c
     src/namespace.c
     src/temporal.c
+    src/platform/${PLATFORM}/temporal.c
     ${EXTRA_PLAT_LIBUSER}
     src/msg.c
     src/type_man.c
     src/thread.c
+    src/platform/${PLATFORM}/thread.c
     src/pthread.c
     src/pthread_mutex.c
     src/panic.c
@@ -94,6 +96,7 @@ set(LIBUSER_LIGHT_SRCS
     src/exceptions.c
     src/namespace.c
     src/temporal.c
+    src/platform/${PLATFORM}/temporal.c
     ${EXTRA_PLAT_LIBUSER}
     src/msg.c
     src/type_man.c

@@ -31,7 +31,9 @@
 #ifndef _MIPS_INCLUDE_CHERIC_H_
 #define	_MIPS_INCLUDE_CHERIC_H_
 
-#define HW_SYNC __asm__ __volatile__ ("sync":::"memory")
+#ifndef SMP_ENABLED
+#define SMP_CORES 1
+#endif
 
 #ifndef __ASSEMBLY__
 

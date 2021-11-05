@@ -31,6 +31,31 @@
 #ifndef CHERIOS_USERNANO_H
 #define CHERIOS_USERNANO_H
 
+#include "nano/nanokernel.h"
+#include "cheric.h"
+
+static inline void init_nano_if_sys(if_req_auth_t auth) {
+    nano_kernel_if_t interface;
+    size_t limit = N_NANO_CALLS;
+    capability data;
+    __asm__(
+    "li a0, 0                       \n"
+    "cmove  ca1, %[auth]            \n"
+    "cmove  ct0, %[ifc]             \n"
+    "1:scall                        \n"
+    "csc  ca2, 0(ct1)               \n"
+    "addi a0, a0, 1                 \n"
+    "cincoffset ct0, ct0, " CAP_SIZE_S "\n"
+    "bne a0, %[total], 1b           \n"
+    "cmove  %[d], ca3               \n"
+    : [d]"=C"(data)
+    : [ifc]"C"(&interface),[total]"r"(limit), [auth]"C"(auth)
+    : "ca0", "ca1", "ca2", "ct0"
+    );
+
+    init_nano_kernel_if_t(&interface, data, NULL);
+}
+
 // TODO RISCV
 
 #endif //CHERIOS_USERNANO_H

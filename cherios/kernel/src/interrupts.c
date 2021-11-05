@@ -33,7 +33,7 @@
 #include <queue.h>
 #include "activations.h"
 #include "klib.h"
-#include "cp0.h"
+#include "cpu.h"
 
 typedef struct interrupt_register_t {
 	act_t* target;
@@ -161,7 +161,7 @@ static int validate_number(int number) {
 int kernel_interrupts_off(void) {
 
 	cp0_status_ie_disable();
-	uint8_t cpu_id = cp0_get_cpuid();
+	uint8_t cpu_id = cpu_get_cpuid();
 	disabled[cpu_id] = 1;
 
 	register_t shifted = (1 << (MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER));
@@ -184,7 +184,7 @@ int kernel_interrupts_off(void) {
 
 int kernel_interrupts_on(void) {
 	cp0_status_ie_disable();
-	uint8_t cpu_id = cp0_get_cpuid();
+	uint8_t cpu_id = cpu_get_cpuid();
 	disabled[cpu_id] = 0;
 
 	register_t shifted = (1 << (MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER));
@@ -212,7 +212,7 @@ int kernel_interrupt_enable(int number, act_control_t * ctrl) {
 	if(number < 0) {
 		return -1;
 	}
-	uint8_t cpu_id = cp0_get_cpuid();
+	uint8_t cpu_id = cpu_get_cpuid();
 	if(GET_REG(cpu_id,number).target != ctrl) {
 		return -1;
 	}
@@ -230,7 +230,7 @@ int kernel_interrupt_register(int number, act_control_t * ctrl, register_t v0, r
 	if(number < 0) {
 		return -1;
 	}
-	uint8_t cpu_id = cp0_get_cpuid();
+	uint8_t cpu_id = cpu_get_cpuid();
 	if(GET_REG(cpu_id,number).target != NULL && GET_REG(cpu_id,number).target != ctrl) {
 		return -1;
 	}

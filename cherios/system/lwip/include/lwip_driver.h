@@ -44,7 +44,6 @@
 #include "lwip/apps/httpd.h"
 #include "lwip/timeouts.h"
 #include "lwip/dhcp.h"
-#include "cp0.h"
 #include "hostconfig.h"
 
 #ifdef HARDWARE_qemu

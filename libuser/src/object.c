@@ -89,17 +89,22 @@ __thread std_sock std_err_sock;
 static void setup_temporal_handle(startup_flags) {
     if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
         // WARN these will by dangling after compact. Call again to fix.
-        register_vectored_exception(&temporal_exception_handle, MIPS_CP0_EXCODE_TRAP);
+        register_vectored_exception(&temporal_exception_handle, TEMPORAL_TRAP_CODE);
     }
 }
 
 int handle_unaligned(register_t cause, register_t ccause, exception_restore_frame* restore_frame, exception_restore_saves_frame* saves_frame);
 
 static void setup_unaligned_handle(startup_flags) {
+// TODO RISCV: This should be in its own header
+#ifdef PLATFORM_MIPS
     if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
         register_vectored_exception2(&handle_unaligned, MIPS_CP0_EXCODE_ADEL);
         register_vectored_exception2(&handle_unaligned, MIPS_CP0_EXCODE_ADES);
     }
+#else
+    (void)startup_flags;
+#endif
 }
 
 // Manually link with other libraries (just the socket lib currently)

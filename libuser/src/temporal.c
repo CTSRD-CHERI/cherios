@@ -89,10 +89,6 @@ capability new_stack(capability old_c10) {
     ERROR_T(res_t) stack_res = mem_request(0, default_unsafe_stack_size, EXACT_SIZE | COMMIT_NOW | REPRESENTABLE, own_mop);
     // if(!IS_VALID(stack_res)) return 1; // We failed to get a new stack
 
-    if(!IS_VALID(stack_res)) {
-        __asm __volatile("li $0, 0xbeef     \n"
-                         "move $v0, %[er]   \n"::[er]"r"((ssize_t)stack_res.er):"v0");
-    }
     assert(IS_VALID(stack_res));
 
 #if !(LIGHTWEIGHT_OBJECT)
@@ -109,25 +105,14 @@ capability new_stack(capability old_c10) {
     return new_c10;
 }
 
+int temporal_check_insts(uint32_t fault_instr, uint32_t prev_fault_instr);
+
 int temporal_exception_handle(__unused register_t cause, __unused register_t ccause, exception_restore_frame* restore_frame) {
 // Looking for: cgetoffset $X, $c10; tltiu $X, Y
 
 #if(UNSAFE_STACKS_OFF)
     return 1;
 #endif
-
-#define REG_MASK            0b11111
-
-#define CGETOFFSET              0b01001000000000000101000000000111
-#define CGETOFFSET_CHECK_MASK   0b11111111111000001111100000000111
-#define CGETOFFSET_REG_SHIFT    16
-
-
-#define TLTIU                   0b00000100000010110000000000000000
-#define TLTIU_CHECK_MASK        0b11111100000111110000000000000000
-#define TLTIU_REG_SHIFT         21
-#define TLTIU_IM_MASK           0xFFFF
-
 
     uint32_t * epcc = (uint32_t*)get_ctl()->ex_pcc;
 
@@ -136,14 +121,10 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     uint32_t fault_instr = *(epcc);
     uint32_t prev_fault_instr = *(epcc-1);
 
-    // Check instructions are what we are looking for
+    int check = temporal_check_insts(fault_instr, prev_fault_instr);
 
-    if(!(((fault_instr & TLTIU_CHECK_MASK) == TLTIU) && ((prev_fault_instr & CGETOFFSET_CHECK_MASK) == CGETOFFSET)))
-        return 1;
-
-    // Check they use the same reg
-    if(((fault_instr >> TLTIU_REG_SHIFT) ^ (prev_fault_instr >> CGETOFFSET_REG_SHIFT)) & REG_MASK)
-        return 1;
+    if(check)
+        return check;
 
     // Get the immediate
     // uint16_t user_wants_size = (uint16_t)(fault_instr & TLTIU_IM_MASK);
@@ -153,7 +134,7 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     capability old_c10;
 
 #ifdef USE_EXCEPTION_UNSAFE_STACK
-    old_c10 = restore_frame->c10;
+    old_c10 = restore_frame->PLT_REG_STACK;
 #else
     old_c10 = get_unsafe_stack_reg();
 #endif
@@ -192,13 +173,13 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     get_ctl()->ex_pcc = (ex_pcc_t*)(((char*)epcc) + 4);
 
 #ifdef USE_EXCEPTION_UNSAFE_STACK
-    restore_frame->c10 = new_c10;
+    restore_frame->PLT_REG_STACK = new_c10;
 
     capability  old_ex_c10 = get_unsafe_stack_reg();
 
     if(replaced_first_c10 == 0 || cheri_getoffset(old_ex_c10) < MinStackSize) {
         capability new_ex_c10 = new_stack(replaced_first_c10 ? old_ex_c10 : NULL);
-        cheri_setreg(10, new_ex_c10);
+        set_unsafe_stack_reg(new_ex_c10);
 
         if(swap_back) {
             // Exception stack now the right size
@@ -215,38 +196,10 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     // The correct value to set it to is the old link
     ((CTL_t*)(get_ctl()->ex_idc))->cusp = old_link;
 #else
-    cheri_setreg(10, new_c10);
+    set_unsafe_stack_reg(new_c10);
 #endif
 
     return 0;
-}
-
-// A function that does nothing but perform the check sequence we use for unsafe stacks then returns
-__asm (
-SANE_ASM
-".text; .global try_replace_usp; .ent try_replace_usp; .hidden try_replace_usp; try_replace_usp: \n"
-"cgetoffset      $1, $c10     \n"
-"tltiu           $1, 0x4000   \n"
-"ccall           $c17, $c18, 2\n"
-"nop                          \n"
-".end try_replace_usp         \n"
-);
-
-
-// Consumes the entire unsafe stack so on the next use it will fault and be replaced
-void consume_usp(void) {
-    //
-    __asm __volatile (SANE_ASM
-                      "cbez       $c10, 1f                \n"
-                      "nop                                \n"
-                      "clcbi      $c1, %[off]($c10)       \n"
-                      "li         $t0, -%[off]            \n"
-                      "csetoffset $c10, $c10, $t0         \n"
-                      "cscbi       $c1, %[off]($c10)      \n"
-                      "1:\n"
-    :
-    : [off]"i"(CSP_OFF_NEXT)
-    :"$c10", "$c1", "t0");
 }
 
 void replace_usp(void) {

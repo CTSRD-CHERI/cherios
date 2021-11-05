@@ -34,6 +34,10 @@
 // While we do not have linker support, this header is used to create a PLT like construct, but every entry in the
 // .plt.got is a SEALED pointer.
 
+// NOTE: There is now dynamic linker support. This is still used for linking to the nanokernel and kernel and socket
+// libary. The first two are likely to remain this was, as they are somewhat special. The socket library, however,
+// should really not use this.
+
 // PLT_WTYPE will define a struct representing the plt, it is up to the user to create one of these
 // It will also create a set of ccall methods for each member of the struct.
 // It will also create a set of default objects for each member
@@ -48,74 +52,10 @@
 #include "utils.h"
 #include "types.h"
 #include "dylink.h"
+#include "cheriplt_platform.h"
 
 // FIXME: alias needs size too
 #define WEAK_DUMMY(name) ".weak " #name "_dummy \n .hidden " #name "_dummy \n"
-
-#if (DEBUG_COUNT_CALLS)
-
-#if (IS_KERNEL)
-#define GET_STATS   "clcbi   $c15, " X_STRINGIFY(CTLP_OFFSET_CGP) "($idc) \n"\
-                    "cbtu $c15, 77f \n "\
-                    "nop \n"\
-                    "clcbi	$c15, %captab20(own_stats)($c15)\n"
-#else
-#define GET_STATS ".type own_stats, \"tls_object\"\n clcbi $c15, %captab_tls20(own_stats)($c26)\n"
-#endif
-
-#define BUMP_CSD_COUNTER GET_STATS \
-        "clcbi   $c15, 0($c15) \n"\
-        "cbtu    $c15, 77f\n"\
-        "nop\n"\
-        "cld     $t0, $zero, " X_STRINGIFY(STATS_COMMON_DOMAIN_OFFSET) "($c15)\n"\
-        "daddiu  $t0, $t0, 1\n"\
-        "csd     $t0, $zero, " X_STRINGIFY(STATS_COMMON_DOMAIN_OFFSET) "($c15)\n"\
-        "77:\n"
-
-#else
-#define BUMP_CSD_COUNTER
-#endif
-
-
-#define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias, alias2) \
-__asm__ (                       \
-    SANE_ASM                    \
-    ".text\n"                   \
-    ".p2align 3\n"              \
-    ".global " #name "\n"       \
-    ".ent " #name "\n"          \
-    X_STRINGIFY(ASM_VISIBILITY) " " #name "\n"\
-    "" #name ":\n"              \
-    alias                       \
-    WEAK_DUMMY(name)            \
-    BUMP_CSD_COUNTER            \
-    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n"      \
-    "clcbi       $c2, %captab" tls "20(" EVAL1(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
-    "ccall       $c1, $c2, 2 \n"\
-    "nop\n"                     \
-    alias2                      \
-    ".end " #name "\n"          \
-);
-
-#define PLT_STUB_CGP_ONLY_MODE_SEL(name, obj, tls, tls_reg, alias, alias2) \
-__asm__ (                       \
-    SANE_ASM                    \
-    ".text\n"                   \
-    ".p2align 3\n"              \
-    ".global " #name "\n"       \
-    ".ent " #name "\n"          \
-    X_STRINGIFY(ASM_VISIBILITY) " " #name "\n"\
-    "" #name ":\n"              \
-    alias                       \
-    WEAK_DUMMY(name)            \
-    WEAK_DUMMY(obj)             \
-    "clcbi       $c1, %capcall20(" #name "_dummy)($c25)\n" \
-    "clcbi       $c12,%capcall20(" EVAL1(STRINGIFY(obj)) "_dummy)($c25)\n"          \
-    "cjr         $c12                                 \n"                           \
-    "clcbi       $c2, %captab" tls "20(" EVAL1(STRINGIFY(obj)) ")(" tls_reg ")\n"   \
-    alias2                      \
-    ".end " #name "\n"          \
-);
 
 typedef void common_t(void);
 
@@ -132,9 +72,6 @@ typedef void common_t(void);
     #define DECLARE_DEFAULT(type, per_thr) extern per_thr capability PLT_UNIQUE_OBJECT(type);
     #define ALLOCATE_DEFAULT(type, per_thr) per_thr capability PLT_UNIQUE_OBJECT(type);
 
-    #define INIT_OBJ(name, ret, sig, ...)             \
-        __asm__ ("cscbi %[d], %%capcall20(" #name "_dummy)($c25)\n"::[d]"C"(plt_if -> name):);
-
     #define DECLARE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
     void init_ ## type (type* plt_if, capability data, capability trust_mode);      \
     void init_ ## type ##_change_mode(capability trust_mode);                       \
@@ -148,19 +85,19 @@ typedef void common_t(void);
 
     #define DEFINE_PLT_INIT(type, LIST, tls_reg, tls)                                 \
     void PLT_INIT_MAIN_THREAD(type)  (type* plt_if, capability data, capability trust_mode) {      \
-        __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
-        __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
+        PLT_STORE_CAPTAB(tls, type, tls_reg, data); \
+        PLT_STORE_CAPTAB_CALL(type, trust_mode);    \
         LIST(INIT_OBJ)                                                                \
     }\
     void PLT_INIT_NEW_THREAD(type) (capability data) {      \
-            __asm__ ("cscbi %[d], %%captab" tls "20(" #type "_data_obj)(" tls_reg ")\n"::[d]"C"(data):); \
+            PLT_STORE_CAPTAB(tls, type, tls_reg, data); \
     }\
     void init_ ## type ##_change_mode(capability trust_mode) {\
-        __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; cscbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n"::[d]"C"(trust_mode):); \
+        PLT_STORE_CAPTAB_CALL(type, trust_mode); \
     }\
     capability init_ ## type ##_get_mode(void) {\
         capability trust_mode;\
-        __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; clcbi %[d], %%capcall20(" #type "_data_obj_dummy)($c25)\n":[d]"=C"(trust_mode)::); \
+        PLT_LOAD_CAPTAB_CALL(type, trust_mode); \
         return trust_mode;  \
     }
 
@@ -188,9 +125,8 @@ typedef void common_t(void);
     #define DEFINE_DUMMYS(LIST) LIST(DUMMY_HELP)
     #define MAKE_DUMMYS(LIST)
 
-
-    #define PLT(type, LIST) PLT_common(type, LIST,, "$c25",)
-    #define PLT_thr(type, LIST) PLT_common(type, LIST,__thread,"$c26", "_tls")
+    #define PLT(type, LIST) PLT_common(type, LIST,, X_STRINGIFY(PLT_REG_GLOB),)
+    #define PLT_thr(type, LIST) PLT_common(type, LIST, __thread, X_STRINGIFY(PLT_REG_LOCAL), "_tls")
 
     #define PLT_ALLOCATE_common(type, LIST, thread_loc, tls, tls_reg, ST) \
         ALLOCATE_DEFAULT(type, thread_loc)      \
@@ -199,9 +135,10 @@ typedef void common_t(void);
         LIST(DEFINE_STUB, type, ST, tls, tls_reg)
 
 
-    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_CSD)
-    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,"$c25",PLT_STUB_CGP_ONLY_MODE_SEL)
-    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST,__thread,"_tls","$c26",PLT_STUB_CGP_ONLY_MODE_SEL)
+    #define PLT_ALLOCATE_csd(type, LIST)  PLT_ALLOCATE_common(type, LIST,,,X_STRINGIFY(PLT_REG_GLOB),PLT_STUB_CGP_ONLY_CSD)
+    #define PLT_ALLOCATE(type, LIST) PLT_ALLOCATE_common(type, LIST,,,X_STRINGIFY(PLT_REG_GLOB),PLT_STUB_CGP_ONLY_MODE_SEL)
+    #define PLT_ALLOCATE_tls(type, LIST) PLT_ALLOCATE_common(type, LIST, __thread, "_tls", \
+                                                             X_STRINGIFY(PLT_REG_LOCAL),PLT_STUB_CGP_ONLY_MODE_SEL)
 
     // These are the mode stubs
     extern void plt_common_single_domain(void);

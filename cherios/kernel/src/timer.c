@@ -31,7 +31,7 @@
  */
 
 #include "klib.h"
-#include "cp0.h"
+#include "cpu.h"
 #include "atomic.h"
 
 // It _seems_ that even on QEMU the timers from cp0 stay in sync
@@ -110,7 +110,7 @@ static void kernel_timer_check_sleepers(uint64_t now) {
 }
 
 void kernel_timer_start_count(act_t* act) {
-	act->timeout_start = get_high_res_time(cp0_get_cpuid()); // WARN: goes badly if we change cpu?
+	act->timeout_start = get_high_res_time(cpu_get_cpuid()); // WARN: goes badly if we change cpu?
 }
 
 void kernel_timer_subscribe(act_t* act, register_t timeout) {

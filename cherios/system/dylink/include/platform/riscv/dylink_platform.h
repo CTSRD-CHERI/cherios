@@ -31,17 +31,31 @@
 #ifndef CHERIOS_DYLINK_PLATFORM_H
 #define CHERIOS_DYLINK_PLATFORM_H
 
-// TODO RISCV
+#define TEMPORAL_TRAP_CODE 0
 
-#define get_cgp() ((capability*) NULL
+#define PLT_REG_GLOB            c3
+#define PLT_REG_LOCAL           c31
+#define PLT_REG_LINK            c1
+#define PLT_REG_STACK           c2
+#define PLT_REG_UNSAFE_STACK    c4
+
+// For calling plt stubs
+#define PLT_REG_TARGET          c1
+#define PLT_REG_TARGET_DATA     ct0
+#define PLT_REG_RETURN_DATA     ct0
+
+// TODO RISCV
 #define get_sym_captable_offset32(Sym) 0
 #define get_sym_call_captable_offset32(Sym) 0
 #define get_tls_sym_captable_ndx16(Sym) 0
 
-#define get_unsafe_stack_reg() NULL
-#define get_safe_stack_reg() NULL
-#define get_return_reg()  NULL
-#define get_function_start_reg() NULL
-#define get_return_data_reg() NULL
+#define get_cgp() cheri_getreg(X_STRINGIFY(PLT_REG_GLOB))
+#define get_unsafe_stack_reg() cheri_getreg(X_STRINGIFY(PLT_REG_UNSAFE_STACK))
+#define get_safe_stack_reg() cheri_getreg(X_STRINGIFY(PLT_REG_STACK))
+#define get_return_reg()  cheri_getreg(X_STRINGIFY(PLT_REG_LINK))
+#define get_function_start_reg() cheri_getreg(X_STRINGIFY(PLT_REG_TARGET))
+#define get_return_data_reg() cheri_getreg(X_STRINGIFY(PLT_REG_GLOB))
+
+#define set_unsafe_stack_reg(X) cheri_setreg(X_STRINGIFY(PLT_REG_UNSAFE_STACK), X)
 
 #endif //CHERIOS_DYLINK_PLATFORM_H

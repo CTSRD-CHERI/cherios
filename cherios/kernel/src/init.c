@@ -31,7 +31,6 @@
 #include <nano/nanotypes.h>
 #include "klib.h"
 #include "nano/nanokernel.h"
-#include "cp0.h"
 #include "uart.h"
 #include "crt.h"
 

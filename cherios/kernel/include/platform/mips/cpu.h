@@ -28,16 +28,13 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_CHERIPLT_H
-#define CHERIOS_CHERIPLT_H
+#ifndef CHERIOS_CPU_H
+#define CHERIOS_CPU_H
 
-// TODO RISCV
+#include "cp0.h"
 
-#define PLT(type, LIST) typedef struct type {} type;
-#define PLT_thr(type, LIST, ...) typedef struct type {} type;
+static inline uint8_t cpu_get_cpuid(void) {
+    return cp0_get_cpuid();
+}
 
-#define PLT_ALLOCATE_csd(type, LIST)
-#define PLT_ALLOCATE(type, LIST)
-#define PLT_ALLOCATE_tls(type, LIST)
-
-#endif //CHERIOS_CHERIPLT_H
+#endif //CHERIOS_CPU_H

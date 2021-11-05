@@ -28,28 +28,20 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_EXCEPTIONS_PLATFORM_H
-#define CHERIOS_EXCEPTIONS_PLATFORM_H
+#include "temporal.h"
+#include "stdint.h"
 
 // TODO RISCV
 
-typedef struct {
-#ifdef USE_EXCEPTION_UNSAFE_STACK
-    capability c2;
-#endif
-} exception_restore_frame;
+void try_replace_usp(void) {
 
-// Some handler may need access to these
-typedef struct {
-} exception_restore_saves_frame;
+}
+void consume_usp(void) {
 
-typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
-typedef int handler2_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame,
-                       exception_restore_saves_frame* saves_frame);
+}
 
-#define INC_STACK(SN, I)
-
-#define N_USER_EXCEPTIONS 0
-#define N_USER_CAP_EXCEPTIONS 0
-
-#endif //CHERIOS_EXCEPTIONS_PLATFORM_H
+int temporal_check_insts(uint32_t fault_instr, uint32_t prev_fault_instr) {
+    (void)fault_instr;
+    (void)prev_fault_instr;
+    return 0;
+}

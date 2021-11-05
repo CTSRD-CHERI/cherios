@@ -34,6 +34,8 @@
 #include "types.h"
 #include "queue.h"
 #include "tman.h"
+#include "spinlock.h"
+#include "dylink.h"
 
 typedef enum startup_flags_e {
     STARTUP_NONE            = 0x00,
@@ -94,4 +96,34 @@ thread thread_create_thread(process_kt proc, const char* name, startup_desc_t* d
 top_t get_top_for_process(process_kt proc);
 top_t get_own_top(void);
 capability get_type_owned_by_process(void);
+
+/* These are used internally */
+
+// This will be symetric locked. It can only be created by the foundation, and only read by the foundation.
+// We try do all the hard bootstrapping in the parent whilst C is a available and then just load in the new thread.
+struct secure_start_t {
+    capability idc;
+
+    // We will use this as an idc while setting up. If we want user exceptions (we currently don't) these fields can be set
+    // WARN: The offsets of these 3 fields are very important. Don't move them.
+    ex_pcc_t* ex_pcc;
+    capability ex_idc;
+    capability ex_c1;
+
+    capability cgp;
+    capability c11;
+    capability c10;
+
+    thread_start_func_t * start;
+    capability carg;
+    register_t arg;
+    spinlock_t once;
+    capability segment_table[MAX_SEGS];
+    capability data_args[MAX_LIBS+1];
+};
+
+struct start_stack_args {
+    thread_start_func_t* start;
+    capability data_args[MAX_LIBS+1];
+};
 #endif //CHERIOS_UNISTD_H_H

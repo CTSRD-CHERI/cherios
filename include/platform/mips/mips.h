@@ -32,10 +32,6 @@
 #ifndef _CHERIOS_MIPS_H_
 #define	_CHERIOS_MIPS_H_
 
-#ifndef SMP_ENABLED
-	#define SMP_CORES 1
-#endif
-
 #ifdef HARDWARE_qemu
 	#define N_TLB_ENTS	32
     #define HW_TRACE_ON __asm__ __volatile__ ("li $zero, 0xbeef");
@@ -66,6 +62,8 @@
 
 #define CAN_SEAL_ANY 1
 
+#define HW_SYNC __asm__ __volatile__ ("sync":::"memory")
+#define HW_SYNC_I HW_SYNC
 /*
  * Derive CHERI-flavor from capability size
  */

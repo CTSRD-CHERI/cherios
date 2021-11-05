@@ -35,7 +35,7 @@
 #include "activations.h"
 #include "klib.h"
 #include "nano/nanokernel.h"
-#include "cp0.h"
+#include "cpu.h"
 #include "boot_info.h"
 #ifdef K_DEBUG
 #ifdef HARDWARE_fpga
@@ -315,7 +315,7 @@ register_t sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e 
 
     if(!got_event) {
 		sched_reschedule(next_hint, in_exception_handler);
-		return (get_high_res_time(cp0_get_cpuid()) - act->timeout_start);
+		return (get_high_res_time(cpu_get_cpuid()) - act->timeout_start);
 	}
 
 	// Fast path related. Waking something in the fastpath wait needs to set v1.
@@ -421,7 +421,7 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 	if(!in_exception_handler) {
 		pool_id = critical_section_enter();
 	} else {
-		pool_id = (uint8_t)cp0_get_cpuid();
+		pool_id = (uint8_t)cpu_get_cpuid();
 	}
 
 	sched_pool* pool = &sched_pools[pool_id];

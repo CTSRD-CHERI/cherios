@@ -137,7 +137,7 @@ size_t load_nano() {
     }
 
 
-    HW_SYNC;
+    HW_SYNC_I;
 
 	bi.nano_begin = 0;
 	bi.nano_end = (size_t)&(__nano_size);

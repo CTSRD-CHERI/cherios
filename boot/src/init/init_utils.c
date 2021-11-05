@@ -30,7 +30,6 @@
  */
 
 #include "cheric.h"
-#include "cp0.h"
 #include "object.h"
 #include "string.h"
 #include "uart.h"
