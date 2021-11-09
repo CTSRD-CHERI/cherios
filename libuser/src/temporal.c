@@ -134,7 +134,7 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     capability old_c10;
 
 #ifdef USE_EXCEPTION_UNSAFE_STACK
-    old_c10 = restore_frame->PLT_REG_STACK;
+    old_c10 = restore_frame->PLT_REG_UNSAFE_STACK;
 #else
     old_c10 = get_unsafe_stack_reg();
 #endif
@@ -173,7 +173,7 @@ int temporal_exception_handle(__unused register_t cause, __unused register_t cca
     get_ctl()->ex_pcc = (ex_pcc_t*)(((char*)epcc) + 4);
 
 #ifdef USE_EXCEPTION_UNSAFE_STACK
-    restore_frame->PLT_REG_STACK = new_c10;
+    restore_frame->PLT_REG_UNSAFE_STACK = new_c10;
 
     capability  old_ex_c10 = get_unsafe_stack_reg();
 
