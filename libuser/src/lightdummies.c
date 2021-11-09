@@ -44,6 +44,10 @@ void lw_panic(void) {
 
 void __assert(__unused const char *assert_function, __unused const char *assert_file,
               __unused int assert_lineno, __unused const char *assert_message) {
+    syscall_puts("(lw) assertion failure at ");
+    syscall_puts(assert_function);
+    syscall_puts(":");
+    syscall_puts(assert_message);
     lw_panic();
 }
 
