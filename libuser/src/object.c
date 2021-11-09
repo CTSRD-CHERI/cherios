@@ -97,7 +97,7 @@ int handle_unaligned(register_t cause, register_t ccause, exception_restore_fram
 
 static void setup_unaligned_handle(startup_flags) {
 // TODO RISCV: This should be in its own header
-#ifdef PLATFORM_MIPS
+#ifdef PLATFORM_mips
     if(!(startup_flags & STARTUP_NO_EXCEPTIONS)) {
         register_vectored_exception2(&handle_unaligned, MIPS_CP0_EXCODE_ADEL);
         register_vectored_exception2(&handle_unaligned, MIPS_CP0_EXCODE_ADES);
