@@ -28,28 +28,9 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_EXCEPTIONS_PLATFORM_H
-#define CHERIOS_EXCEPTIONS_PLATFORM_H
+#include "klib.h"
 
-// TODO RISCV
-
-typedef struct {
-#ifdef USE_EXCEPTION_UNSAFE_STACK
-    capability c4;
-#endif
-} exception_restore_frame;
-
-// Some handler may need access to these
-typedef struct {
-} exception_restore_saves_frame;
-
-typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
-typedef int handler2_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame,
-                       exception_restore_saves_frame* saves_frame);
-
-#define INC_STACK(SN, I)
-
-#define N_USER_EXCEPTIONS 0
-#define N_USER_CAP_EXCEPTIONS 0
-
-#endif //CHERIOS_EXCEPTIONS_PLATFORM_H
+void hw_reboot(void) {
+    // TODO RISCV
+    for(;;);
+}

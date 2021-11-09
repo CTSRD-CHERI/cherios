@@ -550,6 +550,8 @@ __asm __volatile (                              \
     "daddiu %[res], %[res], %%lo(" #symbol ")\n" \
 : [res]"=r"(result) ::)
 
+#define cheri_asm_getpcc(asm_out) "cgetpcc " asm_out "\n"
+
 #define SET_FUNC(S, F) __asm (".weak " # S"; cscbi %[arg], %%capcall20(" #S ")($c25)" ::[arg]"C"(F):"memory")
 #define SET_SYM(S, V) __asm (".weak " # S"; cscbi %[arg], %%captab20(" #S ")($c25)" ::[arg]"C"(V):"memory")
 #define SET_TLS_SYM(S, V) __asm (".weak " #S "; cscbi %[arg], %%captab_tls20(" #S ")($c26)" ::[arg]"C"(V):"memory")
@@ -661,7 +663,6 @@ typedef struct reg_frame {
 #define CHERI_FRAME_SIZE       (MIPS_FRAME_SIZE + CHERI_CAP_FRAME_SIZE)
 #define FRAME_C1_OFFSET         (MIPS_FRAME_SIZE + CAP_SIZE)
 #define FRAME_C3_OFFSET        (MIPS_FRAME_SIZE + (3 * CAP_SIZE))
-#define FRAME_a0_OFFSET        (3 * REG_RIZE)
 #define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
 #define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
 

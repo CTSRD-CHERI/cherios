@@ -542,21 +542,21 @@ crt_init_globals_init()
     cheri_dla(__stop___cap_relocs, reloc_end);
 
     capability cgp = cheri_setoffset(gdc, table_start);
-    cheri_setreg(25, cgp);
+    set_cgp(cgp);
 
     crt_init_common(segment_table,
             (struct capreloc *)((char*)gdc + reloc_start),
                     (struct capreloc *)((char*)gdc + reloc_end),
                             RELOC_FLAGS_TLS);
 
-    cheri_setreg(25, &__cap_table_start);
+    set_cgp(&__cap_table_start);
 
     // Provide our own tls segment
 
     segment_table[3] = (capability)tls_segment;
     capability local_captab = cheri_setbounds(segment_table[3],cheri_getlen(&__cap_table_local_start));
 
-    cheri_setreg(26, local_captab);
+    set_idc(local_captab);
 
     crt_init_common(segment_table, (struct capreloc *)((char*)gdc + reloc_start),
                     (struct capreloc *)((char*)gdc + reloc_end), 0);

@@ -31,13 +31,16 @@
 #ifndef CHERIOS_DYLINK_PLATFORM_H
 #define CHERIOS_DYLINK_PLATFORM_H
 
+#include "reg_abi.h"
+
 #define TEMPORAL_TRAP_CODE 0
 
-#define PLT_REG_GLOB            c3
-#define PLT_REG_LOCAL           c31
-#define PLT_REG_LINK            c1
-#define PLT_REG_STACK           c2
-#define PLT_REG_UNSAFE_STACK    c4
+#define PLT_REG_GLOB            abi_global
+#define PLT_REG_LOCAL           abi_local
+#define PLT_REG_LINK            abi_link
+#define PLT_REG_STACK           abi_stack
+#define PLT_REG_UNSAFE_STACK    abi_unsafe
+#define PLT_REG_DATA_LINK       abi_data_link
 
 // For calling plt stubs
 #define PLT_REG_TARGET          c1
@@ -57,5 +60,6 @@
 #define get_return_data_reg() cheri_getreg(X_STRINGIFY(PLT_REG_GLOB))
 
 #define set_unsafe_stack_reg(X) cheri_setreg(X_STRINGIFY(PLT_REG_UNSAFE_STACK), X)
+#define set_cgp(X) cheri_setreg(X_STRINGIFY(PLT_REG_GLOB), X)
 
 #endif //CHERIOS_DYLINK_PLATFORM_H

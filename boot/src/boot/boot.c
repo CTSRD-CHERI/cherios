@@ -85,12 +85,12 @@ crt_init_globals_boot()
     cheri_dla(__stop___cap_relocs, reloc_end);
 
     capability cgp = cheri_setoffset(gdc, table_start);
-    cheri_setreg(25, cgp);
+    set_cgp(cgp);
 
     crt_init_common(segment_table, (struct capreloc *)((char*)gdc + reloc_start),
                     (struct capreloc *)((char*)gdc + reloc_end), RELOC_FLAGS_TLS);
 
-    cheri_setreg(25, &__cap_table_start);
+    set_cgp(&__cap_table_start);
 
     return &__cap_table_local_start;
 }

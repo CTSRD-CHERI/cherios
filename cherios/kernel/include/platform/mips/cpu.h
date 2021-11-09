@@ -37,4 +37,39 @@ static inline uint8_t cpu_get_cpuid(void) {
     return cp0_get_cpuid();
 }
 
+static inline uint32_t cpu_count_get(void) {
+    return cp0_count_get();
+}
+
+static inline void cpu_compare_set(uint32_t compare) {
+    cp0_compare_set(compare);
+}
+
+static inline int cpu_is_timer_interrupt(register_t cause)
+{
+    return cause & (1 << (MIPS_CP0_INTERRUPT_TIMER + MIPS_CP0_STATUS_IM_SHIFT));
+}
+
+static inline int cpu_ie_get(void) {
+    return cp0_status_ie_get();
+}
+
+static inline void cpu_ie_enable() {
+    cp0_status_ie_enable();
+}
+
+static inline void cpu_ie_disable() {
+    cp0_status_ie_disable();
+}
+
+static inline void cpu_enable_timer_interrupts() {
+    register_t shifted = (1 << (MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER));
+    modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, shifted);
+}
+
+static inline void cpu_disable_timer_interrupts() {
+    register_t shifted = (1 << (MIPS_CP0_STATUS_IM_SHIFT+MIPS_CP0_INTERRUPT_TIMER));
+    modify_hardware_reg(NANO_REG_SELECT_STATUS, shifted, 0);
+}
+
 #endif //CHERIOS_CPU_H

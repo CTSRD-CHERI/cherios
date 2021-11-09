@@ -40,6 +40,7 @@
 #include "nano/nanokernel.h"
 #include "act_events.h"
 #include "atomic.h"
+#include "reg_abi.h"
 
 /*
  * Routines to handle activations
@@ -118,14 +119,14 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
     frame.cf_default = cheri_setbounds(cheri_setoffset(cheri_getdefault(), init_base), length);
     capability pcc =  cheri_setbounds(cheri_setoffset(global_pcc, init_base), length);
 
-	frame.cf_c12 = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
+	frame.cf_link = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
 
 	/* provide config info to init.  c3 is the conventional register */
-	frame.cf_c3 = info;
+	frame.cf_kernel_config = info;
 
     /* init has put its thread locals somewhere sensible (base + 0x100) */
-    frame.mf_user_loc = 0x7000 + init_tls_base;
-    frame.mf_t0 = cheri_getbase(frame.cf_pcc); // Hacky way to indicate a program base
+    frame.cf_init_tls_base = 0x7000 + init_tls_base;
+    frame.cf_program_base = cheri_getbase(frame.cf_pcc); // Hacky way to indicate a program base
 	act_t * init_act = &kernel_acts[namespace_num_init];
 	act_register_create(&frame, &init_queue.queue, "init", status_alive, NULL, NULL, 0);
 
@@ -212,7 +213,7 @@ static act_t* alloc_static_act(aid_t* aid_used) {
 	}
 
 	aid_t id;
-	ATOMIC_ADD(&kernel_next_act, 32, 16i, 1, id)
+	ATOMIC_ADD(&kernel_next_act, 32, 16i, 1, id);
 
 	act_t* act = kernel_acts + id;
 	if(aid_used) *aid_used = id;
@@ -296,13 +297,13 @@ act_t * act_register(reg_frame_t *frame, queue_t *queue, const char *name,
 	/* SEE libuser/src/init.S for the conventional start up */
 
 	/* set namespace */
-	frame->cf_c20	= (capability)queue;
-	frame->cf_c21 	= (capability)act_create_sealed_ctrl_ref(act);
-	frame->cf_c23	= (capability)ns_ref;
-	frame->cf_c24	= (capability)get_if();
+	frame->cf_msg_queue     = (capability)queue;
+	frame->cf_self_ref      = (capability)act_create_sealed_ctrl_ref(act);
+	frame->cf_ns_ref        = (capability)ns_ref;
+	frame->cf_kernel_if     = (capability)get_if();
 
 	// Probably a better place to do this than here...
-	frame->cf_c16	= (capability)req_auth_for_activations;
+	frame->cf_nano_req_auth = (capability)req_auth_for_activations;
 
 	/* set queue */
 	msg_queue_init(act, queue);
@@ -339,7 +340,7 @@ act_control_t *act_register_create(reg_frame_t *frame, queue_t *queue, const cha
         KERNEL_TRACE("Program %s has a context at %lx to %lx\n", name, nfo.base, nfo.base+nfo.length);
     }
 
-	act_t* act = act_register(frame, queue, name, create_in_status, parent, frame->mf_t0, res);
+	act_t* act = act_register(frame, queue, name, create_in_status, parent, frame->cf_program_base, res);
 	act->context = create_context(frame, context_res);
     /* set scheduling status */
 

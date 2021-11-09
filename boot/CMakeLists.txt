@@ -27,6 +27,7 @@ set(BOOT_SRCS
     ${DRIVERS_DIR}/uart/src/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
+    ${UART_CONSOLE}
 )
 
 set(BOOT_ASM_SRCS
@@ -59,14 +60,6 @@ set(INIT_SRCS
 set(INIT_ASM_SRCS
     src/init/platform/${PLATFORM}/init.S
 )
-
-if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND BOOT_SRCS ${DRIVERS_DIR}/uart/src/uart_malta.c)
-elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND BOOT_SRCS ${DRIVERS_DIR}/uart/src/uart_altera.c)
-else()
-    message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
-endif()
 
 # we have to include ${CMAKE_CURRENT_BINARY_DIR} for all files and not just fs.c
 # because CMake strips include paths from the COMPILE_FLAGS source file property

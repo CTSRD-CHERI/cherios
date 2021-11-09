@@ -28,28 +28,11 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_EXCEPTIONS_PLATFORM_H
-#define CHERIOS_EXCEPTIONS_PLATFORM_H
-
-// TODO RISCV
-
-typedef struct {
-#ifdef USE_EXCEPTION_UNSAFE_STACK
-    capability c4;
-#endif
-} exception_restore_frame;
-
-// Some handler may need access to these
-typedef struct {
-} exception_restore_saves_frame;
-
-typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
-typedef int handler2_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame,
-                       exception_restore_saves_frame* saves_frame);
-
-#define INC_STACK(SN, I)
-
-#define N_USER_EXCEPTIONS 0
-#define N_USER_CAP_EXCEPTIONS 0
-
-#endif //CHERIOS_EXCEPTIONS_PLATFORM_H
+/* Trampoline used as entry point for all secure loaded programs. Simply calls nano kernel enter. */
+// TODO RISCV not c1/c2 use registers in reg_abi.h:
+__asm__ (
+".text\n"
+".global secure_entry_trampoline\n"
+"secure_entry_trampoline: cinvoke $c1, $c2\n"
+".size secure_entry_trampoline, 4"
+);

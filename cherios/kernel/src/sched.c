@@ -98,7 +98,7 @@ void sched_init(sched_idle_init_t* sched_idle_init) {
         pool->pool_id = i;
 
 #if (K_DEBUG)
-        pool->last_time = (uint32_t)cp0_count_get();
+        pool->last_time = (uint32_t)cpu_count_get();
 #endif
         capability qsz_cap = & pool->in_queues;
         qsz_cap = cheri_setbounds(qsz_cap, sizeof(size_t));
@@ -456,7 +456,7 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 
 #if (K_DEBUG)
         uint32_t last_time = pool->last_time;
-        uint32_t now = (uint32_t)cp0_count_get();
+        uint32_t now = (uint32_t)cpu_count_get();
 #define GET_STAT(item, ...) uint64_t item = get_ ## item ##_count();
 #define INC_STAT(item, ...) kernel_curr_act->item += (item - pool->item);
 #define SET_STAT(item, ...) pool->item = item;

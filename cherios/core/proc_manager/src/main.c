@@ -113,16 +113,6 @@ static process_t* unseal_live_proc(process_t* process) {
 	return process;
 }
 
-/* Trampoline used as entry point for all secure loaded programs. Simply calls nano kernel enter. */
-__asm__ (
-	SANE_ASM
-	".text\n"
-	".global secure_entry_trampoline\n"
-	".ent secure_entry_trampoline\n"
-	"secure_entry_trampoline: ccall $c1, $c2, 2\n"
-	"nop\n"
- 	".end secure_entry_trampoline "
-);
 extern void secure_entry_trampoline(void);
 
 static mop_t make_mop_for_process(process_t* proc) {
@@ -197,7 +187,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
         process->load_base = base;
     } else base = process->load_base;
 
-    frame.mf_t0 = base;
+    frame.cf_program_base = base;
 
     if(queue == NULL) {
         cap_pair pair = env.alloc(0x100, &env);
@@ -210,13 +200,13 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
 	if(process->im.secure_loaded) {
 		frame.cf_pcc = &secure_entry_trampoline;
 		// we need c3 for the trampoline. C0 would be useless anyway as it points to the unsecure copy
-  		frame.cf_c1 = &foundation_enter_dummy;
-	 	frame.cf_c2 = &PLT_UNIQUE_OBJECT(nano_kernel_if_t);
-	 	frame.cf_c7 = get_tres_for_process(process);
-		frame.cf_c9 = found_cert;
+  		frame.cf_found_enter = &foundation_enter_dummy;
+	 	frame.cf_nano_if_data = &PLT_UNIQUE_OBJECT(nano_kernel_if_t);
+	 	frame.cf_type_res = get_tres_for_process(process);
+		frame.cf_cert = found_cert;
 	}
 
-	frame.mf_s2 = flags;
+	frame.cf_start_flags = flags;
 
 	act_control_kt ctrl = syscall_act_register(&frame, name, queue, bootstrapping ? NULL : cap_malloc_need_split(ACT_REQUIRED_SPACE), cpu_hint);
 

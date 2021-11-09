@@ -8,6 +8,7 @@ set(PROC_SRCS
     ${CMAKE_SOURCE_DIR}/elf/src/elf_loader.c
     ${CMAKE_SOURCE_DIR}/elf/src/cprogram.c
     ${CMAKE_SOURCE_DIR}/tmpalloc/src/alloc.c
+    src/platform/${PLATFORM}/trampolines.c
 )
 
 add_cherios_executable_early(proc ADD_TO_FILESYSTEM LINKER_SCRIPT sandbox.ld SOURCES ${PROC_SRCS})

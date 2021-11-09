@@ -31,4 +31,40 @@
 #ifndef CHERIOS_CPU_H
 #define CHERIOS_CPU_H
 
+// TODO RISCV
+
+static inline uint8_t cpu_get_cpuid(void) {
+    return 0;
+}
+
+static inline uint32_t cpu_count_get(void) {
+    return 0;
+}
+
+static inline void cpu_compare_set(uint32_t compare) {
+    (void)compare;
+}
+
+static inline int cpu_is_timer_interrupt(register_t cause) {
+    (void)cause;
+    return 0;
+}
+
+static inline int cpu_ie_get(void) {
+    return 0;
+}
+
+static inline void cpu_ie_enable() {
+}
+
+static inline void cpu_ie_disable() {
+}
+
+static inline void cpu_enable_timer_interrupts() {
+}
+
+static inline void cpu_disable_timer_interrupts() {
+
+}
+
 #endif //CHERIOS_CPU_H

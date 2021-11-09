@@ -31,6 +31,8 @@
 #ifndef CHERIOS_CPROGRAM_H
 #define CHERIOS_CPROGRAM_H
 
+#include "reg_abi.h"
+
 // We request our default queue (about 0x820 ) and the queue in one go. We can do exact bounds on 0xff00.
 // Sadly requesting via alloc with mmap can only give us 0xfe00.
 // so a stack of f600 + 0x900 for the queue works nicely and wastes about 0x1c0 bytes. A bit of work could make this 0xc0.

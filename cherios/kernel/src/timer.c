@@ -57,10 +57,10 @@ void kernel_timer_init(uint8_t cpu_id) {
 
 	kernel_assert(val == 0);
 
-	kernel_last_timer[cpu_id] = cp0_count_get();
+	kernel_last_timer[cpu_id] = cpu_count_get();
 	high_resolution_timers[cpu_id] = kernel_last_timer[cpu_id];
 	kernel_last_timer[cpu_id] += TIMER_INTERVAL;
-	cp0_compare_set(kernel_last_timer[cpu_id]);
+	cpu_compare_set(kernel_last_timer[cpu_id]);
 }
 
 uint64_t get_high_res_time(uint8_t cpu_id) {
@@ -69,9 +69,9 @@ uint64_t get_high_res_time(uint8_t cpu_id) {
 	uint64_t* old_ptr = &high_resolution_timers[cpu_id];
 	do {
 		// Although we do not plan to update the high res counter here (we do that in a timer interrupt) we still need
-		// to guard cp0_count_get inside a LL/SC otherwise we might double count the wrap around
+		// to guard cpu_count_get inside a LL/SC otherwise we might double count the wrap around
         old_high_res = *old_ptr;
-		uint32_t low_res = (uint32_t)cp0_count_get();
+		uint32_t low_res = (uint32_t)cpu_count_get();
 		// Ensure it hasnt changed
 		ATOMIC_CAS(old_ptr, 64, old_high_res, old_high_res, success);
         if(success) {
@@ -149,7 +149,7 @@ void kernel_timer_unsubcsribe(act_t* act) {
 
 void kernel_timer(uint8_t cpu_id)
 {
-	KERNEL_TRACE(__func__, "in %lu", cp0_count_get());
+	KERNEL_TRACE(__func__, "in %lu", cpu_count_get());
 
 	// Set the high solution timer. This must be done before it wraps around since last call.
 	__unused uint64_t old = high_resolution_timers[cpu_id];
@@ -178,17 +178,17 @@ void kernel_timer(uint8_t cpu_id)
 restart:;
 #endif
 
-    uint32_t cur = cp0_count_get();
+    uint32_t cur = cpu_count_get();
     int32_t diff;
 
     // Catches either small, or negative timer offset
 	while ((diff = (int32_t)next_timer - (int32_t)cur),(diff < TIMER_INTERVAL_MIN)) {
 		next_timer = next_timer + TIMER_INTERVAL;
 	}
-	cp0_compare_set(next_timer);		/* Clears pending interrupt. */
+	cpu_compare_set(next_timer);		/* Clears pending interrupt. */
 
 #ifdef  HARDWARE_qemu
-    uint32_t sanity = (uint32_t)cp0_count_get();
+    uint32_t sanity = (uint32_t)cpu_count_get();
     diff = next_timer - sanity;
     if(diff < 0) goto restart;
 #endif

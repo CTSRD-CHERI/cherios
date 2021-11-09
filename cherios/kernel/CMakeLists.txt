@@ -9,6 +9,7 @@ if(GO_FAST)
 else()
     set(KERNEL_DEBUG_SRCS
             ${DRIVERS_DIR}/uart/src/uart.c
+            ${UART_CONSOLE}
             )
 endif()
 
@@ -19,6 +20,7 @@ set(KERNEL_SRCS
     src/platform/${PLATFORM}/kernel_exceptions.c
     src/kernel_printf.c
     src/kernel_utils.c
+    src/platform/${PLATFORM}/kernel_utils.c
     src/msg.c
     src/platform/${PLATFORM}/regdump.c
     src/sched.c
@@ -32,14 +34,6 @@ set(KERNEL_ASM_SRCS
     src/platform/${PLATFORM}/message_send.S
     ${PLT_ASM}
 )
-
-if("${CONSOLE}" STREQUAL "malta")
-    list(APPEND KERNEL_SRCS  ${DRIVERS_DIR}/uart/src/uart_malta.c)
-elseif("${CONSOLE}" STREQUAL "altera")
-    list(APPEND KERNEL_SRCS  ${DRIVERS_DIR}/uart/src/uart_altera.c)
-else()
-    message(FATAL_ERROR "Invalid choice for CONSOLE: ${CONSOLE}")
-endif()
 
 add_cherios_kernel(kernel LINKER_SCRIPT kernel.ld SOURCES
     ${KERNEL_SRCS}

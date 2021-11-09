@@ -37,7 +37,7 @@
 #define ENUM_VMEM_SAFE_DEREFERENCE(location, result, edefault)  \
     __asm__ (                                                   \
         "li     %[res], %[def]               \n"                \
-        "clw    %[res], zero, 0(%[state])   \n"                \
+        "clw    %[res], 0(%[state])   \n"                       \
         MAGIC_SAFE \
     : [res]"=r"(result)                                         \
     : [state]"C"(location),[def]"i"(edefault)                   \
@@ -46,7 +46,7 @@
 
 #define VMEM_SAFE_DEREFERENCE(var, result, type)                \
 __asm__ (                                                       \
-        LOAD(type)" %[res], zero, 0(%[loc])   \n"              \
+        LOAD(type)" %[res], 0(%[loc])   \n"                     \
         MAGIC_SAFE \
     : [res]INOUT(type)(result)                                  \
     : [loc]"C"(var)                                             \

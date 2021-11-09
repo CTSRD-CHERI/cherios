@@ -48,10 +48,12 @@
 #define SMALL_OBJECT_THRESHOLD  (1 << (SMALL_PRECISION)) // Can set bounds with byte align on objects less than this
 #define CAN_SEAL_ANY 1
 
+#define SANE_ASM
+
 // I have not added a yield nop to RISCV
 #define HW_YIELD
-#define HW_TRACE_ON __asm__ __volatile__ ("slti zero, zero, 1b");
-#define HW_TRACE_OFF __asm__ __volatile__ ("slti zero, zero, 1e");
+#define HW_TRACE_ON __asm__ __volatile__ ("slti zero, zero, 0x1b");
+#define HW_TRACE_OFF __asm__ __volatile__ ("slti zero, zero, 0x1e");
 // Note, I have chosen fence rather than fence.i here. Some consumers may want fence.i,
 // especially around boot / program loading
 #define HW_SYNC __asm__ __volatile__ ("fence":::"memory")
@@ -111,6 +113,7 @@ typedef long		off_t;
 #define cheri_setreg(X, V) __asm("cmove " X ", %[src]" ::[src]"C"(V):)
 
 #define	cheri_getidc() cheri_getreg("c31")
+#define cheri_setidc(X) cheri_setreg("c31", X)
 
 #define SET_FUNC(S, F)                              \
 __asm (".weak " # S";"                              \
@@ -138,12 +141,69 @@ __asm ("cincoffset ct0, c31, %[off];"               \
        "csc %[arg], 0(ct0)"                         \
        ::[arg]"C"(value),[off]"r"(index):"memory","t0","ct0");
 
+// This is really la, not dla. But I think it will suffice.
+#define cheri_dla(symbol, result)               \
+__asm __volatile (                              \
+    "lui %[res], %%hi(" #symbol ")\n"           \
+    "addi %[res], %[res], %%lo(" #symbol ")\n"  \
+: [res]"=r"(result) ::)
+
+#define cheri_asm_getpcc(asm_out) "1: auipcc " asm_out ", 0\n"
+
 // TODO RISCV everything below is a dummy to get things to compile
 
+// TODO: Should these have ABI names? I don't think ABI belongs at this level, and reg_abi.h exists.
 typedef struct reg_frame {
+    union {
+        struct {
+            capability cf_c1, cf_c2, cf_c3, cf_c4, cf_c5, cf_c6, cf_c7, cf_c8;
+            capability cf_c9, cf_c10, cf_c11, cf_c12, cf_c13, cf_c14, cf_c15, cf_c16;
+            capability cf_c17, cf_c18, cf_c19, cf_c20, cf_c21, cf_c22, cf_c23, cf_c24;
+            capability cf_c25, cf_c26, cf_c27, cf_c28, cf_c29, cf_c30;
+        };
+        struct {
+            struct {uint64_t cf_x1; uint64_t cf_x1_hi;};
+            struct {uint64_t cf_x2; uint64_t cf_x2_hi;};
+            struct {uint64_t cf_x3; uint64_t cf_x3_hi;};
+            struct {uint64_t cf_x4; uint64_t cf_x4_hi;};
+            struct {uint64_t cf_x5; uint64_t cf_x5_hi;};
+            struct {uint64_t cf_x6; uint64_t cf_x6_hi;};
+            struct {uint64_t cf_x7; uint64_t cf_x7_hi;};
+            struct {uint64_t cf_x8; uint64_t cf_x8_hi;};
+            struct {uint64_t cf_x9; uint64_t cf_x9_hi;};
+            struct {uint64_t cf_x10; uint64_t cf_x10_hi;};
+            struct {uint64_t cf_x11; uint64_t cf_x11_hi;};
+            struct {uint64_t cf_x12; uint64_t cf_x12_hi;};
+            struct {uint64_t cf_x13; uint64_t cf_x13_hi;};
+            struct {uint64_t cf_x14; uint64_t cf_x14_hi;};
+            struct {uint64_t cf_x15; uint64_t cf_x15_hi;};
+            struct {uint64_t cf_x16; uint64_t cf_x16_hi;};
+            struct {uint64_t cf_x17; uint64_t cf_x17_hi;};
+            struct {uint64_t cf_x18; uint64_t cf_x18_hi;};
+            struct {uint64_t cf_x19; uint64_t cf_x19_hi;};
+            struct {uint64_t cf_x20; uint64_t cf_x20_hi;};
+            struct {uint64_t cf_x21; uint64_t cf_x21_hi;};
+            struct {uint64_t cf_x22; uint64_t cf_x22_hi;};
+            struct {uint64_t cf_x23; uint64_t cf_x23_hi;};
+            struct {uint64_t cf_x24; uint64_t cf_x24_hi;};
+            struct {uint64_t cf_x25; uint64_t cf_x25_hi;};
+            struct {uint64_t cf_x26; uint64_t cf_x26_hi;};
+            struct {uint64_t cf_x27; uint64_t cf_x27_hi;};
+            struct {uint64_t cf_x28; uint64_t cf_x28_hi;};
+            struct {uint64_t cf_x29; uint64_t cf_x29_hi;};
+            struct {uint64_t cf_x30; uint64_t cf_x30_hi;};
+        };
+    };
 
+    capability cf_idc;
+    capability cf_default;
+    capability cf_pcc;
 } reg_frame_t;
 
-#endif
+#endif // ASSEMBLY
+
+#define CHERI_FRAME_SIZE (32 * CAP_SIZE)
+#define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
+#define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
 
 #endif //CHERIOS_RISV_H

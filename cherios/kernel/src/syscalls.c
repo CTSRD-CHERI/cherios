@@ -34,6 +34,7 @@
 #include "klib.h"
 #include "syscalls.h"
 #include "cpu.h"
+#include "dylink_platform.h"
 
 /*
  * These functions are those that are available by dynamic linking with the kernel
@@ -225,7 +226,7 @@ __used void kernel_syscall_puts(char *msg) {
 DECLARE_WITH_CD(void, kernel_syscall_panic_proxy(act_t* act) __dead2);
 __used void kernel_syscall_panic_proxy(act_t* act) { //fixme: debug only
 	// Turn of interrupts makes the panic print not get screwed up
-	cp0_status_ie_disable();
+	cpu_ie_disable();
 
 	kernel_printf("Activation %s has called panic\n", sched_get_current_act()->name);
 
@@ -340,15 +341,14 @@ DECLARE_WITH_CD(void, kernel_syscall_backtrace(void));
 __used void kernel_syscall_backtrace(void) {
     capability rd;
     capability pcc;
-    capability frame;
-    capability ra;
+    capability frame; // = __builtin_frame_address(0) does not seem to be working
+    capability ra = __builtin_return_address(0);
     // This is a horrible hack and is not expected to work
     __asm__ __inline(SANE_ASM
-        "cgetpcc %[c1]\n"
-        "cmove   %[c2], $c18\n"
-        "cmove   %[c3], $c11\n"
-        "cmove   %[c4], $c17\n"
-        : [c1]"=C"(pcc), [c2]"=C"(rd), [c3]"=C"(frame), [c4]"=C"(ra)
+        cheri_asm_getpcc("%[c1]")
+        "cmove   %[c2], "X_STRINGIFY(PLT_REG_DATA_LINK)"\n"
+        "cmove   %[c3], "X_STRINGIFY(PLT_REG_STACK)"\n"
+        : [c1]"=C"(pcc), [c2]"=C"(rd), [c3]"=C"(frame)
     );
     capability idc = cheri_getidc();
     backtrace(frame, pcc, idc, ra, rd);

@@ -98,42 +98,42 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     frame->cf_idc = NULL;
 
     /* Setup the global reg */
-    frame->cf_c25 = NULL;
+    frame->cf_global = NULL;
 
     /* set stack */
-    frame->cf_c11 = stack;
+    frame->cf_stack = stack;
     /* TODO: Set unsafe stack here */
 
     /* set c12 */
-    frame->cf_c12	= frame->cf_pcc;
+    frame->cf_link	= frame->cf_pcc;
 
     /* set default */
     frame->cf_default	= NULL;
 
     /* Setup args */
-    frame->mf_a0 = arg;
-    frame->cf_c3 = carg;
+    frame->cf_arg = arg;
+    frame->cf_carg = carg;
 
-    frame->cf_c19 = mop;
+    frame->cf_mop = mop;
 
     /* Set up a whole bunch of linking info */
 
     if(!im->secure_loaded) {
         env->memcpy(seg_tbl, &im->load_type.basic.tables, sizeof(im->load_type.basic.tables));
-        frame->cf_c4 = seg_tbl;                             // segment_table
-        frame->cf_c5 = im->load_type.basic.tls_prototype ;                  // tls_prototype
-        frame->cf_c6 = im->load_type.basic.code_write_cap;
-        frame->mf_s1 = im->tls_index * sizeof(capability);  // tls_segment_offset
-        frame->mf_a2 = im->data_index * sizeof(capability); // data_seg_offset
-        frame->mf_a4 = im->code_index * sizeof(capability); // code_seg_offset
-        frame->mf_s3 = im->tls_fil_size;
-        frame->mf_s5 = im->tls_mem_size;
-        frame->mf_s6 = im->dynamic_vaddr;
-        frame->mf_s7 = im->dynamic_size;
+        frame->cf_seg_tbl = seg_tbl;                             // segment_table
+        frame->cf_tls_proto = im->load_type.basic.tls_prototype ;                  // tls_prototype
+        frame->cf_code_write = im->load_type.basic.code_write_cap;
+        frame->cf_tls_seg_offset = im->tls_index * sizeof(capability);  // tls_segment_offset
+        frame->cf_data_seg_offset = im->data_index * sizeof(capability); // data_seg_offset
+        frame->cf_code_seg_offset = im->code_index * sizeof(capability); // code_seg_offset
+        frame->cf_tls_fil_size = im->tls_fil_size;
+        frame->cf_tls_mem_size = im->tls_mem_size;
+        frame->cf_dynamic_vaddr = im->dynamic_vaddr;
+        frame->cf_dynamic_size = im->dynamic_size;
     } else {
-        frame->cf_c8 = im->load_type.secure.secure_entry;
+        frame->cf_secure_entry = im->load_type.secure.secure_entry;
     }
 
-    frame->mf_t0 = cheri_getbase(pcc);
+    frame->cf_program_base = cheri_getbase(pcc);
     return queue;
 }

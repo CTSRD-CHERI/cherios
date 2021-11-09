@@ -31,13 +31,15 @@
 #ifndef CHERIOS_DYLINK_PLATFORM_H
 #define CHERIOS_DYLINK_PLATFORM_H
 
-// The inconsistancy around the use of $ is really annoying. The first two of these tend to get used in ASM, so need
-// the $
-#define PLT_REG_GLOB            $c25
-#define PLT_REG_LOCAL           $c26
-#define PLT_REG_LINK            c12
-#define PLT_REG_STACK           c11
-#define PLT_REG_UNSAFE_STACK    c10
+#include "reg_abi.h"
+
+// The inconsistancy around the use of $ is really annoying.
+#define PLT_REG_GLOB            __CONCAT($,abi_global)
+#define PLT_REG_LOCAL           __CONCAT($,abi_local)
+#define PLT_REG_DATA_LINK       __CONCAT($,abi_data_link)
+#define PLT_REG_LINK            __CONCAT($,abi_link)
+#define PLT_REG_STACK           __CONCAT($,abi_stack)
+#define PLT_REG_UNSAFE_STACK    abi_unsafe
 
 #define TEMPORAL_TRAP_CODE MIPS_CP0_EXCODE_TRAP
 
@@ -82,5 +84,6 @@ __ret;})
 #define get_return_data_reg() cheri_getreg(18)
 
 #define set_unsafe_stack_reg(X) cheri_setreg(10, X)
+#define set_cgp(X) cheri_setreg(25, X)
 
 #endif //CHERIOS_DYLINK_PLATFORM_H

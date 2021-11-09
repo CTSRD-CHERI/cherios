@@ -28,28 +28,26 @@
  * SUCH DAMAGE.
  */
 
-#ifndef CHERIOS_EXCEPTIONS_PLATFORM_H
-#define CHERIOS_EXCEPTIONS_PLATFORM_H
+#include "uart.h"
+#include "cheric.h"
 
-// TODO RISCV
+// This 'uart' device is mostly a dummy. It just causes a trace on QEMU when written to.
 
-typedef struct {
-#ifdef USE_EXCEPTION_UNSAFE_STACK
-    capability c4;
-#endif
-} exception_restore_frame;
+char uart_read(void) {
+    return 0;
+}
 
-// Some handler may need access to these
-typedef struct {
-} exception_restore_saves_frame;
+int	uart_readable(void) {
+    return 1;
+}
 
-typedef int handler_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame);
-typedef int handler2_t(register_t cause, register_t ccause, exception_restore_frame* restore_frame,
-                       exception_restore_saves_frame* saves_frame);
+int	uart_writable(void) {
+    return 1;
+}
 
-#define INC_STACK(SN, I)
-
-#define N_USER_EXCEPTIONS 0
-#define N_USER_CAP_EXCEPTIONS 0
-
-#endif //CHERIOS_EXCEPTIONS_PLATFORM_H
+volatile char foo;
+void uart_write(char ch) {
+    HW_TRACE_ON;
+    foo = ch;
+    HW_TRACE_OFF;
+}
