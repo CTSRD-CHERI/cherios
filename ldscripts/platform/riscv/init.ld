@@ -27,13 +27,54 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+INCLUDE "common.ld"
 
-#include "asm.S"
+__size_memory		= 0x1000000;	/* Start simple: 16M above load address */
+__size_init_stack	= 0x10000;	/* Start simple: 64K */
 
-# TODO RISCV
+OUTPUT_FORMAT("elf64-littleriscv");
+OUTPUT_ARCH(riscv)
+ENTRY(start)
+SECTIONS
+{
+	. += SIZEOF_HEADERS;
 
-.text
+    __text_segment_start = .;
 
-START_FUNC start
+	.init : {
+		KEEP (*(.init))
+	} = 0
+	.text ALIGN(64): {
+		*(.text)
+	}
 
-END_FUNC start
+	/*
+	 * Memory to be mapped into the data segment.  For compiler-generated
+	 * content, it would be much preferable to map into the code segment
+	 * and use $pcc-relative loads, but we are not yet there.
+	 */
+    .data ALIGN(CAP_ALIGN): {
+        __data_segment_start = .;
+        *(.data)
+    }
+
+	.bss ALIGN(0x10000): {
+		*(.bss)
+	}
+
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
+
+	/*
+	 * We DO need to include these in so much as they need program headers (even if file size is zero.
+	 * Otherwise the elf loader will not allocate enough memory and we will get an exception
+	 * This only worked before because we ran with a global C0 / never used this stack
+	 */
+
+	 .heapandstack ALIGN(PAGE_ALIGN): {
+	    __start_init_stack	= .;
+	    . += __size_init_stack;
+	    __stop_init_stack = .;
+	 } : bss
+}

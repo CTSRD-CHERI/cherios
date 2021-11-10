@@ -28,12 +28,36 @@
  * SUCH DAMAGE.
  */
 
-#include "asm.S"
 
-# TODO RISCV
+INCLUDE "common.ld"
 
-.text
+OUTPUT_FORMAT("elf64-littleriscv");
+OUTPUT_ARCH(riscv)
+ENTRY(nano_kernel_init)
+SECTIONS
+{
+    . = __nano_load_virtaddr;
+	.text ALIGN(CAP_ALIGN) : {
+	    . = __nano_load_virtaddr;
+	    KEEP (*(.init))
+	    KEEP(*(.text))
+	} :text = 0
 
-START_FUNC start
+	.bss ALIGN(0x10000): { *(.bss) }
 
-END_FUNC start
+    /DISCARD/ :
+    {
+       *(.pdr)
+       *(.comment)
+       *(.data)
+       *(.got)
+       *(.cap_table_local)
+    }
+}
+
+PHDRS
+{
+	header PT_PHDR PHDRS;
+	text PT_LOAD;
+	bss PT_LOAD;
+}

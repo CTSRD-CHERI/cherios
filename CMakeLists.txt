@@ -259,6 +259,7 @@ set(ASMC_COMPILER_FLAGS
     -isysroot=/dev/null # Remove the default '/usr/include' one...
     -DASM_VISIBILITY=.hidden
     -DPLATFORM_${PLATFORM}
+    -DBAREBONES=${BAREBONES}
     -fvisibility=hidden
     "SHELL:-mllvm -is-cherios"
     -march=${CHERI_CPU}
@@ -373,10 +374,18 @@ function(add_to_filesystem _target _fs_target_path)
   set(CHERIOS_FILESYSTEM_DEPENDS ${CHERIOS_FILESYSTEM_DEPENDS} ${_target} CACHE INTERNAL "dependencies for filesystem")
 endfunction()
 
+set(LD_DIR ${CMAKE_SOURCE_DIR}/ldscripts/platform/${PLATFORM})
+
 function(set_core_ld_deps _target)
-  set_target_properties(${_target} PROPERTIES
-    LINK_DEPENDS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT};${CMAKE_SOURCE_DIR}/ldscripts/mips.ld;;${CMAKE_SOURCE_DIR}/ldscripts/common.ld"
-    )
+    if("${PLATFORM}" STREQUAL "mips")
+        set_target_properties(${_target} PROPERTIES
+                LINK_DEPENDS "${LD_DIR}/${add_exe_LINKER_SCRIPT};${LD_DIR}/mips.ld;;${LD_DIR}/common.ld"
+                )
+    else()
+        set_target_properties(${_target} PROPERTIES
+                LINK_DEPENDS "${LD_DIR}/${add_exe_LINKER_SCRIPT};${LD_DIR}/riscv.ld;;${LD_DIR}/common.ld"
+                )
+    endif()
 endfunction()
 
 # Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
@@ -498,14 +507,14 @@ function(add_cherios_module _target)
   endif()
 
   if((NOT add_exe_LINKER_SCRIPT) OR (add_exe_LINKER_SCRIPT STREQUAL "sandbox.ld"))
-    # Sandbox is no just no script plus a few flags
+    # There is no linker script needed for normal programs
     set(LINKER_SCRIPT_ARG "-e start -Wl,--image-base,0,--no-rosegment -z max-page-size=16")
-  elseif(NOT EXISTS "${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
+  elseif(NOT EXISTS "${LD_DIR}/${add_exe_LINKER_SCRIPT}")
     message(FATAL_ERROR "Chosen LINKER_SCRIPT ${add_exe_LINKER_SCRIPT} does not exist!")
   else()
     set(LINKER_SCRIPT_ARG
-            "-L${CMAKE_SOURCE_DIR}/ldscripts"
-            "-Wl,-T,${CMAKE_SOURCE_DIR}/ldscripts/${add_exe_LINKER_SCRIPT}")
+            "-L${LD_DIR}"
+            "-Wl,-T,${LD_DIR}/${add_exe_LINKER_SCRIPT}")
   endif()
   set(_srcs ${add_exe_SOURCES})
   list(LENGTH _srcs _src_count)

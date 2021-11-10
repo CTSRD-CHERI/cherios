@@ -28,3 +28,23 @@
  * SUCH DAMAGE.
  */
 
+#include "klib.h"
+
+// TODO RISCV
+
+void kernel_dump_tlb(void) {
+
+}
+
+void regdump(int reg_num, act_t* act) {
+    (void)reg_num;
+    (void)act;
+}
+
+void backtrace(char* stack_pointer, capability return_address, capability idc, capability r17, capability c18) {
+    (void)stack_pointer;
+    (void)return_address;
+    (void)idc;
+    (void)r17;
+    (void)c18;
+}

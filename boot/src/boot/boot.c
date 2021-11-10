@@ -95,22 +95,6 @@ crt_init_globals_boot()
     return &__cap_table_local_start;
 }
 
-
-static void
-cp0_status_bev_set(int bev)
-{
-    register_t status;
-
-    /* XXXRW: Non-atomic test-and-set. */
-
-    __asm__ __volatile__ ("dmfc0 %0, $12" : "=r" (status));
-    if (bev)
-        status |= MIPS_CP0_STATUS_BEV;
-    else
-        status &= ~MIPS_CP0_STATUS_BEV;
-    __asm__ __volatile__ ("dmtc0 %0, $12" : : "r" (status));
-}
-
 void bootloader_main(capability global_pcc);
 void bootloader_main(capability global_pcc) {
 
@@ -124,9 +108,7 @@ void bootloader_main(capability global_pcc) {
     boot_printf("Boot: loading nano kernel ...\n");
 	nano_init_t * nano_init = (nano_init_t*)cheri_setoffset(global_pcc,load_nano());
 
-    /* TODO: we could have some boot exception vectors if we want exception  handling in boot. */
-    /* These should be in ROM as a part of the boot image (i.e. make a couple more dedicated sections */
-    cp0_status_bev_set(0);
+    boot_platform_init();
 
     boot_printf("Boot: loading kernel ...\n");
     size_t entry = load_kernel();

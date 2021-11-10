@@ -221,19 +221,3 @@ boot_info_t *load_init() {
 err:
 	hw_reboot();
 }
-
-void hw_init(void) {
-    capability ucap = cheri_getdefault();
-    ucap = cheri_setoffset(ucap, MIPS_XKPHYS_UNCACHED_BASE + uart_base_phy_addr);
-    ucap = cheri_setbounds(ucap, uart_base_size);
-    set_uart_cap(ucap);
-	uart_init();
-	__asm__ (
-		"mfc0	$t0, $7\n"
-		"ori	$t0, $t0, 1 << 2\n"
-		"mtc0	$t0, $7\n"
-		:
-		:
-		: "t0"
-    );
-}

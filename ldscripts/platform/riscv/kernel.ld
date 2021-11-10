@@ -28,12 +28,70 @@
  * SUCH DAMAGE.
  */
 
-#include "asm.S"
+INCLUDE "common.ld"
 
-# TODO RISCV
+__size_exception_stack	= 0x4000;	/* Start simple: 4K */
 
-.text
+OUTPUT_FORMAT("elf64-littleriscv");
+OUTPUT_ARCH(riscv)
+ENTRY(start)
+SECTIONS
+{
+	. += SIZEOF_HEADERS;
 
-START_FUNC start
+    __text_segment_start = .;
 
-END_FUNC start
+	.text ALIGN(CAP_ALIGN): {
+        KEEP (*(.init))
+		*(.text)
+	}
+	.fini ALIGN(CAP_ALIGN): {
+		KEEP (*(.fini))
+	} = 0
+
+	/*
+	 * Memory to be mapped into the data segment.  For compiler-generated
+	 * content, it would be much preferable to map into the code segment
+	 * and use $pcc-relative loads, but we are not yet there.
+	 */
+
+
+	.data ALIGN(CAP_ALIGN): {
+	    __data_segment_start = .;
+		*(.data)
+	}
+    .ctors ALIGN(CAP_ALIGN) : {
+        KEEP (*/crtbeginC.o(.ctors))
+        KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
+        KEEP (*(SORT(.ctors.*)))
+        KEEP (*/crtendC.o(.ctors))
+    }
+    .dtors ALIGN(CAP_ALIGN) : {
+        KEEP (*/crtbeginC.o(.dtors))
+        KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
+        KEEP (*(SORT(.dtors.*)))
+        KEEP (*/crtendC.o(.dtors))
+    }
+	.bss ALIGN(CAP_ALIGN): {
+		*(.bss)
+	}
+
+    __start_bss = ADDR(.bss);
+    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
+    __bss_size = __stop_bss - __start_bss;
+
+	.stack ALIGN(PAGE_ALIGN): {
+		__start_exception_stack	= .;
+		. += __size_exception_stack;
+		__stop_exception_stack	= .;
+	}
+
+	/* todo: do not discard in debug mode */
+	/DISCARD/ :
+	{
+	   *(.comment)
+	   *(.tbss)
+	   *(.tdata)
+	   *(.cap_table_local)
+	}
+}

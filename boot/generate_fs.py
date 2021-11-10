@@ -13,7 +13,7 @@ def main():
     hdr.write("// AUTO GENERATED. DO NOT EDIT.\n")
 
     asm.write("// AUTO GENERATED. DO NOT EDIT.\n")
-    asm.write(".text\n")
+    asm.write(".data\n")
 
 
     for filename in os.listdir(in_directory):

@@ -28,12 +28,21 @@
  * SUCH DAMAGE.
  */
 
-#include "asm.S"
+INCLUDE "riscv.ld"
 
-# TODO RISCV
+/* I know RISCV caps are 0x10 aligned, but the generic CheriOS LD alignment is 0x20 for 256-bit legacy reasons */
+CAP_ALIGN = 0x20;
+PAGE_ALIGN = 0x1000;
 
-.text
+/* Careful changing nano size, its hardcoded in the nano kernel still (as NANO_SIZE) */
+__nano_size            =    0x4000000;
+__nano_load_physaddr   =    0x0001000;
+__boot_load_physaddr   =    0x8000000;
 
-START_FUNC start
+/* Everything but the nano kernel are pcc/c0 base relative. */
 
-END_FUNC start
+__kernel_load_virtaddr = 0x000000;
+__init_load_virtaddr   = 0x000000;
+
+__boot_load_virtaddr   = __cached_base + __boot_load_physaddr;
+__nano_load_virtaddr   = __cached_base + __nano_load_physaddr;

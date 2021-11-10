@@ -167,17 +167,22 @@ init_elem_t init_list[] = {
     B_DENTRY(m_proc,     proc, 0, 1)
 	B_DENTRY(m_memmgt,	memmgt,		0, 	1)
 // NOTE: IDLE processes are loaded here
+#if BAREBONES != 1
     B_DENTRY(m_secure,    libsocket, 0, 1)
     B_WAIT_FOR(namespace_num_lib_socket)
     B_DENTRY(m_uart,	uart,		0,	1)      // Needed for stdout so bring up asap. This needs the link server for libsocket
+#endif // Barebones
     B_DENTRY(m_user,    activation_events, 0, 1)
+#if BAREBONES != 1
     B_DENTRY(m_dedup,    dedup, 0 ,1)
     B_DENTRY(m_dedup_init, dedup_init, DEDUP_INIT, 1)
     B_WAIT_FOR(namespace_num_dedup_service)
+#endif // Barebones
     B_DENTRY(m_tman, type_manager,0,1)
     B_WAIT_FOR(namespace_num_tman)
 //  B_DENTRY(m_core,	sockets,		0,	B_SO)
 //	B_DENTRY(m_core,	zlib,		0,	B_ZL)
+#if BAREBONES != 1
 	B_DENTRY(m_virtblk,	BLK_ELF,	0,	!B_DEMO)
     B_DENTRY(DEFAULT_TO(m_secure) | m_user, block_cache, 0, !B_DEMO)
 #if (B_DEMO == 0)
@@ -252,7 +257,7 @@ init_elem_t init_list[] = {
     B_WAIT_FOR(namespace_num_eve)
     B_PENTRY(m_secure, alice, 0, 1)
 #endif
-
+#endif // Barebones
 	{m_fence, 0, NULL, 0, 0, 0, NULL, NULL, NULL}
 };
 

@@ -29,3 +29,7 @@
  */
 
 //TODO RISCV
+
+void hw_reboot(void) {
+    for(;;);
+}

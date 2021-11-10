@@ -28,12 +28,9 @@
  * SUCH DAMAGE.
  */
 
-#include "asm.S"
+#ifndef CHERIOS_ASM_H
+#define CHERIOS_ASM_H
 
-# TODO RISCV
+#define START_FUNC(X) ".global " #X "; .type " #X ", \"function\"; " #X ":"
 
-.text
-
-START_FUNC start
-
-END_FUNC start
+#endif //CHERIOS_ASM_H

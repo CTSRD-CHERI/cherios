@@ -27,6 +27,7 @@ set(BOOT_SRCS
     ${DRIVERS_DIR}/uart/src/uart.c
     src/boot/boot_printf.c
     src/boot/boot_utils.c
+    src/boot/platform/${PLATFORM}/boot_platform.c
     ${UART_CONSOLE}
 )
 

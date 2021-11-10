@@ -1,10 +1,10 @@
 /*-
- * Copyright (c) 2011 Robert N. M. Watson
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause
  *
- * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract (FA8750-10-C-0237)
- * ("CTSRD"), as part of the DARPA CRASH research programme.
+ * Copyright (c) 2021 Lawrence Esswood
+ *
+ * This work was supported by Innovate UK project 105694, "Digital Security
+ * by Design (DSbD) Technology Platform Prototype".
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,23 +28,24 @@
  * SUCH DAMAGE.
  */
 
-/*
- * We don't get loaded at 0, nor do we use a global cap, so null is not the start of our address space.
- * Therefore no padding is needed
- */
+#define __ASSEMBLY__ 1
 
-INCLUDE "common.ld"
+.macro TRACE_ON
+    slti zero, zero, 0x1b
+.endm
 
-ENTRY(start)
-SECTIONS
-{
-    . = SIZEOF_HEADERS;
+.macro TRACE_OFF
+    slti zero, zero, 0x1e
+.endm
 
-	.text ALIGN(CAP_ALIGN): { *(.text) }
-	.data ALIGN(CAP_ALIGN): { *(.data) }
-	.bss  ALIGN(CAP_ALIGN): { *(.bss) }
+.macro START_FUNC name
+    .global \name
+    ASM_VISIBILITY \name
+    .type \name, "function"
+    \name:
+.endm
 
-    __start_bss = ADDR(.bss);
-    __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
-    __bss_size = __stop_bss - __start_bss;
-}
+.macro END_FUNC name
+    \name\()_end:
+    .size \name, \name\()_end - \name
+.endm

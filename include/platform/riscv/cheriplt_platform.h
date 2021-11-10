@@ -40,6 +40,7 @@ __asm__ (                                                                       
     ".text\n"                                                                       \
     ".global " #name "\n"                                                           \
     X_STRINGIFY(ASM_VISIBILITY) " " #name "\n"                                      \
+    ".type " #name ", \"function\"\n"                                               \
     "" #name ":\n"                                                                  \
     alias                                                                           \
     WEAK_DUMMY(name)                                                                \
@@ -55,6 +56,7 @@ __asm__ (                                                                       
     ".text\n"                                                                       \
     ".global " #name "\n"                                                           \
     X_STRINGIFY(ASM_VISIBILITY) " " #name "\n"                                      \
+    ".type " #name ", \"function\"\n"                                               \
     "" #name ":\n"                                                                  \
     alias                                                                           \
     WEAK_DUMMY(name)                                                                \

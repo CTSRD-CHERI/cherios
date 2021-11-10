@@ -31,6 +31,9 @@
 #include "uart.h"
 #include "cheric.h"
 
+size_t uart_base_phy_addr = 0;
+size_t uart_base_size = 64;
+
 // This 'uart' device is mostly a dummy. It just causes a trace on QEMU when written to.
 
 char uart_read(void) {
@@ -50,4 +53,8 @@ void uart_write(char ch) {
     HW_TRACE_ON;
     foo = ch;
     HW_TRACE_OFF;
+}
+
+void set_uart_cap(capability cap) {
+    (void)cap;
 }

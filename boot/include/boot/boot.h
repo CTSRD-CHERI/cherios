@@ -79,4 +79,6 @@ boot_info_t*	load_init(void);
 void	hw_init(void);
 void	install_exception_vector(void);
 
+void boot_platform_init(void);
+
 #endif

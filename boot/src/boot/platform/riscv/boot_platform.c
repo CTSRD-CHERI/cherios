@@ -28,12 +28,10 @@
  * SUCH DAMAGE.
  */
 
-#include "asm.S"
+// TODO RISCV
 
-# TODO RISCV
+void hw_init(void) {
+}
 
-.text
-
-START_FUNC start
-
-END_FUNC start
+void boot_platform_init(void) {
+}

@@ -28,12 +28,5 @@
  * SUCH DAMAGE.
  */
 
-#include "asm.S"
-
-# TODO RISCV
-
-.text
-
-START_FUNC start
-
-END_FUNC start
+/* The nanokernel will set up simple direct mappings at this base */
+__cached_base = 0;

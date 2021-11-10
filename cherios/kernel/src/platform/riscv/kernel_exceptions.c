@@ -28,3 +28,12 @@
  * SUCH DAMAGE.
  */
 
+#include "nano/nanotypes.h"
+#include "kernel_exceptions.h"
+
+void kernel_exception(__unused context_t swap_to, context_t own_context) {
+    while (1) {
+        // TODO RISCV
+        (void)own_context;
+    }
+}

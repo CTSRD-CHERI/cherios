@@ -113,7 +113,7 @@ typedef long		off_t;
 #define cheri_setreg(X, V) __asm("cmove " X ", %[src]" ::[src]"C"(V):)
 
 #define	cheri_getidc() cheri_getreg("c31")
-#define cheri_setidc(X) cheri_setreg("c31", X)
+#define set_idc(X) cheri_setreg("c31", X)
 
 #define SET_FUNC(S, F)                              \
 __asm (".weak " # S";"                              \
@@ -205,5 +205,7 @@ typedef struct reg_frame {
 #define CHERI_FRAME_SIZE (32 * CAP_SIZE)
 #define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
 #define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
+
+#define NANO_KSEG 0
 
 #endif //CHERIOS_RISV_H

@@ -33,6 +33,6 @@
 __asm__ (
 ".text\n"
 ".global secure_entry_trampoline\n"
-"secure_entry_trampoline: cinvoke $c1, $c2\n"
+"secure_entry_trampoline: cinvoke c1, c2\n"
 ".size secure_entry_trampoline, 4"
 );
