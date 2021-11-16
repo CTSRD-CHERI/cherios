@@ -550,6 +550,8 @@ __asm __volatile (                              \
     "daddiu %[res], %[res], %%lo(" #symbol ")\n" \
 : [res]"=r"(result) ::)
 
+#define cheri_dla_boot(symbol, result) cheri_dla(symbol, result)
+
 #define cheri_asm_getpcc(asm_out) "cgetpcc " asm_out "\n"
 
 #define SET_FUNC(S, F) __asm (".weak " # S"; cscbi %[arg], %%capcall20(" #S ")($c25)" ::[arg]"C"(F):"memory")

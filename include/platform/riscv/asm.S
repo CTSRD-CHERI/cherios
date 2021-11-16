@@ -49,3 +49,18 @@
     \name\()_end:
     .size \name, \name\()_end - \name
 .endm
+
+.macro CALL_FUNC sym
+    lui         ra, %captab_call_hi(\sym)
+    cincoffset  cra, cgp, ra
+    clc         cra, %captab_call_lo(\sym)(cra)
+    cjalr       cra, cra
+.endm
+
+# la is banned because purecap and/or relative.
+# But we are using la in conjunction with capability adds in init, so limited use is fair
+
+.macro la_relative reg sym
+    lui \reg, %hi(\sym)
+    addi \reg, \reg, %lo(\sym)
+.endm

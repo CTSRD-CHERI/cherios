@@ -30,7 +30,6 @@
 
 INCLUDE "common.ld"
 
-__size_memory		= 0x1000000;	/* Start simple: 16M above load address */
 __size_boot_stack	= 0x10000;	/* Start simple: 64K */
 
 OUTPUT_FORMAT("elf64-littleriscv");
@@ -44,48 +43,36 @@ PHDRS
 	data PT_LOAD;
 }
 
-ENTRY(beri_boot_start)
+ENTRY(boot_start)
 SECTIONS
 {
-	. = __boot_load_virtaddr;
-	. += SIZEOF_HEADERS;
+	. = __boot_load_virtaddr_low;
 
-	.boot ALIGN(CAP_ALIGN): {
+	.boot : {
 	    __boot_segment_start = .;
 		*(.boot)
 	} :boot = 0x0
 
+    . = __boot_load_virtaddr;
 
-	.text ALIGN(1024): {
-	    __text_segment_start = .;
+    __cap_relocs ALIGN(CAP_ALIGN): {
+        __text_segment_start = .;
+        KEEP (*(__cap_relocs))
+    } :text
+
+    .rodata.str1.1 ALIGN(CAP_ALIGN): {
+        KEEP *(.rodata.str1.1)
+    } :text
+
+	.text ALIGN(CAP_ALIGN): {
 		*(.text)
 	} :text
 
-
-	/*
-	 * Memory to be mapped into the data segment.  For compiler-generated
-	 * content, it would be much preferable to map into the code segment
-	 * and use $pcc-relative loads, but we are not yet there.
-	 */
-	.MIPS.options ALIGN(PAGE_ALIGN): {
-	    __data_segment_start = .;
-		*(.MIPS.options)
-	} : data
-	.ctors ALIGN(CAP_ALIGN) : {
-		KEEP (*/crtbeginC.o(.ctors))
-		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
-		KEEP (*(SORT(.ctors.*)))
-		KEEP (*/crtendC.o(.ctors))
-	} : data
-	.dtors ALIGN(CAP_ALIGN) : {
-		KEEP (*/crtbeginC.o(.dtors))
-		KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
-		KEEP (*(SORT(.dtors.*)))
-		KEEP (*/crtendC.o(.dtors))
-	} : data
 	.data ALIGN(CAP_ALIGN): {
+        __data_segment_start = .;
 		*(.data)
 	} : data
+
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)
 	} : data
@@ -94,10 +81,16 @@ SECTIONS
     __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
     __bss_size = __stop_bss - __start_bss;
 
-	/*
-	 * No need to include anything after the following in the binary --
-	 * we just define symbols, and don't move '.'.
-	 */
+    /* Boots stack needs explicit allocation as we really don't want to do any dynamic allocation in boot */
 	 __start_boot_stack = ALIGN(__stop_bss, PAGE_ALIGN);
      __stop_boot_stack  = __start_boot_stack + __size_boot_stack;
+
+     /DISCARD/ :
+     {
+        *(.pdr)
+        *(.comment)
+        *(.got)
+        *(.cap_table_local)
+     }
+
 }

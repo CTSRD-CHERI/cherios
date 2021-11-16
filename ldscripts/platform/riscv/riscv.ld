@@ -29,4 +29,4 @@
  */
 
 /* The nanokernel will set up simple direct mappings at this base */
-__cached_base = 0;
+__uncached_base = 0x80000000;

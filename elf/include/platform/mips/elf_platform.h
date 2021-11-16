@@ -28,36 +28,23 @@
  * SUCH DAMAGE.
  */
 
+#ifndef CHERIOS_ELF_PLATFORM_H
+#define CHERIOS_ELF_PLATFORM_H
 
-INCLUDE "common.ld"
+#define EI_CLASS_EXPECT             2 // 64-bit
+#define EI_DATA_EXPECT              2 // big endian
+#define EI_VERSION_EXPECT           1
+#define EI_OSABI_EXPECT             0x9 // FreeBSD (sad this is still the case)
+#define EI_ABIVERSION_EXPECT_MAX    3
 
-OUTPUT_FORMAT("elf64-littleriscv");
-OUTPUT_ARCH(riscv)
-ENTRY(nano_kernel_init)
-SECTIONS
-{
-    . = __nano_load_virtaddr;
-	.text ALIGN(CAP_ALIGN) : {
-	    . = __nano_load_virtaddr;
-	    KEEP (*(.init))
-	    KEEP(*(.text))
-	} :text = 0
+#define E_MACHINE_EXPECT            8 // mips
+#define E_VERSION_EXPECT            1 // just elf
 
-	.bss ALIGN(0x10000): { *(.bss) }
+#ifdef _CHERI256_
+#define ELF_E_FLAGS 0x30C2D000
+#else
+#define ELF_E_FLAGS 0x30C1C800
+#endif
+#define ELF_E_MASK  0xFFFFFFF0
 
-    /DISCARD/ :
-    {
-       *(.pdr)
-       *(.comment)
-       *(.data)
-       *(.got)
-       *(.cap_table_local)
-    }
-}
-
-PHDRS
-{
-	header PT_PHDR PHDRS;
-	text PT_LOAD AT (__nano_load_physaddr);
-	bss PT_LOAD;
-}
+#endif //CHERIOS_ELF_PLATFORM_H

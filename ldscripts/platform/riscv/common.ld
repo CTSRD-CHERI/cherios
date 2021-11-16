@@ -35,14 +35,18 @@ CAP_ALIGN = 0x20;
 PAGE_ALIGN = 0x1000;
 
 /* Careful changing nano size, its hardcoded in the nano kernel still (as NANO_SIZE) */
-__nano_size            =    0x4000000;
-__nano_load_physaddr   =    0x0001000;
-__boot_load_physaddr   =    0x8000000;
+__nano_size               = 0x04000000;
+__nano_load_physaddr      = __uncached_base;
+__boot_load_physaddr_low  = 0;
+/* It is neater to have the nanokernel at the start of RAM, and have boot's memory reclaimed. To to this, the majority
+   of boot needs to be much further in memory so it does not overwrite itself */
+__boot_load_physaddr      = 0x08000000;
 
-/* Everything but the nano kernel are pcc/c0 base relative. */
+/* Everything but the nano kernel are pcc/default base relative. */
 
 __kernel_load_virtaddr = 0x000000;
 __init_load_virtaddr   = 0x000000;
 
-__boot_load_virtaddr   = __cached_base + __boot_load_physaddr;
-__nano_load_virtaddr   = __cached_base + __nano_load_physaddr;
+__boot_load_virtaddr     = __uncached_base + __boot_load_physaddr;
+__boot_load_virtaddr_low = __uncached_base + __boot_load_physaddr_low;
+__nano_load_virtaddr     = __nano_load_physaddr;

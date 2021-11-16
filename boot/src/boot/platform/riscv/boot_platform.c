@@ -29,8 +29,14 @@
  */
 
 // TODO RISCV
+#include "uart.h"
 
 void hw_init(void) {
+    capability ucap = cheri_getdefault();
+    // translation is off so we can just use the physical address
+    ucap = cheri_setoffset(ucap, uart_base_phy_addr);
+    ucap = cheri_setbounds(ucap, uart_base_size);
+    set_uart_cap(ucap);
 }
 
 void boot_platform_init(void) {

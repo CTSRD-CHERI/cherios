@@ -9,6 +9,8 @@
 
 NANO_FUNC nano_kernel_init
 
+nop
+
 NANO_FUNC create_context
 
 NANO_FUNC destroy_context

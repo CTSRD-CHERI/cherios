@@ -28,59 +28,20 @@
  * SUCH DAMAGE.
  */
 
-#include "boot_asm.S"
-#include "cheric.h"
-#include "reg_abi.h"
+#ifndef CHERIOS_ELF_PLATFORM_H
+#define CHERIOS_ELF_PLATFORM_H
 
-# TODO RISCV This might need further setup
-# TODO RISCV This needs to park cores (harts?) other than zero for smp.
+#define EI_CLASS_EXPECT             2 // 64-bit
+#define EI_DATA_EXPECT              1 // little endian
+#define EI_VERSION_EXPECT           1
+#define EI_OSABI_EXPECT             0
+#define EI_ABIVERSION_EXPECT_MAX    3
 
-.text
+#define E_MACHINE_EXPECT            0xf3 // riscv
+#define E_VERSION_EXPECT            1 // just elf
 
-START_FUNC  start
 
-# CheriOS enforces W^X. Take execute out of DDC.
-cspecialr   ct1, RISCV_SPECIAL_DDC
-li          t2, CHERI_PERM_ALL & ~(CHERI_PERM_EXECUTE)
-candperm    ct1, ct1, t2
-cspecialw   RISCV_SPECIAL_DDC, ct1
+#define ELF_E_FLAGS                 0x00070000 // EF_RISCV_CHERIABI + EF_RISCV_CAP_MODE + EF_RISCV_CHERIOSABI
+#define ELF_E_MASK                  0xFFFFFFF0 // ignore float ABI
 
-# Actually auipc because we are not yet in cap mode!
-1: auipcc       ca0, %pcrel_hi(remove_write_label)
-cincoffset      ca0, ca0, %pcrel_lo(1b)
-# So use cspecialr to get a capability
-cspecialr       ct3, RISCV_SPECIAL_PCC
-csetaddr        ca0, ct3, a0
-# Take stores out of PCC
-li             t3, CHERI_PERM_ALL & ~(CHERI_PERM_STORE | CHERI_PERM_STORE_CAP)
-candperm       ca0, ca0, t3
-# Also turn on cap mode
-li              t3, 1
-csetflags       ca0, ca0, t3
-# Have to be explicit about the cap, because the assembler thinks we are in cap mode. We are not.
-jr.cap          ca0
-
-remove_write_label:
-
-# Set up boot stack allocated by the linker
-lau_relative t3, __start_boot_stack
-la_relative  t4, __size_boot_stack
-
-csetaddr        csp, ct1, t3
-csetboundsexact csp, csp, t4
-cincoffset      csp, csp, t4
-
-# Init globals.
-call_func_boot  crt_init_globals_boot
-cmove           abi_local, ca0
-
-# Zero BSS
-cspecialr       ca0, RISCV_SPECIAL_DDC
-CALL_FUNC       crt_init_bss
-
-# And finally go to main
-cspecialr       ca0, RISCV_SPECIAL_PCC
-csetaddr        ca0, ca0, zero
-CALL_FUNC       bootloader_main
-
-END_FUNC    start
+#endif //CHERIOS_ELF_PLATFORM_H

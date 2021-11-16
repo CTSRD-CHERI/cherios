@@ -123,3 +123,27 @@ bzero(void *b, size_t s)
 
 	(void)memset_c(b, 0, s);
 }
+
+
+#ifdef PLATFORM_riscv
+// Until I write an appropriate memcpy for RISCV
+void* memcpy(void* restrict s1, const void* restrict s2, size_t n) {
+    if (((n % sizeof(void*)) == 0) &&
+        ((size_t)s1 % sizeof(void*) == 0) &&
+        ((size_t)s1 % sizeof(void*) == 0)) {
+        void** dst = (void**)s1;
+        void** src = (void**)s2;
+        for (size_t i = 0; i != (n / sizeof(void*)); i++) {
+            *(dst++) = *(src++);
+        }
+    } else {
+        char* dst = (char*)s1;
+        char* src = (char*)s2;
+        for (size_t i = 0; i != n; i++) {
+            *(dst++) = *(src++);
+        }
+    }
+
+    return s1;
+}
+#endif

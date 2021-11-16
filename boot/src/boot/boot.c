@@ -63,9 +63,9 @@ crt_init_globals_boot()
     uint64_t text_start;
     uint64_t data_start;
 
-    cheri_dla(__boot_segment_start, boot_start);
-    cheri_dla(__text_segment_start, text_start);
-    cheri_dla(__data_segment_start, data_start);
+    cheri_dla_boot(__boot_segment_start, boot_start);
+    cheri_dla_boot(__text_segment_start, text_start);
+    cheri_dla_boot(__data_segment_start, data_start);
 
     __unused capability text_segment = (char*)pcc + text_start;
     __unused capability data_segment = (char*)gdc + data_start;
@@ -80,9 +80,9 @@ crt_init_globals_boot()
 
     // Get something usable
     uint64_t table_start = 0, reloc_start = 0, reloc_end = 0;
-    cheri_dla(__cap_table_start, table_start);
-    cheri_dla(__start___cap_relocs, reloc_start);
-    cheri_dla(__stop___cap_relocs, reloc_end);
+    cheri_dla_boot(__cap_table_start, table_start);
+    cheri_dla_boot(__start___cap_relocs, reloc_start);
+    cheri_dla_boot(__stop___cap_relocs, reloc_end);
 
     capability cgp = cheri_setoffset(gdc, table_start);
     set_cgp(cgp);
@@ -161,6 +161,8 @@ void bootloader_main(capability global_pcc) {
 #endif
 
     boot_printf("Jumping to nano kernel...\n");
-
+    boot_printf("nanokernel args: kernel mem_size %lx. kernel entry %lx. \n"
+                "Args to be passed through to kernel: a0 %lx. a1 %lx. a2 %lx. a3 %lx\n",
+                mem_size, entry, args.a0, args.a1, args.a2, args.a3);
     nano_init(mem_size, entry, &args);
 }

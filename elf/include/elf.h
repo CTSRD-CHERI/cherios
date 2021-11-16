@@ -31,6 +31,8 @@
 #ifndef __ELF_H
 #define __ELF_H
 
+#include "elf_platform.h"
+
 #ifndef CHERIOS_BOOT
 	#define ALLOW_SECURE
 #endif

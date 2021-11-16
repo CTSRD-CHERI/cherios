@@ -89,6 +89,10 @@
 #define STOREC(type) "csc." SUF_ ## type
 #define STORE(type) "cs" SUF_ ## type
 
+
+#define RISCV_SPECIAL_PCC 0
+#define RISCV_SPECIAL_DDC 1
+
 #ifndef __ASSEMBLY__
 
 /*
@@ -148,6 +152,10 @@ __asm __volatile (                              \
     "addi %[res], %[res], %%lo(" #symbol ")\n"  \
 : [res]"=r"(result) ::)
 
+// Turns out it will not suffice as 32-bit addresses will end up sign extended on RISCV and boot addresses have the high
+// bit set. This dla assumes that, and makes solves the linker error.
+#define cheri_dla_boot(symbol, result) cheri_dla(symbol - 0x80000000, result); result += 0x80000000
+
 #define cheri_asm_getpcc(asm_out) "1: auipcc " asm_out ", 0\n"
 
 // TODO RISCV everything below is a dummy to get things to compile
@@ -206,6 +214,6 @@ typedef struct reg_frame {
 #define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
 #define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
 
-#define NANO_KSEG 0
+#define NANO_KSEG 0x80000000
 
 #endif //CHERIOS_RISV_H

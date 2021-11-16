@@ -34,6 +34,7 @@
 
 .text
 
+/*
 START_FUNC memcpy
-
 END_FUNC memcpy
+*/

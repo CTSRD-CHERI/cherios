@@ -28,59 +28,54 @@
  * SUCH DAMAGE.
  */
 
-#include "boot_asm.S"
+#include "uart.h"
 #include "cheric.h"
-#include "reg_abi.h"
 
-# TODO RISCV This might need further setup
-# TODO RISCV This needs to park cores (harts?) other than zero for smp.
+// These are all 1 byte
+#define RBR_OFFSET      0x00 // R Receive Buffer Register
+#define THR_OFFSET      0x00 // W Transmitter Holding Register
+#define IER_OFFSET      0x01 // RW Interrupt Enable Register
+#define IIR_OFFSET      0x02 // R Interrupt Identification Register
+#define FCR_OFFSET      0x02 // W FIFO Control Register
+#define LCR_OFFSET      0x03 // RW Line Control Register
+#define MCR_OFFSET      0x04 // RW Modem Control Register
+#define LSR_OFFSET      0x05 // R Line Status Register
+#define MSR_OFFSET      0x06 // R Modem Status Register
+#define DLR_OFFSET_LSB  0x00 // RW Divisor Latch Register (LSB)
+#define DLR_OFFSET_MSB  0x01 // RW Divisor Latch Register (MSB)
 
-.text
+size_t uart_base_phy_addr = 0x10000000;
+size_t uart_base_size = 0x100;
 
-START_FUNC  start
+volatile uint8_t* uart_cap;
 
-# CheriOS enforces W^X. Take execute out of DDC.
-cspecialr   ct1, RISCV_SPECIAL_DDC
-li          t2, CHERI_PERM_ALL & ~(CHERI_PERM_EXECUTE)
-candperm    ct1, ct1, t2
-cspecialw   RISCV_SPECIAL_DDC, ct1
+char uart_read(void) {
+    return uart_cap[RBR_OFFSET];
+}
 
-# Actually auipc because we are not yet in cap mode!
-1: auipcc       ca0, %pcrel_hi(remove_write_label)
-cincoffset      ca0, ca0, %pcrel_lo(1b)
-# So use cspecialr to get a capability
-cspecialr       ct3, RISCV_SPECIAL_PCC
-csetaddr        ca0, ct3, a0
-# Take stores out of PCC
-li             t3, CHERI_PERM_ALL & ~(CHERI_PERM_STORE | CHERI_PERM_STORE_CAP)
-candperm       ca0, ca0, t3
-# Also turn on cap mode
-li              t3, 1
-csetflags       ca0, ca0, t3
-# Have to be explicit about the cap, because the assembler thinks we are in cap mode. We are not.
-jr.cap          ca0
+uint8_t get_status(void) {
+    return uart_cap[LSR_OFFSET];
+}
 
-remove_write_label:
+int	uart_readable(void) {
+    return ((get_status() & (1 << 0)) != 0);
+}
 
-# Set up boot stack allocated by the linker
-lau_relative t3, __start_boot_stack
-la_relative  t4, __size_boot_stack
+int	uart_writable(void) {
+    return ((get_status() & (1 << 5)) != 0);
+}
 
-csetaddr        csp, ct1, t3
-csetboundsexact csp, csp, t4
-cincoffset      csp, csp, t4
+void uart_write(char ch) {
+    uart_cap[THR_OFFSET] = (uint8_t)ch;
+}
 
-# Init globals.
-call_func_boot  crt_init_globals_boot
-cmove           abi_local, ca0
+void set_uart_cap(capability cap) {
+    uart_cap = (uint8_t*)cap;
+}
 
-# Zero BSS
-cspecialr       ca0, RISCV_SPECIAL_DDC
-CALL_FUNC       crt_init_bss
-
-# And finally go to main
-cspecialr       ca0, RISCV_SPECIAL_PCC
-csetaddr        ca0, ca0, zero
-CALL_FUNC       bootloader_main
-
-END_FUNC    start
+void uart_init(void)
+{
+    // Disable interrupts, we will just poll, I don't care.
+    uart_cap[IER_OFFSET] = 0;
+    // So, the UART may have already been set up by the BIOS. In which case, do nothing?
+}

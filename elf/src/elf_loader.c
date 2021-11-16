@@ -100,23 +100,23 @@ int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 		ERROR("Bad magic number");
 		return 0;
 	}
-	if(hdr->e_ident[EI_CLASS] != 2) {
+	if(hdr->e_ident[EI_CLASS] != EI_CLASS_EXPECT) {
 		ERROR("Bad EI_CLASS");
 		return 0;
 	}
-	if(hdr->e_ident[EI_DATA] != 2) {
+	if(hdr->e_ident[EI_DATA] != EI_DATA_EXPECT) {
 		ERROR("Bad EI_DATA");
 		return 0;
 	}
-	if(hdr->e_ident[EI_VERSION] != 1) {
+	if(hdr->e_ident[EI_VERSION] != EI_VERSION_EXPECT) {
 		ERROR("Bad EI_VERSION");
 		return 0;
 	}
-	if(hdr->e_ident[EI_OSABI] != 9) {
+	if(hdr->e_ident[EI_OSABI] != EI_OSABI_EXPECT) {
 		ERRORM("Bad EI_OSABI: %X", hdr->e_ident[EI_OSABI]);
 		return 0;
 	}
-	if(hdr->e_ident[EI_ABIVERSION] > 3) {
+	if(hdr->e_ident[EI_ABIVERSION] > EI_ABIVERSION_EXPECT_MAX) {
 		ERRORM("Bad EI_ABIVERSION: %X", hdr->e_ident[EI_ABIVERSION]);
 		return 0;
 	}
@@ -124,20 +124,15 @@ int elf_check_supported(Elf_Env *env, const Elf64_Ehdr *hdr) {
 		ERRORM("Bad e_type: %X", hdr->e_type);
 		return 0;
 	}
-	if(hdr->e_machine != 8) {
+	if(hdr->e_machine != E_MACHINE_EXPECT) {
 		ERRORM("Bad e_machine: %X", hdr->e_machine);
 		return 0;
 	}
-	if(hdr->e_version != 1) {
+	if(hdr->e_version != E_VERSION_EXPECT) {
 		ERROR("Bad e_version");
 		return 0;
 	}
-#ifdef _CHERI256_
-#define ELF_E_FLAGS 0x30C2D000
-#else
-#define ELF_E_FLAGS 0x30C1C800
-#endif
-#define ELF_E_MASK  0xFFFFFFF0
+
 	if((hdr->e_flags != 0x30000007) && ((hdr->e_flags & ELF_E_MASK) != ELF_E_FLAGS)) {
 		ERRORM("Bad e_flags: %X", hdr->e_flags);
 		return 0;

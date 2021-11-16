@@ -249,6 +249,9 @@ BUILTIN(__builtin_cheri_cap_type_copy, "v*mvC*mvC*m", "nc")
 #define	cheri_setbounds_exact(x, y)	__builtin_cheri_bounds_set_exact(		\
 				    __DECONST(capability, (x)), (y))
 
+#endif // ASSEMBLY
+
+// FIXME: These belong in platform specific headers. They are
 
 /* Names for permission bits */
 #define CHERI_PERM_GLOBAL		(1 <<  0)
@@ -267,6 +270,8 @@ BUILTIN(__builtin_cheri_cap_type_copy, "v*mvC*mvC*m", "nc")
 #define CHERI_PERM_SOFT_3		(1 << 17)
 #define CHERI_PERM_SOFT_4		(1 << 18)
 #define CHERI_PERM_ALL		 	((1 << (11 + U_PERM_BITS)) - 1)
+
+#ifndef __ASSEMBLY__
 
 #define READ_ONLY(X) __DECONST(capability, cheri_andperm(X, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP))
 /*

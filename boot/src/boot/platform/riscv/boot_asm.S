@@ -28,36 +28,18 @@
  * SUCH DAMAGE.
  */
 
+#include "asm.S"
 
-INCLUDE "common.ld"
-
-OUTPUT_FORMAT("elf64-littleriscv");
-OUTPUT_ARCH(riscv)
-ENTRY(nano_kernel_init)
-SECTIONS
-{
-    . = __nano_load_virtaddr;
-	.text ALIGN(CAP_ALIGN) : {
-	    . = __nano_load_virtaddr;
-	    KEEP (*(.init))
-	    KEEP(*(.text))
-	} :text = 0
-
-	.bss ALIGN(0x10000): { *(.bss) }
-
-    /DISCARD/ :
-    {
-       *(.pdr)
-       *(.comment)
-       *(.data)
-       *(.got)
-       *(.cap_table_local)
-    }
-}
-
-PHDRS
-{
-	header PT_PHDR PHDRS;
-	text PT_LOAD AT (__nano_load_physaddr);
-	bss PT_LOAD;
-}
+# same as la but assumes the 32-bit (signed) symbol will sign extend, and removes this extention.
+.macro lau_relative reg, sym
+    la_relative \reg, \sym + 0xFFFFFFFF00000000ULL
+    slli \reg, \reg, 32
+    srli \reg, \reg, 32
+.endm
+.macro call_func_boot sym
+    # Manual offset calculation because this will be compiled with purecap but boot has global bounds
+    lau_relative    t0
+    1: auipcc       cra, %pcrel_hi(\sym)
+    cincoffset      cra, cra, %pcrel_lo(1b)
+    cjalr           cra, cra
+.endm
