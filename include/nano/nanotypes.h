@@ -35,6 +35,7 @@
 
 #include "string_enums.h"
 #include "nano/nano_reg_list.h"
+#include "nano/nanotypes_platform.h"
 
 #define REG_LIST_TO_ENUM_LIST(Name, Reg, Select, Mask, X, ...) X(NANO_REG_SELECT_ ## Name)
 #define NANO_REG_LIST_FOR_ENUM(ITEM) NANO_REG_LIST(REG_LIST_TO_ENUM_LIST, ITEM)
@@ -163,42 +164,9 @@
 // These are never re-used are are here for before reservations are working.
 #define N_CONTEXTS                      (16)
 
-//TODO make this dynamic
-/* Page sizes etc */
-/* TODO: Would like to increase this but QEMU does not seem to support a page pask not 0 */
-#define PHY_PAGE_SIZE_BITS              (12)
+#define PAGE_START_STATE                page_dirty
+
 #define PHY_PAGE_SIZE                   (1 << PHY_PAGE_SIZE_BITS)
-
-#ifdef HARDWARE_qemu
-
-// QEMU did not get the MALTA memory map wrong, it is just really weird.
-// MALTA has a 32bit physical address space, and the upper half aliases the lower,
-// apart from the 0x10000000 to 0x20000000 range in the LOWER half which is obscured by the IO hole
-// the current hack works, but we should probably have the nano kernel do some re-arranging to recover the last 256MB,
-// which is actually where the IO hole is, but in the upper half.
-#define PHY_RAM_SIZE                    ((1L << 31) - 0x10000000)
-#define RAM_PRE_IO_END                  0x10000000
-#define RAM_POST_IO_START               0x20000000
-#define RAM_SPLIT
-#define RAM_TAGS                        0
-
-#else // qemu
-
-#define PHY_RAM_SIZE                    (1024 * 1024 * 1024) // 1GB
-#define RAM_PRE_IO_END                  PHY_RAM_SIZE
-#define RAM_POST_IO_START               0x80008000
-#define RAM_TAGS                        (((((PHY_RAM_SIZE + (1024 * 1024)) / (8 * CAP_SIZE)) + (PHY_PAGE_SIZE-1)) & ~(PHY_PAGE_SIZE-1)) * 8)
-#endif
-
-#define PAGE_START_STATE                page_dirty // Should be page_dirty
-
-#define IO_HOLE                         (RAM_POST_IO_START - RAM_PRE_IO_END)
-
-#define TOTAL_PHY_PAGES                 ((PHY_RAM_SIZE+IO_HOLE)/PAGE_SIZE)
-#define TOTAL_LOW_RAM_PAGES             ((RAM_PRE_IO_END-RAM_TAGS)/PHY_PAGE_SIZE)
-#define TOTAL_IO_PAGES                  (IO_HOLE/PHY_PAGE_SIZE)
-#define TOTAL_HIGH_RAM_PAGES            ((PHY_RAM_SIZE - RAM_PRE_IO_END)/PHY_PAGE_SIZE)
-
 #define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS) & 0xFFFFFFFF)
 
 
@@ -224,7 +192,7 @@
 #define L0_BITS                         PAGE_TABLE_BITS_PER_LEVEL
 #define L1_BITS                         PAGE_TABLE_BITS_PER_LEVEL
 #define L2_BITS                         PAGE_TABLE_BITS_PER_LEVEL
-#define UNTRANSLATED_BITS               (1 + PHY_PAGE_SIZE_BITS) /* +1 for having two PFNs per VPN */
+
 
 #define TRANSLATED_BITS                 (L0_BITS + L1_BITS + L2_BITS)
 #define MAX_VIRTUAL_PAGES               (1 << TRANSLATED_BITS)
@@ -447,7 +415,6 @@ typedef struct {
 typedef register_t ex_lvl_t;
 typedef register_t cause_t;
 
-#include "nano/nanotypes_platform.h"
 typedef struct res_nfo_t {
     size_t length;
     size_t base;

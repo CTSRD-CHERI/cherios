@@ -29,11 +29,45 @@
  */
 
 #include "asm.S"
+#include "reg_abi.h"
 
 # TODO RISCV
 
 .text
 
 START_FUNC start
+
+# Save everything we have been passed by the nanokernel
+
+move            s0, a0      # Init starts at
+move            s1, a1      # init entry
+move            s2, a2      # init tls base
+cmove           cs3, ca4    # nano if
+cmove           cs4, ca5    # nano data
+cmove           cs5, ca6    # context handle
+cmove           cs6, ca7    # request token
+
+# TODO Create stack
+
+# Init globals.
+call_func_early  crt_init_globals_kernel
+cmove           abi_local, ca0
+
+# Zero BSS.
+call_func       crt_init_bss
+
+call_func       cherios_main
+/*
+int cherios_main(nano_kernel_if_t* interface,
+				 capability def_data,
+				 context_t own_context,
+				 __unused capability plt_auth_cap,
+                 capability global_pcc,
+                 if_req_auth_t req_auth,
+				 size_t init_base,
+                 size_t init_entry,
+                 size_t init_tls_base)
+
+*/
 
 END_FUNC start

@@ -31,8 +31,11 @@
 #ifndef CHERIOS_NANOTYPES_PLATFORM_H
 #define CHERIOS_NANOTYPES_PLATFORM_H
 
-// TODO RISCV
+// The NOP that the nanokernel treats as marking the previous instruction as being skipable
+
 #define MAGIC_SAFE         "ori    zero, zero, 0xdd \n"
+
+// helper macros to load in a safe way
 
 #define ENUM_VMEM_SAFE_DEREFERENCE(location, result, edefault)  \
     __asm__ (                                                   \
@@ -52,5 +55,13 @@ __asm__ (                                                       \
     : [loc]"C"(var)                                             \
     :                                                           \
     )
+
+// Physical memory
+#define PHY_PAGE_SIZE_BITS              12
+#define PHY_RAM_SIZE                    (1 << 30) // gigabyte seems sensible for now
+#define IO_SIZE                         0x80000000
+#define TOTAL_PHY_PAGES                 ((PHY_RAM_SIZE + IO_SIZE) >> PHY_PAGE_SIZE_BITS)
+// virtual memory
+#define UNTRANSLATED_BITS               PHY_PAGE_SIZE_BITS
 
 #endif //CHERIOS_NANOTYPES_PLATFORM_H

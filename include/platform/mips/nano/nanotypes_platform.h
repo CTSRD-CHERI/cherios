@@ -31,7 +31,11 @@
 #ifndef CHERIOS_NANOTYPES_PLATFORM_H
 #define CHERIOS_NANOTYPES_PLATFORM_H
 
+// The NOP that the nanokernel treats as marking the previous instruction as being skipable
+
 #define MAGIC_SAFE         "ori    $zero, $zero, 0xd00d            \n"
+
+// helper macros to load in a safe way
 
 #define ENUM_VMEM_SAFE_DEREFERENCE(location, result, edefault)  \
     __asm__ (                                                   \
@@ -53,5 +57,43 @@ __asm__ (                                                       \
     : [loc]"C"(var)                                             \
     :                                                           \
     )
+
+// Physical memory
+
+//TODO make this dynamic
+/* Page sizes etc */
+/* TODO: Would like to increase this but QEMU does not seem to support a page pask not 0 */
+#define PHY_PAGE_SIZE_BITS              (12)
+
+#ifdef HARDWARE_qemu
+
+// QEMU did not get the MALTA memory map wrong, it is just really weird.
+// MALTA has a 32bit physical address space, and the upper half aliases the lower,
+// apart from the 0x10000000 to 0x20000000 range in the LOWER half which is obscured by the IO hole
+// the current hack works, but we should probably have the nano kernel do some re-arranging to recover the last 256MB,
+// which is actually where the IO hole is, but in the upper half.
+#define PHY_RAM_SIZE                    ((1L << 31) - 0x10000000)
+#define RAM_PRE_IO_END                  0x10000000
+#define RAM_POST_IO_START               0x20000000
+#define RAM_SPLIT
+#define RAM_TAGS                        0
+
+#else // qemu
+
+#define PHY_RAM_SIZE                    (1024 * 1024 * 1024) // 1GB
+#define RAM_PRE_IO_END                  PHY_RAM_SIZE
+#define RAM_POST_IO_START               0x80008000
+#define RAM_TAGS                        (((((PHY_RAM_SIZE + (1024 * 1024)) / (8 * CAP_SIZE)) + (PHY_PAGE_SIZE-1)) & ~(PHY_PAGE_SIZE-1)) * 8)
+#endif
+
+#define IO_HOLE                         (RAM_POST_IO_START - RAM_PRE_IO_END)
+
+#define TOTAL_PHY_PAGES                 ((PHY_RAM_SIZE+IO_HOLE)/PAGE_SIZE)
+#define TOTAL_LOW_RAM_PAGES             ((RAM_PRE_IO_END-RAM_TAGS)/PHY_PAGE_SIZE)
+#define TOTAL_IO_PAGES                  (IO_HOLE/PHY_PAGE_SIZE)
+#define TOTAL_HIGH_RAM_PAGES            ((PHY_RAM_SIZE - RAM_PRE_IO_END)/PHY_PAGE_SIZE)
+
+// virtual memory
+#define UNTRANSLATED_BITS               (1 + PHY_PAGE_SIZE_BITS) /* +1 for having two PFNs per VPN */
 
 #endif //CHERIOS_NANOTYPES_PLATFORM_H

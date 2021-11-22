@@ -28,12 +28,12 @@
  * SUCH DAMAGE.
  */
 
-#include "boot_asm.S"
+#include "asm.S"
 
 # TODO RISCV
-# 	This trampoline _must_ be placed at the correct address, as bbl will jump here.
+# 	This trampoline _must_ be placed at the correct address.
 #   To keep things simple, we will just jump to a more cannonical start.
 .section	.boot, "xa"
 START_FUNC boot_start
-    call_func_boot start
+    call_func_early start
 END_FUNC   boot_start

@@ -28,7 +28,7 @@
  * SUCH DAMAGE.
  */
 
-#define __ASSEMBLY__ 1
+#include "asm_common.S"
 
 .macro TRACE_ON
     slti zero, zero, 0x1b
@@ -50,7 +50,40 @@
     .size \name, \name\()_end - \name
 .endm
 
-.macro CALL_FUNC sym
+.macro cllc_rel dst, sym
+    # This is the PC relative cllc, which only works with global bounds
+    1: auipcc       \dst, %pcrel_hi(\sym)
+    cincoffset      \dst, \dst, %pcrel_lo(1b)
+.endm
+
+.macro op_any_i12 rout, rin, constant, tmp, op
+    .if (\constant >= -2048) && (\constant <= 2047)
+        \op \rout, \rin, \constant
+    .else
+        li  \tmp, \constant
+        \op \rout, \rin, \tmp
+    .endif
+.endm
+
+.macro add_bi  rout, rin, constant, tmp
+    op_any_i12 \rout, \rin, \constant, \tmp, add
+.endm
+
+.macro cinc_bi rout, rin, constant, tmp
+    op_any_i12 \rout, \rin, \constant, \tmp, cincoffset
+.endm
+
+.macro subi     rout, rin, imm
+    addi \rout, \rin, -\imm
+.endm
+
+.macro call_func_early sym
+    # Manual offset calculation because this will be compiled with purecap but boot has global bounds
+    cllc_rel        cra, \sym
+    cjalr           cra, cra
+.endm
+
+.macro call_func sym
     lui         ra, %captab_call_hi(\sym)
     cincoffset  cra, cgp, ra
     clc         cra, %captab_call_lo(\sym)(cra)
@@ -63,4 +96,11 @@
 .macro la_relative reg sym
     lui \reg, %hi(\sym)
     addi \reg, \reg, %lo(\sym)
+.endm
+
+# same as la but assumes the 32-bit (signed) symbol will sign extend, and removes this extention.
+.macro lau_relative reg, sym
+    la_relative \reg, \sym + 0xFFFFFFFF00000000ULL
+    slli \reg, \reg, 32
+    srli \reg, \reg, 32
 .endm

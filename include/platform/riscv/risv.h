@@ -90,9 +90,6 @@
 #define STORE(type) "cs" SUF_ ## type
 
 
-#define RISCV_SPECIAL_PCC 0
-#define RISCV_SPECIAL_DDC 1
-
 #ifndef __ASSEMBLY__
 
 /*
@@ -214,6 +211,71 @@ typedef struct reg_frame {
 #define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
 #define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
 
-#define NANO_KSEG 0x80000000
+#define RAM_START 0x80000000
+#define NANO_KSEG RAM_START
+
+
+#define RISCV_SATP_MODE_SHIFT   60
+#define RISCV_SATP_ASID_SHIFT   44
+#define RISCV_SATP_ASID_MASK    0x1FF
+
+#define RISCV_SATP_MODE_BARE    0
+#define RISCV_SATP_MODE_Sv39    8
+
+/* XWR can have some funky meanings
+X	W	R	Meaning
+0	0	0	Pointer to next level of page table.
+0	0	1	Read-only page.
+0	1	0	Reserved for future use.
+0	1	1	Read-write page.
+1	0	0	Execute-only page.
+1	0	1	Read-execute page.
+1	1	0	Reserved for future use.
+1	1	1	Read-write-execute page.
+*/
+
+#define RISCV_PTE_V             (1 << 0) // valid
+#define RISCV_PTE_R             (1 << 1) // read
+#define RISCV_PTE_W             (1 << 2) // write
+#define RISCV_PTE_X             (1 << 3) // execute
+#define RISCV_PTE_U             (1 << 4) // user
+#define RISCV_PTE_G             (1 << 5) // global (ignore asid)
+#define RISCV_PTE_A             (1 << 6)
+#define RISCV_PTE_D             (1 << 7) // dirty bit
+
+#define RISCV_PTE_CRG           (1 << 59)
+#define RISCV_PTE_CRM           (1 << 60)
+#define RISCV_PTE_CD            (1 << 61) // cap dirty
+#define RISCV_PTE_CR            (1 << 62) // cap read
+#define RISCV_PTE_CW            (1 << 63) // cap write
+
+#define RISCV_PTE_PERM_ALL      (RISCV_PTE_V | RISCV_PTE_R | RISCV_PTE_W | RISCV_PTE_X | RISCV_PTE_G | \
+                                 RISCV_PTE_D | RISCV_PTE_A | RISCV_PTE_CD | RISCV_PTE_CR | RISCV_PTE_CW)
+
+#define RISCV_PTE_RSW_SHIFT     8       // reserved for software
+#define RISCV_PTE_PFN_SHIFT     10
+
+#define RISCV_CAUSE_INT_SHIFT       63
+
+#define RISCV_CAUSE_ISN_ALIGN       0x0
+#define RISCV_CAUSE_ISN_ACCESS      0x1
+#define RISCV_CAUSE_ISN_ILLEGAL     0x2
+#define RISCV_CAUSE_BREAK           0x3
+#define RISCV_CAUSE_LOAD_ALIGN      0x4
+#define RISCV_CAUSE_LOAD_ACCESS     0x5
+#define RISCV_CAUSE_STORE_ALIGN     0x6
+#define RISCV_CAUSE_STORE_ACCESS    0x7
+#define RISCV_CAUSE_CALL_U          0x8
+#define RISCV_CAUSE_CALL_S          0x9
+#define RISCV_CAUSE_CALL_M          0xb
+#define RISCV_CAUSE_ISN_PAGE        0xc
+#define RISCV_CAUSE_LOAD_PAGE       0xd
+#define RISCV_CAUSE_STORE_PAGE      0xf
+
+#define RISCV_M                     0b11
+#define RISCV_S                     0b01
+#define RISCV_U                     0b00
+
+#define RISCV_STATUS_MPP_SHIFT      11
 
 #endif //CHERIOS_RISV_H

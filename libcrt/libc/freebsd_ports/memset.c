@@ -132,13 +132,13 @@ void* memcpy(void* restrict s1, const void* restrict s2, size_t n) {
         ((size_t)s1 % sizeof(void*) == 0) &&
         ((size_t)s1 % sizeof(void*) == 0)) {
         void** dst = (void**)s1;
-        void** src = (void**)s2;
+        void* const * src = (void* const *)s2;
         for (size_t i = 0; i != (n / sizeof(void*)); i++) {
             *(dst++) = *(src++);
         }
     } else {
         char* dst = (char*)s1;
-        char* src = (char*)s2;
+        const char* src = (const char*)s2;
         for (size_t i = 0; i != n; i++) {
             *(dst++) = *(src++);
         }
