@@ -117,11 +117,8 @@ static inline act_t * act_unseal_sync_ref(act_t * act) {
 	return  (act_t *)act_unseal_callable(act, sync_ref_sealer);
 }
 
-#define FPGA_BASE   			0x1f000000
-#define FPGA_SIZE   			0x900
-#define FPGA_SHUTDOWN_OFFSET	0x500
+void kernel_platform_init(page_t* book);
 
-extern capability fpga_cap;
 extern if_req_auth_t req_auth_for_activations;
 /*
  * Kernel library routines.

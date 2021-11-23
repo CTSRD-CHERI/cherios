@@ -95,9 +95,8 @@ has_thread_local:
     cmove       $c3, $c19
     cmove       $c4, $c20
     cmove       $c5, $c21
-    cgetdefault $c6                 # Need this to auth overwriting of the PLT
-    cgetpccsetoffset $c7, $zero     # Need this to construct a pcc for init in act_init
-    cmove       $c8, $c22
+    cgetpccsetoffset $c6, $zero     # Need this to construct a pcc for init in act_init
+    cmove       $c7, $c22
 	# Call cherios_main() this should never return as the kernel will set itself up as the exception context.
 	call_func   cherios_main
 

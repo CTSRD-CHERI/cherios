@@ -40,7 +40,6 @@ ALLOCATE_PLT_NANO
 
 /* Use linker allocated memory to store boot-info. */
 static init_info_t init_info;
-capability fpga_cap;
 capability int_cap;
 if_req_auth_t req_auth_for_activations;
 
@@ -85,10 +84,10 @@ crt_init_globals_kernel()
     return &__cap_table_local_start;
 }
 
+
 int cherios_main(nano_kernel_if_t* interface,
 				 capability def_data,
 				 context_t own_context,
-				 __unused capability plt_auth_cap,
                  capability global_pcc,
                  if_req_auth_t req_auth,
 				 size_t init_base,
@@ -117,12 +116,9 @@ int cherios_main(nano_kernel_if_t* interface,
         page_n += book[page_n].len;
     } while(page_n != BOOK_END);
 
-
 	capability  cap_for_uart = get_phy_cap(book, uart_base_phy_addr, uart_base_size, 0, 1);
 
-#ifdef HARDWARE_qemu
-    fpga_cap = get_phy_cap(book, FPGA_BASE, FPGA_SIZE, 0, 1);
-#endif
+	kernel_platform_init(book);
 
 	set_uart_cap(cap_for_uart);
 

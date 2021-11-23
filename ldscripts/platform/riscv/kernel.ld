@@ -34,6 +34,15 @@ __size_exception_stack	= 0x4000;	/* Start simple: 4K */
 
 OUTPUT_FORMAT("elf64-littleriscv");
 OUTPUT_ARCH(riscv)
+
+/* These need to be specified manually as the indexs are hardcoded in init.c */
+PHDRS
+{
+	text PT_LOAD;
+	data PT_LOAD;
+    header PT_PHDR PHDRS;
+}
+
 ENTRY(start)
 SECTIONS
 {
@@ -44,10 +53,10 @@ SECTIONS
 	.text ALIGN(CAP_ALIGN): {
         KEEP (*(.init))
 		*(.text)
-	}
+	} : text
 	.fini ALIGN(CAP_ALIGN): {
 		KEEP (*(.fini))
-	} = 0
+	} : text = 0
 
 	/*
 	 * Memory to be mapped into the data segment.  For compiler-generated
@@ -59,22 +68,13 @@ SECTIONS
 	.data ALIGN(CAP_ALIGN): {
 	    __data_segment_start = .;
 		*(.data)
-	}
-    .ctors ALIGN(CAP_ALIGN) : {
-        KEEP (*/crtbeginC.o(.ctors))
-        KEEP (*(EXCLUDE_FILE (*/crtendC.o) .ctors))
-        KEEP (*(SORT(.ctors.*)))
-        KEEP (*/crtendC.o(.ctors))
-    }
-    .dtors ALIGN(CAP_ALIGN) : {
-        KEEP (*/crtbeginC.o(.dtors))
-        KEEP (*(EXCLUDE_FILE (*/crtendC.o) .dtors))
-        KEEP (*(SORT(.dtors.*)))
-        KEEP (*/crtendC.o(.dtors))
-    }
+	} : data
+    .captable : {
+        *(.captable)
+    } : data
 	.bss ALIGN(CAP_ALIGN): {
 		*(.bss)
-	}
+	} : data
 
     __start_bss = ADDR(.bss);
     __stop_bss = ALIGN(__start_bss + SIZEOF(.bss), CAP_ALIGN);
@@ -84,7 +84,7 @@ SECTIONS
 		__start_exception_stack	= .;
 		. += __size_exception_stack;
 		__stop_exception_stack	= .;
-	}
+	} : data
 
 	/* todo: do not discard in debug mode */
 	/DISCARD/ :

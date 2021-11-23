@@ -104,3 +104,34 @@
     slli \reg, \reg, 32
     srli \reg, \reg, 32
 .endm
+
+# 32-bit version. NOTE: Sadly, this instruction does not seem implemented yet.
+.macro cclear_all mask
+    .if (\mask & 0xFF)
+        cclear 0, (\mask & 0xFF)
+    .endif
+    .if ((\mask >> 8) & 0xFF)
+        cclear 1, ((\mask >> 8) & 0xFF)
+    .endif
+    .if ((\mask >> 16) & 0xFF)
+        cclear 2, ((\mask >> 16) & 0xFF)
+    .endif
+    .if ((\mask >> 24) & 0xFF)
+        cclear 3, ((\mask >> 24) & 0xFF)
+    .endif
+.endm
+
+/* This would work, if only cclear was implemented
+#include "assembly_utils.h"
+
+# and again, but macro-fied to use abi names
+#define cclear_regs(...) cclear_all (Reg_Encode_All(__VA_ARGS__))
+*/
+
+.macro cclear_all_with_moves regs:vararg
+    .irp    reg, \regs
+        move    \reg, zero
+    .endr
+.endm
+
+#define cclear_regs(...) cclear_all_with_moves __VA_ARGS__

@@ -30,6 +30,9 @@
 
 #include "klib.h"
 
+void kernel_platform_init(__unused page_t* book) {
+}
+
 void hw_reboot(void) {
     // TODO RISCV
     for(;;);

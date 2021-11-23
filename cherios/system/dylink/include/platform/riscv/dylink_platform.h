@@ -43,7 +43,7 @@
 #define PLT_REG_DATA_LINK       abi_data_link
 
 // For calling plt stubs
-#define PLT_REG_TARGET          c1
+#define PLT_REG_TARGET          ct1
 #define PLT_REG_TARGET_DATA     ct0
 #define PLT_REG_RETURN_DATA     ct0
 

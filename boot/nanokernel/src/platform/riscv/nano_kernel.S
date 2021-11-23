@@ -33,17 +33,21 @@
 #include "nano/nanotypes.h"
 #include "cheric.h"
 #include "reg_abi.h"
+#include "math_utils.h"
 
 .set NANO_SIZE, 0x04000000
 .set DEF_DATA_PERMS, (CHERI_PERM_ALL &~ CHERI_PERM_ACCESS_SYS_REGS)
-
+.set IO_DATA_PERMS, (CHERI_PERM_LOAD | CHERI_PERM_STORE)
 .bss
+
+// The alignment required by the object with the highest alignment requirement (likely the phy_page_table)
+.set align_require, 18
 
 #########################################################
 # nanokernel variables (accessed relative to abi_local) #
 #########################################################
 
-START_LOCALS        PHY_PAGE_SIZE_BITS
+START_LOCALS        align_require
 
 local_cap_var       current_context
 local_cap_var       next_context
@@ -52,11 +56,16 @@ local_cap_var       next_context
 local_var           context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
 LOCAL_AT    if_table_start
-#define IF_ENTRY(name, ...) local_cap_var name;
+#define IF_ENTRY(name, ...) local_cap_var name ## _table_entry;
 NANO_KERNEL_IF_LIST(IF_ENTRY)
 LOCAL_AT    if_table_end
 
 local_var           top_virt_table, PAGE_TABLE_SIZE, PHY_PAGE_SIZE_BITS
+
+# This needs to be aligned enough that the set bounds will work. Number of bits just found by trial and error
+local_var           phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, align_require
+# Pad so the bounds setting in get book works
+local_align         align_require
 
 END_LOCALS
 
@@ -70,18 +79,27 @@ END_LOCALS
     .p2align 2
     .global \name
     \name:
+    # TODO: Remove this nop. I just put it in here because most functions were empty.
     nop
 .endmacro
+.macro NANO_RET
+/* MIPS always used cinvoke/ccall as its return operation. This required the ccall2 variant to work well.
+ * Instead, we will use sentries that can load a pair. */
+    cmove   abi_local, cnull
+    cjr     cra
+.endm
 
 nano_kernel_start:
 
 diff_table_start:
 # This table holds offset from the nano kseg to a particular nanokernel function.
-# The - NANO_KSEG not needed due to truncation
-#define DIFF_MACRO(item, ...) .2byte (item);
+# half word relocations not supported =(
+#define DIFF_MACRO(item, ...) .word(item - NANO_KSEG);
+#define DIFF_TABLE_ENTRY_SIZE   4
+#define DIFF_TABLE_LOAD         clw
 NANO_KERNEL_IF_LIST(DIFF_MACRO)
 diff_table_end:
-.set diff_table_size, 2 * LIST_LENGTH(NANO_KERNEL_IF_LIST)
+.set diff_table_size, DIFF_TABLE_ENTRY_SIZE * LIST_LENGTH(NANO_KERNEL_IF_LIST)
 
 # The nanokernel will use a number of gigapages to create a physical memory map
 # One cached and one uncached should do.
@@ -114,7 +132,6 @@ NANO_FUNC nano_kernel_init
 # TODO RISCV
 # Things still to do in init:
 
-    # Lay out the physical page table
     # Set up exception vectors
     # Clear registers not used to pass arguments
 
@@ -128,6 +145,73 @@ NANO_FUNC nano_kernel_init
 
     cincoffset  cs1, cs0, NANO_KERNEL_TYPE  # cs1 will seal things to be passed to the user
 
+    # Set up the physical book. Use the following convention for a while.
+    # ct0: pointer to entry
+    # t1: prev
+    # t2: length
+    # t3: spare
+
+    cinc_bi     ct0, abi_local, phy_page_table, t3
+    li          t1, 0
+
+    // ct0 += (length << PHY_PAGE_ENTRY_SIZE_BITS)
+    .macro PHY_NEXT
+        slli        t3, t2, PHY_PAGE_ENTRY_SIZE_BITS
+        cincoffset  ct0, ct0, t3
+    .endm
+    // ct0.prev = prev
+    .macro PHY_LINK_PREV
+        csd         t1, PHY_PAGE_OFFSET_prev(ct0)
+    .endm
+    // prev += length
+    .macro PHY_NEXT_PREV
+        add         t1, t1, t2
+    .endm
+    // ct0.state = state
+    .macro PHY_SET_STATE state
+        li          t3, \state
+        csw         t3, PHY_PAGE_OFFSET_status(ct0)
+    .endm
+    // ct0.len = len
+    .macro PHY_LINK_LEN
+        csd         t2, PHY_PAGE_OFFSET_len(ct0)
+    .endm
+    // len = n; ct0.len = len
+    .macro PHY_LINK_LEN_N n
+        li          t2, \n
+        PHY_LINK_LEN
+    .endm
+
+    .macro PHY_NEXT2
+        PHY_NEXT
+        PHY_LINK_PREV
+        PHY_NEXT_PREV
+    .endm
+
+    # TODO: This is for hardcoded QEMU. In general we might like to read the FDT.
+    // IO range
+    PHY_SET_STATE   page_io_unused
+    PHY_LINK_LEN_N  (IO_SIZE >> PHY_PAGE_SIZE_BITS)
+    // Nano owned
+    PHY_NEXT2
+    PHY_SET_STATE   page_nano_owned
+    PHY_LINK_LEN_N  (NANO_SIZE >> PHY_PAGE_SIZE_BITS)
+    // System owned
+    PHY_NEXT2
+    PHY_SET_STATE   page_system_owned
+    srli            t2, a0, PHY_PAGE_SIZE_BITS
+    PHY_LINK_LEN
+    // Free (but dirty)
+    PHY_NEXT2
+    srli            t2, a0, PHY_PAGE_SIZE_BITS
+    li              t3, (PHY_RAM_SIZE - NANO_SIZE) >> PHY_PAGE_SIZE_BITS
+    sub             t2, t3, t2
+    PHY_LINK_LEN
+    // Sentinal
+    PHY_NEXT2
+    PHY_SET_STATE   page_nano_owned
+    PHY_LINK_LEN_N  1
+
     # Set up the MMU
     # First, create gigapage mappings
 
@@ -138,13 +222,13 @@ NANO_FUNC nano_kernel_init
     cincoffset  ct0, abi_local, t0
     li          t3, 1   # 1 if uncached. 0 if cached. currently ignored because QEMU
     li          t4, (1 << ((30 - PHY_PAGE_SIZE_BITS) + RISCV_PTE_PFN_SHIFT))    # increment in gigabytes
-    set_giga_restart:
+set_giga_restart:
     # A pointer to just past the end of the last PTE to set
     cincoffset  ct1, ct0, (GIGA_MAPPINGS << PAGE_TABLE_ENT_BITS)
 
     # The PTE
     li          t2, (RISCV_PTE_PERM_ALL)
-    set_giga_start:
+set_giga_start:
     csd         t2, 0(ct0)
     cincoffset  ct0, ct0, PAGE_TABLE_ENT_SIZE
     add         t2, t2, t4
@@ -161,28 +245,28 @@ NANO_FUNC nano_kernel_init
     csrw        satp, t0
     sfence.vma
 
-    TRACE_OFF
     # Set up the nano IF
-    get_pcc_label:
-    cllc_rel    ct0, NANO_KSEG                  # diff table holds 16-bit offsets from this
+get_pcc_label:
+    auipcc      ct0, 0
+    li          t1, PHY_MEM_START_CACHED + NANO_KSEG # diff table holds 16-bit offsets from this
+    csetaddr    ct0, ct0, t1
     cllc_rel    ct1, diff_table_start
     cincoffset  ct3, ct1, diff_table_size
     cinc_bi     ct2, abi_local, if_table_start, t5
 
-    init_table_loop:
-    clh         t5, 0(ct1)
+init_table_loop:
+    DIFF_TABLE_LOAD t5, 0(ct1)
     cincoffset  ct4, ct0, t5
     cseal       ct4, ct4, cs1
     csc         ct4, 0(ct2)
     cincoffset  ct2, ct2, CAP_SIZE
-    cincoffset  ct1, ct1, 2
+    cincoffset  ct1, ct1, DIFF_TABLE_ENTRY_SIZE
     bne         t1, t3, init_table_loop
 
     # Things passed to the user need to be virtual
     li          t4, PHY_MEM_START_CACHED
     cincoffset  ct5, abi_local, t4
-    li          t1, locals_size
-    csetbounds  ct5, ct5, t1
+    # We don't set bounds on the sealed data so the nanokernel can derive caps from it
     add_bi      t4, t4, RAM_START + NANO_SIZE, t1               # vaddr of unmanaged start
 
     # Make the read-only pointer to the if_table
@@ -233,19 +317,20 @@ NANO_FUNC nano_kernel_init
     # ca7 request token (TODO)
     # cra (jump target)
 
-    TRACE_ON
     csrr        t0, mstatus
     li          t1, RISCV_S << RISCV_STATUS_MPP_SHIFT
     or          t0, t0, t1
     csrw        mstatus, t0
-    csrr        t0, mstatus
-    csrr        t0, satp
-    # Set exception vector
+
+    # Set exception machine vector
     cllc_rel    ct0, m_exp_vec
     cspecialw   mtcc, ct0
 
+    # TODO set the other exception vectors
+
     # TODO: clear all the registers
     cspecialw    mepcc, cra
+    cclear_regs(ra, sp, gp, x4, t0, t1, t2, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t3, t4, t5, x31)
     mret
 
 NANO_FUNC create_context
@@ -278,7 +363,63 @@ NANO_FUNC rescap_splitsub
 
 NANO_FUNC rescap_getsub
 
+#####################################################################################################
+# void get_phy_page(register_t page_n, int cached, register_t npages, cap_pair* out, register_t IO) #
 NANO_FUNC get_phy_page
+#####################################################################################################
+
+    beqz            a2, get_phy_page_end            # if (npages == 0) goto end
+    li              t0, TOTAL_PHY_PAGES
+    bge             a0, t0, split_phy_er            # if (page_n >= TOTAL_PHY_PAGES) goto end
+
+    cinc_bi         ct0, abi_local, phy_page_table, t1 # ct0 = book
+    slli            t1, a0, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ct0, ct0, t1                    # ct0 = book[pagen]
+
+    // Load constants for atomic
+    li              t1, page_io_system              # t1 = state to set to
+    li              t2, (1 << page_io_unused) | (1 << page_io_system) # bitmaask of states page can be in
+    li              t3, IO_DATA_PERMS               # t3 = perms
+    bnez            a4, io                          # if (IO) goto io
+    // not_io
+    li              t1, page_system_owned
+    li              t2, (1 << page_unused) | (1 << page_system_owned)
+    li              t3, DEF_DATA_PERMS               # t3 = perms
+io:
+    li              t5, 1
+change_state_retry:
+    // go from original state -> t1, if len == a2 && state is in t2
+    clr.w.aq        a4, (ct0)                       # a4 = book[page_n].state
+    sll             a4, t5, a4
+    and             a4, a4, t2
+    beqz            a4, get_phy_page_end
+    cld             a4, PHY_PAGE_OFFSET_len(ct0)    # a4 = book[page_n].len
+    bne             a4, a2, get_phy_page_end
+    csc.w.rl        a4, t1, (ct0)
+    bnez            a4, change_state_retry
+
+    // state has been changed, make cap both caps
+    li              t0, PHY_MEM_START_UNCACHED
+    beqz            a1, uncached
+    li              t1, (PHY_MEM_START_CACHED - PHY_MEM_START_UNCACHED)
+    add             t0, t0, t1
+uncached: # t0 = cached/uncached base
+    slli            a0, a0, PHY_PAGE_SIZE_BITS
+    add             a0, a0, t0                      # a0 = base
+    slli            a1, a2, PHY_PAGE_SIZE_BITS      # a1 = length
+    auipcc          ca4, 0                          # ca4 is code cap
+    csetaddr        ca4, ca4, a0
+    csetaddr        ca2, abi_local, a0              # ca2 is data cap
+    csetboundsexact ca2, ca2, a1
+    csetboundsexact ca4, ca4, a1
+    candperm        ca2, ca2, t3
+    candperm        ca4, ca4, t3
+
+    csc             ca4, 0(ca3)
+    csc             ca2, CAP_SIZE(ca3)
+get_phy_page_end:
+    cclear_regs(t0)
+    NANO_RET
 
 NANO_FUNC create_table
 
@@ -294,13 +435,131 @@ NANO_FUNC get_read_only_table
 
 NANO_FUNC make_first_reservation
 
+##########################
+# page_t* get_book(void) #
 NANO_FUNC get_book
+##########################
 
+    # Get and bound capability to the phy book
+    cinc_bi         ca0, abi_local, phy_page_table, t0
+    # We ensured that there was space after the book for the align
+    li              t0, ALIGN_UP_2((TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, align_require)
+    csetboundsexact ca0, ca0, t0
+    # Set perms properly
+    li              t0, CHERI_PERM_LOAD
+    candperm        ca0, ca0, t0
+    NANO_RET
+
+###################################################################
+# void split_phy_page_range(register_t pagen, register_t new_len) #
 NANO_FUNC split_phy_page_range
+###################################################################
 
+    # pagen in range
+    li              t1, TOTAL_PHY_PAGES
+    bge             a0, t1, split_phy_er        # if (pagen >= TOTAL_PHY_PAGES) goto er
+
+
+    cinc_bi         ct0, abi_local, phy_page_table, t1 # ct0 = book
+    slli            t1, a0, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ct0, ct0, t1                # ct0 = book[pagen]
+
+    # Set book[pagen].state to page_transaction
+    li              t1, page_transaction
+    camomaxu.w.aq   t2, t1, (ct0)               # t2 holds old state
+    bge             t2, t1, split_phy_er        # if (book[pagen].state >= page_transaction) goto er
+
+    cld             t3, PHY_PAGE_OFFSET_len(ct0) # t3 = book[pagen].len
+    bge             a1, t3, split_phy_undo      # if (new_len  >= old_len) goto undo
+
+    # At this point we can commit to the operation
+
+    slli            t4, a1, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ca2, ct0, t4                # ca2 = book[new]
+    slli            t4, t3, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ca3, ct0, t4                # ca3 = book[next]
+
+    # set up the new node
+    sub             t3, t3, a1                      # t3 = book[pagen].len - new_len
+    csw             t2, 0(ca2)                      # book[new].state = state
+    csd             t3, PHY_PAGE_OFFSET_len(ca2)    # book[new].len = state
+    csd             a0, PHY_PAGE_OFFSET_prev(ca2)   # book[new].prev = pagen
+
+    # point forward
+    csd             a1, PHY_PAGE_OFFSET_len(ct0)    # book[pagen].len = new_len
+    # point back
+    add             t3, a0, a1                      # t3 = new
+    csd             a1, PHY_PAGE_OFFSET_prev(ct0)   # book[next].prev = new
+
+split_phy_undo:
+    # store back old state
+    camoswap.w.rl   zero, t2, (ct0)
+
+split_phy_er:
+    cclear_regs(t0, a2, a3)
+    NANO_RET
+
+
+###############################################
+# void merge_phy_page_range(register_t pagen) #
 NANO_FUNC merge_phy_page_range
+###############################################
 
+    # pagen in range
+    li              t1, TOTAL_PHY_PAGES
+    bge             a0, t1, merge_phy_er        # if (pagen >= TOTAL_PHY_PAGES) goto er
+
+    cinc_bi         ca1, abi_local, phy_page_table, t1 # ca1 = book
+    slli            t1, a0, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ca1, ca1, t1                # ca1 = book[pagen]
+
+    # Set book[pagen].state to page_transaction
+    li              t0, page_transaction
+    camomaxu.w.aq   t1, t0, (ca1)               # t1 = book[pagen].state
+    bge             t1, t0, merge_phy_er        # if (book[pagen].state >= page_transaction) goto er
+    # look up next entry
+    cld             t2, PHY_PAGE_OFFSET_len(ca1) # t2 = book[pagen].len
+    beqz            t2, merge_phy_undo
+    slli            t3, t2, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ca2, ca1, t3                # ca2 = book[pagen+len]
+    # also set to transacting
+    camomaxu.w.aq   t3, t0, (ca2)               # t3 = book[pagen+len].state
+    bge             t1, t0, merge_phy_undo      # if (book[pagen+len].state >= page_transaction) goto undo
+    bne             t3, t1, merge_phy_undo2     # if (states different) goto undo2
+    # From here we are comitted
+    cld             t3, PHY_PAGE_OFFSET_len(ca2) # t3 = book[pagen+len].len
+    slli            t4, t3, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ca3, ca2, t4                # ca3 = book[pagen+len+len2]
+    add             t3, t3, t2                  # t3 = len + len2
+    # merge lengths
+    csd             t3, PHY_PAGE_OFFSET_len(ca1)
+    # fixup prev
+    csd             a0, PHY_PAGE_OFFSET_prev(ca3)
+    # clear fields of middle node
+    csd             zero, PHY_PAGE_OFFSET_len(ca2)
+    csd             zero, PHY_PAGE_OFFSET_prev(ca2)
+    # Set state of middle node, restore state of first node
+    li              t3, 0
+merge_phy_undo2:
+    camoswap.w.rl   zero, t3, (ca2)
+merge_phy_undo:
+    # store back old state
+    camoswap.w.rl   zero, t1, (ca1)
+merge_phy_er:
+    cclear_regs(a1, a2, a3)
+    NANO_RET
+
+#####################################################################
+# void zero_page_range(register_t pagen)
 NANO_FUNC zero_page_range
+#####################################################################
+    # TODO: this just blindly sets
+    cinc_bi         ca1, abi_local, phy_page_table, t1 # ca1 = book
+    slli            t1, a0, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ca1, ca1, t1                # ca1 = book[pagen]
+    li              t2, page_unused
+    csw             t2, 0(ca1)                  # book[pagen].state = page_unused
+    NANO_RET
 
 NANO_FUNC obtain_super_powers
 
@@ -352,6 +611,10 @@ NANO_FUNC exception_getcause
 
 NANO_FUNC get_integer_space_cap
 
+// TODO
+    cmove       ca0, cnull
+    NANO_RET
+
 NANO_FUNC modify_hardware_reg
 
 NANO_FUNC interrupts_mask
@@ -363,6 +626,9 @@ NANO_FUNC interrupts_get
 NANO_FUNC translate_address
 
 NANO_FUNC if_req_and_mask
+
+// TODO
+    NANO_RET
 
 NANO_FUNC nano_dummy
 

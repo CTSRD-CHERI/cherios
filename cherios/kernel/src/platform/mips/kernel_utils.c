@@ -30,6 +30,17 @@
 
 #include "klib.h"
 
+#define FPGA_BASE   			0x1f000000
+#define FPGA_SIZE   			0x900
+#define FPGA_SHUTDOWN_OFFSET	0x500
+
+capability fpga_cap;
+void kernel_platform_init(page_t* book) {
+#ifdef HARDWARE_qemu
+    fpga_cap = get_phy_cap(book, FPGA_BASE, FPGA_SIZE, 0, 1);
+#endif
+}
+
 void hw_reboot(void) {
 #ifdef HARDWARE_qemu
     /* Used to quit Qemu */

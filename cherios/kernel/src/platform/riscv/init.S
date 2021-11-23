@@ -47,7 +47,13 @@ cmove           cs4, ca5    # nano data
 cmove           cs5, ca6    # context handle
 cmove           cs6, ca7    # request token
 
-# TODO Create stack
+# Create stack
+la_relative     t3, __start_exception_stack
+la_relative     t4, __stop_exception_stack
+cspecialr       csp, ddc
+cincoffset      csp, csp, t3
+csetboundsexact csp, csp, t4
+cincoffset      csp, csp, t4
 
 # Init globals.
 call_func_early  crt_init_globals_kernel
@@ -56,12 +62,19 @@ cmove           abi_local, ca0
 # Zero BSS.
 call_func       crt_init_bss
 
+cmove           ca0, cs3
+cmove           ca1, cs4
+cmove           ca2, cs5
+auipcc          ca3, 0
+cmove           ca4, cs6
+move            a5, s0
+move            a6, s1
+move            a7, s2
 call_func       cherios_main
 /*
 int cherios_main(nano_kernel_if_t* interface,
 				 capability def_data,
 				 context_t own_context,
-				 __unused capability plt_auth_cap,
                  capability global_pcc,
                  if_req_auth_t req_auth,
 				 size_t init_base,

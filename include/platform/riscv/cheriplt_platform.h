@@ -69,14 +69,25 @@ __asm__ (                                                                       
     ".size " #name ", 16\n"                                                          \
 );
 
-#define INIT_OBJ(name, ret, sig, ...)             \
-        __asm__ ("csc %[d], %%captab_call_lo(" #name "_dummy)("X_STRINGIFY(PLT_REG_GLOB)")\n"::[d]"C"(plt_if -> name):);
+// Note: stores are encoded differently, so we can't use the captab relocations on them.
+// Instead, we do it on an incoffset, and then use a zero immediate in the load
+
+#define STORE_CAPTAB_HELPER(reloc, sym, base_reg, val)                              \
+        __asm__ ("lui t0, %%captab" reloc "_hi(" sym ")\n"                          \
+                 "cincoffset ct0, " base_reg ", t0\n"                               \
+                 "cincoffset ct0, ct0, %%captab" reloc "_lo(" sym ")\n"             \
+                 "csc        %[d], 0(ct0)\n"                                        \
+                 ::[d]"C"(val) : "t0", "ct0"                                        \
+                );
+
+#define INIT_OBJ(name, ret, sig, ...) \
+    STORE_CAPTAB_HELPER("_call", #name "_dummy", X_STRINGIFY(PLT_REG_GLOB), plt_if -> name)
 
 #define PLT_STORE_CAPTAB(tls, type, reg, data) \
-        __asm__ ("csc %[d], %%captab" tls "_lo(" #type "_data_obj)(" reg ")\n"::[d]"C"(data):)
+    STORE_CAPTAB_HELPER(tls, #type "_data_obj", reg, data)
 
 #define PLT_STORE_CAPTAB_CALL(type, trust_mode) \
-        __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; csc %[d], %%captab_call_lo(" #type "_data_obj_dummy)("X_STRINGIFY(PLT_REG_GLOB)")\n"::[d]"C"(trust_mode):)
+    STORE_CAPTAB_HELPER("_call", #type "_data_obj_dummy", X_STRINGIFY(PLT_REG_GLOB), trust_mode)
 
 #define PLT_LOAD_CAPTAB_CALL(type, trust_mode) \
         __asm__ (DECLARE_WEAK_OBJ_DUMMY(type) "; clc %[d], %%captab_call_lo(" #type "_data_obj_dummy)("X_STRINGIFY(PLT_REG_GLOB)")\n":[d]"=C"(trust_mode)::)
