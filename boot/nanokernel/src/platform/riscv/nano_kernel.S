@@ -38,6 +38,7 @@
 .set NANO_SIZE, 0x04000000
 .set DEF_DATA_PERMS, (CHERI_PERM_ALL &~ CHERI_PERM_ACCESS_SYS_REGS)
 .set IO_DATA_PERMS, (CHERI_PERM_LOAD | CHERI_PERM_STORE)
+.set DEF_SEALING_PERMS, (CHERI_PERM_SEAL | CHERI_PERM_UNSEAL | CHERI_PERM_GLOBAL)
 .bss
 
 // The alignment required by the object with the highest alignment requirement (likely the phy_page_table)
@@ -61,6 +62,8 @@ NANO_KERNEL_IF_LIST(IF_ENTRY)
 LOCAL_AT    if_table_end
 
 local_var           top_virt_table, PAGE_TABLE_SIZE, PHY_PAGE_SIZE_BITS
+
+local_var           tres_bitfield, TRES_BITFIELD_SIZE, 2
 
 # This needs to be aligned enough that the set bounds will work. Number of bits just found by trial and error
 local_var           phy_page_table, (TOTAL_PHY_PAGES + 1) * PHY_PAGE_ENTRY_SIZE, align_require
@@ -631,9 +634,59 @@ NANO_FUNC rescap_unlock
 
 NANO_FUNC foundation_get_id
 
+###################################
+# tres_t res_get(register_t type) #
 NANO_FUNC tres_get
+###################################
 
+    # Check not a reserved type or too large
+    li              t0, NANO_TYPES
+    blt             a0, t0, tres_er
+    li              t0, TYPE_SPACE
+    bge             a0, t0, tres_er
+
+    # Construct the sealing capability (might as well do it now)
+    csetaddr        ca0, abi_local, a0
+    li              t0, DEF_SEALING_PERMS
+    candperm        ca0, ca0, t0
+    csetbounds      ca0, ca0, 1
+    # and seal it
+    li              t0, TRES_TYPE
+    csetaddr        ct0, abi_local, t0
+    cseal           ca0, ca0, ct0
+tres_er:
+    cclear_regs(t0)
+    NANO_RET
+
+######################################
+# sealing_cap tres_take(tres_t tres) #
 NANO_FUNC tres_take
+######################################
+    # A type reservation is just a sealed version of the sealiing capability
+    li              t0, TRES_TYPE
+    csetaddr        ct0, abi_local, t0
+    cunseal         ct0, ca0, ct0               # ct0 is result
+    cmove           ca0, cnull
+
+    # Use an atomic or to set the correct bit
+    cinc_bi         ca1, abi_local, tres_bitfield, t2
+    subi            t3, t0, NANO_TYPES
+    li              t2, 1
+    andi            t1, t3, 0b11111
+    sll             t2, t2, t1                  # t2 is the mask in the word
+    srli            t1, t3, 5
+    slli            t1, t1, 2                   # t1 is the word the bit is in
+    cincoffset      ca1, ca1, t1                # ca1 is a pointer to the word
+
+    camoor.w        t1, t2, (ca1)
+    and             t1, t1, t2                  # non-zero if already set
+    bnez            t1, tres_take_er
+
+    # otherwise return in ca0
+    cmove           ca0, ct0
+tres_take_er:
+    cclear_regs(t0,a1)
+    NANO_RET
 
 NANO_FUNC tres_revoke
 
