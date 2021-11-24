@@ -230,6 +230,7 @@
 #define PAGE_SIZE                 (PHY_PAGE_SIZE)
 
 // Anything less than transaction can be split/merged.
+// page_cleaning seems like it could just be page_transaction. RISCV does this now, MIPS does not.
 #define NANO_KERNEL_PAGE_STATUS_ENUM_LIST(ITEM)    \
     ITEM(page_unused, 0)                           \
     ITEM(page_nano_owned, 1)                       \

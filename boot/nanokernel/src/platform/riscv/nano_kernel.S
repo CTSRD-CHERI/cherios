@@ -204,6 +204,7 @@ NANO_FUNC nano_kernel_init
     PHY_LINK_LEN
     // Free (but dirty)
     PHY_NEXT2
+    PHY_SET_STATE   page_dirty
     srli            t2, a0, PHY_PAGE_SIZE_BITS
     li              t3, (PHY_RAM_SIZE - NANO_SIZE) >> PHY_PAGE_SIZE_BITS
     sub             t2, t3, t2
@@ -559,12 +560,45 @@ merge_phy_er:
 # void zero_page_range(register_t pagen)
 NANO_FUNC zero_page_range
 #####################################################################
-    # TODO: this just blindly sets
+
+    # pagen in range
+    li              t1, TOTAL_PHY_PAGES
+    bge             a0, t1, merge_phy_er        # if (pagen >= TOTAL_PHY_PAGES) goto er
+
     cinc_bi         ca1, abi_local, phy_page_table, t1 # ca1 = book
     slli            t1, a0, PHY_PAGE_ENTRY_SIZE_BITS
     cincoffset      ca1, ca1, t1                # ca1 = book[pagen]
-    li              t2, page_unused
-    csw             t2, 0(ca1)                  # book[pagen].state = page_unused
+
+    # Set book[pagen].state to page_transaction (not cleaning)
+    li              t0, page_transaction
+    camomaxu.w.aq   t1, t0, (ca1)               # t1 = book[pagen].state
+    bge             t1, t0, zero_page_er        # if (book[pagen].state >= page_transaction) goto er
+    li              t0, page_dirty
+    bne             t1, t0, zero_page_undo      # only clean dirty pages
+
+    cld             a2, PHY_PAGE_OFFSET_len(ca1) # a2 = len (in pages)
+    slli            a0, a0, PHY_PAGE_SIZE_BITS  # base (bytes)
+    slli            a2, a2, PHY_PAGE_SIZE_BITS  # len (bytes)
+    li              t0, PHY_MEM_START_CACHED
+    add             t0, t0, a0
+    csetaddr        ct0, abi_local, t0
+    cincoffset      ct1, ct0, a2
+    # Zero everything between ct0 and ct1
+
+.set UNROLL_FACTOR,  16                          # How many caps worth of zeros to store per loop
+    zero_loop:
+.macro store_zero g, i
+    csc             cnull, (CAP_SIZE * \i)(ct0)
+.endm
+    for_range       store_zero, g, 0, UNROLL_FACTOR, 1
+    cincoffset      ct0, ct0, (CAP_SIZE * UNROLL_FACTOR)
+    bne             t0, t1, zero_loop
+
+    li              t1, page_unused
+zero_page_undo:
+    camoswap.w.rl   zero, t1, (ca1)             # book[pagen].state = page_unused
+zero_page_er:
+    cclear_regs(a1, t0, t1)
     NANO_RET
 
 NANO_FUNC obtain_super_powers
