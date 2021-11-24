@@ -651,8 +651,8 @@ NANO_FUNC exception_getcause
 
 NANO_FUNC get_integer_space_cap
 
-// TODO
-    cmove       ca0, cnull
+    csetaddr    ca0, abi_local, zero
+    candperm    ca0, ca0, zero
     NANO_RET
 
 NANO_FUNC modify_hardware_reg
