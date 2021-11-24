@@ -99,7 +99,8 @@ diff_table_start:
 #define DIFF_TABLE_LOAD         clw
 NANO_KERNEL_IF_LIST(DIFF_MACRO)
 diff_table_end:
-.set diff_table_size, DIFF_TABLE_ENTRY_SIZE * LIST_LENGTH(NANO_KERNEL_IF_LIST)
+.set N_NANO_FUNCS, LIST_LENGTH(NANO_KERNEL_IF_LIST)
+.set diff_table_size, DIFF_TABLE_ENTRY_SIZE * N_NANO_FUNCS
 
 # The nanokernel will use a number of gigapages to create a physical memory map
 # One cached and one uncached should do.
@@ -301,6 +302,12 @@ init_table_loop:
     candperm    ct1, ct1, t0
     cspecialw   ddc, ct1
 
+    # Create if request
+    cincoffset  ct0, cs0, IF_AUTH_TYPE
+    li          t1, (1 << N_NANO_FUNCS) - 1
+    csetaddr    ct1, cs0, t1
+    cseal       ca7, ct1, ct0
+
     # Pass through arguments to the kernel
     cmove       ct0, ca2
     cld         a0, 0x0(ct0)
@@ -314,7 +321,7 @@ init_table_loop:
     # ca4 if_table
     # ca5 sealed data
     # ca6 first context handle
-    # ca7 request token (TODO)
+    # ca7 request token
     # cra (jump target)
 
     csrr        t0, mstatus
@@ -328,7 +335,6 @@ init_table_loop:
 
     # TODO set the other exception vectors
 
-    # TODO: clear all the registers
     cspecialw    mepcc, cra
     cclear_regs(ra, sp, gp, x4, t0, t1, t2, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t3, t4, t5, x31)
     mret
@@ -625,9 +631,17 @@ NANO_FUNC interrupts_get
 
 NANO_FUNC translate_address
 
+##########################################################################
+# if_req_auth_t if_req_and_mask(if_req_auth_t req_auth, register_t mask) #
 NANO_FUNC if_req_and_mask
+##########################################################################
 
-// TODO
+    li          t0, IF_AUTH_TYPE
+    csetaddr    abi_local, abi_local, t0
+    cunseal     ca0, ca0, abi_local
+    and         t0, a0, a1
+    csetaddr    ca0, ca0, t0
+    cseal       ca0, ca0, abi_local
     NANO_RET
 
 NANO_FUNC nano_dummy
