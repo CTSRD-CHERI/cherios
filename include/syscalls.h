@@ -46,11 +46,16 @@ __BEGIN_DECLS
                         ITEM(syscall_puts, void, (const char* msg), __VA_ARGS__)
 #endif
 
-#define SYS_CALL_LIST(ITEM, ...)                                                                                   \
+#define SYS_CALL_LIST(ITEM, ...)\
+/* The argument list here are named after the mips registers that they once corresponded to. Across different platforms
+ * they are just 4 integers and 4 capabilities, that correspond to whatever registers the calling convention would
+ * suggest. v0 is also just another integer that will also be passed in a msg, but by convention is a selector for the target*/\
         ITEM(message_send, register_t, (register_t a0, register_t a1, register_t a2, register_t,                   \
                                         const_capability c3, const_capability c4, const_capability c5, const_capability c6,     \
                                         act_kt dest, register_t selector, register_t v0), __VA_ARGS__,                          \
                                          ".global message_send_c \n .type message_send_c, \"function\"\n" X_STRINGIFY(ASM_VISIBILITY) " message_send_c\n message_send_c: \n", "message_send_c_end: .size message_send_c, message_send_c_end-message_send_c\n") \
+/* The arguments to message reply are also similarly any capability and two integers. They roughly correspond to
+ * the registers that would be used to return from a function.*/\
         ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, int hint_switch), __VA_ARGS__)          \
 /* In mips clock ticks*/\
         ITEM(sleep, void, (register_t timeout), __VA_ARGS__)                                                                           \

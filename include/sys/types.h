@@ -92,13 +92,6 @@ enum sched_prio {
     PRIO_IO = 4, // Temporay, can be toggled on off alongside another priority (keep power 2)
 };
 
-typedef struct
-{
-    capability c3;
-    register_t v0;
-    register_t v1;
-}  ret_t;
-
 typedef struct cap_pair {
     capability code;
     capability data;

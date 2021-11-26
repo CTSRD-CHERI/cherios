@@ -164,7 +164,7 @@ typedef struct reg_frame {
             capability cf_c1, cf_c2, cf_c3, cf_c4, cf_c5, cf_c6, cf_c7, cf_c8;
             capability cf_c9, cf_c10, cf_c11, cf_c12, cf_c13, cf_c14, cf_c15, cf_c16;
             capability cf_c17, cf_c18, cf_c19, cf_c20, cf_c21, cf_c22, cf_c23, cf_c24;
-            capability cf_c25, cf_c26, cf_c27, cf_c28, cf_c29, cf_c30;
+            capability cf_c25, cf_c26, cf_c27, cf_c28, cf_c29, cf_c30, cf_c31;
         };
         struct {
             struct {uint64_t cf_x1; uint64_t cf_x1_hi;};
@@ -197,19 +197,18 @@ typedef struct reg_frame {
             struct {uint64_t cf_x28; uint64_t cf_x28_hi;};
             struct {uint64_t cf_x29; uint64_t cf_x29_hi;};
             struct {uint64_t cf_x30; uint64_t cf_x30_hi;};
+            struct {uint64_t cf_x31; uint64_t cf_x31_hi;};
         };
     };
-
-    capability cf_idc;
     capability cf_default;
     capability cf_pcc;
 } reg_frame_t;
 
 #endif // ASSEMBLY
 
-#define CHERI_FRAME_SIZE (32 * CAP_SIZE)
-#define FRAME_idc_OFFSET       (MIPS_FRAME_SIZE + (26 * CAP_SIZE))
-#define FRAME_pcc_OFFSET       (MIPS_FRAME_SIZE + (27 * CAP_SIZE))
+#define REG_FRAME_INDEX_DEFAULT 31
+#define REG_FRAME_INDEX_PCC 32
+#define CHERI_FRAME_SIZE (33 * CAP_SIZE)
 
 #define RAM_START 0x80000000
 #define NANO_KSEG RAM_START
@@ -277,5 +276,19 @@ X	W	R	Meaning
 #define RISCV_U                     0b00
 
 #define RISCV_STATUS_MPP_SHIFT      11
+#define RISCV_STATUS_SPP_SHIFT      8
 
+#define RISCV_STATUS_SIE            (1 << 1)
+#define RISCV_STATUS_MIE            (1 << 3)
+#define RISCV_STATUS_MIE            (1 << 3)
+
+// Interrupt enable (external)
+#define RISCV_MIE_SSIE              (1 << 1)
+#define RISCV_MIE_MSIE              (1 << 3)
+// Interrupt enable (timer)
+#define RISCV_MIE_STIE              (1 << 5)
+#define RISCV_MIE_MTIE              (1 << 7)
+// Interrupt enable (software)
+#define RISCV_MIE_SEIE              (1 << 9)
+#define RISCV_MIE_MEIE              (1 << 11)
 #endif //CHERIOS_RISV_H

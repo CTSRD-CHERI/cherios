@@ -263,8 +263,8 @@ void sched_receive_event(act_t* act, sched_status_e events) {
 	sched_status_e cause_wake = act->sched_status & events;
 	if(cause_wake) {
 		// Fast path related. Waking something in the fastpath wait needs to set v1.
-		if(cause_wake & (sched_wait_notify | sched_wait_timeout)) act->v1 = FAST_RES_TIME;
-		else if(cause_wake & sched_waiting) act->v1 = FAST_RES_POP;
+		if(cause_wake & (sched_wait_notify | sched_wait_timeout)) act->ret.v1 = FAST_RES_TIME;
+		else if(cause_wake & sched_waiting) act->ret.v1 = FAST_RES_POP;
 
 		act->woke_from = (act->sched_status & events);
 	    // TODO on multicore if we wake up a high priority activation on another core
@@ -319,8 +319,8 @@ register_t sched_block_until_event(act_t* act, act_t* next_hint, sched_status_e 
 	}
 
 	// Fast path related. Waking something in the fastpath wait needs to set v1.
-	if(got_event & (sched_wait_notify | sched_wait_timeout)) act->v1 = FAST_RES_TIME;
-	else if (got_event & sched_waiting) act->v1 = FAST_RES_POP;
+	if(got_event & (sched_wait_notify | sched_wait_timeout)) act->ret.v1 = FAST_RES_TIME;
+	else if (got_event & sched_waiting) act->ret.v1 = FAST_RES_POP;
 	act->woke_from = got_event;
 
 	return 0;

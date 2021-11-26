@@ -338,10 +338,10 @@ __used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c
 	if(target_activation->status != status_alive) {
 		KERNEL_ERROR("Trying to CCall revoked activation %s from %s",
 					 target_activation->name, source_activation->name);
-        source_activation->v0 = (register_t)-1;
-        source_activation->v1 = (register_t)-1;
-        source_activation->c3 = NULL;
-		return (ret_t*)&source_activation->c3;
+        source_activation->ret.v0 = (register_t)-1;
+        source_activation->ret.v1 = (register_t)-1;
+        source_activation->ret.c3 = NULL;
+		return (ret_t*)&source_activation->ret;
 	}
 
 	// Construct a sync_token if this is a synchronous call
@@ -366,7 +366,7 @@ __used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c
 		sched_block_until_event(source_activation, target_activation, sched_sync_block, 0, 0);
 
 		KERNEL_TRACE(__func__, "%s has recieved return message from %s", source_activation->name, target_activation->name);
-		return (ret_t*)&source_activation->c3;
+		return (ret_t*)&source_activation->ret;
 	} else if(selector == SEND_SWITCH) {
         // No point trying to send and switch to something scheduled on another core
         if(source_activation->pool_id == target_activation->pool_id)
@@ -375,10 +375,8 @@ __used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c
         // Empty
 	}
 
-	source_activation->v0 = 0;
-    source_activation->v1 = 0;
-    source_activation->c3 = NULL;
-    return (ret_t*)&source_activation->c3;
+	source_activation->ret = (ret_t){.c3 = NULL, .v0 = 0, .v1 = 0};
+    return &source_activation->ret;
 }
 
 __used act_kt set_message_reply(capability c3, register_t v0, register_t v1, capability sync_token) {
@@ -404,9 +402,7 @@ __used act_kt set_message_reply(capability c3, register_t v0, register_t v1, cap
 	/* At any point we might pre-empted, so the order here is important */
 
 	/* First set the message to be picked up when the condition is unset */
-	returned_to->c3 = c3;
-	returned_to->v0 = v0;
-	returned_to->v1 = v1;
+	returned_to->ret = (ret_t){.c3 = c3, .v0 = v0, .v1 = v1};
 
 	/* Make the caller runnable again */
 	sched_receive_event(returned_to, sched_sync_block);
@@ -446,5 +442,5 @@ __used struct fastpath_return fastpath_bailout(capability c3, register_t v0, reg
 	// TODO something with time
 	__unused register_t time = sched_block_until_event(caller, returned_to, events, (register_t)timeout, 0);
 
-	return (struct fastpath_return){.v0 = 0, .v1 = caller->v1};
+	return (struct fastpath_return){.v0 = 0, .v1 = caller->ret.v1};
 }

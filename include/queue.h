@@ -68,7 +68,6 @@ typedef struct
 	capability c6;
 
 	capability c1;  /* sync token */
-//	capability c2;	/* message sender cap */ We now only have a sync token that also identifies the sender
 
 	register_t a0; /* GP arguments */
 	register_t a1;

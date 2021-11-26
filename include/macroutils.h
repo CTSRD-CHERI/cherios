@@ -37,7 +37,8 @@
  * MAKE_ARG_LIST(X) -> a, b
  * MAKE_ARG_LIST_APPEND(X) -> , a, b
  */
-#define MAKE_SIG(X) MS_HELP X
+#define MAKE_SIG(X) (MAKE_SIG_NO_BRACE(X))
+#define MAKE_SIG_NO_BRACE(X) MS_HELP X
 #define MAKE_ARG_LIST(X) MAL_HELP(MAL_start, EVAL1 X)
 #define MAKE_ARG_LIST_APPEND(X) MAL_HELP(MAL_start_c, EVAL1 X)
 
@@ -197,6 +198,6 @@
 #define MS_rec_ind() MS_rec
 #define MS_rec(name, typenext, ...) name, typenext DEFER(SELECT_REC_IND)()(MS_base, DEFER(MS_rec_ind)(), __VA_ARGS__)
 #define MS_start(type, ...) type DEFER(SELECT_REC_IND)()(MS_base, DEFER(MS_rec_ind)(), __VA_ARGS__)
-#define MS_HELP(...) (EVAL32(SELECT_REC(MS_void, MS_start, __VA_ARGS__)))
+#define MS_HELP(...) EVAL32(SELECT_REC(MS_void, MS_start, __VA_ARGS__))
 
 #endif //CHERIOS_MACROUTILS_H

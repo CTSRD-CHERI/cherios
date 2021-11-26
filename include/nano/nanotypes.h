@@ -145,8 +145,12 @@
 #define CONTEXT_SIZE                    (CHERI_FRAME_SIZE + (CAP_SIZE * 6))
 #define CONTEXT_OFFSET_STATE            (CHERI_FRAME_SIZE - INC_IM_MAX)
 
+// Keep created as zero, or have to rewrite assembly
 #define CONTEXT_STATE_CREATED           0
-#define CONTEXT_STATE_DESTROYED         1
+// This state is not used by MIPS, which seems horribly bugged on multicore
+#define CONTEXT_STATE_RUNNING           1
+// Destroyed should not share any bits with other states and be the largets value (so amo and/max can be used)
+#define CONTEXT_STATE_DESTROYED         2
 
 #define CONTEXT_OFFSET_EX_STATE         (CHERI_FRAME_SIZE + REG_SIZE - INC_IM_MAX)
 

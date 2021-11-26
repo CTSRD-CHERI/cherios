@@ -85,7 +85,7 @@
 #define cf_link             cf(link)
 #define cf_arg              cf(arg)
 #define cf_carg             cf(carg)
-
+#define cf_idc              cf(local)
 
 #define cf_kernel_config    cf(kernel_config)
 #define cf_msg_queue        cf(msg_queue)

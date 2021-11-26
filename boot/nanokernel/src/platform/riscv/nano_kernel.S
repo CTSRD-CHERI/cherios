@@ -50,8 +50,9 @@
 
 START_LOCALS        align_require
 
+local_cap_var       exception_context
 local_cap_var       current_context
-local_cap_var       next_context
+local_cap_var       next_context    # points to the next context in the context table
 
 # Most contexts are allocated by the system, but we provide a few statically to bootstrap
 local_var           context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
@@ -120,6 +121,12 @@ diff_table_end:
 #define PHY_MEM_START_UNCACHED      0xffffffe000000000
 
 // On real hardware we may actually need a second range
+
+// Jumped to if a fault is hit that cannot be recovered.
+// Context will need cleaning up, or the system will just be wedged.
+nano_kernel_die:
+j   nano_kernel_die
+
 
 ######################################################################################
 # nano_kernel_init(register_t unmanaged_space, register_t entry_offset, packaged args)
@@ -282,9 +289,16 @@ init_table_loop:
 
     # First context
     cincoffset  ca6, ct5, context_table
+    # Set current contexts state to running
+    li          t1, CONTEXT_STATE_RUNNING
+    csd         t1, (context_table+CONTEXT_OFFSET_STATE)(abi_local)
+    li          t0, (CONTEXT_SIZE * N_CONTEXTS)
+    csetbounds  ct0, ca6, t0
+    csetbounds  ca6, ca6, CONTEXT_SIZE
     csc         ca6, current_context(abi_local)                       # current context is first context
-    cincoffset  ct0, ca6, CONTEXT_SIZE
+    cincoffset  ct0, ct0, CONTEXT_SIZE
     csc         ct0, next_context(abi_local)                          # store pointer to next context to allocate
+
     # Seal current context
     cincoffset  ct0, cs0, CONTEXT_TYPE
     cseal       ca6, ca6, ct0
@@ -329,7 +343,7 @@ init_table_loop:
     # cra (jump target)
 
     csrr        t0, mstatus
-    li          t1, RISCV_S << RISCV_STATUS_MPP_SHIFT
+    li          t1, (RISCV_S << RISCV_STATUS_MPP_SHIFT) | (RISCV_S << RISCV_STATUS_SPP_SHIFT)
     or          t0, t0, t1
     csrw        mstatus, t0
 
@@ -337,23 +351,245 @@ init_table_loop:
     cllc_rel    ct0, m_exp_vec
     cspecialw   mtcc, ct0
 
+    cllc_rel    ct0, s_exp_vec
+    cspecialw   stcc, ct0
+
+    # I have decided, for now, to run all of CheriOS in S-Mode. M-Mode would have been preferable, but MPRV only allows
+    # data accesses to be virtualised. On machines with only M-mode and U-Mode, this will be very sadly mean that
+    # either virtual memory will not work, or we will have to switch between M-mode and U-mode for many nano calls.
     # TODO set the other exception vectors
 
     cspecialw    mepcc, cra
     cclear_regs(ra, sp, gp, x4, t0, t1, t2, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t3, t4, t5, x31)
     mret
 
+###################################################################
+# context_t create_context(reg_frame_t* initial_state, res_t res) #
 NANO_FUNC create_context
+###################################################################
+
+    beqz        a1, allocate_static
+allocate_dynamic:
+        # TODO: the reservation version provides memory dynamically
+
+
+allocate_static:
+    li          t0, CONTEXT_SIZE
+    cincoffset  ca2, abi_local, next_context
+# atomically increment next_context by CONTEXT_SIZE
+1:  clr.c       ca3, (ca2)
+    cincoffset  ca4, ca3, t0
+    csc.c       t1, ca4, (ca2)
+    bnez        t1, 1b
+allocated:
+    csetboundsexact ca3, ca3, t0
+
+    # memcpy CHERI_FRAME_SIZE bytes from ca0 to ca3
+    cmove       ca1, ca3
+    add         t1, a0, CHERI_FRAME_SIZE
+cpy_loop:
+    clc         ca2, 0(ca0)
+    csc         ca2, 0(ca1)
+    cincoffset  ca0, ca0, CAP_SIZE
+    cincoffset  ca1, ca1, CAP_SIZE
+    bne         a0, t1, cpy_loop
+
+    # Set magic value to a non-zero value
+    li          t0, 1
+    csd         t0, CONTEXT_OFFSET_MAGIC(ca3)
+
+    # finally, seal ca3
+    li          a1, CONTEXT_TYPE
+    csetaddr    ca0, abi_local, a1
+    cseal       ca0, ca3, ca0
+
+    cclear_regs(a2, a3, a4)
+    NANO_RET
 
 NANO_FUNC destroy_context
 
+######################################################################################
+# void context_switch(capability ca0 ... ca7, ct0, ct1, ct2, context_t restore_from) #
 NANO_FUNC context_switch
+######################################################################################
 
+# This is one of the more complicated functions. It is called both by the system (to voluntarily switch between tasks)
+# and as the result of an interrupt/exception. restore_from is the most important argument, and points to a saved context.
+# The other arguments are _possibly_ passed through, if the magic value of the target context is 0.
+# Note: ct0, ct1, ct2, and restore_from are passed via CSP at present. Once we fix stack passing of arguments,
+# they will likely be passed in another register, correctly bounded.
+# Note: until they are saved, it is important not to disrupt _any_ registers as this might have been from an exception
+# the excpetion to this is abi_local. If called by the system, abi_local will be set by the cinvoke.
+# The exception entry should swap with xTDC (which will be saved instead of abi_local)
+
+
+# Breaking the list of registers into different parts, as some are saved and restored differently
+# List 2 and 4 are (possibly) passed through.
+# c30/c31 are restored specially
+
+#define rlist1 c1, c2, c3, c4
+#define rlist1_start 0
+
+#define rlist2 c5, c6, c7
+#define rlist2_start 4
+
+#define rlist3 c8, c9
+#define rlist3_start 7
+
+#define rlist4 c10, c11, c12, c13, c14, c15, c16, c17
+#define rlist4_start 9
+
+#define rlist5 c18, c19, c20, c21, c22, c23, c24, c25, c26, c27, c28, c29
+#define rlist5_start 17
+
+# Note: c30 and c31 are handled specially
+    TRACE_ON
+
+    # disable interrupts. t3 will hold old status in case we want to turn them on again
+    # TODO: This needs to work at different ELs as well
+    csrrci          t3, sstatus, RISCV_STATUS_SIE
+
+    # Write a magic value to cause (currently 0) to indicate a manual switch.
+    csrw            scause, zero
+
+context_switch_exception_entry:
+
+    # Switch with a scratch register. Now abi_local AND c30 are available.
+    # Its worth noting that abi_local is c31. This means c30 and c31 (the last things to save) are stored differently
+    cspecialrw      c30, sscratchc, c30
+
+#define INDEX_TO_OFFSET(index) (index * CAP_SIZE)-INC_IM_MAX
+
+.macro cstore_reg reg, index, g
+    csc             \reg, (INDEX_TO_OFFSET(\index))(c30)
+.endm
+
+    # Load current context
+    clc             c30, current_context(abi_local)
+    # Store some registers we always store
+    foreachi        cstore_reg, rlist1_start, g, rlist1
+    foreachi        cstore_reg, rlist3_start, g, rlist3
+    foreachi        cstore_reg, rlist5_start, g, rlist5
+    # We put c30 here
+    cspecialr       ct0, sscratchc
+    csc             ct0, INDEX_TO_OFFSET(30)(c30)
+    cspecialr       ct0, ddc
+    csc             ct0, INDEX_TO_OFFSET(32)(c30)
+    csrr            s1, scause
+    csd             s1, CONTEXT_OFFSET_MAGIC(c30)
+    beqz            s1, stores_called_only
+stores_exception_only:
+    # These register will not be passed through on next restore, and so need saving
+    foreachi        cstore_reg, rlist2_start, g, rlist2
+    foreachi        cstore_reg, rlist4_start, g, rlist4
+    # TODO This needs to work at different ELs. Not just supervisor.
+    # abi_local was swapped with xtdc. Restore tdc at the same time as getting value to store.
+    cspecialrw      ct0, stdc, abi_local
+    csc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
+    # restored PCC based on Xepcc
+    cspecialr       ct0, sepcc
+    csc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
+    # Load context to restore
+    clc             cs0, exception_context(abi_local)
+    j               context_save_finish
+stores_called_only:
+    # restored PCC based on ra if this functions is called
+    csc             cnull, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
+    csc             cra, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
+    # Unseal context argument
+    clc             cs0, (3*CAP_SIZE)(csp)
+    li              t0, CONTEXT_TYPE
+    csetaddr        ct0, abi_local, t0
+    cunseal         cs0, cs0, ct0
+    # Load other stack passed arguments
+    clc             ct0, 0(csp)             # pass through
+    clc             ct1, CAP_SIZE(csp)      # pass through
+    clc             ct2, (2*CAP_SIZE)(csp)  # pass through
+context_save_finish:
+    # NOTE: it is fine to used saved registers, they have all been stored
+    cincoffset      cs2, c30, CONTEXT_OFFSET_STATE  # cs2 = pointer to source context state
+    li              s3, CONTEXT_STATE_DESTROYED
+    camoand.d.rl    s4, s3, (cs2)                       # will set running->created, or destroyed->destroyed
+    beq             s3, s4, nano_kernel_die
+
+    # From this point on we are truly out of the save portion and need to restore
+context_load: # cs0 = context to load from. s1 = cause of switch (0 if called)
+    # Set state of target context to running.
+    cmove           c30, cs0                    # more convenient
+    cincoffset      cs2, c30, CONTEXT_OFFSET_STATE  # cs2 = pointer to source context state
+    li              s3, CONTEXT_STATE_RUNNING
+retry:
+    camomaxu.d.aq   s4, s3, (cs2)
+    beq             s3, s4, retry               # Note: we spin here to handles between multicore scheduling.
+    bnez            s4, nano_kernel_die         # Die if changing to a destroyed context
+    # and store it as current_context
+    csc             c30, current_context(abi_local)
+
+    cld             s3, CONTEXT_OFFSET_MAGIC(c30)
+    beqz            s3, target_pass_through     # target accepts pass through
+    # Not pass through, so load
+.macro cload_reg reg, index, g
+    clc             \reg, (INDEX_TO_OFFSET(\index))(c30)
+.endm
+    foreachi        cload_reg, rlist2_start, g, rlist2
+    foreachi        cload_reg, rlist4_start, g, rlist4
+    j               source_pass_through
+target_pass_through:
+    beqz            s1, source_pass_through     # source provided pass through
+    # have to zero registers to avoid leaking
+    cclear_regs(a0, a1, a2, a3, a4, a5, a6, a7, t0, t1, t2)
+source_pass_through:
+    foreachi        cload_reg, rlist1_start, g, rlist1
+    foreachi        cload_reg, rlist3_start, g, rlist3
+    foreachi        cload_reg, rlist5_start, g, rlist5
+
+    # Here we still need to restore c30/c31/ddc/pcc, but can only use c30/c31(abi_local)/ddc/scratch
+    # Get ourselves a temp by saving ct0
+    cspecialw       sscratchc, ct0
+    clc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
+    cspecialw       ddc, ct0
+    clc             abi_local, INDEX_TO_OFFSET(31)(c30)
+    clc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
+    clc             c30, INDEX_TO_OFFSET((30-1))(c30)
+    # currently, scratch holds ct0, ct0 hold pcc
+    cspecialw       sepcc, ct0
+    cspecialrw      ct0, sscratchc, cnull           # important to not leak!
+    sret
+
+########################################
+# uint8_t critical_section_enter(void) #
 NANO_FUNC critical_section_enter
+########################################
 
+# TODO
+
+# Should return a hart ID
+    li a0, 0
+    NANO_RET
+
+####################################
+# void critical_section_exit(void) #
 NANO_FUNC critical_section_exit
+####################################
 
+# TODO
+    NANO_RET
+
+####################################################################
+# void set_exception_handler(context_t context, register_t cpu_id) #
 NANO_FUNC set_exception_handler
+####################################################################
+
+# TODO: Multithreading (dont ignore cpu_id)
+    # unseal context
+    li          t0, CONTEXT_TYPE
+    csetaddr    ct0, abi_local, t0
+    cunseal     ca0, ca0, ct0
+
+    # store as exception context
+    csc         ca0, exception_context(abi_local)
+    cclear_regs(a0, t0)
+    NANO_RET
 
 NANO_FUNC rescap_take
 
@@ -733,6 +969,11 @@ NANO_FUNC if_req_and_mask
 
 NANO_FUNC nano_dummy
 
+
+NANO_FUNC s_exp_vec
+
+# This exception vector is the one we normally expect to fall into
+j           s_exp_vec
 
 NANO_FUNC m_exp_vec
 

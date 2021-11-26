@@ -119,6 +119,18 @@ typedef struct {
 
 _Static_assert(SI_SIZE >= sizeof(sync_indirection), "We need to declare a size that is larger than this struct");
 
+typedef struct
+{
+    capability c3;
+    union {
+        struct {
+            register_t v0;
+            register_t v1;
+        };
+        capability ints_as_caps;
+    };
+}  ret_t;
+
 typedef struct act_t
 {
 	/* Warning: The offset of this needs to be zero */
@@ -161,20 +173,20 @@ typedef struct act_t
 
 	context_t context;	/* Space to put saved context for restore */
 
-	// These are arguments to pass for fastpath. Keep c3/cv0/v1 contiguous
+	// These are arguments to pass for fastpath. When switching to a context, we will try pass through the values
+	// stashed here
+    ret_t ret;
 
-	capability c3;
-	register_t v0;
-	register_t v1;
-	/* Currently only pass these fastpath arguments from assembly
-	register_t a0, a1;
-    capability c4, c5, c6, c1;
-    register_t a2, a3;
-    */
+    // These match the pass through arguments supported by the respective nanokernels
+    // In order to have less platform specific gunk be exposed to userspace, the message formats for send/return will
+    // be kept consistent (although we might widen them to better support all platforms). These will then be mapped to
+    // platform specific registers (which can hopefully be passed through the nanokernel switch).
+#ifdef PLATFORM_mips
+#define ACT_ARG_LIST(X) 0, 0, 0, 0, (X)->ret.v0, (X)->ret.v1, (X)->ret.c3, NULL, NULL, NULL, NULL
+#elif PLATFORM_riscv
+#define ACT_ARG_LIST(X) (X)->ret.c3, (X)->ret.ints_as_caps, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL
+#endif
 
-//#define ACT_ARG_LIST(X) (X)->a0, (X)->a1, (X)->a2, (X)->a3, (X)->v0, (X)->v1, (X)->c3, (X)->c4, (X)->c5, (X)->c6, (X)->c1
-#define ACT_ARG_LIST(X) 0, 0, 0, 0, (X)->v0, (X)->v1, (X)->c3, NULL, NULL, NULL, NULL
-#define ACT_ARG_LIST_NULL 0, 0, 0, 0,  0, 0, NULL, NULL, NULL, NULL, NULL
 	/* Message pass related */
 	struct sync_state {
 		volatile sync_t sync_token;		/* The sequence number we expect next */

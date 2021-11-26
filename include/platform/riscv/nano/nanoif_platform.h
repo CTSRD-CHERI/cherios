@@ -28,27 +28,12 @@
  * SUCH DAMAGE.
  */
 
-#include "nano/nanokernel.h"
-#include "nano/nanotypes.h"
-#include "kernel_exceptions.h"
-#include "activations.h"
-#include "klib.h"
+#ifndef CHERIOS_NANOIF_PLATFORM_H
+#define CHERIOS_NANOIF_PLATFORM_H
 
-void kernel_exception(__unused context_t swap_to, context_t own_context) {
+#define NANO_KERNEL_IF_RAW_LIST_PLATFORM(ITEM, ...)
 
-    uint8_t cpu_id = 0;
+#define switch_regs         capability, ca0, capability, ca1, capability, ca2, capability, ca3, capability, ca4, capability, ca5, capability, ca6, capability, ca7, capability, ct0, capability, ct1, capability, ct2
+#define ACT_ARG_LIST_NULL   NULL, NULL, NULL, NULL,  NULL, NULL, NULL, NULL, NULL, NULL, NULL
 
-    set_exception_handler(own_context, cpu_id);
-
-    kernel_interrupts_init(1, cpu_id);
-
-    act_t* kernel_curr_act = sched_get_current_act_in_pool(cpu_id)->context;
-
-    HW_TRACE_ON;
-
-    context_switch(ACT_ARG_LIST_NULL, kernel_curr_act);
-
-    while (1) {
-        // TODO RISCV handle exceptions
-    }
-}
+#endif //CHERIOS_NANOIF_PLATFORM_H

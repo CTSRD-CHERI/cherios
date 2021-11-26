@@ -30,6 +30,10 @@
 
 #include "asm_common.S"
 
+# A little mis-named now. This is a bias for clc/csc used mostly for the context struct.
+# It could be (1 << 11), but for now I'm not sure its needed.
+.set INC_IM_MAX, 0
+
 .macro TRACE_ON
     slti zero, zero, 0x1b
 .endm
