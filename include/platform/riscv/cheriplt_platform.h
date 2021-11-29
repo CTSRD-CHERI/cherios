@@ -61,10 +61,10 @@ __asm__ (                                                                       
     alias                                                                           \
     WEAK_DUMMY(name)                                                                \
     WEAK_DUMMY(obj)                                                                 \
-    "clc ct1, %captab_call_lo(" EVAL1(STRINGIFY(obj)) "_dummy)(" X_STRINGIFY(PLT_REG_GLOB) ")\n"   \
+    "clc ct2, %captab_call_lo(" EVAL1(STRINGIFY(obj)) "_dummy)(" X_STRINGIFY(PLT_REG_GLOB) ")\n"   \
     "clc " X_STRINGIFY(PLT_REG_TARGET) ", %captab_call_lo(" #name "_dummy)(" X_STRINGIFY(PLT_REG_GLOB) ")\n" \
     "clc " X_STRINGIFY(PLT_REG_TARGET_DATA) ", %captab" tls "_lo(" EVAL1(STRINGIFY(obj)) ")(" tls_reg ")\n" \
-    "cjr ct1\n"                                                                     \
+    "cjr ct2\n"                                                                     \
     alias2                                                                          \
     ".size " #name ", 16\n"                                                          \
 );

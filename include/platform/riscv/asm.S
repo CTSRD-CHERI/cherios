@@ -49,6 +49,13 @@
     \name:
 .endm
 
+.macro START_HIDDEN_FUNC name
+    .global \name
+    .hidden \name
+    .type \name, "function"
+    \name:
+.endm
+
 .macro END_FUNC name
     \name\()_end:
     .size \name, \name\()_end - \name
@@ -62,8 +69,19 @@
 
 .macro op_any_i12 rout, rin, constant, tmp, op
     .if (\constant >= -2048) && (\constant <= 2047)
+        # use op once
         \op \rout, \rin, \constant
+    .elseif (\constant >= -4096) && (\constant <= 4094)
+        # use op twice
+        .if (\constant < 0)
+            \op \rout, \rin, -2048
+            \op \rout, \rout, (\constant + 2048)
+        .else
+            \op \rout, \rin, 2047
+            \op \rout, \rout, (\constant - 2047)
+        .endif
     .else
+        # use lui + add to load a constant
         li  \tmp, \constant
         \op \rout, \rin, \tmp
     .endif
@@ -139,3 +157,9 @@
 .endm
 
 #define cclear_regs(...) cclear_all_with_moves __VA_ARGS__
+
+.macro get_sym dst, sym
+        lui         \dst, %captab_hi(\sym)
+        cincoffset  c\()\dst, cgp, \dst
+        clc         c\()\dst, %captab_lo(\sym)(c\()\dst)
+.endm

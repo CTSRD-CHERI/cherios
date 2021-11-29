@@ -44,8 +44,6 @@ void kernel_exception(__unused context_t swap_to, context_t own_context) {
 
     act_t* kernel_curr_act = sched_get_current_act_in_pool(cpu_id)->context;
 
-    HW_TRACE_ON;
-
     context_switch(ACT_ARG_LIST_NULL, kernel_curr_act);
 
     while (1) {

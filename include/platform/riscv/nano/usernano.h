@@ -40,17 +40,18 @@ static inline void init_nano_if_sys(if_req_auth_t auth) {
     capability data;
     __asm__(
     "li a0, 0                       \n"
-    "cmove  ca1, %[auth]            \n"
+    "li a1, 0                       \n"
+    "cmove  ca2, %[auth]            \n"
     "cmove  ct0, %[ifc]             \n"
     "1:scall                        \n"
-    "csc  ca2, 0(ct1)               \n"
-    "addi a0, a0, 1                 \n"
+    "csc  ca3, 0(ct0)               \n"
+    "addi a1, a1, 1                 \n"
     "cincoffset ct0, ct0, " CAP_SIZE_S "\n"
-    "bne a0, %[total], 1b           \n"
-    "cmove  %[d], ca3               \n"
+    "bne a1, %[total], 1b           \n"
+    "cmove  %[d], ca4               \n"
     : [d]"=C"(data)
     : [ifc]"C"(&interface),[total]"r"(limit), [auth]"C"(auth)
-    : "ca0", "ca1", "ca2", "ct0"
+    : "ca0", "ca1", "ca2", "ca3", "ca4", "ct0"
     );
 
     init_nano_kernel_if_t(&interface, data, NULL);

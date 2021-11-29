@@ -244,6 +244,8 @@ void auto_dylink_post_new_thread(link_session_t* session, capability* data_args)
 // Link-interface functions
 void set_info_functions(lib_info_t* info);
 
+#else
+#include "dylink_platform.h"
 #endif // ASSEMBLY
 
 #define CROSS_DOMAIN(X) (__cross_domain_ ## X)

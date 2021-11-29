@@ -37,8 +37,7 @@ OUTPUT_ARCH(riscv)
 ENTRY(start)
 SECTIONS
 {
-	. += SIZEOF_HEADERS;
-
+    /* No bump by size of program headers to keep program header order consistent with mips */
     __text_segment_start = .;
 
 	.init : {

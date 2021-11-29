@@ -278,6 +278,7 @@ init_table_loop:
     # Things passed to the user need to be virtual
     li          t4, PHY_MEM_START_CACHED
     cincoffset  ct5, abi_local, t4
+    cspecialw   stdc, ct5
     # We don't set bounds on the sealed data so the nanokernel can derive caps from it
     add_bi      t4, t4, RAM_START + NANO_SIZE, t1               # vaddr of unmanaged start
 
@@ -351,13 +352,18 @@ init_table_loop:
     cllc_rel    ct0, m_exp_vec
     cspecialw   mtcc, ct0
 
-    cllc_rel    ct0, s_exp_vec
+    cllc_rel    ct0, (s_exp_vec)
+    cinc_bi     ct0, ct0, PHY_MEM_START_CACHED, t1
     cspecialw   stcc, ct0
 
     # I have decided, for now, to run all of CheriOS in S-Mode. M-Mode would have been preferable, but MPRV only allows
     # data accesses to be virtualised. On machines with only M-mode and U-Mode, this will be very sadly mean that
     # either virtual memory will not work, or we will have to switch between M-mode and U-mode for many nano calls.
-    # TODO set the other exception vectors
+
+    li          t0, -1
+    # Delegate all exceptions / in interrupts to s-mode
+    csrw        medeleg, t0
+    csrw        mideleg, t0
 
     cspecialw    mepcc, cra
     cclear_regs(ra, sp, gp, x4, t0, t1, t2, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t3, t4, t5, x31)
@@ -443,7 +449,6 @@ NANO_FUNC context_switch
 #define rlist5_start 17
 
 # Note: c30 and c31 are handled specially
-    TRACE_ON
 
     # disable interrupts. t3 will hold old status in case we want to turn them on again
     # TODO: This needs to work at different ELs as well
@@ -553,7 +558,8 @@ source_pass_through:
     clc             c30, INDEX_TO_OFFSET((30-1))(c30)
     # currently, scratch holds ct0, ct0 hold pcc
     cspecialw       sepcc, ct0
-    cspecialrw      ct0, sscratchc, cnull           # important to not leak!
+    cmove           ct0, cnull                      # important to not leak!
+    cspecialrw      ct0, sscratchc, ct0
     sret
 
 ########################################
@@ -970,11 +976,67 @@ NANO_FUNC if_req_and_mask
 NANO_FUNC nano_dummy
 
 
+.macro nano_s_ret
+    cspecialrw  abi_local, stdc, abi_local
+    sret
+.endm
+
+# This function is called via a syscall so it needs to not clobber registers and has a weird ABI.
+# a0 = 0 (used to indicate this is an intercepted call, can be used as a temp)
+# a1 = method nb
+# ca2 = auth token
+# ca3 = result coda
+# ca4 = result data
+# abi_local = capability to local vars (will be swapped back with stdc on return, do not clobber)
+NANO_FUNC get_if
+    # cause a trap if auth token not tagged/sealed correctly
+    li          a0, IF_AUTH_TYPE
+    csetaddr    ca0, abi_local, a0
+    cunseal     ca0, ca2, ca0
+
+    # null result by default
+
+    cmove       ca3, cnull
+    cmove       ca4, cnull
+
+    srl         a0, a2, a1
+    andi        a0, a0, 1               # 1 if method allowed
+    beqz        a0, exp_skip_inst
+
+    # Seal result data
+    li          a0, NANO_KERNEL_TYPE
+    csetaddr    ca0, abi_local, a0
+    cseal       ca4, abi_local, ca0
+    # load method
+    sll         a0, a1, CAP_SIZE_BITS
+    add_bi      a0, a0, if_table_start, a3
+    cincoffset  ca0, abi_local, a0
+    clc         ca3, 0(ca0)
+
+    move        a0, zero                # this started zero, it shall end zero
+
+    exp_skip_inst:
+    cspecialrw  ct0, sepcc, ct0
+    csrw        sscratch, t1
+    clw         t1, 0(ct0)
+    # Assuming nothing bigger than 32-bit in use. 0b11 is 32bit. Otherwise is 16-bit
+    andi        t1, t1, 0b11
+    addi        t1, t1, 1
+    srli        t1, t1, 1
+    andi        t1, t1, 0b10
+    addi        t1, t1, 2
+    cincoffset  ct0, ct0, t1
+    csrr        t1, sscratch
+    cspecialrw  ct0, sepcc, ct0
+    nano_s_ret
+
 NANO_FUNC s_exp_vec
-
 # This exception vector is the one we normally expect to fall into
-j           s_exp_vec
+    cspecialrw  abi_local, stdc, abi_local
+    beqz        a0, get_if
+# TODO intercept user handled exceptions
+    j           context_switch_exception_entry
 
+# Machine mode exception vector
 NANO_FUNC m_exp_vec
-
-j           m_exp_vec
+    j           nano_kernel_die
