@@ -80,7 +80,8 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 	queue_t * queue = dest->msg_queue;
 	msg_nb_t  qmask  = dest->queue_mask;
 
-	uint32_t backoff_threshold = 0x1000;
+    KERNEL_TRACE("msg push", "pushing msg. were %u items in %s's queue", ACT_QUEUE_FILL(dest), dest->name);
+    uint32_t backoff_threshold = 0x1000;
 	uint32_t backoff_ctr = 0;
 
 	volatile uint64_t * tsx_ptr = &dest->msg_tsx;
@@ -158,7 +159,7 @@ int msg_push(capability c3, capability c4, capability c5, capability c6,
 
     sched_receive_event(dest, sched_waiting);
 
-	KERNEL_TRACE("msg push", "now %lu items in %s's queue", msg_queue_fill(act), dest->name);
+	KERNEL_TRACE("msg push", "now %u items in %s's queue", ACT_QUEUE_FILL(dest), dest->name);
 
 	return 0;
 }
@@ -188,8 +189,13 @@ void msg_queue_init(act_t * act, queue_t * queue) {
 	act->msg_tsx = 0;
 
 	act->msg_queue->header.start = 0;
-	// On big endian machine pointer is to MSB, which is our head.
+#ifdef __BIG_ENDIAN__
+    // On big endian machine pointer is to MSB, which is our head.
 	msg_nb_t *hd= __DEVOLATILE(msg_nb_t*,&act->msg_tsx);
+#else
+	// on little machines we need to offset
+    msg_nb_t *hd= __DEVOLATILE(msg_nb_t*,((volatile char*)(&act->msg_tsx)) + 4);
+#endif
 	hd = cheri_setbounds(hd, sizeof(msg_nb_t));
 	hd = cheri_andperm(hd, CHERI_PERM_LOAD);
 	act->msg_queue->header.end = hd;

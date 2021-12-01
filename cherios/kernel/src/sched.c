@@ -430,7 +430,7 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
     KERNEL_TRACE("sched", "being asked to schedule someone else in pool %d. in_exception_handler=%d. have %lu choices.",
                  pool_id,
                  in_exception_handler,
-                 pool->act_queue_end);
+                 pool->in_queues);
 
 	if(hint != NULL) {
 		KERNEL_TRACE("sched", "hint is %s", hint->name);

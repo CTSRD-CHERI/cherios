@@ -149,7 +149,7 @@ void kernel_timer_unsubcsribe(act_t* act) {
 
 void kernel_timer(uint8_t cpu_id)
 {
-	KERNEL_TRACE(__func__, "in %lu", cpu_count_get());
+	KERNEL_TRACE(__func__, "in %u", cpu_count_get());
 
 	// Set the high solution timer. This must be done before it wraps around since last call.
 	__unused uint64_t old = high_resolution_timers[cpu_id];
