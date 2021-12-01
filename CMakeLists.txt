@@ -90,6 +90,7 @@ elseif("${PLATFORM}" STREQUAL "riscv" OR "${PLATFORM}" STREQUAL "riscv64")
     set(TARGET_TRIP riscv64-unknown-freebsd)
     set(ABI_NAME l64pc128)
     set(PLATFORM_ARGS -mno-relax)
+    set(PLATFORM_ARGS2 -mxcheri-rvc)
     set(CHERI_CPU rv64imacxcheri)
     set(BAREBONES 1)
 else()
@@ -266,6 +267,7 @@ set(ASMC_COMPILER_FLAGS
     -cheri-cap-table-abi=plt
     -integrated-as
     ${PLATFORM_ARGS}
+    ${PLATFORM_ARGS2}
     -fcolor-diagnostics
     -fpic
     # "-B${CheriSDK_TOOLCHAIN_DIR}"  # Doesn't seem to be required
