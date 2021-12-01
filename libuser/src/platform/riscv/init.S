@@ -35,4 +35,8 @@
 
 START_FUNC start_common
 
+TRACE_ON
+
+1: j 1b
+
 END_FUNC start_common

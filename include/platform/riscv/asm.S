@@ -67,6 +67,23 @@
     cincoffset      \dst, \dst, %pcrel_lo(1b)
 .endm
 
+.macro op_any_i5 rout, rin, constant, tmp, op
+    .if (\constant >= 0) && (\constant <= 31)
+        \op\()i \rout, \rin, \constant
+    .else
+        li \tmp, \constant
+        \op \rout, \rin, \tmp
+    .endif
+.endm
+
+.macro csrrs_bi rout, rin, constant, tmp
+    op_any_i5 \rout, \rin, \constant, \tmp, csrrs
+.endm
+
+.macro csrrc_bi rout, rin, constant, tmp
+    op_any_i5 \rout, \rin, \constant, \tmp, csrrc
+.endm
+
 .macro op_any_i12 rout, rin, constant, tmp, op
     .if (\constant >= -2048) && (\constant <= 2047)
         # use op once
@@ -162,4 +179,24 @@
         lui         \dst, %captab_hi(\sym)
         cincoffset  c\()\dst, cgp, \dst
         clc         c\()\dst, %captab_lo(\sym)(c\()\dst)
+.endm
+
+.macro spill_stack_help op, reg, tail:vararg
+    .set spill_ctr, (spill_ctr+1)
+    \op \reg, -(spill_ctr * CAP_SIZE)(csp)
+    .ifnb  \tail
+    spill_stack_help \op \tail
+    .endif
+.endm
+
+.macro spill_stack regs:vararg
+    .set spill_ctr, 0
+    spill_stack_help csc \regs
+    cincoffset  csp, csp, -(CAP_SIZE*spill_ctr)
+.endm
+
+.macro restore_stack regs:vararg
+    cincoffset csp, csp, (CAP_SIZE*spill_ctr)
+    .set spill_ctr, 0
+    spill_stack_help clc \regs
 .endm

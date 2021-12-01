@@ -31,10 +31,6 @@
 #ifndef CHERIOS_CHERIPLT_PLATFORM_H
 #define CHERIOS_CHERIPLT_PLATFORM_H
 
-// TODO RISCV
-
-// FIXME: These all assume that the offsets for captab symbols are small enough for captab_*_lo to be enough
-// FIXME: If this turns out not to be true, also use the captab_*_hi relocations
 #define PLT_STUB_CGP_ONLY_CSD(name, obj, tls, tls_reg, alias, alias2)               \
 __asm__ (                                                                           \
     ".text\n"                                                                       \
@@ -44,11 +40,16 @@ __asm__ (                                                                       
     "" #name ":\n"                                                                  \
     alias                                                                           \
     WEAK_DUMMY(name)                                                                \
-    "clc " X_STRINGIFY(PLT_REG_TARGET) ", %captab_call_lo(" #name "_dummy)(" X_STRINGIFY(PLT_REG_GLOB) ")\n" \
-    "clc ct0, %captab" tls "_lo(" EVAL1(STRINGIFY(obj)) ")(" tls_reg ")\n"          \
+    "lui t2, %captab_call_hi(" #name "_dummy)\n"                                    \
+    "cincoffset "X_STRINGIFY(PLT_REG_TARGET)", " X_STRINGIFY(PLT_REG_GLOB) ", t2\n" \
+    "clc " X_STRINGIFY(PLT_REG_TARGET) ", %captab_call_lo(" #name "_dummy)(" X_STRINGIFY(PLT_REG_TARGET) ")\n" \
+    "lui t2, %captab" tls "_hi(" EVAL1(STRINGIFY(obj)) ")\n"                        \
+    "cincoffset ct0, " tls_reg ", t2\n"                                             \
+    "clc ct0, %captab" tls "_lo(" EVAL1(STRINGIFY(obj)) ")(ct0)\n"                  \
+    "cmove  ct5, ct6\n"                                                             \
     "cinvoke " X_STRINGIFY(PLT_REG_TARGET) ", ct0\n"                                \
     alias2                                                                          \
-    ".size " #name ", 12\n"                                                          \
+    ".size " #name ", 32\n"                                                         \
 );
 
 #define PLT_STUB_CGP_ONLY_MODE_SEL(name, obj, tls, tls_reg, alias, alias2)          \
@@ -61,12 +62,18 @@ __asm__ (                                                                       
     alias                                                                           \
     WEAK_DUMMY(name)                                                                \
     WEAK_DUMMY(obj)                                                                 \
-    "clc ct2, %captab_call_lo(" EVAL1(STRINGIFY(obj)) "_dummy)(" X_STRINGIFY(PLT_REG_GLOB) ")\n"   \
-    "clc " X_STRINGIFY(PLT_REG_TARGET) ", %captab_call_lo(" #name "_dummy)(" X_STRINGIFY(PLT_REG_GLOB) ")\n" \
-    "clc " X_STRINGIFY(PLT_REG_TARGET_DATA) ", %captab" tls "_lo(" EVAL1(STRINGIFY(obj)) ")(" tls_reg ")\n" \
+    "lui t3, %captab_call_hi(" EVAL1(STRINGIFY(obj)) "_dummy)\n"                    \
+    "cincoffset ct2, " X_STRINGIFY(PLT_REG_GLOB) ", t3\n"                           \
+    "clc ct2, %captab_call_lo(" EVAL1(STRINGIFY(obj)) "_dummy)(ct2)\n"              \
+    "lui t3, %captab_call_hi(" #name "_dummy)\n"                                    \
+    "cincoffset "X_STRINGIFY(PLT_REG_TARGET)", " X_STRINGIFY(PLT_REG_GLOB) ", t3\n" \
+    "clc " X_STRINGIFY(PLT_REG_TARGET) ", %captab_call_lo(" #name "_dummy)(" X_STRINGIFY(PLT_REG_TARGET) ")\n" \
+    "lui t3, %captab" tls "_hi("EVAL1(STRINGIFY(obj))")\n"                           \
+    "cincoffset "X_STRINGIFY(PLT_REG_TARGET_DATA)", " tls_reg ", t3\n"              \
+    "clc " X_STRINGIFY(PLT_REG_TARGET_DATA) ", %captab" tls "_lo(" EVAL1(STRINGIFY(obj)) ")(" X_STRINGIFY(PLT_REG_TARGET_DATA) ")\n" \
     "cjr ct2\n"                                                                     \
     alias2                                                                          \
-    ".size " #name ", 16\n"                                                          \
+    ".size " #name ", 40\n"                                                         \
 );
 
 // Note: stores are encoded differently, so we can't use the captab relocations on them.

@@ -33,5 +33,8 @@
 START_FUNC msg_entry
 
 // TODO RISCV
+TRACE_ON
+
+1: j 1b
 
 END_FUNC msg_entry

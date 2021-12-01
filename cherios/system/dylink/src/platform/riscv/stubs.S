@@ -77,6 +77,17 @@ STUB_END    plt_stub
 # PLT_REG_TARGET is the target code pointer
 # PLT_REG_TARGET_DATA is the target data pointer
 
+# NOTE: Currently, stack passing on RISCV is a bit broken for CheriOS. The standard calling convetion is for the
+# caller to place stack passed arguments as a positive offset from SP. However, here we switch stacks. What we
+# need to do is to (re)llocate stack arguments on the unsafe stack, and then have them be an explicit extra argument.
+# What we will do for now is (unsafely) give the callee a window on the callers stack passed via CSP. This is still not
+# enough, as the callee will want to offset from its _own_ stack.
+# As a temporary workaround, callees should copy from the callers stack onto their own. This is being done manually
+# at present.
+# In order to not have to also copy arguments in these trampolines, we will _not_ adjust the SP passed, but will adjust
+# The SP we store to ctlp. This might break calls that end up routing to the same domain, so short circuits might be
+# needed.
+
 # single domain means that the target has only a single domain for all callers (like the nano kernel)
 STUB_BEGIN  plt_common_single_domain
 j plt_common_single_domain
@@ -86,12 +97,12 @@ STUB_END    plt_common_single_domain
 # We have to save csp/cusp to ctlp. put ctlp in s0 to save it.
 STUB_BEGIN  plt_common_complete_trusting
     clc         ct5, CTLP_OFFSET_CSP(ctlp)      # ct5 = old saved csp
-    cincoffset  csp, csp, -(3*CAP_SIZE)         # allocate spills
-    csc         cs0, 0(csp)                     # spill s0
-    csc         cra, CAP_SIZE(csp)              # spill cra
-    csc         csp, CTLP_OFFSET_CSP(ctlp)      # save csp for future invocation
+    cincoffset  ct4, csp, -(3*CAP_SIZE)         # allocate spills (dont actually change SP because of stack passed arguments)
+    csc         cs0, 0(ct4)                     # spill s0
+    csc         cra, CAP_SIZE(ct4)              # spill cra
+    csc         ct4, CTLP_OFFSET_CSP(ctlp)      # save csp for future invocation
     csc         cusp, CTLP_OFFSET_CUSP(ctlp)    # save cusp for future invocation
-    csc         ct5, (CAP_SIZE*2)(csp)
+    csc         ct5, (CAP_SIZE*2)(ct4)
 
     cllc_rel    cra, plt_common_complete_trusting_return
     cmove       cs0, ctlp

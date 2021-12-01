@@ -49,7 +49,7 @@ typedef int handler2_t(register_t cause, register_t ccause, exception_restore_fr
 
 #define INC_STACK(SN, I)
 
-#define N_USER_EXCEPTIONS 0
+#define N_USER_EXCEPTIONS       RISCV_CAUSE_EXCODE_NUM
 #define N_USER_CAP_EXCEPTIONS 0
 
 #endif //CHERIOS_EXCEPTIONS_PLATFORM_H

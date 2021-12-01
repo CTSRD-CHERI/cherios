@@ -33,7 +33,7 @@
 
 #include "reg_abi.h"
 
-#define TEMPORAL_TRAP_CODE 0
+#define TEMPORAL_TRAP_CODE      RISCV_CAUSE_ISN_ILLEGAL
 
 #define PLT_REG_GLOB            abi_global
 #define PLT_REG_LOCAL           abi_local

@@ -271,6 +271,8 @@ X	W	R	Meaning
 #define RISCV_CAUSE_LOAD_PAGE       0xd
 #define RISCV_CAUSE_STORE_PAGE      0xf
 
+#define RISCV_CAUSE_EXCODE_NUM      0x10
+
 #define RISCV_M                     0b11
 #define RISCV_S                     0b01
 #define RISCV_U                     0b00
