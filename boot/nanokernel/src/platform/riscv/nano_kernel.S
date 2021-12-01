@@ -78,19 +78,23 @@ END_LOCALS
 ########################
 
 .text
-
+/* MIPS always used cinvoke/ccall as its return operation. This required the ccall2 variant to work well.
+ * Instead, we will use sentries that can load a pair in most places. To keep the "single domain" caller side
+ * simple, we will have the caller provide abi_local in t5. */
 .macro NANO_FUNC name
     .p2align 2
     .global \name
     \name:
     # TODO: Remove this nop. I just put it in here because most functions were empty.
-    nop
 .endmacro
 .macro NANO_RET
-/* MIPS always used cinvoke/ccall as its return operation. This required the ccall2 variant to work well.
- * Instead, we will use sentries that can load a pair. */
-    cmove   abi_local, cnull
+    cmove   abi_local, ct5
     cjr     cra
+.endm
+
+.macro NANO_TODO
+    TRACE_ON
+    1: j 1b
 .endm
 
 nano_kernel_start:
@@ -343,10 +347,7 @@ init_table_loop:
     # ca7 request token
     # cra (jump target)
 
-    csrr        t0, mstatus
-    li          t1, (RISCV_S << RISCV_STATUS_MPP_SHIFT) | (RISCV_S << RISCV_STATUS_SPP_SHIFT)
-    or          t0, t0, t1
-    csrw        mstatus, t0
+    csrrs_bi    zero, mstatus, (RISCV_S << RISCV_STATUS_MPP_SHIFT) | (RISCV_S << RISCV_STATUS_SPP_SHIFT), t0
 
     # Set exception machine vector
     cllc_rel    ct0, m_exp_vec
@@ -459,11 +460,9 @@ NANO_FUNC context_switch
 
 context_switch_exception_entry:
 
-    # Switch with a scratch register. Now abi_local AND c30 are available.
-    # Its worth noting that abi_local is c31. This means c30 and c31 (the last things to save) are stored differently
-    cspecialrw      c30, sscratchc, c30
 
-#define INDEX_TO_OFFSET(index) (index * CAP_SIZE)-INC_IM_MAX
+
+#define INDEX_TO_OFFSET(index) ((index) * CAP_SIZE)-INC_IM_MAX
 
 .macro cstore_reg reg, index, g
     csc             \reg, (INDEX_TO_OFFSET(\index))(c30)
@@ -477,9 +476,9 @@ context_switch_exception_entry:
     foreachi        cstore_reg, rlist5_start, g, rlist5
     # We put c30 here
     cspecialr       ct0, sscratchc
-    csc             ct0, INDEX_TO_OFFSET(30)(c30)
-    cspecialr       ct0, ddc
-    csc             ct0, INDEX_TO_OFFSET(32)(c30)
+    csc             ct0, INDEX_TO_OFFSET(30-1)(c30)
+    cspecialr       ct1, ddc
+    csc             ct1, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
     csrr            s1, scause
     csd             s1, CONTEXT_OFFSET_MAGIC(c30)
     beqz            s1, stores_called_only
@@ -490,7 +489,7 @@ stores_exception_only:
     # TODO This needs to work at different ELs. Not just supervisor.
     # abi_local was swapped with xtdc. Restore tdc at the same time as getting value to store.
     cspecialrw      ct0, stdc, abi_local
-    csc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
+    csc             ct0, INDEX_TO_OFFSET(31-1)(c30)
     # restored PCC based on Xepcc
     cspecialr       ct0, sepcc
     csc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
@@ -498,6 +497,8 @@ stores_exception_only:
     clc             cs0, exception_context(abi_local)
     j               context_save_finish
 stores_called_only:
+    # Caller expects c31 to be restored with c30 (which is currently in ct0)
+    csc             ct0, INDEX_TO_OFFSET(31-1)(c30)
     # restored PCC based on ra if this functions is called
     csc             cnull, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
     csc             cra, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
@@ -551,9 +552,11 @@ source_pass_through:
     # Here we still need to restore c30/c31/ddc/pcc, but can only use c30/c31(abi_local)/ddc/scratch
     # Get ourselves a temp by saving ct0
     cspecialw       sscratchc, ct0
+    csrrs_bi        zero, sstatus, (RISCV_S << RISCV_STATUS_SPP_SHIFT), t0
+
     clc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
     cspecialw       ddc, ct0
-    clc             abi_local, INDEX_TO_OFFSET(31)(c30)
+    clc             abi_local, INDEX_TO_OFFSET(31-1)(c30)
     clc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
     clc             c30, INDEX_TO_OFFSET((30-1))(c30)
     # currently, scratch holds ct0, ct0 hold pcc
@@ -598,22 +601,31 @@ NANO_FUNC set_exception_handler
     NANO_RET
 
 NANO_FUNC rescap_take
+    NANO_TODO
 
 NANO_FUNC rescap_nfo
+    NANO_TODO
 
 NANO_FUNC rescap_revoke_start
+    NANO_TODO
 
 NANO_FUNC rescap_revoke_finish
+    NANO_TODO
 
 NANO_FUNC rescap_split
+    NANO_TODO
 
 NANO_FUNC rescap_merge
+    NANO_TODO
 
 NANO_FUNC rescap_parent
+    NANO_TODO
 
 NANO_FUNC rescap_splitsub
+    NANO_TODO
 
 NANO_FUNC rescap_getsub
+    NANO_TODO
 
 #####################################################################################################
 # void get_phy_page(register_t page_n, int cached, register_t npages, cap_pair* out, register_t IO) #
@@ -638,11 +650,11 @@ NANO_FUNC get_phy_page
     li              t2, (1 << page_unused) | (1 << page_system_owned)
     li              t3, DEF_DATA_PERMS               # t3 = perms
 io:
-    li              t5, 1
+    li              a5, 1
 change_state_retry:
     // go from original state -> t1, if len == a2 && state is in t2
     clr.w.aq        a4, (ct0)                       # a4 = book[page_n].state
-    sll             a4, t5, a4
+    sll             a4, a5, a4
     and             a4, a4, t2
     beqz            a4, get_phy_page_end
     cld             a4, PHY_PAGE_OFFSET_len(ct0)    # a4 = book[page_n].len
@@ -674,18 +686,25 @@ get_phy_page_end:
     NANO_RET
 
 NANO_FUNC create_table
+    NANO_TODO
 
 NANO_FUNC create_mapping
+    NANO_TODO
 
 NANO_FUNC free_mapping
+    NANO_TODO
 
 NANO_FUNC get_top_level_table
+    NANO_TODO
 
 NANO_FUNC get_sub_table
+    NANO_TODO
 
 NANO_FUNC get_read_only_table
+    NANO_TODO
 
 NANO_FUNC make_first_reservation
+    NANO_TODO
 
 ##########################
 # page_t* get_book(void) #
@@ -847,34 +866,49 @@ zero_page_er:
     NANO_RET
 
 NANO_FUNC obtain_super_powers
+    NANO_TODO
 
 NANO_FUNC get_last_exception
+    NANO_TODO
 
 NANO_FUNC foundation_create
+    NANO_TODO
 
 NANO_FUNC foundation_enter
+    NANO_TODO
 
 NANO_FUNC foundation_entry_expose
+    NANO_TODO
 
 NANO_FUNC foundation_entry_get_id
+    NANO_TODO
 
 NANO_FUNC make_key_for_auth
+    NANO_TODO
 
 NANO_FUNC foundation_entry_vaddr
+    NANO_TODO
 
 NANO_FUNC foundation_new_entry
+    NANO_TODO
 
 NANO_FUNC rescap_take_authed
+    NANO_TODO
 
 NANO_FUNC rescap_check_cert
+    NANO_TODO
 
 NANO_FUNC rescap_check_single_cert
+    NANO_TODO
 
 NANO_FUNC rescap_take_locked
+    NANO_TODO
 
 NANO_FUNC rescap_unlock
+    NANO_TODO
 
 NANO_FUNC foundation_get_id
+    NANO_TODO
 
 ###################################
 # tres_t res_get(register_t type) #
@@ -931,18 +965,26 @@ tres_take_er:
     NANO_RET
 
 NANO_FUNC tres_revoke
+    NANO_TODO
 
 NANO_FUNC tres_get_ro_bitfield
+    NANO_TODO
 
 NANO_FUNC exception_subscribe
+    # TODO: this should register for user exceptions
+    NANO_RET
 
 NANO_FUNC exception_return
+    NANO_TODO
 
 NANO_FUNC exception_replay
+    NANO_TODO
 
 NANO_FUNC exception_signal
+    NANO_TODO
 
 NANO_FUNC exception_getcause
+    NANO_TODO
 
 NANO_FUNC get_integer_space_cap
 
@@ -951,14 +993,19 @@ NANO_FUNC get_integer_space_cap
     NANO_RET
 
 NANO_FUNC modify_hardware_reg
+    NANO_TODO
 
 NANO_FUNC interrupts_mask
+    NANO_TODO
 
 NANO_FUNC interrupts_soft_set
+    NANO_TODO
 
 NANO_FUNC interrupts_get
+    NANO_TODO
 
 NANO_FUNC translate_address
+    NANO_TODO
 
 ##########################################################################
 # if_req_auth_t if_req_and_mask(if_req_auth_t req_auth, register_t mask) #
@@ -974,10 +1021,11 @@ NANO_FUNC if_req_and_mask
     NANO_RET
 
 NANO_FUNC nano_dummy
-
+NANO_RET
 
 .macro nano_s_ret
     cspecialrw  abi_local, stdc, abi_local
+    cspecialrw  c30, sscratchc, c30
     sret
 .endm
 
@@ -988,7 +1036,7 @@ NANO_FUNC nano_dummy
 # ca3 = result coda
 # ca4 = result data
 # abi_local = capability to local vars (will be swapped back with stdc on return, do not clobber)
-NANO_FUNC get_if
+get_if:
     # cause a trap if auth token not tagged/sealed correctly
     li          a0, IF_AUTH_TYPE
     csetaddr    ca0, abi_local, a0
@@ -1030,13 +1078,20 @@ NANO_FUNC get_if
     cspecialrw  ct0, sepcc, ct0
     nano_s_ret
 
-NANO_FUNC s_exp_vec
+.p2align 2
+s_exp_vec:
 # This exception vector is the one we normally expect to fall into
     cspecialrw  abi_local, stdc, abi_local
+    # Switch with a scratch register. Now abi_local AND c30 are available.
+    # Its worth noting that abi_local is c31. This means c30 and c31 (the last things to save) are stored differently
+    cspecialrw  c30, sscratchc, c30
+    csrr        x30, scause
+    subi        x30, x30, RISCV_CAUSE_CALL_S
+    bnez        x30, context_switch_exception_entry
     beqz        a0, get_if
-# TODO intercept user handled exceptions
     j           context_switch_exception_entry
+# TODO intercept user handled exceptions
 
 # Machine mode exception vector
-NANO_FUNC m_exp_vec
+m_exp_vec:
     j           nano_kernel_die
