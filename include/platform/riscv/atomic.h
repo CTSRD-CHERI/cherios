@@ -57,9 +57,9 @@
 // can never succeed. Only the kernel uses these in two places. They should be updated. Do not create any new uses.
 
 #define LOAD_LINK(ptr, type, result) \
-    __asm__ __volatile(LOADL(type) " %[res], 0(%[pt])" : [res] OUT(type) (result) : [pt] IN(c) (ptr):)
+    __asm__ __volatile(LOADL(type) " %[res], 0(%[pt])" : [res] OUT(type) (result) : [pt] IN(c) (ptr):"memory")
 
-#define STORE_COND(ptr, type, val, suc) __asm__ __volatile(STOREC(type) " %[sc], %[vl], 0(%[pt])" : \
+#define STORE_COND(ptr, type, val, suc) __asm__ __volatile(STOREC(type) " %[sc], %[vl], 0(%[pt]); sltiu %[sc], %[sc], 1" : \
                     [sc] OUT(64) (suc) : \
                     [pt] IN(c) (ptr), [vl] IN(type) (val) : "memory")
 
