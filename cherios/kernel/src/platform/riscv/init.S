@@ -49,7 +49,7 @@ cmove           cs6, ca7    # request token
 
 # Create stack
 la_relative     t3, __start_exception_stack
-la_relative     t4, __stop_exception_stack
+la_relative     t4, __size_exception_stack
 cspecialr       csp, ddc
 cincoffset      csp, csp, t3
 csetboundsexact csp, csp, t4
