@@ -49,23 +49,22 @@
 
 // For init (insecure entry, or trampoline from secure entry)
 // supplied by kernel
-#define abi_kernel_config       c11
 #define abi_msg_queue           c20
 #define abi_self_ref            c21
 #define abi_ns_ref              c23
 #define abi_kernel_if           c24
-#define abi_nano_req_auth       c16
+#define abi_nano_req_auth       c29
 
 // supplied by loader
 #define abi_mop                 c19
-#define abi_seg_tbl             c12
+#define abi_seg_tbl             c18
 #define abi_tls_proto           c13
 #define abi_code_write          c14
 #define abi_tls_seg_offset      x8
 #define abi_data_seg_offset     x15
 #define abi_code_seg_offset     x16
 #define abi_tls_fil_size        x9
-#define abi_tls_mem_size        x18
+#define abi_tls_mem_size        x12
 #define abi_dynamic_vaddr       x19
 #define abi_dynamic_size        x20
 #define abi_program_base        x5
@@ -76,6 +75,7 @@
 #define abi_type_res            c26
 #define abi_cert                c27
 #define abi_start_flags         x25
+#define abi_proc_ref            c28
 
 // Some wrappers to access members of a frame_t by a specific abi_reg
 #define cf(abi_reg) __CONCAT(cf_, abi_ ## abi_reg)
@@ -87,7 +87,6 @@
 #define cf_carg             cf(carg)
 #define cf_idc              cf(local)
 
-#define cf_kernel_config    cf(kernel_config)
 #define cf_msg_queue        cf(msg_queue)
 #define cf_self_ref         cf(self_ref)
 #define cf_ns_ref           cf(ns_ref)
@@ -111,7 +110,7 @@
 #define cf_type_res         cf(type_res)
 #define cf_cert             cf(cert)
 #define cf_start_flags      cf(start_flags)
-
+#define cf_proc_ref         cf(proc_ref)
 #define cf_secure_entry     cf(secure_entry)
 #define cf_program_base     cf(program_base)
 

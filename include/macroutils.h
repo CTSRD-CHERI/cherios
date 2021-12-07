@@ -71,6 +71,10 @@
 #define FOLDl(F,z,arg0,...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(DEFER2(_FOLDl)()(F,F(z,arg0),__VA_ARGS__))(F(z,arg0))
 #define _FOLDl() FOLDl
 
+// MAP(F, A,B,...,C) -> F(A) F(B) .. F(C)
+#define MAP(F, X, ...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(F(X) DEFER2(_MAP)()(F, __VA_ARGS__))(F(X))
+#define _MAP() MAP
+
 // Do F(Start, __VA_ARGS__) F(Start ## 0,__VA_ARGS__) ... (F, Start ## (Steps-1), __VA_ARGS__) (limit Steps = 15)
 
 #define FOR_RANGE(Start, Steps, F, ...) CAT(_FOR_, Steps) (Start, F, __VA_ARGS__)

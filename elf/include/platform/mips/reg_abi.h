@@ -50,7 +50,6 @@
 
 // For init (insecure entry, or trampoline from secure entry)
 // supplied by kernel
-#define abi_kernel_config       c3
 #define abi_msg_queue           c20
 #define abi_self_ref            c21
 #define abi_ns_ref              c23
@@ -77,6 +76,7 @@
 #define abi_type_res            c7
 #define abi_cert                c9
 #define abi_start_flags         s2
+#define abi_proc_ref            c22
 
 // Some wrappers to access members of a frame_t by a specific abi_reg
 #define cf(abi_reg) __CONCAT(cf_, abi_ ## abi_reg)
@@ -89,7 +89,6 @@
 #define cf_carg             cf(carg)
 
 
-#define cf_kernel_config    cf(kernel_config)
 #define cf_msg_queue        cf(msg_queue)
 #define cf_self_ref         cf(self_ref)
 #define cf_ns_ref           cf(ns_ref)
@@ -113,6 +112,7 @@
 #define cf_type_res         cf(type_res)
 #define cf_cert             cf(cert)
 #define cf_start_flags      mf(start_flags)
+#define cf_proc_ref         cf(proc_ref)
 
 #define cf_secure_entry     cf(secure_entry)
 #define cf_program_base     mf(program_base)

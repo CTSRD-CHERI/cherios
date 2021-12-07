@@ -195,7 +195,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
     }
 	assert(queue != NULL);
 
-    frame.cf_c22 = seal_proc_for_user(process);
+    frame.cf_proc_ref = seal_proc_for_user(process);
 
 	if(process->im.secure_loaded) {
 		frame.cf_pcc = &secure_entry_trampoline;

@@ -53,7 +53,7 @@ START_FUNC start
     call_func_early crt_init_globals_init
 
     /* Save nano auth */
-    get_sym         a0, nanoreq_auth
+    GET_SYM         (ca0, nanoreq_auth)
     csc             free_save2, 0(ca0)
 
     /* Call libuser init (some of these are null due to init being quite an early task */

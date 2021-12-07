@@ -122,7 +122,7 @@ context_t act_init(context_t own_context, init_info_t* info, size_t init_base, s
 	frame.cf_link = frame.cf_pcc = cheri_setoffset(pcc, init_entry);
 
 	/* provide config info to init.  c3 is the conventional register */
-	frame.cf_kernel_config = info;
+	frame.cf_carg = info;
 
     /* init has put its thread locals somewhere sensible (base + 0x100) */
     frame.cf_init_tls_base = 0x7000 + init_tls_base;

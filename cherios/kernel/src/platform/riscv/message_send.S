@@ -50,14 +50,14 @@ clc             ct1, CAP_SIZE(csp)
 clc             csp, CTLP_OFFSET_CSP(abi_local)
 clc             cgp, CTLP_OFFSET_CGP(abi_local)
 // Push a stack frame because we have to unpack the ret struct
-spill_stack     cra, ct1, ct0
+SPILL_STACK     (cra, ct1, ct0)
 // Push stack passed arguments
 
 call_func       kernel_message_send_ret
 // unpack return
 clc             ca1, CAP_SIZE(ca0)
 clc             ca0, 0(ca0)
-restore_stack   cra
+RESTORE_STACK   (cra)
 cret
 
 END_FUNC __cross_domain_kernel_message_send

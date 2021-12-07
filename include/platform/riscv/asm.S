@@ -122,11 +122,23 @@
     cjalr           cra, cra
 .endm
 
-.macro call_func sym
-    lui         ra, %captab_call_hi(\sym)
-    cincoffset  cra, cgp, ra
-    clc         cra, %captab_call_lo(\sym)(cra)
+.macro load_func_reg dst, sym, tmp
+    lui         \tmp, %captab_call_hi(\sym)
+    cincoffset  \dst, cgp, \tmp
+    clc         \dst, %captab_call_lo(\sym)(\dst)
+.endm
+
+.macro load_func sym
+    load_func_reg   cra, \sym, ra
+.endm
+
+.macro call_func_loaded
     cjalr       cra, cra
+.endm
+
+.macro call_func sym
+    load_func   \sym
+    call_func_loaded
 .endm
 
 # la is banned because purecap and/or relative.
@@ -160,8 +172,9 @@
     .endif
 .endm
 
-/* This would work, if only cclear was implemented
 #include "assembly_utils.h"
+
+/* This would work, if only cclear was implemented
 
 # and again, but macro-fied to use abi names
 #define cclear_regs(...) cclear_all (Reg_Encode_All(__VA_ARGS__))
@@ -175,28 +188,66 @@
 
 #define cclear_regs(...) cclear_all_with_moves __VA_ARGS__
 
-.macro get_sym dst, sym
-        lui         \dst, %captab_hi(\sym)
-        cincoffset  c\()\dst, cgp, \dst
-        clc         c\()\dst, %captab_lo(\sym)(c\()\dst)
+.macro get_sym_help dst, sym, tmp, tls
+    lui         \tmp, %captab\tls\()_hi(\sym)
+    cincoffset  \dst, cgp, \tmp
+    clc         \dst, %captab\tls\()_lo(\sym)(\dst)
 .endm
 
-.macro spill_stack_help op, reg, tail:vararg
-    .set spill_ctr, (spill_ctr+1)
-    \op \reg, -(spill_ctr * CAP_SIZE)(csp)
-    .ifnb  \tail
-    spill_stack_help \op \tail
+#define GET_SYM(dst, sym) get_sym_help dst, sym, Reg_Cap_To_Int(dst),
+#define GET_TLS_SYM(dst, sym) .type sym, "tls_object"; get_sym_help dst, sym, Reg_Cap_To_Int(dst),_tls
+
+.macro get_sym_value_help dst, xtmp, ctmp, sym, tls, dst_size
+    .if \dst_size == 8
+        get_sym_help \ctmp, \sym, \dst, \tls
+        cld \dst, 0(\ctmp)
+    .else
+        get_sym_help \dst, \sym, \xtmp, \tls
+        clc \dst, 0(\ctmp)
     .endif
 .endm
 
-.macro spill_stack regs:vararg
-    .set spill_ctr, 0
-    spill_stack_help csc \regs
-    cincoffset  csp, csp, -(CAP_SIZE*spill_ctr)
+#define GET_SYM_VAL(dst, sym) get_sym_value_help dst, Reg_Cap_To_Int(dst), Reg_Int_To_Cap(dst), sym,,Reg_Size(dst)
+#define GET_TLS_SYM_VAL(dst, sym) get_sym_value_help dst, Reg_Cap_To_Int(dst), Reg_Int_To_Cap(dst), sym,_tls,Reg_Size(dst)
+
+.macro spill_stack_help op4, op8, reg, size, tail:vararg
+    .set spill_ctr, spill_ctr + ((-spill_ctr) % \size)
+    .set spill_ctr, (spill_ctr + \size)
+    .set \reg\()_spill_offset, spill_ctr
+    .if \size == 8
+        \op4 \reg, -(spill_ctr)(csp)
+    .else
+        \op8 \reg, -(spill_ctr)(csp)
+    .endif
+
+    .ifnb  \tail
+        spill_stack_help \op4, \op8, \tail
+    .endif
 .endm
 
-.macro restore_stack regs:vararg
-    cincoffset csp, csp, (CAP_SIZE*spill_ctr)
+.macro spill_stack dummy, regs:vararg
     .set spill_ctr, 0
-    spill_stack_help clc \regs
+    spill_stack_help csd, csc, \regs
+    # Align stack
+    .set spill_ctr, spill_ctr + ((-spill_ctr) % 16)
+    cincoffset  csp, csp, -(spill_ctr)
 .endm
+
+.macro load_spill dst, reg, size
+    .if \size == 8
+        cld \dst, (spill_ctr-\reg\()_spill_offset)(csp)
+    .else
+        clc \dst, (spill_ctr-\reg\()_spill_offset)(csp)
+    .endif
+.endm
+
+#define SPILL_STACK(...) spill_stack dummy AttachSizes(__VA_ARGS__)
+#define LOAD_SPILL(Dst, X) load_spill Dst, X, Reg_Size(X)
+
+.macro restore_stack dummy, regs:vararg
+    cincoffset csp, csp, (spill_ctr)
+    .set spill_ctr, 0
+    spill_stack_help cld, clc, \regs
+.endm
+
+#define RESTORE_STACK(...) restore_stack dummy AttachSizes(__VA_ARGS__)

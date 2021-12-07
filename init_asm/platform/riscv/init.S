@@ -33,7 +33,6 @@
 START_HIDDEN_FUNC start
 
 # Insecure entry has the program loader do most of the early setup work, can just jump to common
-TRACE_ON
 call_func_early start_common
 
 END_FUNC start
