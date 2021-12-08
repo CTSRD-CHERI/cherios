@@ -141,6 +141,11 @@
     call_func_loaded
 .endm
 
+.macro jump_sym sym
+    load_func_reg   ct0, \sym, t0
+    cjr             ct0
+.endm
+
 # la is banned because purecap and/or relative.
 # But we are using la in conjunction with capability adds in init, so limited use is fair
 
@@ -188,27 +193,27 @@
 
 #define cclear_regs(...) cclear_all_with_moves __VA_ARGS__
 
-.macro get_sym_help dst, sym, tmp, tls
+.macro get_sym_help dst, sym, tmp, tls, base_reg
     lui         \tmp, %captab\tls\()_hi(\sym)
-    cincoffset  \dst, cgp, \tmp
+    cincoffset  \dst, \base_reg, \tmp
     clc         \dst, %captab\tls\()_lo(\sym)(\dst)
 .endm
 
-#define GET_SYM(dst, sym) get_sym_help dst, sym, Reg_Cap_To_Int(dst),
-#define GET_TLS_SYM(dst, sym) .type sym, "tls_object"; get_sym_help dst, sym, Reg_Cap_To_Int(dst),_tls
+#define GET_SYM(dst, sym) get_sym_help dst, sym, Reg_Cap_To_Int(dst),,cgp
+#define GET_TLS_SYM(dst, sym) .type sym, "tls_object"; get_sym_help dst, sym, Reg_Cap_To_Int(dst),_tls,abi_local
 
-.macro get_sym_value_help dst, xtmp, ctmp, sym, tls, dst_size
+.macro get_sym_value_help dst, xtmp, ctmp, sym, tls, dst_size, base_reg
     .if \dst_size == 8
-        get_sym_help \ctmp, \sym, \dst, \tls
+        get_sym_help \ctmp, \sym, \dst, \tls, \base_reg
         cld \dst, 0(\ctmp)
     .else
-        get_sym_help \dst, \sym, \xtmp, \tls
-        clc \dst, 0(\ctmp)
+        get_sym_help \dst, \sym, \xtmp, \tls, \base_reg
+        clc \dst, 0(\dst)
     .endif
 .endm
 
-#define GET_SYM_VAL(dst, sym) get_sym_value_help dst, Reg_Cap_To_Int(dst), Reg_Int_To_Cap(dst), sym,,Reg_Size(dst)
-#define GET_TLS_SYM_VAL(dst, sym) get_sym_value_help dst, Reg_Cap_To_Int(dst), Reg_Int_To_Cap(dst), sym,_tls,Reg_Size(dst)
+#define GET_SYM_VAL(dst, sym) get_sym_value_help dst, Reg_Cap_To_Int(dst), Reg_Int_To_Cap(dst), sym,,Reg_Size(dst), cgp
+#define GET_TLS_SYM_VAL(dst, sym) get_sym_value_help dst, Reg_Cap_To_Int(dst), Reg_Int_To_Cap(dst), sym,_tls,Reg_Size(dst), abi_local
 
 .macro spill_stack_help op4, op8, reg, size, tail:vararg
     .set spill_ctr, spill_ctr + ((-spill_ctr) % \size)
@@ -251,3 +256,14 @@
 .endm
 
 #define RESTORE_STACK(...) restore_stack dummy AttachSizes(__VA_ARGS__)
+
+.macro swap a, b, tmp
+    move \tmp, \a
+    move \a, \b
+    move \b, \tmp
+.endm
+
+.macro TODO_SPIN
+    TRACE_ON
+    1: j 1b
+.endm

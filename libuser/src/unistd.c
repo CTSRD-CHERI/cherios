@@ -60,28 +60,9 @@ void needs_drb(FILE_t file) {
     }
 }
 
-FRESULT mkdir(const char* name) {
-    act_kt dest = try_get_fs();
-
-    if(!dest) return -1;
-    return (int)message_send(0,0,0,0,name,NULL,NULL,NULL,dest, SYNC_CALL, 1);
-
-}
-
-
-FRESULT rename(const char* old, const char* new) {
-    act_kt dest = try_get_fs();
-
-    if(!dest) return -1;
-    return (int)message_send(0,0,0,0,old,new,NULL,NULL,dest, SYNC_CALL, 2);
-}
-
-FRESULT unlink(const char* name) {
-    act_kt dest = try_get_fs();
-
-    if(!dest) return -1;
-    return (int)message_send(0,0,0,0,name,NULL,NULL,NULL,dest, SYNC_CALL, 3);
-}
+MESSAGE_WRAP_ID(FRESULT, mkdir, (const char*, name), fs_act, 1, namespace_num_fs, -1);
+MESSAGE_WRAP_ID(FRESULT, rename, (const char*, old, const char*, new), fs_act, 2, namespace_num_fs, -1);
+MESSAGE_WRAP_ID(FRESULT, unlink, (const char*, name), fs_act, 3, namespace_num_fs, -1);
 
 ssize_t truncate_file(FILE_t file) {
     ssize_t flush = socket_flush_drb(file);
@@ -347,39 +328,9 @@ ssize_t filesize(FILE_t file) {
     return fsize;
 }
 
-FRESULT stat(const char* path, FILINFO* fno) {
-    act_kt dest = try_get_fs();
-
-    if(dest == NULL) return FR_NO_FILESYSTEM;
-
-    FRESULT res = (FRESULT)message_send(0,0,0,0,path,fno,NULL,NULL,dest,SYNC_CALL,4);
-
-    return res;
-}
+MESSAGE_WRAP_ID(FRESULT, stat, (const char*, path, FILINFO*, fno), fs_act, 4, namespace_num_fs, FR_NO_FILESYSTEM);
 
 typedef capability dir_token_t;
-
-dir_token_t opendir(const char* name) {
-    act_kt dest = try_get_fs();
-
-    if(dest == NULL) return NULL;
-
-    return message_send_c(0,0,0,0,__DECONST(capability, name),NULL,NULL,NULL,dest,SYNC_CALL,5);
-}
-
-FRESULT readdir(dir_token_t dir, FILINFO* fno) {
-    act_kt dest = try_get_fs();
-
-    if(dest == NULL) return FR_NOT_READY;
-
-    return (FRESULT)message_send(0,0,0,0,dir,fno,NULL,NULL,dest,SYNC_CALL,6);
-}
-
-FRESULT closedir(dir_token_t dir) {
-    act_kt dest = try_get_fs();
-
-    if(dest == NULL) return FR_NOT_READY;
-
-    return (FRESULT)message_send(0,0,0,0,dir,NULL,NULL,NULL,dest,SYNC_CALL,7);
-}
-
+MESSAGE_WRAP_ID(dir_token_t, opendir, (const char*, name), fs_act, 5, namespace_num_fs, NULL);
+MESSAGE_WRAP_ID(FRESULT, readdir, (dir_token_t, dir, FILINFO*, fno), fs_act, 6, namespace_num_fs, FR_NOT_READY);
+MESSAGE_WRAP_ID(FRESULT, closedir, (dir_token_t, dir), fs_act, 7, namespace_num_fs, FR_NOT_READY);

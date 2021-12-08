@@ -31,6 +31,24 @@
 #ifndef CHERIOS_UNISTD_H_H
 #define CHERIOS_UNISTD_H_H
 
+#define IDC_OFF 0
+#define CGP_OFF (4 * CAP_SIZE)
+#define C11_OFF (5 * CAP_SIZE)
+#define C10_OFF (6 * CAP_SIZE)
+
+#define START_OFF_SEC (7 * CAP_SIZE)
+#define CARG_OFF_SEC (8 * CAP_SIZE)
+#define ARG_OFF_SEC (9 * CAP_SIZE)
+
+#define SPIN_OFF ((9 * CAP_SIZE) +  REG_SIZE)
+#define SEG_TBL_OFF (10 * CAP_SIZE)
+#define DATA_ARGS_OFF_SEC (SEG_TBL_OFF + (MAX_SEGS * CAP_SIZE))
+
+#define START_OFF       0
+#define DATA_ARGS_OFF   CAP_SIZE
+
+#ifndef __ASSEMBLY__
+
 #include "types.h"
 #include "queue.h"
 #include "tman.h"
@@ -99,6 +117,8 @@ capability get_type_owned_by_process(void);
 
 /* These are used internally */
 
+// TODO RISCV: This struct will be the same for RISCV, but like in other places, some fields are badly named now
+
 // This will be symetric locked. It can only be created by the foundation, and only read by the foundation.
 // We try do all the hard bootstrapping in the parent whilst C is a available and then just load in the new thread.
 struct secure_start_t {
@@ -126,4 +146,7 @@ struct start_stack_args {
     thread_start_func_t* start;
     capability data_args[MAX_LIBS+1];
 };
+
+#endif
+
 #endif //CHERIOS_UNISTD_H_H

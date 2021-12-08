@@ -113,7 +113,7 @@ static void clean_worker_start(__unused register_t arg, __unused capability carg
 
 	clean_loop();
 }
-int main(memmgt_init_t* mem_init) {
+int main(__unused int dummy, memmgt_init_t* mem_init) {
 
     commit_act = act_self_ref;
 

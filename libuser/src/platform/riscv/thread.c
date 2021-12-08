@@ -30,12 +30,4 @@
 
 #include "asm.h"
 
-__asm__ (
-".text\n"
-START_FUNC(thread_start)
-);
-
-__asm__ (
-".text\n"
-START_FUNC(secure_thread_start)
-);
+// TODO: Delete me

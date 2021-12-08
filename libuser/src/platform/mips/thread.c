@@ -30,25 +30,10 @@
 
 #include "thread.h"
 
-#define IDC_OFF 0
-#define CGP_OFF (4 * CAP_SIZE)
-#define C11_OFF (5 * CAP_SIZE)
-#define C10_OFF (6 * CAP_SIZE)
-
-#define START_OFF_SEC (7 * CAP_SIZE)
-#define CARG_OFF_SEC (8 * CAP_SIZE)
-#define ARG_OFF_SEC (9 * CAP_SIZE)
-
-#define SPIN_OFF ((9 * CAP_SIZE) +  REG_SIZE)
-#define SEG_TBL_OFF (10 * CAP_SIZE)
-#define DATA_ARGS_OFF_SEC (SEG_TBL_OFF + (MAX_SEGS * CAP_SIZE))
-
 _Static_assert((offsetof(struct secure_start_t, once)) == SPIN_OFF, "used by assembly below");
 _Static_assert((offsetof(struct secure_start_t, segment_table)) == SEG_TBL_OFF, "used by assembly below");
 _Static_assert((offsetof(struct secure_start_t, data_args)) == DATA_ARGS_OFF_SEC, "used by assembly below");
 
-#define START_OFF       0
-#define DATA_ARGS_OFF   CAP_SIZE
 
 
 #define STRFY(X) #X

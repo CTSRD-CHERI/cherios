@@ -171,9 +171,58 @@ START_FUNC start_common
     load_func       object_destroy
     GET_TLS_SYM_VAL (t0, msg_enable)
     beqz            t0, end
-    li              a0, -1
-    li              a1, 0
+    li              a0, -1  # infinite timeout
+    li              a1, 0   # no flags
     load_func       msg_entry
     end:
     call_func_loaded
 END_FUNC start_common
+
+#include "thread.h"
+
+START_FUNC thread_start
+
+    LOAD_SYM_DATA   (cgp, __cap_table_start)
+    LOAD_SYM_TLS    (abi_local, __cap_table_local_start)
+
+
+    // Call c_thread_start
+    cmove           ca2, abi_tls_proto
+    move            a3, abi_tls_seg_offset
+    cmove           ca4, abi_msg_queue
+    cmove           ca5, abi_self_ref
+    move            a6, abi_start_flags
+    cmove           ca7, abi_kernel_if
+    // Save arguments quickly here
+    move            s0, a0
+    cmove           cs1, ca1
+    // Keep calling c_thread_start
+    cincoffset      ca0, csp, DATA_ARGS_OFF // Data args are stack passed
+    cmove           ca1, abi_seg_tbl
+    call_func       c_thread_start
+/*
+capability c_thread_start(capability* data_args, capability* segment_table, capability tls_segment_prototype, register_t tls_segment_offset,
+                    queue_t* queue, act_control_kt self_ctrl, startup_flags_e flags,
+                    kernel_if_t* kernel_if_c) {
+
+return argument is the next function to call after stack recovery.
+*/
+    # Save target
+    cmove           cra, ca0
+    # Get last arugment off stack and restore arguments
+    clc             ca2, START_OFF(csp)
+    move            a0, s0
+    cmove           ca1, cs1
+    # Reset stack
+    cgetlen         t0, csp
+    csetoffset      csp, csp, t0
+    # Call main
+    cjalr           cra, cra
+
+END_FUNC thread_start
+
+START_FUNC secure_thread_start
+
+    TODO_SPIN
+
+END_FUNC secure_thread_start

@@ -46,36 +46,10 @@ void namespace_init(act_kt ns_ref) {
 	namespace_ref = ns_ref;
 }
 
-int namespace_register(int nb, act_kt ref) {
-	return (int)message_send(nb, 0, 0, 0, ref, NULL, NULL, NULL, namespace_ref, SYNC_CALL, 0);
-}
-
-act_kt namespace_get_ref(int nb) {
-	return message_send_c(nb, 0, 0, 0, NULL, NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 1);
-}
-
-int namespace_register_found_id(cert_t cert) {
-	return (int)message_send(0, 0, 0, 0, cert, NULL, NULL, NULL, namespace_ref, SYNC_CALL, 4);
-}
-
-found_id_t* namespace_get_found_id(int nb) {
-	return message_send_c(nb, 0, 0, 0, NULL, NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 3);
-}
-
-int namespace_get_num_services(void) {
-	if (namespace_ref == NULL)
-		return -1;
-	return (int)message_send(0, 0, 0, 0, NULL, NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 2);
-}
-
-int namespace_register_name(const char* name, act_kt ref) {
-    if (namespace_ref == NULL)
-        return -1;
-    return (int)message_send(0, 0, 0, 0, __DECONST(capability, name), ref, NULL, NULL,  namespace_ref, SYNC_CALL, 5);
-}
-
-act_kt namespace_get_ref_by_name(const char* name) {
-    if (namespace_ref == NULL)
-        return NULL;
-    return (act_kt)message_send_c(0, 0, 0, 0, __DECONST(capability, name), NULL, NULL, NULL,  namespace_ref, SYNC_CALL, 6);
-}
+MESSAGE_WRAP(int, namespace_register, (int, nb, act_kt, ref), namespace_ref, 0)
+MESSAGE_WRAP(act_kt, namespace_get_ref, (int, nb), namespace_ref, 1)
+MESSAGE_WRAP(int, namespace_register_found_id, (cert_t, cert), namespace_ref, 4)
+MESSAGE_WRAP(found_id_t*, namespace_get_found_id, (int, nb), namespace_ref, 3)
+MESSAGE_WRAP_DEF(int, namespace_get_num_services, (void), namespace_ref, 2, -1)
+MESSAGE_WRAP_DEF(int, namespace_register_name, (const char*, name, act_kt, ref), namespace_ref, 5, -1)
+MESSAGE_WRAP_DEF(act_kt, namespace_get_ref_by_name, (const char*, name), namespace_ref, 6, NULL)

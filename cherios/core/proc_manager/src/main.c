@@ -364,9 +364,9 @@ cap_pair proc_tmp_alloc(size_t s, Elf_Env* the_env) {
     }
 }
 
-int main(procman_init_t* init)
+int main(int dummy, procman_init_t* init)
 {
-
+    (void)dummy;
 	// This handles a race between starting procman and init being finished with the tmp alloc pool
 	while(init->pool_from_init.code == NULL || init->pool_from_init.data == NULL) {
 		sleep(0);

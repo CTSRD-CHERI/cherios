@@ -332,8 +332,8 @@ __used size_t kernel_syscall_provide_sync(res_t res) {
 }
 
 /* This function 'returns' by setting the sync state ret values appropriately */
-__used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
-					 register_t a0, register_t a1, register_t a2, register_t a3,
+__used ret_t* kernel_message_send_ret(register_t a0, register_t a1, register_t a2, register_t a3,
+                     capability c3, capability c4, capability c5, capability c6,
 					 act_t* target_activation, ccall_selector_t selector, register_t v0) {
 
 	target_activation = act_unseal_ref(target_activation);

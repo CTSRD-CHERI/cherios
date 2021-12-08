@@ -32,6 +32,7 @@
 #define CHERIOS_RISV_H
 
 #define CAN_SEAL_ANY 1
+#define MERGED_FILE
 
 #define REG_SIZE    8
 #define REG_SIZE_BITS 3
@@ -50,10 +51,13 @@
 
 #define SANE_ASM
 
+#define ASM_TRACE_ON 	"slti zero, zero, 0x1b\n"
+#define ASM_TRACE_OFF 	"slti zero, zero, 0x1e\n"
+
 // I have not added a yield nop to RISCV
 #define HW_YIELD
-#define HW_TRACE_ON __asm__ __volatile__ ("slti zero, zero, 0x1b");
-#define HW_TRACE_OFF __asm__ __volatile__ ("slti zero, zero, 0x1e");
+#define HW_TRACE_ON __asm__ __volatile__ (ASM_TRACE_ON);
+#define HW_TRACE_OFF __asm__ __volatile__ (ASM_TRACE_OFF);
 // Note, I have chosen fence rather than fence.i here. Some consumers may want fence.i,
 // especially around boot / program loading
 #define HW_SYNC __asm__ __volatile__ ("fence":::"memory")

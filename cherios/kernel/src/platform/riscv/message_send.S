@@ -33,6 +33,10 @@
 
 START_FUNC __cross_domain_kernel_message_send
 
+#if (KERNEL_FASTPATH)
+TODO_SPIN
+#else
+
 # TODO RISCV
 // Eventually we want a fastpath here. For now, we just default to a slow path.
 /* Kernel message send has the same signature, apart from the return type. _ret returns a reference to the actual return values
@@ -59,12 +63,16 @@ clc             ca1, CAP_SIZE(ca0)
 clc             ca0, 0(ca0)
 RESTORE_STACK   (cra)
 cret
-
+#endif
 END_FUNC __cross_domain_kernel_message_send
 
 START_FUNC __cross_domain_kernel_fastpath_wait
-
-1: j 1b
-
+#if (KERNEL_FASTPATH)
+// TODO
+TODO_SPIN
+#else
+clc             cgp, (CTLP_OFFSET_CGP)(abi_local)
+jump_sym        __cross_domain_fastpath_bailout
+#endif
 END_FUNC __cross_domain_kernel_fastpath_wait
 

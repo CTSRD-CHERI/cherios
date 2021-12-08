@@ -61,4 +61,79 @@ int msg_queue_empty(void);
 
 __END_DECLS
 
+#define IS_T_CAP(X) (sizeof(X) == sizeof(void*))
+
+#define NTH_CAP_F(res, arg) ( (((SECOND res) == 0) && IS_T_CAP(arg)) ? (void*)(uintptr_t)(arg) : FIRST res, SECOND res - IS_T_CAP(arg))
+// Gets the nth cap of a list of arguments, otherwise NULL
+#define NTH_CAPH(N, ...) EVAL16(FOLDl(NTH_CAP_F,(NULL,N), __VA_ARGS__))
+#define NTH_CAP(...) EVAL1(FIRST NTH_CAPH(__VA_ARGS__))
+#define NTH_NCAP_F(res, arg) ( (((SECOND res) == 0) && !IS_T_CAP(arg)) ? (register_t)(uintptr_t)(arg) : FIRST res, SECOND res - !IS_T_CAP(arg))
+// Gets the nth non-cap of a list of arguments, otherwise 0
+#define NTH_NCAPH(N, ...) EVAL16(FOLDl(NTH_NCAP_F,(0,N), __VA_ARGS__))
+#define NTH_NCAP(...) EVAL1(FIRST NTH_NCAPH(__VA_ARGS__))
+#define PASS_CAP(X) (void*)(uintptr_t)X
+
+// Gets the nth arg, or else a default
+#ifdef MERGED_FILE
+
+// Just pass the arguments padding to 8. The compiler will sort out casts.
+    #define ARG0(X, ...) X
+    #define ARG1(a,X, ...) X
+    #define ARG2(a,b,X, ...) X
+    #define ARG3(a,b,c,X, ...) X
+    #define ARG4(a,b,c,d,X, ...) X
+    #define ARG5(a,b,c,d,e,X, ...) X
+
+    #define ARG6(a,b,c,d,e,f,X, ...) X
+    #define ARG7(a,b,c,d,e,f,g, X, ...) X
+
+    #define ARG_ASSERTS(...) _Static_assert(!IS_T_CAP(ARG4(__VA_ARGS__ 0,0,0,0,0,0,0,0)) && \
+                                    !IS_T_CAP(ARG5(__VA_ARGS__ 0,0,0,0,0,0,0,0)) &&         \
+                                    !IS_T_CAP(ARG6(__VA_ARGS__ 0,0,0,0,0,0,0,0)) &&         \
+                                    !IS_T_CAP(ARG7(__VA_ARGS__ 0,0,0,0,0,0,0,0)), "Merged register file pass only the first four arguments as caps");
+
+    #define MARSHALL_ARGUMENTSH(...) (register_t)ARG4(__VA_ARGS__, 0,0,0,0,0,0,0,0), (register_t)ARG5(__VA_ARGS__, 0,0,0,0,0,0,0,0), (register_t)ARG6(__VA_ARGS__, 0,0,0,0,0,0,0,0), (register_t)ARG7(__VA_ARGS__, 0,0,0,0,0,0,0,0), \
+                                    PASS_CAP(ARG0(__VA_ARGS__, 0,0,0,0,0,0,0,0)), PASS_CAP(ARG1(__VA_ARGS__, 0,0,0,0,0,0,0,0)), PASS_CAP((uintptr_t)ARG2(__VA_ARGS__, 0,0,0,0,0,0,0,0)), PASS_CAP(ARG3(__VA_ARGS__, 0,0,0,0,0,0,0,0))
+#else
+    #define ARG_ASSERTS(...)
+// On a split file, we pass the caps separately from the
+#define MARSHALL_ARGUMENTSH(...) NTH_NCAP(0, __VA_ARGS__), NTH_NCAP(1, __VA_ARGS__), NTH_NCAP(2, __VA_ARGS__), NTH_NCAP(3, __VA_ARGS__), \
+                                PASS_CAP(NTH_CAP(0, __VA_ARGS__)), PASS_CAP(NTH_CAP(1, __VA_ARGS__)), PASS_CAP(NTH_CAP(2, __VA_ARGS__)), PASS_CAP(NTH_CAP(3, __VA_ARGS__))\
+
+#endif
+#define MARSHALL_ARGUMENTS(...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(MARSHALL_ARGUMENTSH(__VA_ARGS__))(0,0,0,0,NULL,NULL,NULL,NULL)
+
+#define message_send_marshal_help(f, target, mode, selector, ...) f(MARSHALL_ARGUMENTS(__VA_ARGS__), target, mode, selector)
+#define message_send_marshal(...) message_send_marshal_help(message_send, __VA_ARGS__)
+#define message_send_marshal_c(...) message_send_marshal_help(message_send_c, __VA_ARGS__)
+
+#define MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                      \
+    ARG_ASSERTS(MAKE_ARG(sig))                                                                                  \
+    if (IS_T_CAP(rt)) {                                                                                         \
+        return (rt)(uintptr_t)message_send_marshal_c(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));    \
+    } else {                                                                                                    \
+        return (rt)(uintptr_t)message_send_marshal(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));      \
+    }
+
+// A message send wrapper that lowers the vargs into the correct slot of a message
+#define MESSAGE_WRAP(rt, name, sig, target, method_n)                                                           \
+rt name MAKE_SIG(sig) {                                                                                         \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+}
+
+// Same again, but with a default value
+#define MESSAGE_WRAP_DEF(rt, name, sig, target, method_n, def_val)                                              \
+rt name MAKE_SIG(sig) {                                                                                         \
+    if (!target) return (rt)def_val;                                                                            \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+}
+
+// Same again, but will resolve the target if need be, and return a default value if it cannot
+#define MESSAGE_WRAP_ID(rt, name, sig, target, method_n, target_num, def_val)                                   \
+rt name MAKE_SIG(sig) {                                                                                         \
+    if (!target) target = namespace_get_ref(target_num);                                                        \
+    if (!target) return (rt)def_val;                                                                            \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+}
+
 #endif //CHERIOS_MSG_H

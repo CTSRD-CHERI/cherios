@@ -67,7 +67,7 @@
 #define FOLDr(F,z,arg0,...) F(arg0, IF_ELSE(HAS_ARGS(__VA_ARGS__))(DEFER2(_FOLDr)()(F,z,__VA_ARGS__))(z))
 #define _FOLDr() FOLDr
 
-// FOLDr(F,z,...) -> F((...(z, arg0)...), argn)
+// FOLDl(F,z,...) -> F((...(z, arg0)...), argn)
 #define FOLDl(F,z,arg0,...) IF_ELSE(HAS_ARGS(__VA_ARGS__))(DEFER2(_FOLDl)()(F,F(z,arg0),__VA_ARGS__))(F(z,arg0))
 #define _FOLDl() FOLDl
 

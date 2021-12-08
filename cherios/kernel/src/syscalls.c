@@ -323,12 +323,12 @@ __used void kernel_syscall_cond_notify(act_t* act) {
     sched_receive_event(act, sched_wait_notify);
 }
 
-DECLARE_WITH_CD (void, kernel_message_send(capability c3, capability c4, capability c5, capability c6,
-        register_t a0, register_t a1, register_t a2, register_t a3,
+DECLARE_WITH_CD (void, kernel_message_send(register_t a0, register_t a1, register_t a2, register_t a3,
+        capability c3, capability c4, capability c5, capability c6,
         act_t* target_activation, ccall_selector_t selector, register_t v0, ret_t* ret));
-__used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c5, capability c6,
-                             register_t a0, register_t a1, register_t a2, register_t a3,
-                             act_t* target_activation, ccall_selector_t selector, register_t v0);
+__used ret_t* kernel_message_send_ret(register_t a0, register_t a1, register_t a2, register_t a3,
+        capability c3, capability c4, capability c5, capability c6,
+        act_t* target_activation, ccall_selector_t selector, register_t v0);
 
 
 
