@@ -260,20 +260,25 @@ X	W	R	Meaning
 
 #define RISCV_CAUSE_INT_SHIFT       63
 
-#define RISCV_CAUSE_ISN_ALIGN       0x0
-#define RISCV_CAUSE_ISN_ACCESS      0x1
-#define RISCV_CAUSE_ISN_ILLEGAL     0x2
-#define RISCV_CAUSE_BREAK           0x3
-#define RISCV_CAUSE_LOAD_ALIGN      0x4
-#define RISCV_CAUSE_LOAD_ACCESS     0x5
-#define RISCV_CAUSE_STORE_ALIGN     0x6
-#define RISCV_CAUSE_STORE_ACCESS    0x7
-#define RISCV_CAUSE_CALL_U          0x8
-#define RISCV_CAUSE_CALL_S          0x9
-#define RISCV_CAUSE_CALL_M          0xb
-#define RISCV_CAUSE_ISN_PAGE        0xc
-#define RISCV_CAUSE_LOAD_PAGE       0xd
-#define RISCV_CAUSE_STORE_PAGE      0xf
+#define RISCV_CAUSE_LIST(ITEM)             \
+    ITEM(RISCV_CAUSE_ISN_ALIGN       , 0x0)\
+    ITEM(RISCV_CAUSE_ISN_ACCESS      , 0x1)\
+    ITEM(RISCV_CAUSE_ISN_ILLEGAL     , 0x2)\
+    ITEM(RISCV_CAUSE_BREAK           , 0x3)\
+    ITEM(RISCV_CAUSE_LOAD_ALIGN      , 0x4)\
+    ITEM(RISCV_CAUSE_LOAD_ACCESS     , 0x5)\
+    ITEM(RISCV_CAUSE_STORE_ALIGN     , 0x6)\
+    ITEM(RISCV_CAUSE_STORE_ACCESS    , 0x7)\
+    ITEM(RISCV_CAUSE_CALL_U          , 0x8)\
+    ITEM(RISCV_CAUSE_CALL_S          , 0x9)\
+    ITEM(RISCV_CAUSE_CALL_M          , 0xb)\
+    ITEM(RISCV_CAUSE_ISN_PAGE        , 0xc)\
+    ITEM(RISCV_CAUSE_LOAD_PAGE       , 0xd)\
+    ITEM(RISCV_CAUSE_STORE_PAGE      , 0xf)\
+
+#include "string_enums.h"
+
+DECLARE_ENUM(riscv_cause, RISCV_CAUSE_LIST)
 
 #define RISCV_CAUSE_EXCODE_NUM      0x10
 

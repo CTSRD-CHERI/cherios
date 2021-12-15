@@ -1206,7 +1206,7 @@ struct revoke_tracking* __get_tracking(void) {
 
 #endif
 
-ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed, size_t* phy_base) {
+ERROR_T(res_t) __mem_request(mop_t mop_sealed, size_t* phy_base, size_t base, size_t length, mem_request_flags flags) {
     mop_internal_t* mop = unseal_mop(mop_sealed);
 
     if(mop == NULL) return MAKE_ER(res_t, MEM_BAD_MOP);

@@ -418,6 +418,8 @@ static void load_modules(init_info_t * init_info) {
 
     mop_t mop = (mop_t)memmgt_init.base_mop;
 
+    CHERI_PRINT_CAP(mop);
+
     /* We need to do this as we had no mop when created */
     mmap_set_mop(mop);
 

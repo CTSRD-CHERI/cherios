@@ -84,11 +84,11 @@
     op_any_i5 \rout, \rin, \constant, \tmp, csrrc
 .endm
 
-.macro op_any_i12 rout, rin, constant, tmp, op
+.macro op_any_i12 rout, rin, constant, tmp, op, linear
     .if (\constant >= -2048) && (\constant <= 2047)
         # use op once
         \op \rout, \rin, \constant
-    .elseif (\constant >= -4096) && (\constant <= 4094)
+    .elseif (\constant >= -4096) && (\constant <= 4094) && \linear
         # use op twice
         .if (\constant < 0)
             \op \rout, \rin, -2048
@@ -104,12 +104,29 @@
     .endif
 .endm
 
+.macro op_any_u12 rout, rin, constant, tmp, op
+    .if (\constant >= 0) && (\constant < 4096)
+        \op \rout, \rin, \constant
+    .else
+        li \tmp, \constant
+        \op \rout, \rin, \tmp
+    .endif
+.endm
+
+.macro csetbounds_bi rout, rin, constant, tmp
+    op_any_u12 \rout, \rin, \constant, \tmp, csetbounds
+.endm
+
 .macro add_bi  rout, rin, constant, tmp
-    op_any_i12 \rout, \rin, \constant, \tmp, add
+    op_any_i12 \rout, \rin, \constant, \tmp, add, 1
 .endm
 
 .macro cinc_bi rout, rin, constant, tmp
-    op_any_i12 \rout, \rin, \constant, \tmp, cincoffset
+    op_any_i12 \rout, \rin, \constant, \tmp, cincoffset, 1
+.endm
+
+.macro and_bi rout, rin, constant, tmp
+    op_any_i12 \rout, \rin, \constant, \tmp, and, 0
 .endm
 
 .macro subi     rout, rin, imm

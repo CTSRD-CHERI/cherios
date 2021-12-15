@@ -86,13 +86,6 @@ typedef capability context_t;               // Type of a nanokernel context hand
 #define RES_LENGTH_SHIFT_LOW            4
 
 #define RES_STATE_OFFSET                0           // Keep zero for link/conditional
-#define STORE_RES_STATE                 csh
-#define LOAD_RES_STATE                  clh
-#define STOREC_RES_STATE                csch
-#define LOADL_RES_STATE                 cllh
-
-#define LOADL_RES_LENGTH                clld
-#define STOREC_RES_LENGTH               cscd
 
 #define RES_STATE_MASK                  0xC000
 #define RES_LOW_TERM_MASK               0x2000
@@ -103,8 +96,11 @@ typedef capability context_t;               // Type of a nanokernel context hand
 
 #define RES_STATE_SHIFT                 14
 #define RES_SCALE_SHIFT                 5
+// These are only for when we load the state as a half
+#define RES_SCALE_SHIFT                 5
+#define RES_STATE_SHIFT                 14
 #define RES_STATE_IN_LENGTH_SHIFT       (6 * 8)
-
+#define RES_SIMPLE_SHIFT                12
 #define RES_SCALE_NOT_FIELD              0 // A parent or taken, not a field
 // Makes the largest field x 64 be 4GB, so that the result of the multiplication will be 32 bit
 #define RES_SCALE_MAX                   (0b1100100 - 1)
@@ -206,7 +202,8 @@ typedef capability context_t;               // Type of a nanokernel context hand
 #define MAX_VIRTUAL_PAGES               (1 << TRANSLATED_BITS)
 
 #define UNTRANSLATED_PAGE_SIZE          (1 << UNTRANSLATED_BITS)
-
+#define VIRT_PHY_PAGE_RATIO_BITS        (UNTRANSLATED_BITS - PHY_PAGE_SIZE_BITS)
+#define VIRT_PHY_PAGE_RATIO             (1 << VIRT_PHY_PAGE_RATIO_BITS)
 #ifdef __ASSEMBLY__
 #define T_E_CAST
 #else
@@ -239,6 +236,7 @@ typedef capability context_t;               // Type of a nanokernel context hand
 
 // Anything less than transaction can be split/merged.
 // page_cleaning seems like it could just be page_transaction. RISCV does this now, MIPS does not.
+// page_unused should always be 0.
 #define NANO_KERNEL_PAGE_STATUS_ENUM_LIST(ITEM)    \
     ITEM(page_unused, 0)                           \
     ITEM(page_nano_owned, 1)                       \

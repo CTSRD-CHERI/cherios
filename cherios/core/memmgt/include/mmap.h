@@ -226,7 +226,7 @@ void __revoke_finish(res_t res);
 
 int __mem_claim(size_t base, size_t length, size_t times, mop_t mop_sealed);
 int __mem_release(size_t base, size_t length, size_t times, mop_t mop_sealed);
-ERROR_T(res_t) __mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop_sealed, size_t* phy_base);
+ERROR_T(res_t) __mem_request( mop_t mop_sealed, size_t* phy_base, size_t base, size_t length, mem_request_flags flags);
 mop_t __init_mop(capability sealing_cap, res_t big_res);
 ERROR_T(mop_t) __mem_makemop(res_t space, mop_t mop_sealed, const char* debug_id);
 int __mem_reclaim_mop(mop_t mop_sealed);

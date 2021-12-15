@@ -55,18 +55,7 @@ void commit_vmem(__unused act_kt activation, __unused size_t addr) {
     assert(0);
 }
 
-
-size_t mem_commit_range(size_t addr, size_t pages, mem_request_flags flags) {
-    if(commit_ref == NULL) {
-        commit_ref = namespace_get_ref(namespace_num_memmgt_commit);
-    }
-
-    assert(commit_ref != NULL);
-
-    message_send(addr, pages, flags, 0, NULL, NULL, NULL, NULL, commit_ref, SYNC_CALL, 12);
-
-    return 0;
-}
+MESSAGE_WRAP_ID_ASSERT(size_t, mem_commit_range, (size_t, addr, size_t, pages, mem_request_flags, flags), commit_ref, 12, namespace_num_memmgt_commit)
 
 void *mmap(__unused void *addr, size_t length, int prot, int flags, __unused int fd, __unused off_t offset) {
 	cap_pair pair;
@@ -168,7 +157,8 @@ int mmap_based_free(capability c, Elf_Env* env) {
 ERROR_T(res_t) mem_request(size_t base, size_t length, mem_request_flags flags, mop_t mop) {
 	act_kt memmgt = try_init_memmgt_ref();
 	assert(memmgt != NULL);
-	return MAKE_VALID(res_t, message_send_c(base, length, flags, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 0));
+	void* out = NULL;
+	return MAKE_VALID(res_t, message_send_c(MARSHALL_ARGUMENTS(mop, out, base, length, flags), memmgt, SYNC_CALL, 0));
 }
 
 ERROR_T(res_t) mem_request_phy_out(size_t base, size_t length, mem_request_flags flags, mop_t mop, size_t* phy_out) {
@@ -176,7 +166,8 @@ ERROR_T(res_t) mem_request_phy_out(size_t base, size_t length, mem_request_flags
     assert(memmgt != NULL);
     assert(flags & (COMMIT_DMA | COMMIT_NOW));
     _unsafe size_t out = (size_t)(-1);
-    ERROR_T(res_t) res = MAKE_VALID(res_t, message_send_c(base, length, flags, 0, mop, &out, NULL, NULL, memmgt, SYNC_CALL, 0));
+    ARG_ASSERTS(mop, &out, base, length, flags)
+    ERROR_T(res_t) res = MAKE_VALID(res_t, message_send_c(MARSHALL_ARGUMENTS(mop, &out, base, length, flags), memmgt, SYNC_CALL, 0));
     *phy_out = out;
     return res;
 }

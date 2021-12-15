@@ -612,8 +612,33 @@ NANO_FUNC set_exception_handler
 NANO_FUNC rescap_take
     NANO_TODO
 
+/*  typedef struct res_nfo_t {size_t length; size_t base;} res_nfo_t;   */
+###################################
+# res_nfo_t rescap_nfo(res_t res) #
 NANO_FUNC rescap_nfo
+###################################
+
+    li              t0, RES_TYPE
+    csetaddr        ct0, abi_local, t0
+    cunseal         ct0, ca0, ct0
+
+    cgetbase        a1, ct0
+    cgetoffset      t2, ct0
+
+    addi            a1, a1, RES_META_SIZE
+    cld             t1, RES_LENGTH_OFFSET(ct0)
+    slli            a0, t1, RES_LENGTH_SHIFT_HIGH
+    srli            a0, a0, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW)
+    beqz            t2, normal_info
+
+sub_info:
+    # Subfield
     NANO_TODO
+
+normal_info:
+    # TODO: sign extend base (but not length)
+    cclear_regs     (t0)
+    NANO_RET
 
 NANO_FUNC rescap_revoke_start
     NANO_TODO
@@ -621,7 +646,61 @@ NANO_FUNC rescap_revoke_start
 NANO_FUNC rescap_revoke_finish
     NANO_TODO
 
+####################################################
+# res_t  rescap_split(capability res, size_t size) #
 NANO_FUNC rescap_split
+####################################################
+    # check alignment
+    andi            t0, a1, (RES_META_SIZE-1)
+    bnez            t0, nano_er
+    # No splitting subfields
+    cgetoffset      t0, ca0
+    bnez            t0, nano_er
+    # Unseal
+    li              t0, RES_TYPE
+    csetaddr        ca3, abi_local, t0
+    cunseal         ca0, ca0, ca3
+    # New length field
+    srl             t4, a1, RES_LENGTH_SHIFT_LOW
+    # WARN: _MUST_ materialise the new cap before the store conditional to avoid revocation race.
+    cincoffset      ca2, ca0, a1
+    cincoffset      ca2, ca2, RES_META_SIZE
+    # Rematerialise from abi_local to get new bounds
+    csetaddr        ca2, abi_local, a2
+    csetbounds      ca2, ca2, RES_META_SIZE
+split_loop:
+    # t0 = encoded state + length
+    clr.d.aq        t0, (ca0)
+    # t1 = encoded state
+    srli            t1, t0, (RES_STATE_IN_LENGTH_SHIFT + RES_SIMPLE_SHIFT)
+    # t2 = state
+    andi            t2, t1, (RES_STATE_MASK >> RES_SIMPLE_SHIFT)
+    # State must be open
+    bnez            t2, nano_er
+    # Store high terminator for later
+    andi            t2, t1, RES_HIGH_TERM_MASK >> RES_SIMPLE_SHIFT
+    # Extract length
+    sll             t3, t0, RES_LENGTH_SHIFT_HIGH
+    srl             t3, t3, RES_LENGTH_SHIFT_HIGH
+    # Must have _more_ length than request size (because also require space for metadata)
+    bgeu            t4, t3, nano_er
+    # New state (keep low and state, and or in new length)
+    andi            t1, t1, (RES_LOW_TERM_MASK >> RES_SIMPLE_SHIFT)
+    slli            t1, t1, RES_STATE_IN_LENGTH_SHIFT + RES_SIMPLE_SHIFT
+    or              t1, t1, t4
+    csc.d.rl        t1, t1, (ca0)
+    bnez            t1, split_loop
+
+    # Now create new node. ca2 holding ptr.
+    sub             t3, t3, t4
+    subi            t3, t3, (RES_META_SIZE >> RES_LENGTH_SHIFT_LOW)
+    slli            t2, t2, RES_STATE_IN_LENGTH_SHIFT + RES_SIMPLE_SHIFT
+    or              t3, t3, t2
+    camoswap.d.rl   zero, t3, 0(ca2)
+
+    cseal           ca0, ca2, ca3
+
+    cclear_regs     (a2, a3)
     NANO_TODO
 
 NANO_FUNC rescap_merge
@@ -694,26 +773,222 @@ get_phy_page_end:
     cclear_regs(t0)
     NANO_RET
 
+###############################################################################
+# ptable_t create_table(register_t page_n, ptable_t parent, register_t index) #
 NANO_FUNC create_table
-    NANO_TODO
+###############################################################################
+    li              a4, 0 # a4 will be the result
+    # Only allowed ptable_t type values are VTABLE_TYPE_L0 and VTABLE_TYPE_L0+1
+    cgettype        t0, ca1
+    li              t1, VTABLE_TYPE_L0
+    beq             t0, t1, correct_type
+    add             t1, t1, 1
+    bne             t0, t1, create_table_error
+correct_type:
+    # unseal table
+    csetaddr        ca3, abi_local, t0
+    cunseal         ca1, ca1, ca3
 
+    # !(index < PAGE_TABLE_ENT_PER_TABLE) goto error
+    sltiu           t0, a2, PAGE_TABLE_ENT_PER_TABLE
+    beqz            t0, create_table_error
+
+    # (page_n >= TOTAL_PHY_PAGEs) goto error
+    li              t0, TOTAL_PHY_PAGES
+    bgeu            a0, t0, create_table_error
+
+    cinc_bi         ct0, abi_local, phy_page_table, t1
+    slli            t1, a0, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ct0, ct0, t1                            # ct0 = &book[page_n]
+
+    # ca1 = parent vtable entry address
+    slli            a2, a2, PAGE_TABLE_ENT_BITS
+    cincoffset      ca1, ca1, a2
+
+    # a2 = new table entry
+    slli            a2, a0, RISCV_PTE_PFN_SHIFT
+    # TODO: XWR = 0 means table entry. Do other bits matter? i.e., do we to pay attention to user/global/dirty bits?
+    ori             a2, a2, RISCV_PTE_V
+
+    # Create a capability to return to the caller for the new table now
+    sll             t1, a0, PHY_PAGE_SIZE_BITS
+    add_bi          t1, t1, PHY_MEM_START_CACHED, t2
+    csetaddr        ca0, abi_local, t1                      # ca0 = new table
+
+    li              t1, page_transaction
+    camomaxu.w.aq   t2, t1, (ct0)               # t2 holds old state
+
+    # allowed states are page_ptable_free and page_unused(0)
+    beqz            t2, create_table_phys_state_good
+    li              t3, page_ptable_free
+    bne             t2, t3,  create_table_undo
+
+    # Because this table has been used before, its a good idea to zero it.
+    # If this leaves any physical pages in an unrecoverable state, it is the system's problem
+    cmove           ca6, ca0
+    cinc_bi         ca7, ca6, PHY_PAGE_SIZE, t3
+    # do_zero_page: ca5 return address. ca6 start. ca7 end. clobbers these registers.
+    cjal            ca5, do_zero_page
+
+create_table_phys_state_good:
+    # length must be 1
+    cld             t1, PHY_PAGE_OFFSET_len(ct0)
+    li              t3, 1
+    bne             t1, t3, create_table_undo
+
+    # compare and swap, expecting zero, with the entry
+    1:  clr.d.aq    t1, (ca1)
+    bnez            t1, create_table_undo
+    csc.d.rl        t1, a2, (ca1)
+    bnez            t1, 1b
+
+    # bound and seal ca0. ca3 still has a sealing cap with the parent type
+    csetbounds_bi   ca0, ca0, PAGE_TABLE_SIZE, t1
+    cincoffset      ca3, ca3, 1
+    cseal           ca4, ca0, ca3
+    # finally, set physical page to page table state
+    li              t2, page_ptable
+create_table_undo:
+    # store back old state
+    camoswap.w.rl   zero, t2, (ct0)
+create_table_error:
+    cmove           ca0, ca4
+    cclear_regs     (a1, a3, a5, a6, a7, t0)
+    NANO_RET
+
+##################################################################################
+# void create_mapping(register_t page_n, ptable_t table, register_t index_start, #
+#                     register_t index_stop, register_t flags)                   #
 NANO_FUNC create_mapping
-    NANO_TODO
+##################################################################################
+    # For now, only allowing leaf entries to be at L2
+    # Unseal table
+    li              t0, VTABLE_TYPE_L2
+    csetaddr        ct0, abi_local, t0
+    cunseal         ca1, ca1, ct0
+
+    # Do not allow 0 length ranges
+    beq             a2, a3, create_mapping_er
+    sltiu           t0, a2, PAGE_TABLE_ENT_PER_TABLE
+    beqz            t0, create_mapping_er               # index_start < PAGE_TABLE_ENT_PER_TABLE
+    sltiu           t0, a3, PAGE_TABLE_ENT_PER_TABLE+1  # index_stop < PAGE_TABLE_ENT_PER_TABLE + 1
+
+    # (page_n >= TOTAL_PHY_PAGEs) goto error
+    li              t0, TOTAL_PHY_PAGES
+    bgeu            a0, t0, create_mapping_er
+
+    cinc_bi         ct0, abi_local, phy_page_table, t1
+    slli            t1, a0, PHY_PAGE_ENTRY_SIZE_BITS
+    cincoffset      ct0, ct0, t1                            # ct0 = &book[page_n]
+
+    # Set physical page to transacting
+    li              t1, page_transaction
+    camomaxu.w.aq   t2, t1, (ct0)                           # t2 holds old state
+
+    # State must be free (0)
+    bnez            t2, create_mapping_undo
+
+    # Length must be equal to difference in indexs
+    cld             t1, PHY_PAGE_OFFSET_len(ct0)            # length
+    sub             t3, a3, a2
+    bne             t3, t1, create_mapping_undo
+
+    # Mask out flags that the system should not control
+#define PTE_FLAGS_SYSTEM (RISCV_PTE_PERM_ALL &~ RISCV_PTE_V)
+    and_bi          a4, a4, PTE_FLAGS_SYSTEM, t3
+
+    # a0 = entry
+    slli            a0, a0, RISCV_PTE_PFN_SHIFT
+    or              a0, a0, a4
+    ori             a0, a0, RISCV_PTE_V
+
+    # Loop from     ca1[a2] to ca1[a3], setting entries to a0. And adding (1 << RISCV_PTE_PFN_SHIFT) to a0 each time.
+    # If at any point we find a bad entry, we do not undo, instead we keep the mappings we have already
+    # made but mark the physical pages as forever invalid
+    li              t2, page_screwed_the_pooch
+
+    slli            a2, a2, PAGE_TABLE_ENT_BITS
+    slli            a3, a3, PAGE_TABLE_ENT_BITS
+    cincoffset      ca2, ca1, a2
+    cincoffset      ca3, ca1, a3
+    li              a1, (1 << RISCV_PTE_PFN_SHIFT)
+set_mapping_loop:
+    # compare and swap, expecting zero, with the entry
+    1:  clr.d.aq    t1, (ca2)
+    bnez            t1, create_mapping_undo
+    csc.d.rl        t1, a0, (ca2)
+    bnez            t1, 1b
+    # Increment page, increment pointer to entry
+    add             a0, a0, a1
+    cincoffset      ca2, ca2, PAGE_TABLE_ENT_SIZE
+    bne             a2, a3, set_mapping_loop
+
+    # All mappings created, set physical pages to mapped
+    li              t2, page_mapped
+create_mapping_undo:
+    # store back old state
+    camoswap.w.rl   zero, t2, (ct0)
+create_mapping_er:
+    cclear_regs     (a2, a3, t0)
+    NANO_RET
 
 NANO_FUNC free_mapping
+    # It should be noted there are now some entries in the L0 table that cannot be unmapped.
+    # Right now, it will impossible to free them because we are not suporting gigapages for the system.
+    # When we do, this is will have to do an extra check.
     NANO_TODO
 
+######################################
+# ptable_t get_top_level_table(void) #
 NANO_FUNC get_top_level_table
-    NANO_TODO
+######################################
+    cinc_bi         ca0, abi_local, top_virt_table, t0
+    csetbounds_bi   ca0, ca0, PAGE_TABLE_SIZE, t0
+    li              t0, VTABLE_TYPE_L0
+    csetaddr        ca1, abi_local, t0
+    cseal           ca0, ca0, ca1
+    cclear_regs     (a1)
+    NANO_RET
 
+############################################################
+# ptable_t get_sub_table(ptable_t table, register_t index) #
 NANO_FUNC get_sub_table
+############################################################
     NANO_TODO
 
+#########################################################
+# readable_table_t* get_read_only_table(ptable_t table) #
 NANO_FUNC get_read_only_table
+#########################################################
     NANO_TODO
 
+#######################################
+# res_t make_first_reservation (void) #
 NANO_FUNC make_first_reservation
-    NANO_TODO
+#######################################
+.set VIRT_MEM_START,                0x0000  # Mips started at a page so as to never use address 0
+.set VIRT_MEM_END,                  (MAX_VIRTUAL_PAGES << UNTRANSLATED_BITS) - ((GIGA_MAPPINGS << 30) * 2)
+.set VIRT_MEM_SIZE,                 VIRT_MEM_END - VIRT_MEM_START
+    # Set made_first_res 0->1 atomically
+    li                  t1, 1
+    cincoffset          ct0, abi_local, made_first_res
+    camomaxu.w.aqrl     t1, t1, (ct0)
+    bnez                t1, nano_er
+
+    # Make a cap to the start of vmem
+    li                  t0, VIRT_MEM_START
+    csetaddr            ca0, abi_local, t0
+
+    # Open reservation With low terminator And high terminator covering all of vmem minus metadata
+    li                  t0, ((RES_LOW_TERM_MASK | RES_HIGH_TERM_MASK) << RES_STATE_IN_LENGTH_SHIFT) | ((VIRT_MEM_SIZE - RES_META_SIZE) >> RES_LENGTH_SHIFT_LOW)
+    csd                 t0, RES_LENGTH_OFFSET(ca0)
+
+    li                  t0, RES_TYPE
+    csetaddr            ct0, abi_local, t0
+    # We must set bounds because we use the offset field to encode extra information
+    csetbounds          ca0, ca0, RES_META_SIZE
+    cseal               ca0, ca0, ct0
+    NANO_RET
 
 ##########################
 # page_t* get_book(void) #
@@ -769,7 +1044,7 @@ NANO_FUNC split_phy_page_range
     csd             a1, PHY_PAGE_OFFSET_len(ct0)    # book[pagen].len = new_len
     # point back
     add             t3, a0, a1                      # t3 = new
-    csd             a1, PHY_PAGE_OFFSET_prev(ct0)   # book[next].prev = new
+    csd             t3, PHY_PAGE_OFFSET_prev(ca3)   # book[next].prev = new
 
 split_phy_undo:
     # store back old state
@@ -854,26 +1129,32 @@ NANO_FUNC zero_page_range
     slli            a2, a2, PHY_PAGE_SIZE_BITS  # len (bytes)
     li              t0, PHY_MEM_START_CACHED
     add             t0, t0, a0
-    csetaddr        ct0, abi_local, t0
-    cincoffset      ct1, ct0, a2
-    # Zero everything between ct0 and ct1
-
-.set UNROLL_FACTOR,  16                          # How many caps worth of zeros to store per loop
-    zero_loop:
-.macro store_zero g, i
-    csc             cnull, (CAP_SIZE * \i)(ct0)
-.endm
-    for_range       store_zero, g, 0, UNROLL_FACTOR, 1
-    cincoffset      ct0, ct0, (CAP_SIZE * UNROLL_FACTOR)
-    bne             t0, t1, zero_loop
+    csetaddr        ca6, abi_local, t0
+    cincoffset      ca7, ca6, a2
+    cjal            ca5, do_zero_page
 
     li              t1, page_unused
 zero_page_undo:
     camoswap.w.rl   zero, t1, (ca1)             # book[pagen].state = page_unused
 zero_page_er:
-    cclear_regs(a1, t0, t1)
+    cclear_regs(a1, a6, t1)
     NANO_RET
 
+    # Zero everything between ca6 and ca7. If ca5 is zero, fall through, otherwise return to it.
+    # Only clobber these registers
+do_zero_page:
+.set UNROLL_FACTOR,  16                          # How many caps worth of zeros to store per loop
+    zero_loop:
+.macro store_zero g, i
+    csc             cnull, (CAP_SIZE * \i)(ca6)
+.endm
+    for_range       store_zero, g, 0, UNROLL_FACTOR, 1
+    cincoffset      ca6, ca6, (CAP_SIZE * UNROLL_FACTOR)
+    bne             a6, a7, zero_loop
+    cjr             ca5
+
+####################################################
+# capability obtain_super_powers(capability*, pcc) #
 NANO_FUNC obtain_super_powers
 ####################################################
 

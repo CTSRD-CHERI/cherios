@@ -87,10 +87,10 @@ __END_DECLS
     #define ARG6(a,b,c,d,e,f,X, ...) X
     #define ARG7(a,b,c,d,e,f,g, X, ...) X
 
-    #define ARG_ASSERTS(...) _Static_assert(!IS_T_CAP(ARG4(__VA_ARGS__ 0,0,0,0,0,0,0,0)) && \
-                                    !IS_T_CAP(ARG5(__VA_ARGS__ 0,0,0,0,0,0,0,0)) &&         \
-                                    !IS_T_CAP(ARG6(__VA_ARGS__ 0,0,0,0,0,0,0,0)) &&         \
-                                    !IS_T_CAP(ARG7(__VA_ARGS__ 0,0,0,0,0,0,0,0)), "Merged register file pass only the first four arguments as caps");
+    #define ARG_ASSERTS(...) _Static_assert(!IS_T_CAP(ARG4(__VA_ARGS__, 0,0,0,0,0,0,0,0)) && \
+                                    !IS_T_CAP(ARG5(__VA_ARGS__, 0,0,0,0,0,0,0,0)) &&         \
+                                    !IS_T_CAP(ARG6(__VA_ARGS__, 0,0,0,0,0,0,0,0)) &&         \
+                                    !IS_T_CAP(ARG7(__VA_ARGS__, 0,0,0,0,0,0,0,0)), "Merged register file passes only the first four arguments as caps");
 
     #define MARSHALL_ARGUMENTSH(...) (register_t)ARG4(__VA_ARGS__, 0,0,0,0,0,0,0,0), (register_t)ARG5(__VA_ARGS__, 0,0,0,0,0,0,0,0), (register_t)ARG6(__VA_ARGS__, 0,0,0,0,0,0,0,0), (register_t)ARG7(__VA_ARGS__, 0,0,0,0,0,0,0,0), \
                                     PASS_CAP(ARG0(__VA_ARGS__, 0,0,0,0,0,0,0,0)), PASS_CAP(ARG1(__VA_ARGS__, 0,0,0,0,0,0,0,0)), PASS_CAP((uintptr_t)ARG2(__VA_ARGS__, 0,0,0,0,0,0,0,0)), PASS_CAP(ARG3(__VA_ARGS__, 0,0,0,0,0,0,0,0))
@@ -108,7 +108,7 @@ __END_DECLS
 #define message_send_marshal_c(...) message_send_marshal_help(message_send_c, __VA_ARGS__)
 
 #define MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                      \
-    ARG_ASSERTS(MAKE_ARG(sig))                                                                                  \
+    ARG_ASSERTS(MAKE_ARG_LIST(sig))                                                                             \
     if (IS_T_CAP(rt)) {                                                                                         \
         return (rt)(uintptr_t)message_send_marshal_c(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));    \
     } else {                                                                                                    \
@@ -134,6 +134,21 @@ rt name MAKE_SIG(sig) {                                                         
     if (!target) target = namespace_get_ref(target_num);                                                        \
     if (!target) return (rt)def_val;                                                                            \
     MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+}
+
+#define MESSAGE_WRAP_ID_ASSERT(rt, name, sig, target, method_n, target_num)                                     \
+rt name MAKE_SIG(sig) {                                                                                         \
+    if (!target) target = namespace_get_ref(target_num);                                                        \
+    assert(target);                                                                                             \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+}
+
+#define MESSAGE_WRAP_ID_ASSERT_ERRT(rt, name, sig, target, method_n, target_num)                                \
+ERROR_T(rt) name MAKE_SIG(sig) {                                                                                         \
+    if (!target) target = namespace_get_ref(target_num);                                                        \
+    assert(target);                                                                                             \
+    ARG_ASSERTS(MAKE_ARG_LIST(sig))                                                                                  \
+    return MAKE_VALID(rt,message_send_marshal_c(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig)));        \
 }
 
 #endif //CHERIOS_MSG_H

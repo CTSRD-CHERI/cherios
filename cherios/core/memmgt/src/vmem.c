@@ -69,7 +69,7 @@ ptable_t vmem_create_table(ptable_t parent, register_t index, __unused int level
 
 int vmem_create_mapping(ptable_t L2_table, register_t index, register_t flags) { // FIXME: Races with other thread
 
-    size_t page = pmem_find_page_type(2, page_unused, PMEM_NONE, 0);
+    size_t page = pmem_find_page_type(VIRT_PHY_PAGE_RATIO, page_unused, PMEM_NONE, 0);
     if(page == BOOK_END) return -1;
 
     assert(L2_table != NULL);
@@ -137,7 +137,7 @@ void vmem_commit_vmem(act_kt activation, char* name, size_t addr) {
 size_t __vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags flags) {
     assert(worker_id == 0);
 
-    pages <<=1; // How many physical pages this will be
+    pages <<=VIRT_PHY_PAGE_RATIO_BITS; // How many physical pages this will be
 
     // DMA wants to have all contiguous physical
     // Otherwise its fine to skip a page of its already commited
@@ -171,7 +171,7 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags fla
             first = 0;
         }
 
-        assert((pages & 1) == 0);
+        assert((pages % VIRT_PHY_PAGE_RATIO) == 0);
 
         l2 = get_sub_table(l1, l1_index);
         if(l2 == NULL) {
@@ -185,12 +185,12 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags fla
         // We may have lost a few pages to making tables
         in_block = book[phy_pagen].status == page_unused ? book[phy_pagen].len : 0;
 
-        size_t end_ndx = ndx + (pages / 2);
+        size_t end_ndx = ndx + (pages / VIRT_PHY_PAGE_RATIO);
         end_ndx = end_ndx > PAGE_TABLE_ENT_PER_TABLE ? PAGE_TABLE_ENT_PER_TABLE : end_ndx;
 
         size_t pages_tmp = pages;
 
-        pages -= (end_ndx-ndx) * 2;
+        pages -= (end_ndx-ndx) * VIRT_PHY_PAGE_RATIO;
 
         do {
             // Loop to find unmapped range
@@ -207,15 +207,15 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags fla
 
             while(ndx != end_empty) {
                 // commit  [ndx,end_empty)
-                if(in_block < 2) {
+                if(in_block < VIRT_PHY_PAGE_RATIO) {
                     if(is_dma) assert(contig_base == 0);
-                    phy_pagen = pmem_find_page_type(is_dma ? pages_tmp : 2, page_unused, PMEM_ALLOW_GREATER, phy_pagen);
+                    phy_pagen = pmem_find_page_type(is_dma ? pages_tmp : VIRT_PHY_PAGE_RATIO, page_unused, PMEM_ALLOW_GREATER, phy_pagen);
                     assert(phy_pagen != BOOK_END);
                     contig_base = contig_base == 0 ? phy_pagen : (size_t)(-1);
                     in_block = book[phy_pagen].len;
                 }
 
-                size_t phy_len = (end_empty - ndx) * 2;
+                size_t phy_len = (end_empty - ndx) * VIRT_PHY_PAGE_RATIO;
 
                 if(phy_len > in_block) phy_len = in_block;
 
@@ -223,7 +223,7 @@ size_t __vmem_commit_vmem_range(size_t addr, size_t pages, mem_request_flags fla
                     pmem_break_page_to(phy_pagen, phy_len);
                 }
 
-                size_t block_end_ndx = ndx + (phy_len/2);
+                size_t block_end_ndx = ndx + (phy_len/VIRT_PHY_PAGE_RATIO);
 
                 assert(book[phy_pagen].status == page_unused);
                 create_mapping(phy_pagen, l2, ndx, block_end_ndx, (flags & COMMIT_UNCACHED) ? TLB_FLAGS_UNCACHED : TLB_FLAGS_DEFAULT);

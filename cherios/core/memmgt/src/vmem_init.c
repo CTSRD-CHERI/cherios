@@ -61,6 +61,8 @@ static mop_t init_vmem(capability a_mop_sealing_cap) {
     /* Align the reservation to a page boundry (just throw away forever the first few bytes) */
     size_t base = nfo.base;
 
+    printf("Got first reservation. Base %lx. Length %lx\n", base, nfo.length);
+
     size_t realigned_base = align_up_to(base - RES_META_SIZE, UNTRANSLATED_PAGE_SIZE) + RES_META_SIZE;
 
     if(base != realigned_base) {

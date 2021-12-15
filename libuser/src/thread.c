@@ -90,27 +90,9 @@ capability c_thread_start(capability* data_args, capability* segment_table, capa
     return (capability)&c_thread_call_start;
 }
 
-process_kt thread_create_process(const char* name, const char* file, int secure_load) {
-    if(proc_man_ref == NULL) {
-        proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
-    }
-    assert(proc_man_ref != NULL);
-    return message_send_c(secure_load, 0, 0, 0, __DECONST(capability,name), __DECONST(capability,file), NULL, NULL, proc_man_ref, SYNC_CALL, 0);
-}
-thread thread_start_process(process_kt proc, startup_desc_t* desc) {
-    if(proc_man_ref == NULL) {
-        proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
-    }
-    assert(proc_man_ref != NULL);
-    return message_send_c(0, 0, 0, 0, proc, desc, NULL, NULL, proc_man_ref, SYNC_CALL, 1);
-}
-thread thread_create_thread(process_kt proc, const char* name, startup_desc_t* desc) {
-    if(proc_man_ref == NULL) {
-        proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
-    }
-    assert(proc_man_ref != NULL);
-    return message_send_c(0, 0, 0, 0, proc, __DECONST(char*,name), desc, NULL, proc_man_ref, SYNC_CALL, 2);
-}
+MESSAGE_WRAP_ID_ASSERT(process_kt, thread_create_process, (const char*, name, const char*, file, int, secure_load), proc_man_ref, 0, namespace_num_proc_manager)
+MESSAGE_WRAP_ID_ASSERT(thread, thread_start_process, (process_kt, proc, startup_desc_t*, desc), proc_man_ref, 1, namespace_num_proc_manager)
+MESSAGE_WRAP_ID_ASSERT(thread, thread_create_thread, (process_kt, proc, const char*, name, startup_desc_t*, desc), proc_man_ref, 2, namespace_num_proc_manager)
 
 top_t own_top;
 
@@ -122,13 +104,7 @@ top_t get_own_top(void) {
     return own_top;
 }
 
-top_t get_top_for_process(process_kt proc) {
-    if(proc_man_ref == NULL) {
-        proc_man_ref = namespace_get_ref(namespace_num_proc_manager);
-    }
-    assert(proc_man_ref != NULL);
-    return (top_t)message_send_c(0, 0, 0, 0, proc, NULL, NULL, NULL, proc_man_ref, SYNC_CALL, 5);
-}
+MESSAGE_WRAP_ID_ASSERT(top_t, get_top_for_process, (process_kt, proc), proc_man_ref, 5, namespace_num_proc_manager)
 
 capability get_type_owned_by_process(void) {
     own_top = get_own_top();
