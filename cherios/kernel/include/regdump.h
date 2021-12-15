@@ -28,51 +28,37 @@
  * SUCH DAMAGE.
  */
 
-#include "nano/nanokernel.h"
-#include "nano/nanotypes.h"
-#include "kernel_exceptions.h"
-#include "activations.h"
-#include "klib.h"
-#include "cpu.h"
+#ifndef CHERIOS_REGDUMP_H
+#define CHERIOS_REGDUMP_H
 
-DEFINE_ENUM_CASE(riscv_cause, RISCV_CAUSE_LIST)
-
-void handle_exception_kill(act_t* kernel_curr_act, exection_cause_t* ex_info) {
-    // TODO
-    kernel_printf("Exception %s killing activation %s\n", enum_riscv_cause_tostring(ex_info->cause), kernel_curr_act->name);
-    regdump(-1, kernel_curr_act);
-    kernel_freeze();
+static inline size_t correct_base(size_t image_base, capability pcc) {
+    return ((cheri_getoffset(pcc) + cheri_getbase(pcc)) - image_base);
 }
 
-void kernel_exception(__unused context_t swap_to, context_t own_context) {
+static act_t* get_act_for_address(size_t address) {
+    /* Assuming images are contiguous, we want the greatest base less than address */
+    size_t base = 0;
+    size_t top_bits = 2;
+    act_t* base_act = NULL;
+    FOR_EACH_ACT(act) {
+        size_t new_base = act->image_base;
 
-    exection_cause_t ex_info;
+        /* Should not confuse our two regions */
 
-    uint8_t cpu_id = cpu_get_cpuid();
-
-    set_exception_handler(own_context, cpu_id);
-
-    kernel_interrupts_init(1, cpu_id);
-    act_t* kernel_curr_act;
-
-    while (1) {
-        kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
-        context_switch(ACT_ARG_LIST(kernel_curr_act), kernel_curr_act->context);
-
-        // TODO RISCV handle exceptions
-        get_last_exception(&ex_info);
-        if (ex_info.cause >> RISCV_CAUSE_INT_SHIFT) {
-            // Interrupt
-            kernel_printf("Kernel interrupt: TODO\n");
-        } else {
-            // Synchronous exception
-            kernel_printf("Synchronous exception. Code : %lx\n", ex_info.cause);
-            switch(ex_info.cause) {
-                default:
-                    handle_exception_kill(kernel_curr_act, &ex_info);
+        if(new_base >> (64 - top_bits) == address >> (64 - top_bits)) {
+            if(new_base <= address && new_base > base) {
+                base = act->image_base;
+                base_act = act;
             }
-
         }
+    }}
 
-    }
+    return base_act;
 }
+
+static act_t* get_act_for_pcc(capability pcc) {
+    return get_act_for_address(cheri_getcursor(pcc));
+}
+
+
+#endif //CHERIOS_REGDUMP_H

@@ -54,6 +54,11 @@ local_cap_var       exception_context
 local_cap_var       current_context
 local_cap_var       next_context    # points to the next context in the context table
 
+local_cap_var       last_exception_victim
+local_reg_var       last_exception_cause
+local_reg_var       last_exception_stval
+local_var           made_first_res, 4, 2
+
 # Most contexts are allocated by the system, but we provide a few statically to bootstrap
 local_var           context_table, N_CONTEXTS * CONTEXT_SIZE, CAP_SIZE_BITS
 
@@ -131,6 +136,10 @@ diff_table_end:
 nano_kernel_die:
 j   nano_kernel_die
 
+// A general error return. Saves having too many error handling cases
+nano_er:
+cclear_regs(a0,a1,a2,a3,a4,a5,a6,a7,t0,t1,t2,t3,t4)
+NANO_RET
 
 ######################################################################################
 # nano_kernel_init(register_t unmanaged_space, register_t entry_offset, packaged args)
@@ -866,10 +875,34 @@ zero_page_er:
     NANO_RET
 
 NANO_FUNC obtain_super_powers
-    NANO_TODO
+####################################################
 
+    auipcc          ct0, 0
+    csetaddr        ct1, ct0, zero
+    csc             ct1, 0(ca0)
+    csetaddr        cra, ct0, ra
+    csetaddr        ca0, abi_local, zero
+    NANO_RET
+
+/*
+typedef struct {
+    context_t victim_context;
+    register_t cause;
+    register_t stval;
+    register_t ex_level;
+} exection_cause_t;
+*/
+##################################################
+# void get_last_exception(exection_cause_t* out) #
 NANO_FUNC get_last_exception
-    NANO_TODO
+##################################################
+    clc             ct0, last_exception_victim(abi_local)
+    cld             t1, last_exception_cause(abi_local)
+    cld             t2, last_exception_stval(abi_local)
+    csc             ct0, 0(ca0)
+    csd             t1, CAP_SIZE(ca0)
+    csd             t2, (CAP_SIZE + REG_SIZE)(abi_local)
+    NANO_RET
 
 NANO_FUNC foundation_create
     NANO_TODO
@@ -1087,8 +1120,15 @@ s_exp_vec:
     cspecialrw  c30, sscratchc, c30
     csrr        x30, scause
     subi        x30, x30, RISCV_CAUSE_CALL_S
-    bnez        x30, context_switch_exception_entry
+    bnez        x30, s_do_exception
     beqz        a0, get_if
+s_do_exception:
+    csrr        x30, scause
+    csd         x30, last_exception_cause(abi_local)
+    csrr        x30, stval
+    csd         x30, last_exception_stval(abi_local)
+    clc         c30, current_context(abi_local)
+    csc         c30, last_exception_victim(abi_local)
     j           context_switch_exception_entry
 # TODO intercept user handled exceptions
 

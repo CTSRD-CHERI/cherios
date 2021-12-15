@@ -96,4 +96,24 @@ __asm__ (                                                       \
 // virtual memory
 #define UNTRANSLATED_BITS               (1 + PHY_PAGE_SIZE_BITS) /* +1 for having two PFNs per VPN */
 
+#ifndef __ASSEMBLY__
+
+typedef struct {
+    context_t victim_context;
+    register_t cause;
+    register_t ccause;
+    register_t badvaddr;
+    register_t ex_level;
+} exection_cause_t;
+
+#endif
+
+#define STORE_RES_STATE                 csh
+#define LOAD_RES_STATE                  clh
+#define STOREC_RES_STATE                csch
+#define LOADL_RES_STATE                 cllh
+
+#define LOADL_RES_LENGTH                clld
+#define STOREC_RES_LENGTH               cscd
+
 #endif //CHERIOS_NANOTYPES_PLATFORM_H

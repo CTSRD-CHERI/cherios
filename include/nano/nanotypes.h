@@ -33,9 +33,12 @@
 
 #include "cheric.h"
 
+#ifndef __ASSEMBLY__
+typedef capability context_t;               // Type of a nanokernel context handle
+#endif
+
 #include "string_enums.h"
 #include "nano/nano_reg_list.h"
-#include "nano/nanotypes_platform.h"
 
 #define REG_LIST_TO_ENUM_LIST(Name, Reg, Select, Mask, X, ...) X(NANO_REG_SELECT_ ## Name)
 #define NANO_REG_LIST_FOR_ENUM(ITEM) NANO_REG_LIST(REG_LIST_TO_ENUM_LIST, ITEM)
@@ -170,10 +173,6 @@
 
 #define PAGE_START_STATE                page_dirty
 
-#define PHY_PAGE_SIZE                   (1 << PHY_PAGE_SIZE_BITS)
-#define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS) & 0xFFFFFFFF)
-
-
 /* Physical page records */
 #define PHY_PAGE_ENTRY_SIZE_BITS        (REG_SIZE_BITS + 2)
 #define PHY_PAGE_ENTRY_SIZE             (1L << PHY_PAGE_ENTRY_SIZE_BITS)
@@ -185,6 +184,11 @@
 /* Virtual page table records */
 
 /* In this version we are using one physical page for each page table at each level */
+
+#include "nano/nanotypes_platform.h"
+
+#define PHY_PAGE_SIZE                   (1 << PHY_PAGE_SIZE_BITS)
+#define PHY_ADDR_TO_PAGEN(addr)         ((addr >> PHY_PAGE_SIZE_BITS) & 0xFFFFFFFF)
 
 #define PAGE_TABLE_BITS                 PHY_PAGE_SIZE_BITS
 #define PAGE_TABLE_SIZE                 PHY_PAGE_SIZE
@@ -324,7 +328,6 @@ _Static_assert(sizeof(register_t) == REG_SIZE, "This should be true");
 
 /* WARN: these structures are used in assembly */
 
-typedef capability context_t;               // Type of a nanokernel context handle
 typedef capability res_t;                   // Type of a reservation handle
 typedef capability tres_t;
 typedef capability ptable_t;                // Type of a page table handle
@@ -403,14 +406,6 @@ _Static_assert(sizeof(table_entry_t) == PAGE_TABLE_ENT_SIZE, "Used by nano kerne
 
 /* This is how big the structure is in the nano kernel */
 _Static_assert(sizeof(page_t) == PHY_PAGE_ENTRY_SIZE, "Assumed by nano kernel");
-
-typedef struct {
-    context_t victim_context;
-    register_t cause;
-    register_t ccause;
-    register_t badvaddr;
-    register_t ex_level;
-} exection_cause_t;
 
 typedef struct {
     register_t cause;

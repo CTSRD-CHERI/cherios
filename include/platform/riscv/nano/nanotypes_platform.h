@@ -64,4 +64,15 @@ __asm__ (                                                       \
 // virtual memory
 #define UNTRANSLATED_BITS               PHY_PAGE_SIZE_BITS
 
+#ifndef __ASSEMBLY__
+
+typedef struct {
+    context_t victim_context;
+    register_t cause;
+    register_t stval;
+    register_t ex_level;
+} exection_cause_t;
+
+#endif
+
 #endif //CHERIOS_NANOTYPES_PLATFORM_H

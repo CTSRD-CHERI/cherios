@@ -32,6 +32,7 @@
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"
+#include "regdump.h"
 
 #ifndef __LITE__
 
@@ -80,34 +81,6 @@ static void regdump_c(const char * str_cap, int hl, const void * cap, const char
 	printf("%s"KRST"\n", extra);
 }
 
-static inline size_t correct_base(size_t image_base, capability pcc) {
-	return ((cheri_getoffset(pcc) + cheri_getbase(pcc)) - image_base);
-}
-
-static act_t* get_act_for_address(size_t address) {
-    /* Assuming images are contiguous, we want the greatest base less than address */
-    size_t base = 0;
-    size_t top_bits = 2;
-    act_t* base_act = NULL;
-	FOR_EACH_ACT(act) {
-        size_t new_base = act->image_base;
-
-        /* Should not confuse our two regions */
-
-        if(new_base >> (64 - top_bits) == address >> (64 - top_bits)) {
-            if(new_base <= address && new_base > base) {
-                base = act->image_base;
-                base_act = act;
-            }
-        }
-    }}
-
-    return base_act;
-}
-
-static act_t* get_act_for_pcc(capability pcc) {
-    return get_act_for_address(cheri_getcursor(pcc));
-}
 
 static inline void print_frame(int num, capability ra) {
     if(cheri_getoffset(ra) > cheri_getlen(ra)) ra = cheri_setoffset(ra, 0);
