@@ -130,6 +130,8 @@ extern int in_bench;
  */
 static void handle_exception_loop(context_t* own_context_ptr) {
     context_t own_context = *own_context_ptr;
+    (void)own_context;
+
     exection_cause_t ex_info;
 
     uint8_t cpu_id = cp0_get_cpuid();
@@ -153,8 +155,9 @@ static void handle_exception_loop(context_t* own_context_ptr) {
         kernel_assert(in_bench == 0);
         kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
 
-        if(ex_info.victim_context != own_context) {
+        if(ex_info.victim_context != kernel_curr_act->context) {
             // We only do this as handles are not guaranteed to stay fresh (although they are currently)
+            kernel_printf("This must have covered up a bug!\n");
             kernel_curr_act->context = ex_info.victim_context;
         } else {
             // This happens if an interrupt happened during the exception level. As soon as we exit

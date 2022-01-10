@@ -259,6 +259,7 @@ X	W	R	Meaning
 #define RISCV_PTE_PFN_SHIFT     10
 
 #define RISCV_CAUSE_INT_SHIFT       63
+#define RISCV_CAUSE_MASK            0xFFFF
 
 #define RISCV_CAUSE_LIST(ITEM)             \
     ITEM(RISCV_CAUSE_ISN_ALIGN       , 0x0)\
@@ -275,6 +276,7 @@ X	W	R	Meaning
     ITEM(RISCV_CAUSE_ISN_PAGE        , 0xc)\
     ITEM(RISCV_CAUSE_LOAD_PAGE       , 0xd)\
     ITEM(RISCV_CAUSE_STORE_PAGE      , 0xf)\
+    ITEM(RISCV_CAUSE_CHERI           , 0x1c)\
 
 #include "string_enums.h"
 

@@ -37,10 +37,18 @@
 
 DEFINE_ENUM_CASE(riscv_cause, RISCV_CAUSE_LIST)
 
+DEFINE_ENUM_AR(cap_cause_exception_t, CAP_CAUSE_LIST)
+
 void handle_exception_kill(act_t* kernel_curr_act, exection_cause_t* ex_info) {
-    // TODO
-    kernel_printf("Exception %s killing activation %s\n", enum_riscv_cause_tostring(ex_info->cause), kernel_curr_act->name);
-    regdump(-1, kernel_curr_act);
+
+    kernel_printf("Exception %s killing activation %s\n", enum_riscv_cause_tostring(ex_info->cause & RISCV_CAUSE_MASK), kernel_curr_act->name);
+    int regnum = -1;
+    if ((ex_info->cause & RISCV_CAUSE_MASK) == RISCV_CAUSE_CHERI) {
+        cap_exception_t exception = parse_cause(ex_info->stval);
+        kernel_printf("Cheri Exception: %s. Regnum: %d\n", enum_cap_cause_exception_t_tostring(exception.cause), exception.reg_num);
+        regnum = exception.reg_num;
+    }
+    regdump(regnum, kernel_curr_act);
     kernel_freeze();
 }
 
@@ -56,11 +64,15 @@ void kernel_exception(__unused context_t swap_to, context_t own_context) {
     act_t* kernel_curr_act;
 
     while (1) {
+        // Get a new activation to switch to
         kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
         context_switch(ACT_ARG_LIST(kernel_curr_act), kernel_curr_act->context);
-
+        // Get which activation should have taken the exception
+        kernel_curr_act = sched_get_current_act_in_pool(cpu_id);
         // TODO RISCV handle exceptions
         get_last_exception(&ex_info);
+        kernel_assert(ex_info.victim_context == kernel_curr_act->context);
+
         if (ex_info.cause >> RISCV_CAUSE_INT_SHIFT) {
             // Interrupt
             kernel_printf("Kernel interrupt: TODO\n");

@@ -40,9 +40,19 @@ typedef struct cap_exception_t {
     int reg_num;
 } cap_exception_t;
 
+#ifdef PLATFORM_mips
+
 static inline cap_exception_t parse_cause(register_t packed_cause) {
 	return (cap_exception_t) {.cause = ((packed_cause >> 8) & 0x1F), .reg_num = (packed_cause & 0xFF)};
 }
+
+#else
+
+static inline cap_exception_t parse_cause(register_t packed_cause) {
+    return (cap_exception_t) {.cause = (packed_cause & 0x1F), .reg_num = (packed_cause >> 5) & 0x1F};
+}
+
+#endif
 
 #ifndef __LITE__
 	#define exception_printf kernel_printf

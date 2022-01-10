@@ -30,8 +30,8 @@
 
 #include "klib.h"
 #include "cpu.h"
-#include "regdump.h"
 #define printf kernel_printf
+#include "regdump.h"
 
 // TODO RISCV
 
@@ -76,6 +76,7 @@ void regdump(int reg_num, act_t* act) {
     capability data_power = obtain_super_powers(&code_power);
 
     kernel_printf("Regdump:\n");
+    CHERI_PRINT_CAP(act->context);
     reg_frame_t* frame = kernel_unseal_any(act->context, data_power);
     CHERI_PRINT_CAP(frame);
 
@@ -116,25 +117,46 @@ void regdump(int reg_num, act_t* act) {
     DUMP_REG(cf_c30, ct5);
     DUMP_REG(cf_c31, idc);
 
-    backtrace(frame->cf_c2, frame->cf_pcc, frame->cf_idc, frame->cf_c1, NULL);
+    backtrace(frame->cf_c2, frame->cf_pcc, frame->cf_idc, frame->cf_c1, frame->cf_c8);
     (void)reg_num;
 }
 
+void* rederive(capability cap, capability from) {
+    if (!cheri_gettag(cap))
+        return cap;
+    capability result = from;
+    result = cheri_setcursor(result, cheri_getbase(cap));
+    result = cheri_setbounds(result, cheri_getlen(cap));
+    result = cheri_setcursor(result, cheri_getcursor(cap));
+    return result;
+}
+
+// Needs renaming across mips/riscv. Here its backtrace(sp, pc, idc, ra, fp)
+// TODO: Not working because removing -fomit-frame-pointer does not seem to get frame pointer back in
 void backtrace(char* stack_pointer, capability return_address, capability idc, capability r17, capability c18) {
-    (void)stack_pointer;
-    (void)return_address;
+
+    capability all_power_pcc;
+    capability all_power = obtain_super_powers(&all_power_pcc);
+
+    (void)all_power;
     (void)idc;
-    (void)r17;
-    (void)c18;
 
-    /*
-    capability code_power;
-    capability data_power = obtain_super_powers(&code_power);
-    */
+    int frame_idx = 0;
 
-    // Mostly TODO
-    act_t* act = get_act_for_address((size_t)return_address);
-    size_t base = correct_base(act ? act->image_base : 0, return_address);
-    printf("Backtrace:\n");
-    printf("In %s\n offset %lx\n", act ? act->name : "unknown", base);
+    return_address = rederive(return_address, all_power_pcc);
+    char* frame_pointer = (char*)c18;
+
+    while(cheri_getoffset(frame_pointer) != cheri_getlen(frame_pointer)) {
+        print_frame(frame_idx++, return_address);
+        if (frame_pointer == stack_pointer && frame_idx == 1) {
+            return_address = r17;
+        } else {
+            stack_pointer = frame_pointer;
+            return_address = ((capability*)stack_pointer)[-1];
+            frame_pointer = ((capability*)stack_pointer)[-2];
+        }
+    }
+
+    print_frame(frame_idx, return_address);
+    print_end();
 }

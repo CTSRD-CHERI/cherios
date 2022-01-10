@@ -502,6 +502,14 @@ stores_exception_only:
     # restored PCC based on Xepcc
     cspecialr       ct0, sepcc
     csc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
+    # Store exception info
+    csd             s1, last_exception_cause(abi_local)
+    csrr            t0, stval
+    csd             t0, last_exception_stval(abi_local)
+    li              t0, CONTEXT_TYPE
+    csetaddr        ct0, abi_local, t0
+    cseal           ct0, c30, ct0
+    csc             ct0, last_exception_victim(abi_local)
     # Load context to restore
     clc             cs0, exception_context(abi_local)
     j               context_save_finish
@@ -1182,7 +1190,7 @@ NANO_FUNC get_last_exception
     cld             t2, last_exception_stval(abi_local)
     csc             ct0, 0(ca0)
     csd             t1, CAP_SIZE(ca0)
-    csd             t2, (CAP_SIZE + REG_SIZE)(abi_local)
+    csd             t2, (CAP_SIZE + REG_SIZE)(ca0)
     NANO_RET
 
 NANO_FUNC foundation_create
@@ -1401,15 +1409,8 @@ s_exp_vec:
     cspecialrw  c30, sscratchc, c30
     csrr        x30, scause
     subi        x30, x30, RISCV_CAUSE_CALL_S
-    bnez        x30, s_do_exception
+    bnez        x30, context_switch_exception_entry
     beqz        a0, get_if
-s_do_exception:
-    csrr        x30, scause
-    csd         x30, last_exception_cause(abi_local)
-    csrr        x30, stval
-    csd         x30, last_exception_stval(abi_local)
-    clc         c30, current_context(abi_local)
-    csc         c30, last_exception_victim(abi_local)
     j           context_switch_exception_entry
 # TODO intercept user handled exceptions
 

@@ -32,6 +32,7 @@
 #include "activations.h"
 #include "klib.h"
 #include "cp0.h"
+#define printf kernel_printf
 #include "regdump.h"
 
 #ifndef __LITE__
@@ -39,8 +40,6 @@
 /*
  * Prints a nice regump
  */
-
-#define printf kernel_printf
 
 #define REG_DUMP_M(_reg, _extra) {\
 	register_t reg = frame->mf_##_reg; \
@@ -80,45 +79,6 @@ static void regdump_c(const char * str_cap, int hl, const void * cap, const char
 	__REGDUMP(otype, otype||seal, "otype", 24);
 	printf("%s"KRST"\n", extra);
 }
-
-
-static inline void print_frame(int num, capability ra) {
-    if(cheri_getoffset(ra) > cheri_getlen(ra)) ra = cheri_setoffset(ra, 0);
-    act_t* act = get_act_for_pcc(ra);
-    size_t base = NANO_KSEG;
-    const char* name = "nano";
-    if(act) {
-        base = act->image_base;
-        name = act->name;
-    }
-
-    size_t correct = correct_base(base, ra);
-    // (sp=%p). PCC offset = 0x%016lx
-
-    printf("%3d| [0x%016lx] in %16s.", num, correct, name);
-}
-
-static inline void print_frame_info(int16_t size, char* stack) {
-    uint32_t on_stack = cheri_getlen(stack) - cheri_getoffset(stack);
-    printf(" Frame size: %4x. Left On Stack: %4x. ", -size, on_stack);
-}
-
-static inline void print_change_stack(char* stack, const char* reason) {
-    uint32_t on_stack = cheri_getlen(stack) - cheri_getoffset(stack);
-    printf("\n Swap to new stack with size %4x due to %s", on_stack, reason);
-}
-
-static inline void print_end(void) {
-    printf("\n");
-}
-
-int check_cap(capability cap) {
-	size_t perm = CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP;
-	return ((cheri_getoffset(cap) >= cheri_getlen(cap)) ||
-	((cheri_getperm(cap) & perm) != perm) ||
-	(cap == NULL));
-}
-
 
 // TODO handle frames that are larger than the immediate field (need to decode a
 
