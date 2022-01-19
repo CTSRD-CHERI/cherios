@@ -42,7 +42,7 @@
         "li     %[res], %[def]               \n"                \
         "clw    %[res], 0(%[state])   \n"                       \
         MAGIC_SAFE \
-    : [res]"=r"(result)                                         \
+    : [res]"=&r"(result)                                         \
     : [state]"C"(location),[def]"i"(edefault)                   \
     :                                                           \
     )
