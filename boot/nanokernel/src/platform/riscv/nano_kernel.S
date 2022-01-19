@@ -974,7 +974,7 @@ NANO_FUNC get_read_only_table
 # res_t make_first_reservation (void) #
 NANO_FUNC make_first_reservation
 #######################################
-.set VIRT_MEM_START,                0x0000  # Mips started at a page so as to never use address 0
+.set VIRT_MEM_START,                0x1000  # Start a page in to avoid any NULL looking caps
 .set VIRT_MEM_END,                  (MAX_VIRTUAL_PAGES << UNTRANSLATED_BITS) - ((GIGA_MAPPINGS << 30) * 2)
 .set VIRT_MEM_SIZE,                 VIRT_MEM_END - VIRT_MEM_START
     # Set made_first_res 0->1 atomically
