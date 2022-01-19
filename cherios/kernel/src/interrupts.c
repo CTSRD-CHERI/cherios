@@ -34,6 +34,7 @@
 #include "activations.h"
 #include "klib.h"
 #include "cpu.h"
+#include "marshall_args.h"
 
 typedef struct interrupt_register_t {
 	act_t* target;
@@ -109,9 +110,8 @@ static void kernel_interrupt_others(register_t pending, uint8_t cpu_id) {
 
 			// FIXME this breaks as we can't take a proper TLB fault in exception levels
 			// FIXME I have added a cludge to load every slot on register but this needs fixing
-			if(msg_push(registration->carg, NULL, NULL, NULL,
-						registration->arg, i, 0, 0,
-						registration->v0, registration->target, &kernel_acts[0], NULL)) {
+			if(msg_push(MARSHALL_ARGUMENTS(registration->carg, registration->arg, i), registration->v0,
+                        registration->target, &kernel_acts[0], NULL)) {
                 kernel_printf(KRED"Could not send interrupt to %s. Queue full\n"KRST, registration->target->name);
 			}
 

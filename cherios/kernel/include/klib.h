@@ -157,8 +157,8 @@ void	kernel_vtrace(const char *context, const char *fmt, va_list ap);
 void	hw_reboot(void) __dead2;
 void	kernel_freeze(void) __dead2;
 
-int msg_push(capability c3, capability c4, capability c5, capability c6,
-			 register_t a0, register_t a1, register_t a2, register_t a3,
+int msg_push(register_t a0, register_t a1, register_t a2, register_t a3,
+             capability c3, capability c4, capability c5, capability c6,
 			 register_t v0,
 			 act_t * dest, act_t * src, capability sync_token);
 void	msg_queue_init(act_t* act, queue_t * queue);

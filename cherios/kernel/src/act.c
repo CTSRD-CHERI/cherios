@@ -41,6 +41,7 @@
 #include "act_events.h"
 #include "atomic.h"
 #include "reg_abi.h"
+#include "marshall_args.h"
 
 /*
  * Routines to handle activations
@@ -356,7 +357,7 @@ int act_revoke(act_control_t * ctrl) {
 	ctrl->status = status_revoked;
 
 	if(event_ref != NULL)
-		msg_push(act_create_sealed_ref(ctrl), NULL, NULL, NULL, 0, 0 , 0, 0, notify_revoke_port, event_ref, ctrl, NULL);
+		msg_push(MARSHALL_ARGUMENTS(act_create_sealed_ref(ctrl)), notify_revoke_port, event_ref, ctrl, NULL);
 
 	return 0;
 }
@@ -366,7 +367,7 @@ int act_terminate(act_control_t * ctrl) {
 	KERNEL_TRACE("act", "Terminating %s", ctrl->name);
 
 	if(event_ref != NULL)
-		if(msg_push(act_create_sealed_ref(ctrl), NULL, NULL, NULL, 0, 0 , 0, 0, notify_terminate_port, event_ref, ctrl, NULL))
+		if(msg_push(MARSHALL_ARGUMENTS(act_create_sealed_ref(ctrl)), notify_terminate_port, event_ref, ctrl, NULL))
 			kernel_printf(KRED"Could not send termination event. Queue full\n"KRST);
 
 	// need to delete from linked list

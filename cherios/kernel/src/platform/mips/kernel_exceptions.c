@@ -89,40 +89,6 @@ static void kernel_exception_unknown(__unused register_t excode, act_t* kernel_c
 	kernel_freeze();
 }
 
-
-static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act);
-static void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act) {
-	if(memgt_ref == NULL) {
-		exception_printf(KRED"Virtual memory exception (%lx) before memmgt created\n"KRST, badvaddr);
-        regdump(-1, kernel_curr_act);
-        kernel_freeze();
-	}
-	if(kernel_curr_act == memgt_ref) {
-		exception_printf(KRED"Virtual memory exception in memmgt is not allowed\n"KRST);
-		regdump(-1, kernel_curr_act);
-		kernel_freeze();
-	}
-    if(kernel_curr_act->is_idle) {
-        regdump(-1, kernel_curr_act);
-    }
-
-    kernel_assert(!kernel_curr_act->is_idle);
-    // Order is important here. We need to send the message first to unblock memgt.
-    // This can however result in the commit coming in before the block. sched handles this for us.
-
-#if (K_DEBUG)
-    kernel_curr_act->commit_faults++;
-#endif
-
-    kernel_curr_act->last_vaddr_fault = badvaddr;
-    kernel_curr_act->commit_early_notify = 0;
-    if(msg_push(act_create_sealed_ref(kernel_curr_act), kernel_curr_act->name, NULL, NULL, badvaddr, 0, 0, 0, 2, memgt_ref, kernel_curr_act, NULL))
-        kernel_printf(KRED"Could not send commit event. Queue full\n"KRST);
-    sched_block_until_event(kernel_curr_act, memgt_ref, sched_wait_commit, 0, 1);
-
-    kernel_curr_act->last_vaddr_fault = badvaddr;
-}
-
 extern int in_bench;
 /*
  * Exception handler demux to various more specific exception

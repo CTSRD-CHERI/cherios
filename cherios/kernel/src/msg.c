@@ -66,8 +66,8 @@ static inline void dump_queue(act_t* act) {
 #define dump_queue(...)
 #endif
 
-int msg_push(capability c3, capability c4, capability c5, capability c6,
-			 register_t a0, register_t a1, register_t a2, register_t a3,
+int msg_push(register_t a0, register_t a1, register_t a2, register_t a3,
+             capability c3, capability c4, capability c5, capability c6,
 			 register_t v0,
 			 act_t * dest, __unused act_t * src, capability sync_token) {
 
@@ -358,7 +358,7 @@ __used ret_t* kernel_message_send_ret(register_t a0, register_t a1, register_t a
 
 	int res;
 	do {
-		res = msg_push(c3, c4, c5, c6, a0, a1, a2, a3, v0, target_activation, source_activation, sync_token);
+		res = msg_push(a0, a1, a2, a3, c3, c4, c5, c6, v0, target_activation, source_activation, sync_token);
 		if(res != 0) {
 			kernel_printf("Message qeueue full! %s sacrifices to %s (%x)\n",
 					source_activation->name,

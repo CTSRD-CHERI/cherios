@@ -35,6 +35,8 @@
 
 #ifndef __ASSEMBLY__
 
+#include "activations.h"
+
 typedef struct cap_exception_t {
     cap_cause_exception_t cause;
     int reg_num;
@@ -53,6 +55,9 @@ static inline cap_exception_t parse_cause(register_t packed_cause) {
 }
 
 #endif
+
+
+void kernel_exception_tlb(register_t badvaddr, act_t* kernel_curr_act);
 
 #ifndef __LITE__
 	#define exception_printf kernel_printf

@@ -17,6 +17,7 @@ set(KERNEL_SRCS
     src/act.c
     src/init.c
     src/interrupts.c
+    src/kernel_exceptions.c
     src/platform/${PLATFORM}/kernel_exceptions.c
     src/kernel_printf.c
     src/kernel_utils.c

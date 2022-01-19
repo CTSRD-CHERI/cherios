@@ -79,7 +79,12 @@ void kernel_exception(__unused context_t swap_to, context_t own_context) {
         } else {
             // Synchronous exception
             kernel_printf("Synchronous exception. Code : %lx\n", ex_info.cause);
-            switch(ex_info.cause) {
+            switch(ex_info.cause & RISCV_CAUSE_MASK) {
+                case RISCV_CAUSE_ISN_PAGE:
+                case RISCV_CAUSE_LOAD_PAGE:
+                case RISCV_CAUSE_STORE_PAGE:
+                    kernel_exception_tlb(ex_info.stval, kernel_curr_act);
+                    break;
                 default:
                     handle_exception_kill(kernel_curr_act, &ex_info);
             }
