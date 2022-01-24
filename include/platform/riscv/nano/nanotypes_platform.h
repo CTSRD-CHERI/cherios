@@ -75,4 +75,9 @@ typedef struct {
 
 #endif
 
+// Even numbers are always invalid
+#define VTABLE_ENTRY_FREE               (T_E_CAST (0))
+#define VTABLE_ENTRY_USED               (T_E_CAST (-2))
+#define VTABLE_ENTRY_TRAN               (T_E_CAST (-4))
+
 #endif //CHERIOS_NANOTYPES_PLATFORM_H

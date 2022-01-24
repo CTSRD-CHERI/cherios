@@ -35,19 +35,6 @@
 #include "nano/nanokernel.h"
 #include "assert.h"
 
-// FIXME: This is MIPS specific.
-
-#define TLB_ENTRY_CACHE_ALGORITHM_UNCACHED              (2 << 3)
-#define TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT    (3 << 3)
-#define TLB_ENTRY_VALID                                 2
-#define TLB_ENTRY_DIRTY                                 4
-#define TLB_ENTRY_GLOBAL                                1
-
-#define TLB_FLAGS_DEFAULT                               (TLB_ENTRY_CACHE_ALGORITHM_CACHED_NONCOHERENT |\
-                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY)
-#define TLB_FLAGS_UNCACHED                              (TLB_ENTRY_CACHE_ALGORITHM_UNCACHED |\
-                                                        TLB_ENTRY_VALID | TLB_ENTRY_DIRTY)
-
 mop_t	mem_minit(capability mop_sealing_cap);
 
 void vmem_commit_vmem(act_kt activation, char* name, size_t addr);

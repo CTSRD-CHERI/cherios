@@ -78,7 +78,6 @@ void kernel_exception(__unused context_t swap_to, context_t own_context) {
             kernel_printf("Kernel interrupt: TODO\n");
         } else {
             // Synchronous exception
-            kernel_printf("Synchronous exception. Code : %lx\n", ex_info.cause);
             switch(ex_info.cause & RISCV_CAUSE_MASK) {
                 case RISCV_CAUSE_ISN_PAGE:
                 case RISCV_CAUSE_LOAD_PAGE:

@@ -617,8 +617,103 @@ NANO_FUNC set_exception_handler
     cclear_regs(a0, t0)
     NANO_RET
 
+# Avoding use of argument registers so this can easily be used as a sub-routine (apart from those used as arguments)
+##############################################
+# void rescap_take(res_t res, cap_pair* out) #
 NANO_FUNC rescap_take
-    NANO_TODO
+##############################################
+    li              t0, RES_TYPE
+    csetaddr        ct0, abi_local, t0
+    cunseal         ca0, ca0, ct0
+
+    # Non-zero offset is sub-field
+    cgetbase        t0, ca0
+    addi            t0, t0, RES_META_SIZE
+    cgetoffset      t3, ca0
+    bnez            t3, take_sub
+
+    li              t3, res_taken << (RES_STATE_IN_LENGTH_SHIFT + RES_STATE_SHIFT)
+take_normal:
+    clr.d.aq        t1, (ca0)
+    # State should go from open -> taken
+    srl             t2, t1, (RES_STATE_IN_LENGTH_SHIFT + RES_STATE_SHIFT)
+    bnez            t2, nano_er
+    or              t2, t1, t3
+    csc.d.rl        t2, t2, (ca0)
+    bnez            t2, take_normal
+    # Extract length
+    slli            t1, t1, RES_LENGTH_SHIFT_HIGH
+    srli            t1, t1, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW)
+    j               take_make
+
+take_sub:
+    csetoffset      ca0, ca0, zero
+.macro EXTRACT_SUB_LENGTH state_reg, output_reg, tmp1,
+    # Extract scale
+    srli            \output_reg, \state_reg, (RES_STATE_IN_LENGTH_SHIFT + RES_SCALE_SHIFT)
+    andi            \tmp1, \output_reg, 0b11    # tmp1 holding mantissa
+    srli            \output_reg, \output_reg, 2
+    andi            \output_reg, \output_reg, 0b11111 # output_reg holding exp
+    # Exp of 0 is de-normal. We don't have an implicit 1.
+    # Otherwise, we do have an implict 1, and we bias exp by 1 so still have a shift of 0.
+    beqz            \output_reg, 1f
+    subi            \output_reg, \output_reg, 1
+    ori             \tmp1, \tmp1, 0b100
+    1:
+    sll             \output_reg, \tmp1, \output_reg
+.endm
+    # t3 is holding base of 0th index sub.
+    subi            t3, t3, 1
+    # t1 is holding index
+
+    # Check in range
+    li              t2, RES_SUBFIELD_BITMAP_BITS
+    bgeu            t3, t2, nano_er
+
+    # Set the bit in the bitmap, error if already set
+    cincoffset      ct1, ca0, RES_SUBFIELD_BITMAP_OFFSET
+    li              t2, 1
+    sll             t2, t2, t3
+    camoor.d.aqrl   t1, t2, (ct1)
+    and             t1, t1, t2
+    bnez            t1, nano_er
+
+    # Load state to get scale
+    cld             t2, 0(ca0)
+    # t1 is holding length of sub
+    EXTRACT_SUB_LENGTH t2, t1, t4
+    # Also extract out total length (t2)
+    sll             t2, t2, RES_LENGTH_SHIFT_HIGH
+    srl             t2, t2, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW)
+
+    mul             t3, t3, t1
+    # t0 is now correct base, t1 is length
+    add             t0, t0, t3
+    add             t3, t3, t1  # t3 is the end of the range. Check its not more than total length.
+    bgtu            t3, t2, nano_er
+
+take_make:
+    # Make a reservation (t1 is length, t0 is base)
+    cmove           ct2, ca1
+
+    # ca0 is code capability, ca1 is data capability
+    auipcc          ca0, 0
+    csetaddr        ca0, ca0, t0
+    csetaddr        ca1, abi_local, t0
+
+    csetboundsexact ca0, ca0, t1
+    csetboundsexact ca1, ca1, t1
+
+    li              t0, DEF_DATA_PERMS
+    candperm        ca0, ca0, t0
+    candperm        ca1, ca1, t0
+
+    # Store if required
+    beqz            t2, no_store
+    csc             ca0, 0(ct2)
+    csc             ca1, CAP_SIZE(ct2)
+no_store:
+    NANO_RET
 
 /*  typedef struct res_nfo_t {size_t length; size_t base;} res_nfo_t;   */
 ###################################
@@ -632,6 +727,7 @@ NANO_FUNC rescap_nfo
 
     cgetbase        a1, ct0
     cgetoffset      t2, ct0
+    csetoffset      ct0, ct0, zero
 
     addi            a1, a1, RES_META_SIZE
     cld             t1, RES_LENGTH_OFFSET(ct0)
@@ -640,9 +736,11 @@ NANO_FUNC rescap_nfo
     beqz            t2, normal_info
 
 sub_info:
-    # Subfield
-    NANO_TODO
-
+    EXTRACT_SUB_LENGTH t1, a0, t3
+    # a0 now has the length, now multiply by offset and add to base
+    subi            t2, t2, 1
+    mul             t2, a0, t2
+    add             a1, a1, t2
 normal_info:
     # TODO: sign extend base (but not length)
     cclear_regs     (t0)
@@ -709,19 +807,122 @@ split_loop:
     cseal           ca0, ca2, ca3
 
     cclear_regs     (a2, a3)
-    NANO_TODO
+    NANO_RET
 
 NANO_FUNC rescap_merge
     NANO_TODO
 
+##################################
+# res_t rescap_parent(res_t res) #
 NANO_FUNC rescap_parent
-    NANO_TODO
+##################################
+    cgetoffset      t0, ca0
+    bnez            t0, nano_er
 
+    # Unseal rerservation
+    li              t0, RES_TYPE
+    csetaddr        ct0, abi_local, t0
+    cunseal         ca0, ca0, ct0
+
+    li              t3, res_taken << (RES_STATE_IN_LENGTH_SHIFT + RES_STATE_SHIFT)
+1:
+    # Get length and state
+    clr.d.aq        t1, 0(ca0)
+
+    # Length should be anything non-zero
+    slli            t2, t1, RES_LENGTH_SHIFT_HIGH
+    beqz            t2, nano_er
+
+    # State must be open
+    srli            t2, t1, RES_STATE_IN_LENGTH_SHIFT + RES_STATE_SHIFT
+    bnez            t2, nano_er
+
+    # Keep everything the same, but set to taken
+    or              t2, t3, t1
+    csc.d.rl        t2, t2, 0(ca0)
+
+    # Now just need to create the new node right after old one.
+    cincoffset      ca0, ca0, RES_META_SIZE
+    # Need to rematerialise because of bounding
+    csetaddr        ca0, abi_local, a0
+    csetbounds      ca0, ca0, RES_META_SIZE
+
+    # Its state will be the same as the old one (stored in t1), but shorter, and with both terms
+    subi            t1, t1, (RES_META_SIZE >> RES_LENGTH_SHIFT_LOW)
+    li              t2, (RES_LOW_TERM_MASK | RES_HIGH_TERM_MASK) << RES_STATE_IN_LENGTH_SHIFT
+    or              t1, t1, t2
+    camoswap.w.aqrl zero, t1, (ca0)
+
+    # Seal return value
+    cseal           ca0, ca0, ct0
+    cclear_regs     (t0)
+    NANO_RET
+
+######################################################
+# res_t rescap_splitsub(res_t res, register_t scale) #
 NANO_FUNC rescap_splitsub
-    NANO_TODO
+######################################################
+    # Cannot be called on a sub-field
+    cgetoffset      t0, ca0
+    bnez            t0, nano_er
 
+    # Scale in range
+    li              t0, RES_SCALE_MAX
+    bgtu            a1, t0, nano_er
+    add             a1, a1, 1                               # we use 0 as a special value
+
+    # Unseal
+    li              t0, RES_TYPE
+    csetaddr        ct0, abi_local, t0
+    cunseal         ca0, ca0, ct0
+
+    # Set scale and set state from open to taken
+    ori             a1, a1, (res_taken << (RES_STATE_SHIFT - RES_SCALE_SHIFT))
+    sll             a1, a1, RES_SCALE_SHIFT
+    slli            a1, a1, RES_STATE_IN_LENGTH_SHIFT
+1:
+    clr.d.aq        t1, 0(ca0)
+    srli            t2, t1, RES_STATE_IN_LENGTH_SHIFT + RES_STATE_SHIFT
+    bnez            t2, nano_er
+    or              t1, t1, a1
+    csc.d.rl        t1, t1, 0(ca0)
+    bnez            t1, 1b
+
+    cseal           ca0, ca0, ct0
+    cclear_regs     (t0)
+    NANO_RET
+
+####################################################
+# res_t rescap_getsub(res_t res, register_t index) #
 NANO_FUNC rescap_getsub
-    NANO_TODO
+######################################################
+
+    # Unseal
+    li              t0, RES_TYPE
+    csetaddr        ct0, abi_local, t0
+    cunseal         ca0, ca0, ct0
+
+    # Must be called on the parent
+    cgetoffset      t1, ca0
+    bnez            t1, nano_er
+
+    # index in range
+    li              t1, RES_SUBFIELD_BITMAP_BITS
+    bgeu            a1, t1, nano_er
+
+    # Scale field indicates split_sub has been called
+    cld             t1, 0(ca0)
+    srli            t1, t1, RES_STATE_IN_LENGTH_SHIFT + RES_SCALE_SHIFT
+    andi            t1, t1, (RES_SCALE_MASK >> RES_SCALE_SHIFT)
+    beqz            t1, nano_er
+
+    # Otherwise, set offset to index+1 and reseal
+    add             a1, a1, 1
+    csetoffset      ca0, ca0, a1
+    cseal           ca0, ca0, ct0
+
+    cclear_regs     (t0)
+    NANO_RET
 
 #####################################################################################################
 # void get_phy_page(register_t page_n, int cached, register_t npages, cap_pair* out, register_t IO) #
@@ -962,13 +1163,64 @@ NANO_FUNC get_top_level_table
 # ptable_t get_sub_table(ptable_t table, register_t index) #
 NANO_FUNC get_sub_table
 ############################################################
-    NANO_TODO
+    cgettype        t0, ca0
+    # Every level _but_ the last
+    subi            t1, t0, VTABLE_TYPE_L0
+    li              t2, VTABLE_LEVELS-1
+    bgeu            t1, t2, nano_er
+
+1:
+    # Unseal table
+    csetaddr        ct0, abi_local, t0
+    cunseal         ca0, ca0, ct0
+
+    # Check index in range
+    li              t1, PAGE_TABLE_ENT_PER_TABLE
+    bgeu            a1, t1, nano_er
+
+    # scale and load
+    slli            a1, a1, PAGE_TABLE_ENT_BITS
+    cincoffset      ca0, ca0, a1
+    cld             a1, 0(ca0)
+
+    # A zero entry should return NULL, but is not actually an error
+    cmove           ca0, cnull
+    beqz            a1, 1f
+
+    # Check is valid entry to another table
+    andi            t1, a1, RISCV_PTE_TYPE_MASK
+    li              t2, RISCV_PTE_PERM_SUB_TABLE
+    bne             t1, t2, nano_er
+
+    # Clear other bits, scale PFN
+    srli            a0, a1, RISCV_PTE_PFN_SHIFT
+    slli            a0, a0, (64 - (3 * 9))
+    srli            a0, a0, (64 - (3 * 9)) - PHY_PAGE_SIZE_BITS
+
+    # construct new cap
+    add_bi          a0, a0, PHY_MEM_START_CACHED, t1
+    csetaddr        ca0, abi_local, a0
+    csetbounds_bi   ca0, ca0, PAGE_TABLE_SIZE, t1
+    cincoffset      ct0, ct0, 1
+    cseal           ca0, ca0, ct0
+1:
+    cclear_regs     (t0)
+    NANO_RET
 
 #########################################################
 # readable_table_t* get_read_only_table(ptable_t table) #
 NANO_FUNC get_read_only_table
 #########################################################
-    NANO_TODO
+    cgettype        t0, ca0
+    subi            t1, t0, VTABLE_TYPE_L0
+    li              t2, VTABLE_LEVELS
+    bgeu            t1, t2, nano_er
+
+    csetaddr        ct0, abi_local, t0
+    cunseal         ca0, ca0, ct0
+    li              t0, CHERI_PERM_LOAD
+    candperm        ca0, ca0, t0
+    NANO_RET
 
 #######################################
 # res_t make_first_reservation (void) #

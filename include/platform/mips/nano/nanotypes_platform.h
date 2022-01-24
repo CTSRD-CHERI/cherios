@@ -116,4 +116,8 @@ typedef struct {
 #define LOADL_RES_LENGTH                clld
 #define STOREC_RES_LENGTH               cscd
 
+#define VTABLE_ENTRY_FREE               (T_E_CAST (0))
+#define VTABLE_ENTRY_USED               (T_E_CAST (-1))
+#define VTABLE_ENTRY_TRAN               (T_E_CAST (-2))
+
 #endif //CHERIOS_NANOTYPES_PLATFORM_H

@@ -79,14 +79,32 @@ typedef capability context_t;               // Type of a nanokernel context hand
 #define RES_META_SIZE                   (16)
 #define RES_USER_SIZE                   (RES_META_SIZE - RES_PRIV_SIZE)
 
+/* New layout. Length and fields before it can be loaded as 64 bit.
+   On big-endian, the other fields were loaded as 16 bits as well.
+   The state/term/scale fields are therefore always logically 16 bits.
+   Currently I am not loading those 16-bits on their own on little-endian,
+   but the idea is that a smaller atomic could be used to change just state and nothing else.
+   High and Low terminators mark the first and last children of a particular parent.
+   Low terminator technically redundant, and if another bit is needed, should be scavenged.
+ */
 
+// | State  | Low Term | High Term | Scale  | Length  | Bitmap  |
+// | 2 bits | 1 bits   | 1 bits    | 7 bits | 53 bits | 64 bits |
+
+// if Scale == RES_SCALE_NOT_FIELD, this is not a field. Otherwise it is and scale is its scale.
+
+// Scale is |Exp|Mantissa|. length has RES_LENGTH_SHIFT_LOW zero bits implied at the bottom, giving a 57 bits of length
+//          | 5 |   2    |
 
 #define RES_LENGTH_OFFSET               0
+// How many high bits in length are other fields
 #define RES_LENGTH_SHIFT_HIGH           11
+// How many implied 0 bits are at the bottom of length
 #define RES_LENGTH_SHIFT_LOW            4
 
 #define RES_STATE_OFFSET                0           // Keep zero for link/conditional
 
+// 16-bit descriptions
 #define RES_STATE_MASK                  0xC000
 #define RES_LOW_TERM_MASK               0x2000
 #define RES_HIGH_TERM_MASK              0x1000
@@ -99,6 +117,8 @@ typedef capability context_t;               // Type of a nanokernel context hand
 // These are only for when we load the state as a half
 #define RES_SCALE_SHIFT                 5
 #define RES_STATE_SHIFT                 14
+
+// The shift to get the 16-bit field
 #define RES_STATE_IN_LENGTH_SHIFT       (6 * 8)
 #define RES_SIMPLE_SHIFT                12
 #define RES_SCALE_NOT_FIELD              0 // A parent or taken, not a field
@@ -106,19 +126,6 @@ typedef capability context_t;               // Type of a nanokernel context hand
 #define RES_SCALE_MAX                   (0b1100100 - 1)
 #define RES_SUBFIELD_BITMAP_OFFSET      8
 #define RES_SUBFIELD_BITMAP_BITS        (8 * 8)
-
-
-// New layout. All state bits shoved in top half of length.
-// Low terminator technically redundant.
-// | State  | Low Term | High Term | Scale  | Length  | Bitmap  |
-// | 2 bits | 1 bits   | 1 bits    | 7 bits | 53 bits | 64 bits |
-
-// if Scale == RES_SCALE_NOT_FIELD, this is not a field. Otherwise it is and scale is its scale.
-
-// Scale is |Exp|Mantissa|, length has 4 zero bits implied at the bottom, giving a 57 bits of length
-//          | 5 |   2    |
-
-
 
 // The layout of contexts
 
@@ -209,10 +216,6 @@ typedef capability context_t;               // Type of a nanokernel context hand
 #else
 #define T_E_CAST (table_entry_t)
 #endif
-#define VTABLE_ENTRY_FREE               (T_E_CAST (0))
-#define VTABLE_ENTRY_USED               (T_E_CAST (-1))
-#define VTABLE_ENTRY_TRAN               (T_E_CAST (-2))
-
 
 #define REVOKE_STATE_AVAIL      0 // can call start
 #define REVOKE_STATE_STARTING   1 // in the middle of start

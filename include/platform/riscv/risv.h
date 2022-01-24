@@ -246,14 +246,22 @@ X	W	R	Meaning
 #define RISCV_PTE_A             (1 << 6)
 #define RISCV_PTE_D             (1 << 7) // dirty bit
 
-#define RISCV_PTE_CRG           (1 << 59)
-#define RISCV_PTE_CRM           (1 << 60)
-#define RISCV_PTE_CD            (1 << 61) // cap dirty
-#define RISCV_PTE_CR            (1 << 62) // cap read
-#define RISCV_PTE_CW            (1 << 63) // cap write
+#define RISCV_PTE_CRG           (1ULL << 59)
+#define RISCV_PTE_CRM           (1ULL << 60)
+#define RISCV_PTE_CD            (1ULL << 61) // cap dirty
+#define RISCV_PTE_CR            (1ULL << 62) // cap read
+#define RISCV_PTE_CW            (1ULL << 63) // cap write
+
+#define RISCV_PTE_PERM_SUB_TABLE (RISCV_PTE_V)
+#define RISCV_PTE_TYPE_MASK     (RISCV_PTE_V | RISCV_PTE_X | RISCV_PTE_W | RISCV_PTE_R)
 
 #define RISCV_PTE_PERM_ALL      (RISCV_PTE_V | RISCV_PTE_R | RISCV_PTE_W | RISCV_PTE_X | RISCV_PTE_G | \
                                  RISCV_PTE_D | RISCV_PTE_A | RISCV_PTE_CD | RISCV_PTE_CR | RISCV_PTE_CW)
+
+#define TLB_FLAGS_DEFAULT       RISCV_PTE_PERM_ALL
+// RISCV does not actually have cache attributes for its TLB (saaad).
+// Just making these the same we will see what breaks.
+#define TLB_FLAGS_UNCACHED      RISCV_PTE_PERM_ALL
 
 #define RISCV_PTE_RSW_SHIFT     8       // reserved for software
 #define RISCV_PTE_PFN_SHIFT     10
