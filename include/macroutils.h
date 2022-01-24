@@ -62,6 +62,10 @@
 // Will map 0->0 and any other token to 1
 #define BOOL(X) NOT(NOT(X))
 
+#define _TEST_void 0
+// Maps void -> 0
+#define NOT_VOID(rt) _TEST_ ## rt
+
 // FOLDr(F,z,...) -> F(arg0,F((...,argn,z)...)
 
 #define FOLDr(F,z,arg0,...) F(arg0, IF_ELSE(HAS_ARGS(__VA_ARGS__))(DEFER2(_FOLDr)()(F,z,__VA_ARGS__))(z))

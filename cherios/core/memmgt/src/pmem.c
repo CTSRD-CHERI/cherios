@@ -251,7 +251,7 @@ size_t pmem_find_page_type(size_t required_len, e_page_status required_type, pme
     return rounded_index;
 }
 
-void __get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop_sealed, cap_pair* result) {
+void __get_physical_capability(mop_t mop_sealed, cap_pair* result, size_t base, size_t length, int IO, int cached) {
     __unused mop_internal_t* mop = unseal_mop(mop_sealed);
 
     // TODO check mop limits

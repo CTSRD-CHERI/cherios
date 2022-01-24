@@ -207,7 +207,7 @@ int altera_transport_init(net_session* session) {
     cap_pair pair;
 
     // Get sgdma_mmio
-    get_physical_capability(MSGDMA_BASE, MSGDMA_SIZE, 1, 0, own_mop, &pair);
+    get_physical_capability(own_mop, &pair, MSGDMA_BASE, MSGDMA_SIZE, 1, 0);
 
     session->sgdma_mmio = (sgdma_mmio*)pair.data;
 

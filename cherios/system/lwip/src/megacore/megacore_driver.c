@@ -36,7 +36,7 @@ int lwip_driver_init(net_session* session) {
     cap_pair pair;
 
     // Get MMIO
-    get_physical_capability(MEGA_CORE_BASE_0, MEGA_CORE_SIZE, 1, 0, own_mop, &pair);
+    get_physical_capability(own_mop, &pair, MEGA_CORE_BASE_0, MEGA_CORE_SIZE, 1, 0);
 
     session->mmio = (lwip_driver_mmio_t*)pair.data;
 

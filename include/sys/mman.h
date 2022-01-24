@@ -114,7 +114,7 @@ int         mem_reclaim_mop(mop_t mop_sealed);
 mop_t       init_mop(capability mop_sealing_cap);
 
 /* Gets a physical capability. Can never be returned */
-void        get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop, cap_pair* result);
+void        get_physical_capability(mop_t mop, cap_pair* result, size_t base, size_t length, int IO, int cached);
 
 /* Gets the paddr for vaddr. DEPRACATED use the nano kernel function its faster*/
 size_t      mem_paddr_for_vaddr(size_t vaddr);

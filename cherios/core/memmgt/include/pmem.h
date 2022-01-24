@@ -72,7 +72,7 @@ void pmem_check_book(void);
 size_t pmem_try_merge(size_t page_n);
 
 /* Get a physical capability. Mediates access to the similar nano kernel function */
-void __get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop_sealed, cap_pair* result);
+void __get_physical_capability(mop_t mop_sealed, cap_pair* result, size_t base, size_t length, int IO, int cached);
 
 /* Dumps the whole book */
 void full_dump(void);

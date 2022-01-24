@@ -308,7 +308,7 @@ static void * get_act_cap(init_elem_t* elem, init_info_t* info) {
         case m_fs:{}
             if(BLK_MMIO_BASE == 0) return NULL;
             cap_pair pair;
-            get_physical_capability(BLK_MMIO_BASE, BLK_MMIO_SIZE, 1, 0, own_mop, &pair);
+            get_physical_capability(own_mop, &pair, BLK_MMIO_BASE, BLK_MMIO_SIZE, 1, 0);
             return pair.data;
         case m_proc:
             procman_arg.nano_default_cap = info->nano_default_cap;

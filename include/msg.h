@@ -68,13 +68,19 @@ __END_DECLS
 #define message_send_marshal(...) message_send_marshal_help(message_send, __VA_ARGS__)
 #define message_send_marshal_c(...) message_send_marshal_help(message_send_c, __VA_ARGS__)
 
-#define MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                      \
-    ARG_ASSERTS(MAKE_ARG_LIST(sig))                                                                             \
+#define MESSAGE_WRAP_BODY_rt(rt, name, sig, target, method_n)                                                   \
     if (IS_T_CAP(rt)) {                                                                                         \
         return (rt)(uintptr_t)message_send_marshal_c(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));    \
     } else {                                                                                                    \
         return (rt)(uintptr_t)message_send_marshal(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));      \
     }
+
+#define MESSAGE_WRAP_BODY_void(name, sig, target, method_n)                         \
+    message_send_marshal(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));
+
+#define MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                      \
+    ARG_ASSERTS(MAKE_ARG_LIST(sig))                                                                             \
+    IF_ELSE(NOT_VOID(rt))(MESSAGE_WRAP_BODY_rt(rt, name, sig, target, method_n))(MESSAGE_WRAP_BODY_void(name, sig, target, method_n))
 
 // A message send wrapper that lowers the vargs into the correct slot of a message
 #define MESSAGE_WRAP(rt, name, sig, target, method_n)                                                           \
@@ -97,6 +103,7 @@ rt name MAKE_SIG(sig) {                                                         
     MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
 }
 
+// Same as WRAP_ID, but will assert if target cannot be resolved
 #define MESSAGE_WRAP_ID_ASSERT(rt, name, sig, target, method_n, target_num)                                     \
 rt name MAKE_SIG(sig) {                                                                                         \
     if (!target) target = namespace_get_ref(target_num);                                                        \
@@ -104,6 +111,7 @@ rt name MAKE_SIG(sig) {                                                         
     MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
 }
 
+// Same as MESSAGE_WRAP_ID_ASSERT but creates an ERROR_T of rt
 #define MESSAGE_WRAP_ID_ASSERT_ERRT(rt, name, sig, target, method_n, target_num)                                \
 ERROR_T(rt) name MAKE_SIG(sig) {                                                                                         \
     if (!target) target = namespace_get_ref(target_num);                                                        \

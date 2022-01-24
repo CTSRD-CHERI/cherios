@@ -172,55 +172,19 @@ ERROR_T(res_t) mem_request_phy_out(size_t base, size_t length, mem_request_flags
     return res;
 }
 
-int mem_claim(size_t base, size_t length, size_t times, mop_t mop) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 5);
-}
+MESSAGE_WRAP_ID_ASSERT(int, mem_claim, (size_t, base, size_t, length, size_t, times, mop_t, mop), memmgt_ref, 5, namespace_num_memmgt)
+MESSAGE_WRAP_ID_ASSERT(int, mem_claim_mode, (size_t, base, size_t, length, size_t, times, mop_t, mop, ccall_selector_t, mode), memmgt_ref, 5, namespace_num_memmgt)
+MESSAGE_WRAP_ID_ASSERT(int, mem_release, (size_t, base, size_t, length, size_t, times, mop_t, mop), memmgt_ref, 1, namespace_num_memmgt)
+MESSAGE_WRAP_ID_ASSERT(int, mem_release_mode, (size_t, base, size_t, length, size_t, times, mop_t, mop, ccall_selector_t, mode), memmgt_ref, 1, namespace_num_memmgt)
+MESSAGE_WRAP_ID_ASSERT_ERRT(mop_t, mem_makemop_debug, (res_t, space, mop_t, auth_mop, const char*, debug_id), memmgt_ref, 7, namespace_num_memmgt)
 
-int mem_claim_mode(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, mode, 5);
-}
-
-int mem_release(size_t base, size_t length, size_t times, mop_t mop) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, SYNC_CALL, 1);
-}
-
-int mem_release_mode(size_t base, size_t length, size_t times, mop_t mop, ccall_selector_t mode) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return (int)message_send(base, length, times, 0, mop, NULL, NULL, NULL, memmgt, mode, 1);
-}
-
-ERROR_T(mop_t) mem_makemop_debug(res_t space, mop_t auth_mop, const char* debug_id) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return MAKE_VALID(mop_t, message_send_c(0, 0, 0, 0, space, auth_mop, __DECONST(capability, debug_id), NULL, memmgt, SYNC_CALL, 7));
-}
 ERROR_T(mop_t) mem_makemop(res_t space, mop_t auth_mop) {
 	return mem_makemop_debug(space, auth_mop, NULL);
 }
 
-int mem_reclaim_mop(mop_t mop_sealed) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return (int)message_send(0, 0, 0, 0, mop_sealed, NULL, NULL, NULL, memmgt, SYNC_CALL, 9);
-}
-mop_t init_mop(capability mop_sealing_cap) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	return message_send_c(0, 0, 0, 0, mop_sealing_cap, NULL, NULL, NULL, memmgt, SYNC_CALL, 6);
-}
-
-void get_physical_capability(size_t base, size_t length, int IO, int cached, mop_t mop, cap_pair* result) {
-	act_kt memmgt = try_init_memmgt_ref();
-	assert(memmgt != NULL);
-	message_send(base, length, (register_t )IO, (register_t)cached, mop, result, NULL, NULL, memmgt, SYNC_CALL, 8);
-}
+MESSAGE_WRAP_ID_ASSERT(int, mem_reclaim_mop, (mop_t, mop_sealed), memmgt_ref, 9, namespace_num_memmgt)
+MESSAGE_WRAP_ID_ASSERT(mop_t, init_mop, (capability, mop_sealing_cap), memmgt_ref, 6, namespace_num_memmgt)
+MESSAGE_WRAP_ID_ASSERT(void, get_physical_capability, (mop_t, mop, cap_pair*, result, size_t, base, size_t, length, int, IO, int, cached), memmgt_ref, 8, namespace_num_memmgt)
 
 void mmap_set_act(act_kt ref) {
 	memmgt_ref = ref;
