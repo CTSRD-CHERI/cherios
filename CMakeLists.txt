@@ -28,7 +28,7 @@ set(CHERI_SDK_DIR $ENV{CHERI_SDK_DIR} CACHE PATH "Path to CHERI SDK")
 if(NOT CHERI_SDK_DIR)
     # guess the location of CHERI SDK by looking for CheriSDKConfig and checking some guessed locations
     set(GUESSED_CHERISDK_LOCATIONS
-        /local/scratch/cheri/output/cherios-sdk
+        /local/scratch/$ENV{USER}/cheri/output/cherios-sdk
         $ENV{HOME}/cherios-sdk/
         $ENV{HOME}/cheri/output/cherios-sdk
     )
