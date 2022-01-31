@@ -105,8 +105,13 @@ static inline int condition_sleep_for_less(volatile act_notify_kt* wait_cap, vol
     return condition_sleep_for_condition(wait_cap, cancelled_cap, monitor_cap, comp_val, 0x10000 - comp_val, delay_sleep, n_token);
 }
 
+#ifdef TARGET_mips
 // The compiler things it can get rid of the &0xFFFF when it cannot. Use assembly to fool it.
 #define TRUNCATE16(X) ({uint16_t _tmpx; __asm ("andi   %[out], %[in], 0xFFFF\n":[out]"=r"(_tmpx):[in]"r"(X):); _tmpx;})
+#else
+// TODO: see if this bug is also present on RISCV
+#define TRUNCATE16(X) X
+#endif
 
 // Just a really useful condition for the socket library which does buffer_size - (request - *fulfil) >= space_needed
 // Sleep for C1 - (C2 - *monitor) >= C3

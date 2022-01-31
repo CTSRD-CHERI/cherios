@@ -167,11 +167,9 @@ init_elem_t init_list[] = {
     B_DENTRY(m_proc,     proc, 0, 1)
 	B_DENTRY(m_memmgt,	memmgt,		0, 	1)
 // NOTE: IDLE processes are loaded here
-#if BAREBONES != 1
     B_DENTRY(m_secure,    libsocket, 0, 1)
     B_WAIT_FOR(namespace_num_lib_socket)
     B_DENTRY(m_uart,	uart,		0,	1)      // Needed for stdout so bring up asap. This needs the link server for libsocket
-#endif // Barebones
     B_DENTRY(m_user,    activation_events, 0, 1)
 #if BAREBONES != 1
     B_DENTRY(m_dedup,    dedup, 0 ,1)

@@ -1151,14 +1151,20 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
 
     VMEM_SAFE_DEREFERENCE(other_close, other_close_val, 8);
 
-    if(*other_close) {
+    if(other_close_val) {
         return 0; // If the other has closed on their end they won't expect a signal
     }
 
-    // Otherwise the fulfiller may be about to sleep / alfulfilly be asleep.
+    // Otherwise, the fulfiller may be about to sleep / already be asleep.
+    // Fulfiller will load link their waiter_cap, then check what if this functions's own_close (already set to 1),
+    // then store do a conditional.
+    // We do our own atomic to read waiter_cap, and do some kind of write to make sure we would break the other side's
+    // ll/sc  (if it were in progress), or else get the waiter if it has been set, or else the other side will notice
+    // own_close=1.
 
     act_notify_kt waiter;
 
+#ifdef PLATFORM_mips
     __asm__ __volatile (
     "cllc   %[res], %[wc]           \n"
             "cscc   $at, %[res], %[wc]      \n"
@@ -1167,6 +1173,9 @@ static int socket_internal_close_safe(volatile uint8_t* own_close, volatile uint
     : [wc]"C"(waiter_cap)
     : "at"
     );
+#else
+    waiter = atomic_exchange((volatile ATOMIC_c*)(waiter_cap), NULL);
+#endif
 
     if(waiter) {
         *waiter_cap = NULL;

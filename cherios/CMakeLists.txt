@@ -1,6 +1,4 @@
 add_subdirectory(kernel)
 add_subdirectory(core)
-if(NOT ${BAREBONES})
 add_subdirectory(drivers)
-endif()
 add_subdirectory(system)

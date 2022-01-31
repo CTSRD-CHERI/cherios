@@ -9,5 +9,6 @@ add_subdirectory(fatfs)
 add_subdirectory(dedup)
 add_subdirectory(lwip)
 add_subdirectory(block_cache)
-add_subdirectory(libsocket)
 endif()
+
+add_subdirectory(libsocket)

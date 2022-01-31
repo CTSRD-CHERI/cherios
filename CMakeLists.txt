@@ -390,7 +390,12 @@ function(set_core_ld_deps _target)
     endif()
 endfunction()
 
-# Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] LINKERSCRIPT sandbox.ld SOURCES src1...)
+# Usage: add_cherios_executable(target [ADD_TO_FILESYSTEM] [CAN_VARY_SS] [TEMPORAL_A] LINKERSCRIPT sandbox.ld SOURCES src1...)
+
+# ADD_TO_FILESYSTEM will embed the program inside init so it can be loaded early. Currently I am very lazy and use this
+# for every program. Eventually, only core programs should load this way, and others should come from a storage device.
+# CAN_VARY_SS will allow safe stacks to vary on/off based on a global flag passed to cmake
+# TEMPORAL_A will perform the temporal safety analysis pass (will force on LTO as well)
 
 function(add_cherios_executable _target)
   add_cherios_module(${_target} ${ARGN})
@@ -485,7 +490,11 @@ set(TEMP_1 "SHELL:-mllvm -TemporalExpandLimit=1")
 
 function(add_cherios_library _target)
     add_cherios_module(${_target} IS_DYN ${ARGN})
-    # The link_serv will be an embedded executable that (FIXME comment: that what?)
+    # CheriOS dynamic libraries are themselves runnable standalone programs, but the program they run is a libk_serv.
+    # The link_serv is a single-thread, lightweight, embedded executable that has the authority to create new
+    # processes and threads for a library. Some basic functionality (e.g. memcpy) is shared between the link-serv and
+    # the library proper. Therefore some symbols are always required to be a part of a dyanamic library.
+    # When actually linking, a given process may override these symbols, but the library will continue to use its own
     target_link_libraries(${_target} PRIVATE link_serv)
     target_compile_definitions(${_target} PUBLIC -DLIGHTWEIGHT_OBJECT=1)
 endfunction()
@@ -502,6 +511,11 @@ function(add_cherios_module _target)
       elseif(${VARY_SS} STREQUAL "OFF")
             set(add_exe_TEMPORAL_A "OFF")
       endif()
+  endif()
+
+  if(${add_exe_TEMPORAL_A} AND ${PLATFORM} STREQUAL "riscv")
+      message("WARN: disabling temporal analysis for RISCV")
+      set(add_exe_TEMPORAL_A "OFF")
   endif()
 
   if(ALWAYS_LTO)
