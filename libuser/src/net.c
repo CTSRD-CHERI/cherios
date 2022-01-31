@@ -78,7 +78,7 @@ listening_token_or_er_t netsock_listen_tcp(struct tcp_bind* bind, uint8_t backlo
     act_kt act = net_try_get_ref();
     assert(act != NULL);
 
-    capability res = message_send_c(backlog, TCP_CALLBACK_PORT, 0, 0, bind, act_self_ref, callback_arg, bufferedRequesters, act, SYNC_CALL, 1);
+    capability res = message_send_c(MARSHALL_ARGUMENTS(bind, bufferedRequesters, act_self_ref, callback_arg, backlog, TCP_CALLBACK_PORT), act, SYNC_CALL, 1);
     return MAKE_VALID(listening_token, res);
 }
 
@@ -91,7 +91,7 @@ int netsock_connect_tcp(struct tcp_bind* bind, struct tcp_bind* server,
                         capability callback_arg) {
     act_kt act = net_try_get_ref();
     assert(act != NULL);
-    return (int)message_send(TCP_CALLBACK_PORT, 0, 0, 0, bind, server, act_self_ref, callback_arg, act, SEND, 0);
+    return (int)message_send(MARSHALL_ARGUMENTS(bind, server, act_self_ref, callback_arg, TCP_CALLBACK_PORT), act, SEND, 0);
 }
 
 NET_SOCK netsock_accept_in(enum SOCKET_FLAGS flags, NET_SOCK in) {

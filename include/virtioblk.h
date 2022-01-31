@@ -60,9 +60,12 @@ static inline void virtio_check_refs(void) {
 	assert(vblk_ref != NULL);
 }
 
+
+static inline
+MESSAGE_WRAP_ID_ASSERT(int, virtio_new_socket_dont_connect, (requester_t, requester, enum socket_connect_type, type), vblk_ref, 5, namespace_num_blockcache, virt_session)
+
 static inline int virtio_new_socket(requester_t requester, enum socket_connect_type type) {
-    virtio_check_refs();
-    int res = message_send(type, 0, 0, 0, virt_session, requester, NULL, NULL, vblk_ref, SYNC_CALL, 5);
+	int res = virtio_new_socket_dont_connect(requester, type);
 
 	if(res == 0) {
 		socket_requester_connect(requester);
@@ -73,49 +76,32 @@ static inline int virtio_new_socket(requester_t requester, enum socket_connect_t
 
 static inline void virtio_blk_session(void * mmio_cap) {
 	virtio_check_refs();
-	virt_session = message_send_c(0, 0 ,0, 0, mmio_cap, NULL, NULL, NULL, vblk_ref, SYNC_CALL, -1);
+	virt_session = message_send_c(MARSHALL_ARGUMENTS(mmio_cap), vblk_ref, SYNC_CALL, -1);
 }
 
-static inline int virtio_blk_init(void) {
-	virtio_check_refs();
-	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 0);
-}
+static inline
+MESSAGE_WRAP_ID_ASSERT(int, virtio_blk_init, (void), vblk_ref, 0, namespace_num_blockcache, virt_session)
 
-static inline int virtio_read(void * buf, size_t sector) {
-	virtio_check_refs();
-	return message_send(sector, 0, 0, 0, virt_session, buf, NULL, NULL, vblk_ref, SYNC_CALL, 1);
-}
+static inline
+MESSAGE_WRAP_ID_ASSERT(int, virtio_read, (void *, buf, size_t, sector), vblk_ref, 1, namespace_num_blockcache, virt_session)
 
-static inline void virtio_async_read(void* buf, size_t sector, register_t async_no, register_t async_port) {
-	virtio_check_refs();
-	message_send(sector, async_no, async_port, 0, virt_session, buf, act_self_ref, NULL, vblk_ref, SEND, 1);
-}
+static inline
+MESSAGE_WRAP_ASYNC_ID_ASSERT(virtio_async_read, (void*, buf, size_t, sector, register_t, async_no, register_t, async_port), vblk_ref, 1, namespace_num_blockcache)
 
-static inline int virtio_write(const void * buf, size_t sector) {
-	virtio_check_refs();
-	return message_send(sector, 0, 0, 0, virt_session, __DECONST(capability,buf), NULL, NULL, vblk_ref, SYNC_CALL, 2);
-}
+static inline
+MESSAGE_WRAP_ID_ASSERT(int, virtio_write, (const void *, buf, size_t, sector), vblk_ref, 2, namespace_num_blockcache, virt_session)
 
+static inline
+MESSAGE_WRAP_ASYNC_ID_ASSERT(virtio_async_write, (const void*, buf, size_t, sector, register_t, async_no, register_t, async_port), vblk_ref, 2, namespace_num_blockcache)
 
-static inline void virtio_async_write(void* buf, size_t sector, register_t async_no, register_t async_port) {
-	virtio_check_refs();
-	message_send(sector, async_no, async_port, 0, virt_session, buf, act_self_ref, NULL, vblk_ref, SEND, 2);
-}
+static inline
+MESSAGE_WRAP_ID_ASSERT(int, virtio_blk_status, (void), vblk_ref, 3, namespace_num_blockcache, virt_session)
 
-static inline int virtio_blk_status(void) {
-	virtio_check_refs();
-	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 3);
-}
+static inline
+MESSAGE_WRAP_ID_ASSERT(size_t, virtio_blk_size, (void), vblk_ref, 4, namespace_num_blockcache, virt_session)
 
-static inline size_t virtio_blk_size(void) {
-	virtio_check_refs();
-	return message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 4);
-}
-
-static inline void virtio_writeback_all(void) {
-	virtio_check_refs();
-	message_send(0, 0, 0, 0, virt_session, NULL, NULL, NULL, vblk_ref, SYNC_CALL, 6);
-}
+static inline
+MESSAGE_WRAP_ID_ASSERT(void, virtio_writeback_all, (void), vblk_ref, 6, namespace_num_blockcache, virt_session)
 
 
 #endif // _VIRTIO_BLK_H

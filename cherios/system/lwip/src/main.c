@@ -550,9 +550,9 @@ static err_t user_tcp_connect(struct tcp_bind* bind, struct tcp_bind* server,
     return er;
 }
 
-static uintptr_t user_tcp_listen(struct tcp_bind* bind, uint8_t backlog,
-                            act_kt callback, capability callback_arg, register_t callback_port,
-                            buffered_requesters_t* bf) {
+static uintptr_t user_tcp_listen(struct tcp_bind* bind, buffered_requesters_t* bf,
+                            act_kt callback, capability callback_arg,
+                            uint8_t backlog, register_t callback_port) {
     tcp_listen_session* listen_session = (tcp_listen_session*)(malloc(sizeof(tcp_listen_session)));
 
     listen_session->callback = callback;

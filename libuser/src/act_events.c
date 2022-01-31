@@ -45,13 +45,13 @@ void try_set_event_source(void) {
 int subscribe_ ## name (act_kt target, act_kt notify, capability carg, register_t arg, register_t port) {               \
     try_set_event_source(); \
     if(event_act == NULL) return SUBSCRIBE_NO_SERVICE;                                                                  \
-    return message_send(arg, port, 0, 0, target, notify, carg, NULL, event_act, SYNC_CALL, subscribe_ ## name ## _port); \
+    return message_send(MARSHALL_ARGUMENTS(target, notify, carg, arg, port), event_act, SYNC_CALL, subscribe_ ## name ## _port); \
 }
 
 #define EVENT_IF_BOILERPLATE_unsub(name, ...)                                                                          \
-int unsubscribe_ ## name (act_kt target, act_kt notify, register_t port) {                                              \
-    if(event_act == NULL) return SUBSCRIBE_NO_SERVICE;                                                                  \
-    return message_send(port, 0, 0, 0, target, notify, NULL, NULL, event_act, SYNC_CALL, unsubscribe_ ## name ## _port); \
+int unsubscribe_ ## name (act_kt target, act_kt notify, register_t port) {                                             \
+    if(event_act == NULL) return SUBSCRIBE_NO_SERVICE;                                                                 \
+    return message_send(MARSHALL_ARGUMENTS(target, notify, port), event_act, SYNC_CALL, unsubscribe_ ## name ## _port); \
 }
 
 #define EVENT_IF_BOILERPLATE_unsub_all(name, ...)                                                                      \

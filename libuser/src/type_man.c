@@ -42,26 +42,14 @@ act_kt try_init_tman_ref(void) {
     return tman_ref;
 }
 
-top_t type_get_first_top(void) {
-    return (top_t)message_send_c(0, 0, 0, 0, NULL, NULL, NULL, NULL, tman_ref, SYNC_CALL, 0);
-}
+MESSAGE_WRAP(top_t, type_get_first_top, (void), tman_ref, 0)
 
-ERROR_T(top_t) type_new_top(top_t parent) {
-    return (ERROR_T(top_t))message_send_c(0, 0, 0, 0, parent, NULL, NULL, NULL, tman_ref, SYNC_CALL, 1);
-}
+MESSAGE_WRAP_ERRT(top_t, type_new_top, (top_t, parent), tman_ref, 1)
 
-er_t type_destroy_top(top_t top) {
-    return (er_t)message_send_c(0, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 2);
-}
+MESSAGE_WRAP(er_t, type_destroy_top, (top_t, top), tman_ref, 2)
 
-ERROR_T(tres_t) type_get_new(top_t top) {
-    return (ERROR_T(tres_t))message_send_c(0, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 3);
-}
+MESSAGE_WRAP_ERRT(tres_t, type_get_new, (top_t, top), tman_ref, 3)
 
-ERROR_T(tres_t) type_get_new_exact(top_t top, stype type) {
-    return (ERROR_T(tres_t))message_send_c(type, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 4);
-}
+MESSAGE_WRAP_ERRT(tres_t, type_get_new_exact, (top_t, top, stype, type), tman_ref, 4)
 
-er_t type_return_type(top_t top, stype type) {
-    return (er_t)message_send_c(type, 0, 0, 0, top, NULL, NULL, NULL, tman_ref, SYNC_CALL, 5);
-}
+MESSAGE_WRAP(er_t, type_return_type, (top_t, top, stype, type), tman_ref, 5)

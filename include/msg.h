@@ -68,56 +68,70 @@ __END_DECLS
 #define message_send_marshal(...) message_send_marshal_help(message_send, __VA_ARGS__)
 #define message_send_marshal_c(...) message_send_marshal_help(message_send_c, __VA_ARGS__)
 
-#define MESSAGE_WRAP_BODY_rt(rt, name, sig, target, method_n)                                                   \
+#define MESSAGE_WRAP_BODY_rt(rt, name, sig, target, method_n, ...)                                              \
     if (IS_T_CAP(rt)) {                                                                                         \
-        return (rt)(uintptr_t)message_send_marshal_c(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));    \
+        return (rt)(uintptr_t)message_send_marshal_c(target, SYNC_CALL, method_n ,##__VA_ARGS__ MAKE_ARG_LIST_APPEND(sig));    \
     } else {                                                                                                    \
-        return (rt)(uintptr_t)message_send_marshal(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));      \
+        return (rt)(uintptr_t)message_send_marshal(target, SYNC_CALL, method_n ,##__VA_ARGS__ MAKE_ARG_LIST_APPEND(sig));      \
     }
 
-#define MESSAGE_WRAP_BODY_void(name, sig, target, method_n)                         \
-    message_send_marshal(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig));
+#define MESSAGE_WRAP_BODY_void(name, sig, target, method_n, ...)                         \
+    message_send_marshal(target, SYNC_CALL, method_n ,##__VA_ARGS__ MAKE_ARG_LIST_APPEND(sig));
 
-#define MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                      \
+#define MESSAGE_WRAP_BODY(rt, name, sig, target, method_n, ...)                                                 \
     ARG_ASSERTS(MAKE_ARG_LIST(sig))                                                                             \
-    IF_ELSE(NOT_VOID(rt))(MESSAGE_WRAP_BODY_rt(rt, name, sig, target, method_n))(MESSAGE_WRAP_BODY_void(name, sig, target, method_n))
+    IF_ELSE(NOT_VOID(rt))(MESSAGE_WRAP_BODY_rt(rt, name, sig, target, method_n ,##__VA_ARGS__))(MESSAGE_WRAP_BODY_void(name, sig, target, method_n ,##__VA_ARGS__))
 
 // A message send wrapper that lowers the vargs into the correct slot of a message
-#define MESSAGE_WRAP(rt, name, sig, target, method_n)                                                           \
+#define MESSAGE_WRAP(rt, name, sig, target, method_n, ...)                                                      \
 rt name MAKE_SIG(sig) {                                                                                         \
-    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n ,##__VA_ARGS__)                                           \
+}
+
+// Same again but constructs an ERROR_T(rt)
+#define MESSAGE_WRAP_ERRT(rt, name, sig, target, method_n, ...)                                                 \
+ERROR_T(rt) name MAKE_SIG(sig) {                                                                                \
+    ARG_ASSERTS(MAKE_ARG_LIST(sig))                                                                             \
+    return MAKE_VALID(rt,message_send_marshal_c(target, SYNC_CALL, method_n ,##__VA_ARGS__ MAKE_ARG_LIST_APPEND(sig)));\
 }
 
 // Same again, but with a default value
-#define MESSAGE_WRAP_DEF(rt, name, sig, target, method_n, def_val)                                              \
+#define MESSAGE_WRAP_DEF(rt, name, sig, target, method_n, def_val, ...)                                         \
 rt name MAKE_SIG(sig) {                                                                                         \
     if (!target) return (rt)def_val;                                                                            \
-    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n ,##__VA_ARGS__)                                           \
 }
 
 // Same again, but will resolve the target if need be, and return a default value if it cannot
-#define MESSAGE_WRAP_ID(rt, name, sig, target, method_n, target_num, def_val)                                   \
+#define MESSAGE_WRAP_ID(rt, name, sig, target, method_n, target_num, def_val, ...)                              \
 rt name MAKE_SIG(sig) {                                                                                         \
     if (!target) target = namespace_get_ref(target_num);                                                        \
     if (!target) return (rt)def_val;                                                                            \
-    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n ,##__VA_ARGS__)                                           \
 }
 
 // Same as WRAP_ID, but will assert if target cannot be resolved
-#define MESSAGE_WRAP_ID_ASSERT(rt, name, sig, target, method_n, target_num)                                     \
+#define MESSAGE_WRAP_ID_ASSERT(rt, name, sig, target, method_n, target_num, ...)                                \
 rt name MAKE_SIG(sig) {                                                                                         \
     if (!target) target = namespace_get_ref(target_num);                                                        \
     assert(target);                                                                                             \
-    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n)                                                          \
+    MESSAGE_WRAP_BODY(rt, name, sig, target, method_n ,##__VA_ARGS__)                                           \
 }
 
 // Same as MESSAGE_WRAP_ID_ASSERT but creates an ERROR_T of rt
-#define MESSAGE_WRAP_ID_ASSERT_ERRT(rt, name, sig, target, method_n, target_num)                                \
+#define MESSAGE_WRAP_ID_ASSERT_ERRT(rt, name, sig, target, method_n, target_num, ...)                           \
 ERROR_T(rt) name MAKE_SIG(sig) {                                                                                         \
     if (!target) target = namespace_get_ref(target_num);                                                        \
     assert(target);                                                                                             \
     ARG_ASSERTS(MAKE_ARG_LIST(sig))                                                                                  \
-    return MAKE_VALID(rt,message_send_marshal_c(target, SYNC_CALL, method_n MAKE_ARG_LIST_APPEND(sig)));        \
+    return MAKE_VALID(rt,message_send_marshal_c(target, SYNC_CALL, method_n ,##__VA_ARGS__ MAKE_ARG_LIST_APPEND(sig)));        \
+}
+
+#define MESSAGE_WRAP_ASYNC_ID_ASSERT(name, sig, target, method_n, target_num, ...)                              \
+void name MAKE_SIG(sig) {                                                                                       \
+    if (!target) target = namespace_get_ref(target_num);                                                        \
+    assert(target);                                                                                             \
+    message_send_marshal(target, SEND, method_n ,##__VA_ARGS__ MAKE_ARG_LIST_APPEND(sig));                      \
 }
 
 #endif //CHERIOS_MSG_H

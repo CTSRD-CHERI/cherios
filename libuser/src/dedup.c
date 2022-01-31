@@ -54,20 +54,13 @@ act_kt set_custom_dedup(act_kt dedup) {
     return dedup;
 }
 
-ERROR_T(entry_t)    deduplicate(uint64_t* data, size_t length) {
-    act_kt serv = get_dedup();
-    return MAKE_VALID(entry_t,message_send_c(length, 0, 0, 0, data, NULL, NULL, NULL, serv, SYNC_CALL, 0));
-}
-
-ERROR_T(entry_t)    deduplicate_dont_create(uint64_t* data, size_t length) {
-    act_kt serv = get_dedup();
-    return MAKE_VALID(entry_t,message_send_c(length, 0, 0, 0, data, NULL, NULL, NULL, serv, SYNC_CALL, 2));
-}
+MESSAGE_WRAP_ID_ASSERT_ERRT(entry_t, deduplicate, (uint64_t*, data, size_t, length), dedup_service, 0, namespace_num_dedup_service)
+MESSAGE_WRAP_ID_ASSERT_ERRT(entry_t, deduplicate_dont_create, (uint64_t*, data, size_t, length), dedup_service, 2, namespace_num_dedup_service)
 
 entry_t             deduplicate_find(sha256_hash hash) {
     act_kt serv = get_dedup();
-    return (entry_t)message_send_c(hash.doublewords[0], hash.doublewords[1], hash.doublewords[2], hash.doublewords[3],
-                                   NULL, NULL, NULL, NULL, serv, SYNC_CALL, 1);
+    return (entry_t)message_send_c(MARSHALL_ARGUMENTS(hash.doublewords[0], hash.doublewords[1], hash.doublewords[2], hash.doublewords[3]),
+            serv, SYNC_CALL, 1);
 }
 
 capability deduplicate_cap(capability cap, int allow_create, register_t perms, register_t length, register_t offset) {

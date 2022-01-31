@@ -134,7 +134,7 @@ ERROR_T(FILE_t) open_er(const char* name, int mode, enum SOCKET_FLAGS flags, con
         sock->encrypt_lock = encrypt_lock;
     }
 
-    if((result = message_send(mode,0,0,0,r32_read, r32_write, name, encrypt_lock, dest, SYNC_CALL, 0))) goto er1;
+    if((result = message_send(MARSHALL_ARGUMENTS(r32_read, r32_write, name, encrypt_lock, mode), dest, SYNC_CALL, 0))) goto er1;
     if(r32_read) socket_requester_connect(r32_read);
     if(r32_write) socket_requester_connect(r32_write);
 

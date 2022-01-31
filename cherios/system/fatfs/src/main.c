@@ -293,7 +293,7 @@ static void init_block_cache_requesters(void) {
 }
 
 
-int open_file_internal(int mode, requester_t read_requester, requester_t write_requester, const char* file_name, locked_t* encrpyt) {
+int open_file_internal(requester_t read_requester, requester_t write_requester, const char* file_name, locked_t* encrpyt, int mode) {
 
     int read = mode & FA_READ;
     int write = mode & FA_WRITE;
