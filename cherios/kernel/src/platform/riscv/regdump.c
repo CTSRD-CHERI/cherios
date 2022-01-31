@@ -35,6 +35,8 @@
 
 // TODO RISCV
 
+#define TRACE_ONLY_TOP 1
+
 void kernel_dump_tlb(void) {
 
 }
@@ -146,14 +148,16 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
     return_address = rederive(return_address, all_power_pcc);
     char* frame_pointer = (char*)c18;
 
-    while(cheri_getoffset(frame_pointer) != cheri_getlen(frame_pointer)) {
-        print_frame(frame_idx++, return_address);
-        if (frame_pointer == stack_pointer && frame_idx == 1) {
-            return_address = r17;
-        } else {
-            stack_pointer = frame_pointer;
-            return_address = ((capability*)stack_pointer)[-1];
-            frame_pointer = ((capability*)stack_pointer)[-2];
+    if (!TRACE_ONLY_TOP) {
+        while(cheri_getoffset(frame_pointer) != cheri_getlen(frame_pointer)) {
+            print_frame(frame_idx++, return_address);
+            if (frame_pointer == stack_pointer && frame_idx == 1) {
+                return_address = r17;
+            } else {
+                stack_pointer = frame_pointer;
+                return_address = ((capability*)stack_pointer)[-1];
+                frame_pointer = ((capability*)stack_pointer)[-2];
+            }
         }
     }
 
