@@ -1,10 +1,10 @@
 /*-
- * Copyright (c) 2017 Lawrence Esswood
- * All rights reserved.
+ * SPDX-License-Identifier: BSD-2-Clause
  *
- * This software was developed by SRI International and the University of
- * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
- * ("CTSRD"), as part of the DARPA CRASH research programme.
+ * Copyright (c) 2022 Lawrence Esswood
+ *
+ * This work was supported by Innovate UK project 105694, "Digital Security
+ * by Design (DSbD) Technology Platform Prototype".
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,31 +27,28 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-#ifndef CHERIOS_SHA256_H
-#define CHERIOS_SHA256_H
+#ifndef CHERIOS_SHA256_PLATFORM_H
+#define CHERIOS_SHA256_PLATFORM_H
 
-#define SHA256_BLOCK_SIZE   (512 / 8)
-#define SHA256_DIGEST_SIZE  (256 / 8)
+// These are the registers used to hold the message window. If you want to pass the first block by value, set these
+// and set the high bit of the length argument to 1.
+#define w0_1        a3
+#define w2_3        a4
+#define w4_5        a5
+#define w6_7        a6
+#define w8_9        a7
+#define w10_11      t2
+#define w12_13      t3
+#define w14_15      t4
 
-#include "sha256_platform.h"
+// These are used to return by value for use by assembly
+#define out_h0_1
+#define out_h2_3
+#define out_h4_5
+#define out_h6_7
 
-#ifndef __ASSEMBLY__
-// Both of these will only work for lengths that are multiples of 2 WORDS!
-// Also must have source buffer aligned to 64 bits
+// These are non-clobbers
+#define sha_non_clobber1    t0
+#define sha_non_clobber2    t1
 
-#ifdef SHA_COPY
-// Also returns the hash in a non-ABI complient way by 4 GP registers - used by assembly
-// Also optionally accepts the first block by value in a non-ABI complient way by 8 GP registers (and setting the top bit of length)
-    void sha256_copy(char* in, char* out, size_t length);
-#else
-
-    typedef struct sha256_hash {
-        uint64_t doublewords[4];
-    } sha256_hash;
-
-    void sha256(uint64_t * in, sha256_hash* hash, size_t length);
-#endif
-
-#endif
-
-#endif //CHERIOS_SHA256_H
+#endif //CHERIOS_SHA256_PLATFORM_H

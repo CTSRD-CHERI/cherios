@@ -34,6 +34,7 @@
 #include "cheric.h"
 #include "reg_abi.h"
 #include "math_utils.h"
+#include "sha256.h"
 
 .set NANO_SIZE, 0x04000000
 .set DEF_DATA_PERMS, (CHERI_PERM_ALL &~ CHERI_PERM_ACCESS_SYS_REGS)
@@ -618,10 +619,16 @@ NANO_FUNC set_exception_handler
     NANO_RET
 
 # Avoding use of argument registers so this can easily be used as a sub-routine (apart from those used as arguments)
+# t4 will hold the return address for local use
 ##############################################
 # void rescap_take(res_t res, cap_pair* out) #
 NANO_FUNC rescap_take
 ##############################################
+    cmove           ct4, cnull
+.macro SUBROUTINE_TAKE
+    jalr            ct4, rescap_take
+.endm
+rescap_take_local_entry:
     li              t0, RES_TYPE
     csetaddr        ct0, abi_local, t0
     cunseal         ca0, ca0, ct0
@@ -681,7 +688,7 @@ take_sub:
     # Load state to get scale
     cld             t2, 0(ca0)
     # t1 is holding length of sub
-    EXTRACT_SUB_LENGTH t2, t1, t4
+    EXTRACT_SUB_LENGTH t2, t1, a0
     # Also extract out total length (t2)
     sll             t2, t2, RES_LENGTH_SHIFT_HIGH
     srl             t2, t2, (RES_LENGTH_SHIFT_HIGH - RES_LENGTH_SHIFT_LOW)
@@ -713,6 +720,10 @@ take_make:
     csc             ca0, 0(ct2)
     csc             ca1, CAP_SIZE(ct2)
 no_store:
+    # If this was called as a sub-routine, ca2 will be non-null
+    beqz            a2, not_subroutine
+    cjr             ca2
+not_subroutine:
     NANO_RET
 
 /*  typedef struct res_nfo_t {size_t length; size_t base;} res_nfo_t;   */
@@ -1445,7 +1456,95 @@ NANO_FUNC get_last_exception
     csd             t2, (CAP_SIZE + REG_SIZE)(ca0)
     NANO_RET
 
+#struct foundation_metadata {
+#    found_id_t id;
+#    capability data; // data granted on entry when calling foundation_enter
+#    capability entrys[n_entries];
+#};
+
+#################################################################################
+# entry_t foundation_create(res_t res, size_t image_size, capability image,     #
+#                           size_t entry0, size_t n_entries, register_t public) #
 NANO_FUNC foundation_create
+#################################################################################
+
+    beqz            a4, nano_er     # n_entries must not be 0
+.set FOUND_ALIGN    REG_SIZE - 1
+    # image_size should be aligned
+    andi            t0, a1, FOUND_ALIGN
+    bnez            t0, nano_er
+    # image should also be aligned
+    cgetaddr        t0, ca2
+    andi            t0, t0, FOUND_ALIGN
+    bnez            t0, nano_er
+
+    # ca0, ca1 and all temps are clobbered
+    cmove           a6, a1          # save image_size so it does not get clobbered
+    move            a1, 0
+    SUBROUTINE_TAKE
+    # ca0 now holds code cap, ca1 data cap
+
+    # Total size of metadata
+    dsll            t1, a4, CAP_SIZE_BITS
+    addi            t1, t1, (FOUNDATION_ID_SIZE + CAP_SIZE)
+
+    # Gives mask with low bits 1's
+    CRepresentableAlignmentMask  t2, a6
+
+    # Base
+    cgetaddr        t0, ca0
+    # Earliest address that could be used
+    add             t0, t0, t1
+    # Modular complement to get adjustment
+    neg             t0, t0
+    and             t0, t0, t2
+    # Add to metadata
+    add             t1, t1, t0
+
+    # Check metadata + image_size is not greater than the size of the reservation
+    add             t2, a6, t1
+    cgetlen         t3, ca0
+    bgtu            t2, t3, nano_er
+
+    # Store all the fields apart from id hash (which is calculated during copy)
+    csd             a6, FOUNDATION_ID_LEN_OFFSET(ca1)
+    csd             a3, FOUNDATION_ID_E0_OFFSET(ca1)
+    csd             a4, FOUNDATION_ID_NENT_OFFSET(ca1)
+
+    # Store entry pointer
+    cincoffset      ca0, ca0, t1
+    csetbounds      ca0, ca0, a6
+    cincoffset      ca0, ca0, a3
+    csc             ca0, FOUNDATION_META_ENTRY_VECTOR_OFFSET(ca1)
+
+    # Construct entry data (null for public)
+    csc             cnull, FOUNDATION_META_DATA_OFFSET(ca1)
+    bnez            a5, is_public
+
+    cincoffset      ca0, ca1, t1
+    csetbounds      ca0, ca0, a6
+    csc             ca0, FOUNDATION_META_DATA_OFFSET(ca1)
+
+is_public:
+#define saved_reg   ???
+    # Save cap (unsealed)
+
+    # call hash
+
+    # store hash
+    csd         a0, 0(saved_reg)
+    csd         a1, 8(saved_reg)
+    csd         a2, 16(saved_reg)
+    csd         a3, 24(saved_reg)
+
+    # Now seal it for the return
+    li          t0, FOUND_ENTRY_TYPE
+    csetaddr    ct0, abi_local, t0
+    # Entry is cap to entire foundation, but points to entry point
+    cincoffset  ca0, saved_reg, FOUNDATION_META_ENTRY_VECTOR_OFFSET
+    cseal       ca0, ca0, ct0
+
+    cclear_regs (a1, a2, a3, a4, a5, a6, a7, t0, t1, t2, t3, t4)
     NANO_TODO
 
 NANO_FUNC foundation_enter

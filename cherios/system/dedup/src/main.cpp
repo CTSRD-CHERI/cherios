@@ -154,7 +154,7 @@ void hash_test(void) {
 
 #define TEST_STR(len, str, W1, W2, W3, W4)  \
     memcpy(aligned,str, len);               \
-    sha256(len, aligned, &hash);                \
+    sha256(aligned, &hash, len);                \
     assert_int_ex(hash.doublewords[0], ==, W1); \
     assert_int_ex(hash.doublewords[1], ==, W2); \
     assert_int_ex(hash.doublewords[2], ==, W3); \
@@ -204,7 +204,7 @@ void hash_test(void) {
 entry_t create(uint64_t* data, size_t length) {
 
     sha256_hash hash;
-    sha256(length, data, &hash);
+    sha256(data, &hash, length);
 
     entry_t lost = nullptr;
 
@@ -239,7 +239,7 @@ entry_t find(sha256_hash hash) {
 entry_t dont_create(uint64_t* data, size_t length) {
 
     sha256_hash hash;
-    sha256(length, data, &hash);
+    sha256(data, &hash, length);
 
     return find(hash);
 }
