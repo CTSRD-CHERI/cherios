@@ -483,11 +483,13 @@ context_switch_exception_entry:
     foreachi        cstore_reg, rlist1_start, g, rlist1
     foreachi        cstore_reg, rlist3_start, g, rlist3
     foreachi        cstore_reg, rlist5_start, g, rlist5
+
+    # After this point, we can use most registers that are not passed though (avoid a0..a7 and t0..t3)
+    cspecialr       cs0, ddc
+    csc             cs0, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
     # We put c30 here
-    cspecialr       ct0, sscratchc
-    csc             ct0, INDEX_TO_OFFSET(30-1)(c30)
-    cspecialr       ct1, ddc
-    csc             ct1, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
+    cspecialr       cs0, sscratchc
+    csc             cs0, INDEX_TO_OFFSET(30-1)(c30)
     csrr            s1, scause
     csd             s1, CONTEXT_OFFSET_MAGIC(c30)
     beqz            s1, stores_called_only
@@ -497,11 +499,11 @@ stores_exception_only:
     foreachi        cstore_reg, rlist4_start, g, rlist4
     # TODO This needs to work at different ELs. Not just supervisor.
     # abi_local was swapped with xtdc. Restore tdc at the same time as getting value to store.
-    cspecialrw      ct0, stdc, abi_local
-    csc             ct0, INDEX_TO_OFFSET(31-1)(c30)
+    cspecialrw      cs0, stdc, abi_local
+    csc             cs0, INDEX_TO_OFFSET(31-1)(c30)
     # restored PCC based on Xepcc
-    cspecialr       ct0, sepcc
-    csc             ct0, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
+    cspecialr       cs0, sepcc
+    csc             cs0, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
     # Store exception info
     csd             s1, last_exception_cause(abi_local)
     csrr            t0, stval
@@ -514,8 +516,8 @@ stores_exception_only:
     clc             cs0, exception_context(abi_local)
     j               context_save_finish
 stores_called_only:
-    # Caller expects c31 to be restored with c30 (which is currently in ct0)
-    csc             ct0, INDEX_TO_OFFSET(31-1)(c30)
+    # Caller expects c31 to be restored with c30 (which is currently in cs0)
+    csc             cs0, INDEX_TO_OFFSET(31-1)(c30)
     # restored PCC based on ra if this functions is called
     csc             cnull, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
     csc             cra, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
