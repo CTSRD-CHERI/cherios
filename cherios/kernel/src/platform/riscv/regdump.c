@@ -57,10 +57,11 @@ void regdump_printcap(const char* name, void* cap) {
             cheri_getcursor(cap));
 
     if(str || cheri_gettag(cap) || cheri_getbase(cap) != 0 || cheri_gettop(cap) != (unsigned long)~0) {
-        kernel_printf(" | t:%d B:%016lx T:%016lx",
+        kernel_printf(" | t:%d base:%016lx offset:%016lx length:%016lx",
                     (int)cheri_gettag(cap),
                     cheri_getbase(cap),
-                    cheri_gettop(cap));
+                    cheri_getoffset(cap),
+                    cheri_getlen(cap));
     }
 
     if (str) {
