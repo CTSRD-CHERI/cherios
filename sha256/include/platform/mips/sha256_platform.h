@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2021 Lawrence Esswood
+ * Copyright (c) 2022 Lawrence Esswood
  *
  * This work was supported by Innovate UK project 105694, "Digital Security
  * by Design (DSbD) Technology Platform Prototype".
@@ -27,15 +27,24 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_SHA256_PLATFORM_H
+#define CHERIOS_SHA256_PLATFORM_H
 
-#include "reg_abi.h"
-#include "macroutils.h"
+// These are the registers used to hold the message window. If you want to pass the first block by value, set these
+// and set the high bit of the length argument to 1.
+#define w0_1        $t0
+#define w2_3        $t1
+#define w4_5        $t2
+#define w6_7        $t3
+#define w8_9        $v0
+#define w10_11      $v1
+#define w12_13      $at
+#define w14_15      $t8
 
-/* Trampoline used as entry point for all secure loaded programs. Simply calls nano kernel enter. */
+// These are used to return by value for use by assembly
+#define out_h0_1    $v0
+#define out_h2_3    $v1
+#define out_h4_5    $t0
+#define out_h6_7    $t1
 
-__asm__ (
-".text\n"
-".global secure_entry_trampoline\n"
-"secure_entry_trampoline: cinvoke " X_STRINGIFY(abi_found_enter) ", " X_STRINGIFY(abi_nano_if_data) "\n"
-".size secure_entry_trampoline, 4"
-);
+#endif //CHERIOS_SHA256_PLATFORM_H

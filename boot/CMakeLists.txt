@@ -46,7 +46,7 @@ endif()
 set(NANO_ASM_SRCS
     nanokernel/src/platform/${PLATFORM}/nano_kernel.S
     ${MIPS_NANO_SRCS}
-    ${CMAKE_SOURCE_DIR}/sha256/src/platform/${PLATFORM}/sha256_k.S
+    ${CMAKE_SOURCE_DIR}/sha256/src/sha256_k.S
 )
 
 set(INIT_SRCS

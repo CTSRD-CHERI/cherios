@@ -52,6 +52,14 @@ __END_DECLS
 extern capability int_cap;
 #define MAKE_SEALABLE_INT(x) cheri_setoffset(int_cap, x)
 
+#ifdef PLATFORM_riscv
+typedef capability pad_t[0x10];
+static inline entry_t foundation_create(res_t res, size_t image_size, capability image, size_t entry0, size_t n_entries, register_t is_public) {
+    _safe pad_t pad;
+    return foundation_create_need_pad(res, image_size, image, entry0, n_entries, is_public, (capability *)((char*)pad + sizeof(pad_t)));
+}
+#endif
+
 /* Safe (assuming the nano kernel performs relevent locking n the presence of a race */
 static inline void try_take_end_of_res(res_t res, size_t required, cap_pair* out) {
     out->data = out->code = NULL;

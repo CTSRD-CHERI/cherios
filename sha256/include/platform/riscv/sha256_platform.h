@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2021 Lawrence Esswood
+ * Copyright (c) 2022 Lawrence Esswood
  *
  * This work was supported by Innovate UK project 105694, "Digital Security
  * by Design (DSbD) Technology Platform Prototype".
@@ -27,15 +27,23 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+#ifndef CHERIOS_SHA256_PLATFORM_H
+#define CHERIOS_SHA256_PLATFORM_H
 
-#include "reg_abi.h"
-#include "macroutils.h"
+// The non-canonical argument registers for SHA used by the nanokernel
 
-/* Trampoline used as entry point for all secure loaded programs. Simply calls nano kernel enter. */
+#define IN_CAP      ct0
+#define OUT_CAP     ct1
+#define len_arg     t2
+#define pad_arg     ca7
 
-__asm__ (
-".text\n"
-".global secure_entry_trampoline\n"
-"secure_entry_trampoline: cinvoke " X_STRINGIFY(abi_found_enter) ", " X_STRINGIFY(abi_nano_if_data) "\n"
-".size secure_entry_trampoline, 4"
-);
+// Non-canonical ra
+#define ra_cap      ct4
+
+// These are used to return by value for use by the nanokernel
+#define out_h0_1    a4
+#define out_h2_3    a5
+#define out_h4_5    a6
+#define out_h6_7    a7
+
+#endif //CHERIOS_SHA256_PLATFORM_H

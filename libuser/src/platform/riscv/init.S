@@ -178,6 +178,9 @@ START_FUNC start_common
     call_func_loaded
 END_FUNC start_common
 
+// Lightweight objects do not create extra threads
+#ifndef LIGHTWEIGHT_OBJECT
+
 #include "thread.h"
 
 START_FUNC thread_start
@@ -226,3 +229,5 @@ START_FUNC secure_thread_start
     TODO_SPIN
 
 END_FUNC secure_thread_start
+
+#endif

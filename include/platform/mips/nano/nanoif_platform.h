@@ -31,7 +31,11 @@
 #ifndef CHERIOS_NANOIF_PLATFORM_H
 #define CHERIOS_NANOIF_PLATFORM_H
 
-#define NANO_KERNEL_IF_RAW_LIST_PLATFORM(ITEM, ...)
+#define NANO_KERNEL_IF_RAW_LIST_PLATFORM(ITEM, ...) \
+/* A public foundation has no associated data, but the entries can be converted into readable capabilities. */\
+    ITEM(foundation_create, entry_t,                                                                                \
+    (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries, register_t, is_public),  \
+    __VA_ARGS__)
 
 #define switch_regs register_t, a0, register_t, a1, register_t, a2, register_t, a3, register_t, v0, register_t, v1, capability, c3, capability, c4, capability, c5, capability, c6, capability, c1
 #define ACT_ARG_LIST_NULL 0, 0, 0, 0,  0, 0, NULL, NULL, NULL, NULL, NULL

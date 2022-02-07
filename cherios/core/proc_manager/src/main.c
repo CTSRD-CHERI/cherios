@@ -198,6 +198,7 @@ static act_control_kt create_activation_for_image(image* im, const char* name, r
     frame.cf_proc_ref = seal_proc_for_user(process);
 
 	if(process->im.secure_loaded) {
+        // This trampoline will just cinvoke found_enter and nano_if_data
 		frame.cf_pcc = &secure_entry_trampoline;
 		// we need c3 for the trampoline. C0 would be useless anyway as it points to the unsecure copy
   		frame.cf_found_enter = &foundation_enter_dummy;

@@ -31,7 +31,12 @@
 #ifndef CHERIOS_NANOIF_PLATFORM_H
 #define CHERIOS_NANOIF_PLATFORM_H
 
-#define NANO_KERNEL_IF_RAW_LIST_PLATFORM(ITEM, ...)
+#define NANO_KERNEL_IF_RAW_LIST_PLATFORM(ITEM, ...)     \
+/* Create a new founded code block. The entry returned will be at offset entry0. */\
+/* A public foundation has no associated data, but the entries can be converted into readable capabilities. */                  \
+    ITEM(foundation_create_need_pad, entry_t,                                                                                   \
+    (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries, register_t, is_public, capability*, pad),  \
+    __VA_ARGS__)
 
 #define switch_regs         capability, ca0, capability, ca1, capability, ca2, capability, ca3, capability, ca4, capability, ca5, capability, ca6, capability, ca7, capability, ct0, capability, ct1, capability, ct2
 #define ACT_ARG_LIST_NULL   NULL, NULL, NULL, NULL,  NULL, NULL, NULL, NULL, NULL, NULL, NULL

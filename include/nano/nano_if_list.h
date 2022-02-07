@@ -112,11 +112,6 @@
     ITEM(obtain_super_powers, capability, (capability*, pcc), __VA_ARGS__)\
 /* Get the victim context and cause register for the last exception. */\
     ITEM(get_last_exception, void, (exection_cause_t*, out), __VA_ARGS__)\
-/* Create a new founded code block. The entry returned will be at offset entry0. */\
-/* A public foundation has no associated data, but the entries can be converted into readable capabilities. */\
-    ITEM(foundation_create, entry_t,                                                                            \
-    (res_t, res, size_t, image_size, capability, image, size_t, entry0, size_t, n_entries, register_t, is_public),   \
-    __VA_ARGS__)\
 /* Enter a foundation created with foundation_create or foundation_new_entry. The entry will be jumped to, and optionally a locked idc will be unclocked into idc*/\
 /* c8 will contain the data componant of the foundation. c9 will have a copy of idc. c12 will be correctly set to target as well.
  * This function acts a whole lot like ccall entry, lock_idc but with foundations instead of sealed objects*/\

@@ -45,7 +45,7 @@
 #define abi_carg                c11
 
 // For init (secure entry), supplied by loader
-#define abi_secure_entry        c17
+#define abi_secure_entry        c15 // needs to be ca5 (c15) for foundation_enter
 
 // For init (insecure entry, or trampoline from secure entry)
 // supplied by kernel
@@ -61,7 +61,7 @@
 #define abi_tls_proto           c13
 #define abi_code_write          c14
 #define abi_tls_seg_offset      x8
-#define abi_data_seg_offset     x15
+#define abi_data_seg_offset     x17
 #define abi_code_seg_offset     x16
 #define abi_tls_fil_size        x9
 #define abi_tls_mem_size        x12
@@ -73,7 +73,7 @@
 #define abi_found_enter         c6
 #define abi_nano_if_data        c22
 #define abi_type_res            c26
-#define abi_cert                c27
+#define abi_cert                c16     // needs to be ca6 (c16) for foundation_enter
 #define abi_start_flags         x25
 #define abi_proc_ref            c28
 
