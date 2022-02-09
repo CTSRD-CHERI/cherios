@@ -469,6 +469,8 @@ NANO_FUNC context_switch
     # Write a magic value to cause (currently 0) to indicate a manual switch.
     csrw            scause, zero
 
+    # c30 is going to get clobbered, but the caller expects it to be restored as c31
+    cmove           c29, c30
 context_switch_exception_entry:
 
 
@@ -518,8 +520,8 @@ stores_exception_only:
     clc             cs0, exception_context(abi_local)
     j               context_save_finish
 stores_called_only:
-    # Caller expects c31 to be restored with c30 (which is currently in cs0)
-    csc             cs0, INDEX_TO_OFFSET(31-1)(c30)
+    # Caller expects c31 to be restored with c30 (which we moved to c29)
+    csc             c29, INDEX_TO_OFFSET(31-1)(c30)
     # restored PCC based on ra if this functions is called
     csc             cnull, INDEX_TO_OFFSET(REG_FRAME_INDEX_DEFAULT)(c30)
     csc             cra, INDEX_TO_OFFSET(REG_FRAME_INDEX_PCC)(c30)
