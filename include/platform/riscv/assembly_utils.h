@@ -233,6 +233,7 @@
 #define Reg_Cap_To_Int_ct4            t4
 #define Reg_Cap_To_Int_ct5            t5
 #define Reg_Cap_To_Int_c31            x31
+#define Reg_Cap_To_Int_c14            x14
 
 #define Reg_Cap_To_Int(X)       Reg_Cap_To_Int_ ## X
 #define Reg_Int_To_Cap(X)       c ## X

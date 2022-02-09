@@ -44,17 +44,20 @@ __used ret_t* kernel_message_send_ret(capability c3, capability c4, capability c
 					 register_t a0, register_t a1, register_t a2, register_t a3,
 					 act_t* target_activation, ccall_selector_t selector, register_t v0)
 */
+// This needs doing better, maybe inside stubs.S based on the length of CSP?
+// We need to get the stack past arguments off the stack before the swtich.
+// We put them in temps we know are not used in stubs.S
+clc             ct3, 0(csp)
+clc             ct4, CAP_SIZE(csp)
 // The normal cross domain sequence
 clc             ct1, CTLP_OFFSET_CDL(abi_local)
 cjalr           ct1, ct1
 // TODO: when stack passing is fixed, this will change. For now, we have to quickly transfer stack passed arguments
 // Before we clobber csp, we have to grab stack passed arguments
-clc             ct0, 0(csp)
-clc             ct1, CAP_SIZE(csp)
 clc             csp, CTLP_OFFSET_CSP(abi_local)
 clc             cgp, CTLP_OFFSET_CGP(abi_local)
 // Push a stack frame because we have to unpack the ret struct
-SPILL_STACK     (cra, ct1, ct0)
+SPILL_STACK     (cra, ct4, ct3)
 // Push stack passed arguments
 
 call_func       kernel_message_send_ret

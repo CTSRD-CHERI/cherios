@@ -29,10 +29,12 @@
  */
 
 #include "asm.S"
+#include "reg_abi.h"
 
 START_HIDDEN_FUNC start
 
 # Insecure entry has the program loader do most of the early setup work, can just jump to common
+cmove           abi_cert, cnull
 call_func_early start_common
 
 END_FUNC start

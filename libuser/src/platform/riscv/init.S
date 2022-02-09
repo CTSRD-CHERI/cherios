@@ -66,7 +66,7 @@
 START_FUNC start_common
 
     # Save arguments that would be clobbered (8/9 and  and 18-27 do not need saving)
-    SPILL_STACK(abi_tls_proto, abi_nano_req_auth, abi_proc_ref, abi_carg, abi_arg, abi_code_seg_offset, abi_tls_mem_size)
+    SPILL_STACK(abi_cert, abi_tls_proto, abi_nano_req_auth, abi_proc_ref, abi_carg, abi_arg, abi_tls_mem_size)
 
     # Load (currently unbounded) tables to bootstrap. We assume these symbols are in these segments, or rather,
     # The loader should provide the correct offsets to find these symbols.
@@ -100,9 +100,11 @@ START_FUNC start_common
 
     # TODO: Save a cap to the dynamic segment (needed for dyanmic libs to work)
     # Save a bunch of things for the CRT
+    LOAD_SPILL          (ct1, abi_cert)
+    GET_SYM             (ct0, own_auth)
+    csc                 ct1, 0(ct0)
     GET_SYM             (ct0, crt_code_seg_offset)
-    LOAD_SPILL          (t1, abi_code_seg_offset)
-    csd                 t1, 0(ct0)
+    csd                 abi_code_seg_offset, 0(ct0)
     GET_SYM             (ct0, crt_tls_seg_size)
     LOAD_SPILL          (t1, abi_tls_mem_size)
     csd                 t1, 0(ct0)

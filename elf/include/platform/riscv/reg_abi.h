@@ -55,18 +55,18 @@
 #define abi_kernel_if           c24
 #define abi_nano_req_auth       c29
 
-// supplied by loader
+// supplied by loader (or secure_init)
 #define abi_mop                 c19
 #define abi_seg_tbl             c18
 #define abi_tls_proto           c13
 #define abi_code_write          c14
 #define abi_tls_seg_offset      x8
 #define abi_data_seg_offset     x17
-#define abi_code_seg_offset     x16
+#define abi_code_seg_offset     x27
 #define abi_tls_fil_size        x9
 #define abi_tls_mem_size        x12
-#define abi_dynamic_vaddr       x19
-#define abi_dynamic_size        x20
+#define abi_dynamic_vaddr       x19 // overlaps but not really used?
+#define abi_dynamic_size        x20 // overlaps but not really used?
 #define abi_program_base        x5
 
 // supplied by proc_manager

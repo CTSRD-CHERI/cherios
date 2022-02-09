@@ -61,6 +61,15 @@
     .size \name, \name\()_end - \name
 .endm
 
+.macro MAKE_SYM name size align
+    .p2align \align
+    .global \name
+    .type \name, "object"
+    \name:
+    .space  \size
+    .size \name, \size
+.endm
+
 .macro cllc_rel dst, sym
     # This is the PC relative cllc, which only works with global bounds
     1: auipcc       \dst, %pcrel_hi(\sym)
@@ -140,6 +149,7 @@
 .endm
 
 .macro load_func_reg dst, sym, tmp
+    .type   \sym, "function"
     lui         \tmp, %captab_call_hi(\sym)
     cincoffset  \dst, cgp, \tmp
     clc         \dst, %captab_call_lo(\sym)(\dst)
@@ -284,3 +294,8 @@
     TRACE_ON
     1: j 1b
 .endm
+
+.macro trap
+    .word   0
+.endm
+

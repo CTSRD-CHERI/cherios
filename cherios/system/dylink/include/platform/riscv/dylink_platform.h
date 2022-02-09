@@ -47,10 +47,20 @@
 #define PLT_REG_TARGET_DATA     ct0
 #define PLT_REG_RETURN_DATA     ct0
 
-// TODO RISCV
-#define get_sym_captable_offset32(Sym) 0
-#define get_sym_call_captable_offset32(Sym) 0
-#define get_tls_sym_captable_ndx16(Sym) 0
+// TODO: On RISCV these are 12 and 32, not 16 and 32, so we should rename them "small" and "large". But hey ho.
+#define get_sym_call_captable_offset32(Sym)({                               \
+    register_t out;                                                         \
+    __asm__ (   "lui %[out], %%captab_hi(" X_STRINGIFY(Sym) ")\n"           \
+                "addi %[out], %[out], %%captab_lo(" X_STRINGIFY(Sym) ")"    \
+                :[out]"=r"(out));                                           \
+    out / sizeof(capability);})
+
+#define get_tls_sym_captable_ndx16(Sym)({                                   \
+    register_t out;                                                         \
+    __asm__ (".weak "X_STRINGIFY(Sym)" \n"                                  \
+             "addi %[out], zero, %%captab_tls_lo(" X_STRINGIFY(Sym) ")"     \
+             :[out]"=r"(out));                                              \
+    out / sizeof(capability);})
 
 #define get_cgp() cheri_getreg(X_STRINGIFY(PLT_REG_GLOB))
 #define get_unsafe_stack_reg() cheri_getreg(X_STRINGIFY(PLT_REG_UNSAFE_STACK))
