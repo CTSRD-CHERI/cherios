@@ -122,8 +122,18 @@ typedef struct {
     size_t mask;
 } precision_rounded_length;
 
-// TODO this is basically what cram/crap does.
 static inline precision_rounded_length round_cheri_length(size_t length) {
+#ifdef PLATFORM_riscv
+    size_t mask_high;
+    __asm__ ("CRepresentableAlignmentMask %[out], %[in]\n"
+        :[out]"=r"(mask_high)
+        :[in]"r"(length)
+        :
+    );
+    size_t mask_low = ~mask_high;
+    return (precision_rounded_length){.length = (length + mask_low) & mask_high, .mask = mask_low};
+#else
+    // TODO this is basically what cram/crap does.
     if(length < SMALL_OBJECT_THRESHOLD) return (precision_rounded_length){.length = length, .mask = 0};
     size_t mask = length >> (LARGE_PRECISION-1);
     mask++; // to avoid edge case where rounding length would actually change exponent
@@ -135,6 +145,7 @@ static inline precision_rounded_length round_cheri_length(size_t length) {
     mask |= mask >> 32L;
     size_t rounded_length = (length + mask) & ~mask;
     return (precision_rounded_length){.length = rounded_length, .mask = mask};
+#endif
 }
 
 #define SUF_8  "b"
