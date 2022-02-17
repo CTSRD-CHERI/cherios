@@ -339,6 +339,7 @@ __used void kernel_syscall_hang_debug(void) {
 
 DECLARE_WITH_CD(void, kernel_syscall_backtrace(void));
 __used void kernel_syscall_backtrace(void) {
+    kernel_printf("Backtrace for %s\n", sched_get_current_act()->name);
     capability rd;
     capability pcc;
     capability frame; // = __builtin_frame_address(0) does not seem to be working
