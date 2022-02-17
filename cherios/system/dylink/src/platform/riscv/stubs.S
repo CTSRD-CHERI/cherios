@@ -59,7 +59,9 @@
 1:  clr.d   \tmp1, (\ptr)
 .if (\constants)
     andi    \tmp2, \tmp1, DOMAIN_TYPE_MASK
+.if (\from != 0)
     subi    \tmp2, \tmp2, \from
+.endif
     bnez    \tmp2, \error_label
     addi    \tmp2, \tmp1, (\to + (\bump << DOMAIN_INFO_SHIFT) - \from)
     csc.d   \tmp2, \tmp2, (\ptr)
