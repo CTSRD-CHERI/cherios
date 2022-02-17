@@ -163,5 +163,10 @@ void backtrace(char* stack_pointer, capability return_address, capability idc, c
     }
 
     print_frame(frame_idx, return_address);
+    if (TRACE_ONLY_TOP) {
+        print_end();
+        print_frame(frame_idx, r17);
+    }
+
     print_end();
 }
