@@ -103,11 +103,7 @@ static inline void try_take_res(res_t res, size_t required, cap_pair* out) {
 static inline capability get_phy_cap(page_t* book, size_t address, size_t size, int cached, int IO) {
     size_t phy_page = address / PAGE_SIZE;
     size_t phy_offset = address & (PAGE_SIZE - 1);
-
-    if((phy_offset + size) > PAGE_SIZE) {
-        /* If you want a better version use mmap */
-        return NULL;
-    }
+    size_t n_pages = 1 + ((phy_offset + size) / PAGE_SIZE);
 
     if(book[phy_page].len == 0) {
         size_t search_index = 0;
@@ -117,12 +113,12 @@ static inline capability get_phy_cap(page_t* book, size_t address, size_t size, 
         split_phy_page_range(search_index, phy_page - search_index);
     }
 
-    if(book[phy_page].len != 1) {
-        split_phy_page_range(phy_page, 1);
+    if(book[phy_page].len != n_pages) {
+        split_phy_page_range(phy_page, n_pages);
     }
 
     cap_pair pair;
-    get_phy_page(phy_page, cached, 1, &pair, IO);
+    get_phy_page(phy_page, cached, n_pages, &pair, IO);
     capability cap_for_phy = pair.data;
     cap_for_phy = cheri_setoffset(cap_for_phy, phy_offset);
     cap_for_phy = cheri_setbounds(cap_for_phy, size);

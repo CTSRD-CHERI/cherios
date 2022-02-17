@@ -40,9 +40,6 @@ typedef capability context_t;               // Type of a nanokernel context hand
 #include "string_enums.h"
 #include "nano/nano_reg_list.h"
 
-#define REG_LIST_TO_ENUM_LIST(Name, Reg, Select, Mask, X, ...) X(NANO_REG_SELECT_ ## Name)
-#define NANO_REG_LIST_FOR_ENUM(ITEM) NANO_REG_LIST(REG_LIST_TO_ENUM_LIST, ITEM)
-
 #define TYPE_SPACE_BITS     16
 #define TYPE_SPACE          (1 << TYPE_SPACE_BITS)
 

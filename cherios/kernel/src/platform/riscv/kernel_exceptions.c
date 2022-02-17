@@ -75,7 +75,7 @@ void kernel_exception(__unused context_t swap_to, context_t own_context) {
 
         if (ex_info.cause >> RISCV_CAUSE_INT_SHIFT) {
             // Interrupt
-            kernel_printf("Kernel interrupt: TODO\n");
+            kernel_interrupt(ex_info.cause, cpu_id);
         } else {
             // Synchronous exception
             switch(ex_info.cause & RISCV_CAUSE_MASK) {

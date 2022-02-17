@@ -31,10 +31,18 @@
 #ifndef CHERIOS_NANO_REG_LIST_H
 #define CHERIOS_NANO_REG_LIST_H
 
+// Format: ITEM(Name, WriteMask, __VA_ARGS__)
+// Will generate an enum with all names
+// Will generate a data block with all WriteMask fields concatanated (sets register_mask_table_size)
+// Will generate a code block with stubs for a modification
+
 // TODO RISCV
-#define NANO_REG_LIST(ITEM, ...)                                                            \
-    ITEM(FOO, 0, 0, 0xFFFFFFFF, __VA_ARGS__)                             \
+#define NANO_REG_LIST(ITEM, ...)                                        \
+    ITEM(sstatus, RISCV_STATUS_SIE, __VA_ARGS__)                        \
+    ITEM(sie, RISCV_MIE_STIE, __VA_ARGS__)                              \
+    ITEM(sip, RISCV_MIE_STIE, __VA_ARGS__)
 
-
+#define REG_LIST_TO_ENUM_LIST(Name, Mask, X, ...) X(NANO_REG_SELECT_ ## Name)
+#define NANO_REG_LIST_FOR_ENUM(ITEM) NANO_REG_LIST(REG_LIST_TO_ENUM_LIST, ITEM)
 
 #endif //CHERIOS_NANO_REG_LIST_H

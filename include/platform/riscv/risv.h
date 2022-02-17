@@ -285,6 +285,10 @@ X	W	R	Meaning
     ITEM(RISCV_CAUSE_LOAD_PAGE       , 0xd)\
     ITEM(RISCV_CAUSE_STORE_PAGE      , 0xf)\
     ITEM(RISCV_CAUSE_CHERI           , 0x1c)\
+    ITEM(RISCV_CAUSE_USER_SOFT       , 0x0 | (1ULL << RISCV_CAUSE_INT_SHIFT))\
+    ITEM(RISCV_CAUSE_SUPER_SOFT      , 0x1 | (1ULL << RISCV_CAUSE_INT_SHIFT))\
+    ITEM(RISCV_CAUSE_USER_TIMER      , 0x4 | (1ULL << RISCV_CAUSE_INT_SHIFT))\
+    ITEM(RISCV_CAUSE_SUPER_TIMER     , 0x5 | (1ULL << RISCV_CAUSE_INT_SHIFT))\
 
 #include "string_enums.h"
 
@@ -302,14 +306,18 @@ DECLARE_ENUM(riscv_cause, RISCV_CAUSE_LIST)
 #define RISCV_STATUS_SIE            (1 << 1)
 #define RISCV_STATUS_MIE            (1 << 3)
 #define RISCV_STATUS_MIE            (1 << 3)
+#define RISCV_STATUS_MPP            (1 << 17)
 
-// Interrupt enable (external)
+
+#define RISCV_STATUS_SPIE           (1 << 5)
+
+// Interrupt enable (software)
 #define RISCV_MIE_SSIE              (1 << 1)
 #define RISCV_MIE_MSIE              (1 << 3)
 // Interrupt enable (timer)
 #define RISCV_MIE_STIE              (1 << 5)
 #define RISCV_MIE_MTIE              (1 << 7)
-// Interrupt enable (software)
+// Interrupt enable (external)
 #define RISCV_MIE_SEIE              (1 << 9)
 #define RISCV_MIE_MEIE              (1 << 11)
 #endif //CHERIOS_RISV_H

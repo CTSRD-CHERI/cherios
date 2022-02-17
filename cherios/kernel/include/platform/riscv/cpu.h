@@ -31,40 +31,48 @@
 #ifndef CHERIOS_CPU_H
 #define CHERIOS_CPU_H
 
-// TODO RISCV
+#define HAS_HIGH_DEF_TIME
+
+extern capability clint_cap;
+#define TIMER_COUNT_OFFSET      0xBFF8
+#define TIMER_COMPARE_OFFSET    0x4000
+#define CLINT_SIP_OFFSET        0
 
 static inline uint8_t cpu_get_cpuid(void) {
     return 0;
 }
 
-static inline uint32_t cpu_count_get(void) {
-    return 0;
+static inline uint64_t cpu_count_get(void) {
+    return *(volatile uint64_t *)((char*)clint_cap + TIMER_COUNT_OFFSET);
 }
 
-static inline void cpu_compare_set(uint32_t compare) {
-    (void)compare;
-}
-
-static inline int cpu_is_timer_interrupt(register_t cause) {
-    (void)cause;
-    return 0;
-}
-
-static inline int cpu_ie_get(void) {
-    return 0;
-}
-
-static inline void cpu_ie_enable() {
-}
-
-static inline void cpu_ie_disable() {
+static inline void cpu_compare_set(uint64_t compare) {
+    *(volatile uint64_t *)((char*)clint_cap + TIMER_COMPARE_OFFSET) = compare;
+    *(volatile uint32_t *)((char*)clint_cap + CLINT_SIP_OFFSET) = 1;
 }
 
 static inline void cpu_enable_timer_interrupts() {
+    modify_hardware_reg(NANO_REG_SELECT_sie, RISCV_MIE_STIE, RISCV_MIE_STIE);
 }
 
 static inline void cpu_disable_timer_interrupts() {
+    modify_hardware_reg(NANO_REG_SELECT_sie, RISCV_MIE_STIE, 0);
+}
 
+static inline int cpu_is_timer_interrupt(register_t cause) {
+    return (riscv_cause)cause == RISCV_CAUSE_SUPER_TIMER;
+}
+
+static inline int cpu_ie_get(void) {
+    return (modify_hardware_reg(NANO_REG_SELECT_sstatus, 0, 0)  & RISCV_STATUS_SIE) == RISCV_STATUS_SIE;
+}
+
+static inline void cpu_ie_enable() {
+    modify_hardware_reg(NANO_REG_SELECT_sstatus, RISCV_STATUS_SIE, RISCV_STATUS_SIE);
+}
+
+static inline void cpu_ie_disable() {
+    modify_hardware_reg(NANO_REG_SELECT_sstatus, RISCV_STATUS_SIE, 0);
 }
 
 #endif //CHERIOS_CPU_H

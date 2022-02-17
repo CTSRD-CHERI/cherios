@@ -34,6 +34,11 @@
 #include "cpu.h"
 #include "atomic.h"
 
+#ifdef HAS_HIGH_DEF_TIME
+
+#define LOW_DEF_TIME_T uint64_t
+
+#else
 // It _seems_ that even on QEMU the timers from cp0 stay in sync
 // However, QEMU misses timer interrupts and so will have to wrap to take another, making these high res timers get
 // out of sync. We could have only one core update the high res time, but then it might miss and time would stop
@@ -42,6 +47,9 @@
 uint64_t high_resolution_timers[SMP_CORES];
 
 static uint32_t kernel_last_timer[SMP_CORES];
+#define LOW_DEF_TIME_T uint32_t
+#endif
+
 // TODO everyone may wait on timeout, maybe just walk the list?
 #define MAX_WAITERS 0x10
 act_t* sleeps[MAX_WAITERS];
@@ -57,12 +65,24 @@ void kernel_timer_init(uint8_t cpu_id) {
 
 	kernel_assert(val == 0);
 
+#ifdef HAS_HIGH_DEF_TIME
+    LOW_DEF_TIME_T time = cpu_count_get();
+    cpu_compare_set(time + TIMER_INTERVAL);
+#else
 	kernel_last_timer[cpu_id] = cpu_count_get();
 	high_resolution_timers[cpu_id] = kernel_last_timer[cpu_id];
 	kernel_last_timer[cpu_id] += TIMER_INTERVAL;
-	cpu_compare_set(kernel_last_timer[cpu_id]);
+    cpu_compare_set(kernel_last_timer[cpu_id]);
+#endif
 }
 
+#ifdef HAS_HIGH_DEF_TIME
+
+uint64_t get_high_res_time(__unused uint8_t cpu_id) {
+    return cpu_count_get();
+}
+
+#else
 uint64_t get_high_res_time(uint8_t cpu_id) {
 	uint64_t old_high_res, new_high_res;
 	register_t success;
@@ -90,6 +110,7 @@ uint64_t get_high_res_time(uint8_t cpu_id) {
 
 	return new_high_res;
 }
+#endif
 
 static void kernel_timer_check_sleepers(uint64_t now) {
 
@@ -152,12 +173,16 @@ void kernel_timer(uint8_t cpu_id)
 	KERNEL_TRACE(__func__, "in %u", cpu_count_get());
 
 	// Set the high solution timer. This must be done before it wraps around since last call.
-	__unused uint64_t old = high_resolution_timers[cpu_id];
+#ifdef HAS_HIGH_DEF_TIME
+    uint64_t new = get_high_res_time(cpu_id);
+#else
+    __unused uint64_t old = high_resolution_timers[cpu_id];
 	uint64_t new = get_high_res_time(cpu_id);
 	kernel_assert(new > old);
     // FIXME QEMU is broken, it misses enough timer interrupts that this gets hit
     //kernel_assert(new - old <= (3 * TIMER_INTERVAL));
 	high_resolution_timers[cpu_id] = new;
+#endif
 
 	kernel_timer_check_sleepers(new);
 
@@ -170,28 +195,34 @@ void kernel_timer(uint8_t cpu_id)
 	 * Reschedule timer for a future date -- if we've almost missed a
 	 * tick, better to defer.
 	 */
-	/* count register is 32 bits */
-	uint32_t next_timer = kernel_last_timer[cpu_id] + TIMER_INTERVAL;
 
 // QEMU has timer jumps that can occur before compare set
 #ifdef  HARDWARE_qemu
 restart:;
 #endif
 
-    uint32_t cur = cpu_count_get();
-    int32_t diff;
+    LOW_DEF_TIME_T cur = cpu_count_get();
+    int64_t diff;
+
+#ifdef HAS_HIGH_DEF_TIME
+    LOW_DEF_TIME_T next_timer = cur + TIMER_INTERVAL;
+#else
+    LOW_DEF_TIME_T next_timer = kernel_last_timer[cpu_id] + TIMER_INTERVAL;
+#endif
 
     // Catches either small, or negative timer offset
-	while ((diff = (int32_t)next_timer - (int32_t)cur),(diff < TIMER_INTERVAL_MIN)) {
+	while ((diff = (int64_t)next_timer - (int64_t)cur),(diff < TIMER_INTERVAL_MIN)) {
 		next_timer = next_timer + TIMER_INTERVAL;
 	}
 	cpu_compare_set(next_timer);		/* Clears pending interrupt. */
 
 #ifdef  HARDWARE_qemu
-    uint32_t sanity = (uint32_t)cpu_count_get();
-    diff = next_timer - sanity;
+    LOW_DEF_TIME_T sanity = cpu_count_get();
+    diff = (uint64_t)(next_timer - sanity);
     if(diff < 0) goto restart;
 #endif
 
+#ifndef HAS_HIGH_DEF_TIME
 	kernel_last_timer[cpu_id] = next_timer;
+#endif
 }

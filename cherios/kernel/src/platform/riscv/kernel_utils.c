@@ -31,12 +31,18 @@
 #include "klib.h"
 
 #define VIRT_TEST_BASE  0x100000
-#define VIRT_TEST_SIZE   0x1000
+#define VIRT_TEST_SIZE  0x1000
+
+#define CLINT_BASE      0x2000000
+#define CLINT_SIZE      0x10000
+#define CLINT_SIP       0
 
 capability virt_test_cap;
+capability clint_cap;
 
 void kernel_platform_init(page_t* book) {
     virt_test_cap = get_phy_cap(book, VIRT_TEST_BASE, VIRT_TEST_SIZE, 0, 1);
+    clint_cap = get_phy_cap(book, CLINT_BASE, CLINT_SIZE, 0, 1);
 }
 
 enum sifive_shutdown_status_e {

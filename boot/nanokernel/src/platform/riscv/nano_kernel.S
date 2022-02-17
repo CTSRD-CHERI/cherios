@@ -55,6 +55,7 @@ local_cap_var       exception_context
 local_cap_var       current_context
 local_cap_var       next_context    # points to the next context in the context table
 
+local_cap_var       extra_mscratch
 local_cap_var       last_exception_victim
 local_reg_var       last_exception_cause
 local_reg_var       last_exception_stval
@@ -294,6 +295,7 @@ init_table_loop:
     li          t4, PHY_MEM_START_CACHED
     cincoffset  ct5, abi_local, t4
     cspecialw   stdc, ct5
+    cspecialw   mtdc, ct5
     # We don't set bounds on the sealed data so the nanokernel can derive caps from it
     add_bi      t4, t4, RAM_START + NANO_SIZE, t1               # vaddr of unmanaged start
 
@@ -372,10 +374,15 @@ init_table_loop:
     # data accesses to be virtualised. On machines with only M-mode and U-Mode, this will be very sadly mean that
     # either virtual memory will not work, or we will have to switch between M-mode and U-mode for many nano calls.
 
+    # We sometimes go through the trap handler in m-mode because RISCV does not understand how delagation should work
+    li          t0, RISCV_STATUS_MIE | RISCV_STATUS_MPP
+    csrs        mstatus, t0
+
     li          t0, -1
     # Delegate all exceptions / in interrupts to s-mode
     csrw        medeleg, t0
     csrw        mideleg, t0
+    csrw        mie, t0
 
     cspecialw    mepcc, cra
     cclear_regs(ra, sp, gp, x4, t0, t1, t2, s0, s1, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t3, t4, t5, x31)
@@ -465,7 +472,9 @@ NANO_FUNC context_switch
     # disable interrupts. t3 will hold old status in case we want to turn them on again
     # TODO: This needs to work at different ELs as well
     csrrci          t3, sstatus, RISCV_STATUS_SIE
-
+    # we will also turn on interrupts on sret
+    li              t3, RISCV_STATUS_SPIE
+    csrs            sstatus, t3
     # Write a magic value to cause (currently 0) to indicate a manual switch.
     csrw            scause, zero
 
@@ -1778,8 +1787,49 @@ NANO_FUNC get_integer_space_cap
     candperm    ca0, ca0, zero
     NANO_RET
 
+# A list of masks for which hardware register fields can be accessed
+.set register_mask_table_size, 0
+.p2align 3
+hardware_reg_mask_table:
+#define CALC_SIZE(Name, Mask, ...) .set register_mask_table_size, register_mask_table_size+1; .quad Mask;
+NANO_REG_LIST(CALC_SIZE)
+#undef CALC_SIZE
+
+##########################################################################################
+# register_t modify_hardware_reg(register_t selector, register_t mask, register_t value) #
 NANO_FUNC modify_hardware_reg
-    NANO_TODO
+##########################################################################################
+    # Check in range
+    li          a3, register_mask_table_size
+    bgeu        a0, a3, nano_er
+
+    # Load mask
+    cllc_rel    ca3, hardware_reg_mask_table
+    slli        a4, a0, 3
+    cincoffset  ca3, ca3, a4
+    cld         a3, 0(ca3)
+    and         a3, a3, a1              # include user supplied mask
+    # Create a set mask and clear mask
+
+    and         a1, a2, a3              # Set mask
+    not         a2, a2
+    and         a2, a2, a3              # clear mask
+
+    # Each entry is 10 bytes = (x << 3) + (x << 1). We did the shift by 3 earlier.
+    slli        a0, a0, 1
+    add         a0, a0, a4
+    cllc_rel    ca4, hardware_reg_modify_table
+    cincoffset  ca4, ca4, a0
+    cjr         ca4
+
+    # We are just going to a set then a clear
+hardware_reg_modify_table:
+#define MODIFY_EL(Name, Mask, ...) csrrs a0, Name, a1; csrrc zero, Name, a2; j hardware_reg_modify_table_end;
+NANO_REG_LIST(MODIFY_EL)
+hardware_reg_modify_table_end:
+    # Only reveal bits that are allowed
+    and         a0, a0, a3
+    NANO_RET
 
 NANO_FUNC interrupts_mask
     NANO_TODO
@@ -1787,8 +1837,15 @@ NANO_FUNC interrupts_mask
 NANO_FUNC interrupts_soft_set
     NANO_TODO
 
+########################################
+# uint64_t interrupts_get(uint8_t cpu) #
 NANO_FUNC interrupts_get
-    NANO_TODO
+########################################
+    csrr        a0, sip
+    # Timer not a part of this. Really we should get rid of this completely?
+    # The nanokernel needs to own at least one software interrupt, but maybe we can push that out?
+    andi        a0, a0, ~(RISCV_MIE_STIE | RISCV_MIE_MTIE)
+    NANO_RET
 
 NANO_FUNC translate_address
     NANO_TODO
@@ -1873,11 +1930,54 @@ s_exp_vec:
     cspecialrw  c30, sscratchc, c30
     csrr        x30, scause
     subi        x30, x30, RISCV_CAUSE_CALL_S
-    bnez        x30, context_switch_exception_entry
+    bnez        x30, s_exp_vec_goto_switch
     beqz        a0, get_if
-    j           context_switch_exception_entry
 # TODO intercept user handled exceptions
 
+s_exp_vec_goto_switch:
+    li          x30, RISCV_STATUS_SPIE
+    csrc        sstatus, x30
+    j           context_switch_exception_entry
+
 # Machine mode exception vector
+# We should never get this because all exceptions should be delagated to S-Mode
+# One exception (so far) seems to be the timer, which we need to delagate manually.
+
+#define TIMER_BASE              0x2000000
+#define TIMER_COUNT_OFFSET      0xBFF8
+#define TIMER_COMPARE_OFFSET    0x4000
+
 m_exp_vec:
+    cspecialrw  cs0, mscratchc, cs0
+    cspecialrw  abi_local, mtdc, abi_local
+#    csc         s1, extra_mscratch(abi_local)
+
+    csrr        s0, mip
+    and         s0, s0, RISCV_MIE_MTIE
+    beqz        s0, no_m_timer
+# We delagate by setting sip manually and clearing our own mie.mtie
+    li          s0, RISCV_MIE_STIE
+    csrs        mip, s0
+    li          s0, RISCV_MIE_MTIE
+    csrc        mie, s0
+no_m_timer:
+    csrr        s0, mip
+    andi        s0, s0, RISCV_MIE_MSIE
+    beqz        s0, m_return
+# If a software interrupt fires, this is a prob to turn mie.mtie back on
+# Also we have to clear it ourselves
+    li          s0, TIMER_BASE + PHY_MEM_START_UNCACHED
+    csetaddr    cs0, abi_local, s0
+    csw         zero, 0(cs0)
+    li          s0, RISCV_MIE_MTIE
+    csrs        mie, s0
+    li          s0, RISCV_MIE_STIE | RISCV_MIE_MSIE
+    csrc        mip, s0
+m_return:
+#    clc         s1, extra_mscratch(abi_local)
+    cspecialrw  abi_local, mtdc, abi_local
+    cspecialr   cs0, mscratchc
+    mret
+m_exp_vec_die:
+    TRACE_ON
     j           nano_kernel_die
