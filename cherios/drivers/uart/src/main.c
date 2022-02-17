@@ -138,7 +138,7 @@ size_t msg_methods_nb = countof(msg_methods);
 void (*ctrl_methods[]) = {NULL, ctor_null, dtor_null};
 size_t ctrl_methods_nb = countof(ctrl_methods);
 
-int main(capability uart_cap)
+int main(__unused int int_arg, capability uart_cap)
 {
 	syscall_puts("UART: Hello world\n");
 
