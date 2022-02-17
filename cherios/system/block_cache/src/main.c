@@ -480,7 +480,7 @@ static int handle_sock_session(session_sock* ss) {
         // Create a certificate for our interface
         res_t reser = cap_malloc(RES_CERT_META_SIZE + sizeof(ful_pack));
         _safe cap_pair pair;
-        cert = rescap_take_authed(reser, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, AUTH_CERT, own_auth, NULL, NULL).cert;
+        cert = rescap_take_authed(reser, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, own_auth, NULL, NULL, AUTH_CERT).cert;
         ful_pack* pack = (ful_pack*)pair.data;
 
         pack->data_arg = pack->oob_data_arg = DATA_DEFAULT_SECURE;

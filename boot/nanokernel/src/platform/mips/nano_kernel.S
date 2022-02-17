@@ -3385,8 +3385,8 @@ foundation_get_id:
     CRETURN
 
 ########################################################################################### (safe)
-# cert_t rescap_take_authed(res_t res, cap_pair* out, register_t user_perms, auth_types_t type
-#                            auth_t auth, capability code, capability data)
+# cert_t rescap_take_authed(res_t res, cap_pair* out, register_t user_perms,
+#                            auth_t auth, capability code, capability data, auth_types_t type)
 .global rescap_take_authed
 rescap_take_authed:
 ###########################################################################################

@@ -60,7 +60,7 @@ int main(void) {
 
     res_t res1 = cap_malloc(0x500);
     cap_pair pair1;
-    cert_t certificate = rescap_take_authed(res1, &pair1, CHERI_PERM_LOAD, AUTH_CERT, own_auth,NULL,NULL).cert;
+    cert_t certificate = rescap_take_authed(res1, &pair1, CHERI_PERM_LOAD, own_auth,NULL,NULL, AUTH_CERT).cert;
 
     assert(pair1.data != NULL);
     assert(certificate != NULL);

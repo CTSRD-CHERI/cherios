@@ -58,6 +58,8 @@
 #define get_tls_sym_captable_ndx16(Sym)({                                   \
     register_t out;                                                         \
     __asm__ (".weak "X_STRINGIFY(Sym)" \n"                                  \
+             ".hidden "X_STRINGIFY(Sym)" \n"                                \
+             ".type " X_STRINGIFY(Sym) ", \"tls_object\"\n"                 \
              "addi %[out], zero, %%captab_tls_lo(" X_STRINGIFY(Sym) ")"     \
              :[out]"=r"(out));                                              \
     out / sizeof(capability);})

@@ -127,7 +127,7 @@
 /* Create a new entry from within a foundation */\
     ITEM(foundation_new_entry, entry_t, (size_t, eid, capability, at, auth_t, auth), __VA_ARGS__)\
 /* Take and sign a reservation. Result depends on type used. If no cap_pair* out is provided, will sign inputs code and data. Otherwise signs the result of taking the reservation minus metadata size and also returns them via out.*/\
-    ITEM(rescap_take_authed, auth_result_t, (res_t, res, cap_pair*, out, register_t, user_perms, auth_types_t, type, auth_t, auth, capability, code, capability, data), __VA_ARGS__)\
+    ITEM(rescap_take_authed, auth_result_t, (res_t, res, cap_pair*, out, register_t, user_perms, auth_t, auth, capability, code, capability, data, auth_types_t, type), __VA_ARGS__)\
 /* Get access to certfied capability from signed handle. Only has user_perms. Will return identity of signer*/\
     ITEM(rescap_check_cert, found_id_t*, (cert_t, cert, cap_pair*, out), __VA_ARGS__)\
 /* Get access to certfied capability from signed handle. Only has user_perms. Will return identity of signer. Destructive of the cert.*/\

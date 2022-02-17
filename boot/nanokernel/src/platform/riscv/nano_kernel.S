@@ -645,7 +645,6 @@ NANO_FUNC rescap_take
 rescap_take_local_entry:
     li              t0, RES_TYPE
     csetaddr        ct0, abi_local, t0
-    cmove           ca0, ca0
     cunseal         ca0, ca0, ct0
 
     # Non-zero offset is sub-field
@@ -1683,20 +1682,161 @@ NANO_FUNC foundation_new_entry
     cclear_regs (a2, a3)
     NANO_RET
 
+################################################################################################
+# cert_t rescap_take_authed(res_t res, cap_pair* out, register_t user_perms                    #
+#                            auth_t auth, capability code, capability data, auth_types_t type) #                    #
 NANO_FUNC rescap_take_authed
-    NANO_TODO
+################################################################################################
 
-NANO_FUNC rescap_check_cert
-    NANO_TODO
+    # Unseal auth
+    li          t0, FOUND_AUTH_TYPE
+    csetaddr    ct0, abi_local, t0
+    cunseal     ca3, ca3, ct0
 
-NANO_FUNC rescap_check_single_cert
-    NANO_TODO
+    # Convert auth_t to a found_id_t
+    csetbounds  ca3, ca3, FOUNDATION_ID_SIZE
+    li          t0, CHERI_PERM_LOAD
+    candperm    ca3, ca3, t0
 
+    # CERT_TYPE locked uses the entry below.
+    li          t0, FOUND_CERT_TYPE
+    bltu        a6, t0, nano_er
+    li          t0, FOUND_INV_TYPE
+    bgtu        a6, t0, nano_er
+    j           locked_authed_shared
+
+#############################################################################################
+# locked_t rescap_take_locked(res_t res, cap_pair* out, register_t user_perms,              #
+#                               found_id_t* recipient_id, capability code, capability data) #
 NANO_FUNC rescap_take_locked
-    NANO_TODO
+#############################################################################################
 
+    li          a6, FOUND_LOCKED_TYPE
+    # Take authed and take locked are identical apart from authed takes an auth rather than id,
+    # And has an extra argument (a6). We convert the auth, and load a6 here so they can share the rest
+locked_authed_shared:
+
+    # ca0, ca1 and all temps are clobbered
+    # Save out
+
+    cmove           ca7, ca1
+    move            a1, zero
+
+    SUBROUTINE_TAKE
+    # ca0 is now code cap, ca1 is now data cap
+    beqz            a7, use_inputs
+
+use_extra_space:    # Use extra space for code/data
+    # We need RES_CERT_META_SIZE. We also need to make sure precision does no damage.
+    cgetlen         t0, ca0
+    # Get top while here
+    add             t3, a0, t0
+    subi            t0, t0, RES_CERT_META_SIZE
+    # We align up base and length down so the setbounds can be exact
+    # (mask is high bit ones)
+    CRepresentableAlignmentMask  t1, t0
+    # Lowest address we could use
+    cincoffset      ca4, ca0, RES_CERT_META_SIZE
+    # Round up base
+    not             t2, t1
+    add             t2, t2, a4
+    and             t2, t2, t1
+    csetaddr        ca4, ca4, t2
+    # Round down top to set length
+    and             t2, t3, t1
+    sub             t2, t2, a4
+    csetboundsexact ca4, ca4, t2
+    # Mirror for c5
+    csetaddr        ca5, ca1, a4
+    csetboundsexact ca5, ca5, t2
+
+    csc             ca4, 0(ca7)
+    csc             ca5, CAP_SIZE(ca7)
+    candperm        ca4, ca4, a2
+    candperm        ca5, ca5, a2
+
+use_inputs:         # Use the inputs (ca4/ca5)
+    # Make the certificate
+    csc             ca3, RES_CERT_OWNER_OFF(ca1)
+    csc             ca4, RES_CERT_CODE_OFF(ca1)
+    csc             ca5, RES_CERT_DATA_OFF(ca1)
+
+    # Seal
+    csetaddr        ca6, abi_local, a6
+    cseal           ca0, ca1, ca6
+
+    cclear_regs     (a1, a6)
+    NANO_RET
+
+#############################################################################
+# found_id_t* rescap_check_single_cert(single_use_cert cert, cap_pair* out) #
+NANO_FUNC rescap_check_single_cert
+#############################################################################
+
+    li              a2, FOUND_SINGLE_CERT
+    csetaddr        ca2, abi_local, a2
+    cunseal         ca2, ca0, ca2
+
+    # Swap, setting to null
+    camoswap.c.aqrl ca0, cnull, (ca2)
+    beqz            a0, nano_er
+    j               check_cert_shared
+
+#############################################################
+# found_id_t* rescap_check_cert(cert_t cert, cap_pair* out) #
+NANO_FUNC rescap_check_cert
+#############################################################
+
+    li              a2, FOUND_CERT_TYPE
+    csetaddr        ca2, abi_local, a2
+    cunseal         ca2, ca0, ca2
+
+    clc             ca0, 0(ca2)
+
+check_cert_shared:
+    clc             ca3, RES_CERT_CODE_OFF(ca2)
+    clc             ca2, RES_CERT_DATA_OFF(ca2)
+    csc             ca3, 0(ca1)
+    csc             ca2, CAP_SIZE(ca1)
+
+    NANO_RET
+
+######################################################################################
+# void rescap_unlock(locked_t locked, cap_pair* out, auth_t auth, auth_types_t type) #
 NANO_FUNC rescap_unlock
-    NANO_TODO
+######################################################################################
+
+    # Check type is in range
+    li              a4, FOUND_LOCKED_TYPE
+    bltu            a3, a4, nano_er
+    li              a4, FOUND_INV_TYPE
+    bgtu            a3, a4, nano_er
+
+    # Unseal
+    csetaddr        ca3, abi_local, a3
+    cunseal         ca0, ca0, ca3
+
+    # Get a found_id from auth
+    li              a3, FOUND_AUTH_TYPE
+    csetaddr        ca3, abi_local, a3
+    cunseal         ca2, ca2, ca3
+    csetbounds      ca2, ca2, FOUNDATION_ID_SIZE
+    li              a3, CHERI_PERM_LOAD
+    candperm        ca2, ca2, a3
+
+    # Load owner
+    clc             ca3, RES_CERT_OWNER_OFF(ca0)
+    CSetEqualExact  a2, ca3, ca2
+    beqz            a2, nano_er
+
+    # Load return data
+    clc             ca2, RES_CERT_CODE_OFF(ca0)
+    clc             ca0, RES_CERT_DATA_OFF(ca0)
+    # Store out
+    csc             ca2, 0(ca1)
+    csc             ca0, 0(ca1)
+
+    NANO_RET
 
 ###############################################
 # found_id_t* foundation_get_id (auth_t auth) #

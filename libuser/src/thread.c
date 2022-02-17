@@ -150,7 +150,7 @@ thread thread_new_hint(const char* name, register_t arg, capability carg, thread
         res_t res = cap_malloc(space_required);
 
         _safe cap_pair pair;
-        invocable_t invocable = rescap_take_authed(res, &pair, CHERI_PERM_ALL, AUTH_INVOCABLE, own_auth, NULL, NULL).invocable;
+        invocable_t invocable = rescap_take_authed(res, &pair, CHERI_PERM_ALL, own_auth, NULL, NULL, AUTH_INVOCABLE).invocable;
 
         struct secure_start_t* start_message = ( struct secure_start_t*)pair.data;
 

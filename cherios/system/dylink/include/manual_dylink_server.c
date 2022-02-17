@@ -112,7 +112,7 @@ single_use_cert create_new_external_thread(res_t locals_res, res_t stack_res, re
     capability sealed_locals =  cheri_seal(locals, locals->cds);
 
     // Now sign
-    single_use_cert cert = rescap_take_authed(sign_res, NULL, 0, AUTH_SINGLE_USE_CERT, own_auth, NULL, sealed_locals).scert;
+    single_use_cert cert = rescap_take_authed(sign_res, NULL, 0, own_auth, NULL, sealed_locals, AUTH_SINGLE_USE_CERT).scert;
 
     return cert;
 }
@@ -149,7 +149,7 @@ int server_start(void) {
 
     _safe cap_pair pair;
 
-    if_cert = rescap_take_authed(if_res, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, AUTH_CERT, own_auth, NULL, NULL).cert;
+    if_cert = rescap_take_authed(if_res, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, own_auth, NULL, NULL, AUTH_CERT).cert;
 
     assert(if_cert != NULL);
 

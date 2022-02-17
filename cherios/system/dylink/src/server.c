@@ -200,7 +200,7 @@ _Static_assert(MULTI_PROCESS_LINK == 0, "TODO");
     if(was_secure_loaded) {
         res_t res = get_early_res(RES_CERT_META_SIZE);
         signed_info = rescap_take_authed(res, NULL, 0,
-                AUTH_CERT, own_auth, NULL, cheri_andperm(&own_info,CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP)).cert;
+                own_auth, NULL, cheri_andperm(&own_info,CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP), AUTH_CERT).cert;
     }
 
     set_info_functions(&own_info);

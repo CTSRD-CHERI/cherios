@@ -111,7 +111,7 @@ int response5(requester_t eve_req) {
     // Create a certificate for our interface
     res_t reser = cap_malloc(RES_CERT_META_SIZE + sizeof(ful_pack));
     _safe cap_pair pair;
-    cert_t ff_cert = rescap_take_authed(reser, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, AUTH_CERT, own_auth, NULL, NULL).cert;
+    cert_t ff_cert = rescap_take_authed(reser, &pair, CHERI_PERM_LOAD | CHERI_PERM_LOAD_CAP, own_auth, NULL, NULL, AUTH_CERT).cert;
 
     assert(ff_cert);
 
@@ -135,7 +135,7 @@ int main(void) {
 
     // Make a certificate of the proper response
     res_t res = cap_malloc(RES_CERT_META_SIZE);
-    response_cert = rescap_take_authed(res, NULL, CHERI_PERM_LOAD, AUTH_CERT, own_auth, NULL, READ_ONLY(PROPER_RESPONSE)).cert;
+    response_cert = rescap_take_authed(res, NULL, CHERI_PERM_LOAD, own_auth, NULL, READ_ONLY(PROPER_RESPONSE), AUTH_CERT).cert;
 
     // Make a certificate for the socket
 
