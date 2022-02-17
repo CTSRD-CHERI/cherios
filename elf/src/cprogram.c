@@ -97,9 +97,6 @@ queue_t* setup_c_program(Elf_Env* env, reg_frame_t* frame, image* im, register_t
     /* Setup thread local reg */
     frame->cf_idc = NULL;
 
-    /* Setup the global reg */
-    frame->cf_global = NULL;
-
     /* set stack */
     frame->cf_stack = stack;
     /* TODO: Set unsafe stack here */

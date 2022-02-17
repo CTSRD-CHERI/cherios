@@ -66,7 +66,10 @@
 START_FUNC start_common
 
     # Save arguments that would be clobbered (8/9 and  and 18-27 do not need saving)
-    SPILL_STACK(abi_cert, abi_tls_proto, abi_nano_req_auth, abi_proc_ref, abi_carg, abi_arg, abi_tls_mem_size)
+    SPILL_STACK(abi_cert, abi_tls_proto, abi_nano_req_auth, abi_proc_ref, abi_carg, abi_arg, abi_tls_mem_size, abi_dynamic_vaddr, abi_dynamic_size)
+
+    # Make a null safe stack
+    cmove           abi_unsafe, cnull
 
     # Load (currently unbounded) tables to bootstrap. We assume these symbols are in these segments, or rather,
     # The loader should provide the correct offsets to find these symbols.

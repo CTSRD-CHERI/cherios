@@ -51,6 +51,10 @@ START_HIDDEN_FUNC start
 # code_write_cap
 # data_seg_offset
 
+# TODO RISCV
+# abi_dynamic_vaddr
+# abi_dynamic_size
+
 # We also have a few extra arguments from foundation_enter, which mostly just need saving
 # ca5: foundation_data cap
 # ca6/idc: likely null, but would be the unlocked idc
@@ -187,9 +191,6 @@ loop_end:
     cgetlen         tmp2, abi_code_write
     csetbounds      ctmp1, ctmp1, tmp2
     csc             ctmp1, 0(ctmp0)
-
-# Make a null safe stack
-    cmove           abi_unsafe, cnull
 
 call_func_early start_common
 
