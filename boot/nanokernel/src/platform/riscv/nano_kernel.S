@@ -602,9 +602,9 @@ source_pass_through:
 NANO_FUNC critical_section_enter
 ########################################
 
-# TODO
+    csrci           sstatus, RISCV_STATUS_SIE
 
-# Should return a hart ID
+# TODO Should return a hart ID
     li a0, 0
     NANO_RET
 
@@ -613,7 +613,8 @@ NANO_FUNC critical_section_enter
 NANO_FUNC critical_section_exit
 ####################################
 
-# TODO
+    csrsi           sstatus, RISCV_STATUS_SIE
+
     NANO_RET
 
 ####################################################################
