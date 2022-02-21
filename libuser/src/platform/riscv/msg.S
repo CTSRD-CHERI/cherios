@@ -118,7 +118,7 @@ msg_loop:
 return_before_pop:
     beqz            a3, pop_msg
     li              a4, 0
-    #  ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, int hint_switch), __VA_ARGS__)          \
+    #  ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, int hint_switch), __VA_ARGS__)
     call_func       message_reply
 pop_msg:
     clw             t3, HEADER_LEN_OFFSET(queue)    # load length
@@ -178,6 +178,12 @@ overflow:
     cmove           ca3, ct1
     j               msg_loop_er
 return_to_caller:
+    # Might still have a mesage to return
+    beqz            a3, pop_frame
+    li              a4, 0
+    #  ITEM(message_reply, int, (capability c3, register_t v0, register_t v1, act_reply_kt caller, int hint_switch), __VA_ARGS__)
+    call_func       message_reply
+pop_frame:
     RESTORE_STACK(stack_spills)
     cret
 END_FUNC msg_entry
