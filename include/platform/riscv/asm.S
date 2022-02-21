@@ -72,8 +72,8 @@
 
 .macro cllc_rel dst, sym
     # This is the PC relative cllc, which only works with global bounds
-    1: auipcc       \dst, %pcrel_hi(\sym)
-    cincoffset      \dst, \dst, %pcrel_lo(1b)
+    77: auipcc       \dst, %pcrel_hi(\sym)
+    cincoffset      \dst, \dst, %pcrel_lo(77b)
 .endm
 
 .macro op_any_i5 rout, rin, constant, tmp, op
@@ -299,3 +299,18 @@
     .word   0
 .endm
 
+# This is the ccall2 variant that allows unsealed arguments
+.macro ccall2 c1, c2, tmp, ctmp
+    cgettype    \tmp, \c1
+    bgtz        \tmp, 1f
+# WARN: Moving to abi_local changes exception handling domain, so we have to set bounds
+# WARN: on PCC in order to not leak in case an an exception is caused by the jr c1
+    cllc_rel    \ctmp, 2f
+    csetbounds  \ctmp, \ctmp, 8
+    cjr         \ctmp
+2:
+    cmove       c31, \c2
+    cjr         \c1
+1:
+    cinvoke     \c1, \c2
+.endm
