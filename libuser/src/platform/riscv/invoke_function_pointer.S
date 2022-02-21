@@ -29,9 +29,33 @@
  */
 
 #include "asm.S"
+#include "dylink.h"
 
 START_FUNC call_function_pointer_arg_mem
 
-// TODO RISCV
+clc             ct2, CTLP_OFFSET_CDS(abi_local)
+load_func_reg   ct3, plt_common_complete_trusting, t3
+beqz            t2, mode_trusting               # Use complete trust if cds is NULL
+load_func_reg   ct3, plt_common_untrusting, t3  # otherwise use untrusting
+mode_trusting:
+.weak invoke_c1
+.weak invoke_c2
+GET_TLS_SYM     (PLT_REG_TARGET, invoke_c1)
+GET_TLS_SYM     (PLT_REG_TARGET_DATA, invoke_c2)
+
+# Try to shortcircuit
+CSetEqualExact  t4, PLT_REG_TARGET, abi_local
+beqz            t4, go_via_helper
+# We are making an in domain call, might still have to unseal
+cgetsealed      t3, PLT_REG_TARGET
+beqz            t3, handle_trusted
+.set offset_trusted, (3 * 4)
+.set offset_untrusted, (5 * 4)
+cunseal         PLT_REG_TARGET, PLT_REG_TARGET, ct2
+cincoffset      PLT_REG_TARGET, PLT_REG_TARGET, offset_untrusted - offset_trusted
+handle_trusted:
+cincoffset      ct3, PLT_REG_TARGET, offset_trusted
+go_via_helper:
+cjr             ct3
 
 END_FUNC call_function_pointer_arg_mem
