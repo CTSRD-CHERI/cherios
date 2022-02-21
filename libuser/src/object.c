@@ -219,9 +219,8 @@ void object_init(act_control_kt self_ctrl, queue_t * queue,
     int flags = MSG_NO_CAPS | SOCKF_DRB_INLINE | SOCKF_SOCK_INLINE;
 
 #define MAKE_STD_SOCK(S,IPC_NO)                                                                                 \
-        S.sock.write.push_writer = socket_malloc_requester_32(SOCK_TYPE_PUSH, &S.sock.write_copy_buffer);          \
-            res = message_send(0,0,0,0,                                                                         \
-                               socket_make_ref_for_fulfill(S.sock.write.push_writer), NULL, NULL, NULL,         \
+        S.sock.write.push_writer = socket_malloc_requester_32(SOCK_TYPE_PUSH, &S.sock.write_copy_buffer);       \
+        res = message_send(MARSHALL_ARGUMENTS(socket_make_ref_for_fulfill(S.sock.write.push_writer)),           \
                                uart, SYNC_CALL, IPC_NO);                                                        \
         assert(res == 0);                                                                                       \
         socket_requester_connect(S.sock.write.push_writer);                                            \

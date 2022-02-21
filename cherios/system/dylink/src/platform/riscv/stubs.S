@@ -90,22 +90,44 @@
 # If we are completely trusting this never gets called            #
 ###################################################################
 
+.set STACK_PASSED_ARG_SIZE, (4 * CAP_SIZE)
+
 STUB_BEGIN  entry_stub
     # TODO: all sorts of secure things. This just forces fallthrough to trusting entry
     # PLT_REG_TARGET (t1) contains an address to jump to
     # Perform CFI check
     DOMAIN_CHANGE_CHECKED ctlp, callable_ready, callable_taken, 0, t0, t2, entry_stub_trap
     # Save cra. The standard entry will reload csp, so we need to save the adjustment.
+
+    cmove       ct0, csp
+
     clc         csp, CTLP_OFFSET_CSP(ctlp)
-    cincoffset  csp, csp, -CAP_SIZE
-    csc         cra, 0(csp)
+    cincoffset  csp, csp, -(CAP_SIZE+STACK_PASSED_ARG_SIZE)
+    csc         cra, STACK_PASSED_ARG_SIZE(csp)
     csc         csp, CTLP_OFFSET_CSP(ctlp)
+
+    // This needs doing better, should be passed as an argument by the extra function entry
+    // as that knows how many stack passed arguments there will be
+    // For now, we just use STACK_PASSED_ARG_SIZE
+    cgetlen     t2, ct0
+    cgetoffset  t3, ct0
+    sub         t2, t2, t3          # How much space remains
+.macro copy_stack_arg glob, off
+    subi        t2, t2, CAP_SIZE
+    bltz        t2, no_more_space_on_stack
+    clc         ct3, \off(ct0)
+    csc         ct3, \off(csp)
+.endm
+
+    for_range   copy_stack_arg, g, 0, STACK_PASSED_ARG_SIZE, CAP_SIZE
+    no_more_space_on_stack:
+
     # Call function
     cjalr       cra, PLT_REG_TARGET
 
     # Restore CRA
-    clc         cra, 0(csp)
-    cincoffset  csp, csp, CAP_SIZE
+    clc         cra, STACK_PASSED_ARG_SIZE(csp)
+    cincoffset  csp, csp, CAP_SIZE + STACK_PASSED_ARG_SIZE
     csc         csp, CTLP_OFFSET_CSP(ctlp)
 
     # Exit domain
@@ -166,7 +188,7 @@ STUB_BEGIN  plt_common_complete_trusting
 
     cllc_rel    cra, plt_common_complete_trusting_return
     cmove       cs0, ctlp
-    cinvoke     PLT_REG_TARGET, PLT_REG_TARGET_DATA
+    ccall2      PLT_REG_TARGET, PLT_REG_TARGET_DATA, t2, ct2
 
 plt_common_complete_trusting_return:
     # restore everything (cgp need
@@ -196,7 +218,7 @@ STUB_BEGIN  plt_common_trusting
     cllc_rel    cra, plt_common_trusting_return
     cmove       cs0, ctlp
     DOMAIN_CHANGE_UNCHECKED ctlp, callable_taken, callable_ready, 1, t2
-    cinvoke     PLT_REG_TARGET, PLT_REG_TARGET_DATA
+    ccall2      PLT_REG_TARGET, PLT_REG_TARGET_DATA, t2, ct2
 
 plt_common_trusting_return:
     # restore everything (cgp need
@@ -220,7 +242,6 @@ STUB_BEGIN  plt_common_untrusting
 
     # We allocate on the (TODO: safe) stack a structure that has a pair of a guard_t and ctlp, which we reload
 
-.set STACK_PASSED_ARG_SIZE, (4 * CAP_SIZE)
 .set TOTAL_ALLOCATION_SIZE, ((12 + 1 + 1 + 1 + 1) * CAP_SIZE) # 12 saved regs + ra + saved csp + saved ctlp + guard
 
     cincoffset  ct2, csp, -TOTAL_ALLOCATION_SIZE
@@ -249,7 +270,13 @@ STUB_BEGIN  plt_common_untrusting
     # FIXME: for now, I'm just assumng this is some constant, so at least the template of how this looks will be here.
 
     # Bound CSP to pass stack args
+    # (if possible)
+    cgetoffset  t3, csp
+    add         t3, t3, STACK_PASSED_ARG_SIZE
+    cgetlen     t4, csp
+    bgtu        t3, t4, passing_would_trap
     csetbounds  csp, csp, STACK_PASSED_ARG_SIZE
+passing_would_trap:
 
     # Get a sealing cap
     clc         ct3, CTLP_OFFSET_CDS(ctlp)
@@ -268,7 +295,7 @@ STUB_BEGIN  plt_common_untrusting
     # t0 and t1 are holding PLT_REG_TARGET and PLT_REG_TARGET_DATA. cra s0 and s1 hold sealed thing. kill everything else.
     # FIXME: we still have the problem of callers being required to zero argument registers themselves. they should. but they dont.
     cclear_regs (gp, tp, t2, s2, s3, s4, s5, s6, s7, s8, s9, s10, s11, t3, t4, t5, t6)
-    cinvoke     PLT_REG_TARGET, PLT_REG_TARGET_DATA
+    ccall2      PLT_REG_TARGET, PLT_REG_TARGET_DATA, t2, ct2
 untrusting_return_trampoline:
     # WARN: this is where the non-atomic exception handling bug could occur
     # WARN: it is very important that this stub does not get access to any authority as the caller's IDC will still be present
