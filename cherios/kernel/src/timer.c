@@ -37,6 +37,7 @@
 #ifdef HAS_HIGH_DEF_TIME
 
 #define LOW_DEF_TIME_T uint64_t
+#define LOW_DEF_TIME_FMT "%lu"
 
 #else
 // It _seems_ that even on QEMU the timers from cp0 stay in sync
@@ -48,6 +49,7 @@ uint64_t high_resolution_timers[SMP_CORES];
 
 static uint32_t kernel_last_timer[SMP_CORES];
 #define LOW_DEF_TIME_T uint32_t
+#define LOW_DEF_TIME_FMT "%u"
 #endif
 
 // TODO everyone may wait on timeout, maybe just walk the list?
@@ -170,7 +172,7 @@ void kernel_timer_unsubcsribe(act_t* act) {
 
 void kernel_timer(uint8_t cpu_id)
 {
-	KERNEL_TRACE(__func__, "in %u", cpu_count_get());
+	KERNEL_TRACE(__func__, "in " LOW_DEF_TIME_FMT, cpu_count_get());
 
 	// Set the high solution timer. This must be done before it wraps around since last call.
 #ifdef HAS_HIGH_DEF_TIME

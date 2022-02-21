@@ -427,7 +427,8 @@ void sched_reschedule(act_t *hint, int in_exception_handler) {
 	sched_pool* pool = &sched_pools[pool_id];
 	act_t* kernel_curr_act = pool->current_act;
 
-    KERNEL_TRACE("sched", "being asked to schedule someone else in pool %d. in_exception_handler=%d. have %lu choices.",
+    KERNEL_TRACE("sched", "%s asking to schedule someone else in pool %d. in_exception_handler=%d. have %lu choices.",
+                 kernel_curr_act->name,
                  pool_id,
                  in_exception_handler,
                  pool->in_queues);
