@@ -120,25 +120,33 @@ typedef long		off_t;
 #define	cheri_getidc() cheri_getreg("c31")
 #define set_idc(X) cheri_setreg("c31", X)
 
+// NOTE: Relocations cannot be used with csc as they were designed for for clc and so will target the wrong portion of
+// the instruction. We could improve the relocation to know where the offset field is for different instructions,
+// but it also works to just use a cincoffset for the %lo portion.
+
 #define SET_FUNC(S, F)                              \
 __asm (".weak " # S";"                              \
        "lui t0, %%captab_call_hi(" #S ");"          \
        "cincoffset ct0, c3, t0;"                    \
-       "csc %[arg], %%captab_call_lo(" #S ")(ct0)"  \
+       "cincoffset ct0, ct0, %%captab_call_lo(" #S ");"\
+       "csc %[arg], 0(ct0)"                         \
        ::[arg]"C"(F):"memory","t0","ct0")
 
 #define SET_SYM(S, V)                               \
 __asm (".weak " # S";"                              \
        "lui t0, %%captab_hi(" #S ");"               \
        "cincoffset ct0, c3, t0;"                    \
-       "csc %[arg], %%captab_lo(" #S ")(ct0)"       \
+       "cincoffset ct0, ct0, %%captab_lo(" #S ");"  \
+       "csc %[arg], 0(ct0)"                         \
        ::[arg]"C"(V):"memory","t0","ct0")
 
 #define SET_TLS_SYM(S, V)                           \
-__asm (".weak " # S";"                              \
+__asm (".weak " #S ";"                              \
+       ".type " #S ", \"tls_object\"\n"             \
        "lui t0, %%captab_tls_hi(" #S ");"           \
        "cincoffset ct0, c31, t0;"                   \
-       "csc %[arg], %%captab_tls_lo(" #S ")(ct0)"   \
+       "cincoffset ct0, ct0, %%captab_tls_lo(" #S ");"\
+       "csc %[arg],0(ct0)"                          \
        ::[arg]"C"(V):"memory","t0","ct0")
 
 #define STORE_IDC_INDEX(index, value)               \
