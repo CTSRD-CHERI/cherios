@@ -66,32 +66,31 @@ static int condition_sleep_for_condition(volatile act_notify_kt* wait_cap, volat
     do {
 
         __asm__ __volatile(
-        "2: clr.c   ct1, 0(%[wc])           \n"
         "li     t0, 0xFFFF                  \n"
+        "2: clr.c   ct1, 0(%[wc])           \n"
         MAGIC_SAFE
         "li     %[res], 1                   \n"
         "clb    %[res], 0(%[cc])            \n"
         MAGIC_SAFE
-        "li     %[res], 2                   \n"
         "bnez   %[res], 1f                  \n"
         "clhu   %[res], 0(%[mc])            \n"
         MAGIC_SAFE
         "sub   %[res], %[res], %[im]        \n"
         "and   %[res], %[res], t0           \n"
         "sltu   %[res], %[res], %[cmp]      \n"
-        "li     %[res], 0                   \n"
-        "beqz   %[res], 1f                  \n"
+        "beqz   %[res], 2f                  \n"
         "csc.c  %[res], %[self], 0(%[wc])   \n"
-        "li     %[res], 1                   \n"
-        "beqz   %[res], 2b                  \n"
+        "bnez   %[res], 2b                  \n"
         "1:                                 \n"
+        "add    %[res], %[res], 1           \n"
+        "2:                                 \n"
         : [res]"=&r"(result)
         : [wc]"C"(wait_cap), [cc]"C"(cancelled_cap), [mc]"C"(monitor_cap),[self]"C"(n_token),
         [im]"r"(im_off), [cmp]"r"(comp_val)
         : "ct1", "t0", "memory"
         );
 
-        if(result == 2) {
+        if(result > 1) {
             *wait_cap = NULL;
             return CONDITION_CANCELLED;
         }
