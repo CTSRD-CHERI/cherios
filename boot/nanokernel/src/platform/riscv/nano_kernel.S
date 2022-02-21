@@ -1903,8 +1903,16 @@ tres_take_er:
 NANO_FUNC tres_revoke
     NANO_TODO
 
+###################################################
+# type_res_bitfield_t* tres_get_ro_bitfield(void) #
 NANO_FUNC tres_get_ro_bitfield
-    NANO_TODO
+###################################################
+    cinc_bi         ca0, abi_local, tres_bitfield, a1
+    li              a1, TRES_BITFIELD_SIZE
+    csetboundsexact ca0, ca0, a1
+    li              a1, CHERI_PERM_LOAD
+    candperm        ca0, ca0, a1
+    NANO_RET
 
 NANO_FUNC exception_subscribe
     # TODO: this should register for user exceptions
