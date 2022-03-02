@@ -1,22 +1,38 @@
 # CheriOS-microkernel
 
-CheriOS is a minimal microkernel that demonstrates "clean-slate" CHERI memory protection and object capabilities.
+CheriOS is a minimal microkernel that demonstrates "clean-slate" CHERI software enclaves, memory protection and object capabilities.
 
-This is Lawrence Esswood's branch, it has now substantially diverged from the original cherios and is very much work in progress. The major difference is the addition of a security hypervisor, the nano kernel. You can read about it elsewhere. It currently has: Virtual memory, multicore support, a file system, a network stack and a webserver. The nanokernel also offers some userspace primitives for integrity, confidentially, and attestation. The aim of this is to provide isolation between mutually distrusting compartments.
+This is Lawrence Esswood's fork of the original CheriOS microkernel, which was outlined by Robert N.M. Watson and implemented by Hadrien Barral.
+It has now substantially diverged from the original CheriOS.
+The major difference is an attempt to de-privilege the OS such that processes can exist in mutual distrust with the OS they run on.
+CheriOS augments CHERI architectures with a new abstraction, the 'nanokernel'.
+The nanokernel offers some userspace primitives for integrity, confidentially, and attestation, which are built upon by CheriOS to provide fine-grained software enclaves.
+You can read about [CheriOS] and its nanokernel. It offers far more coverge of how CheriOS works at a high level.
+This README contains instructions on building and developing CheriOS
+
+CheriOS has virtual memory, multicore support, a file system, a network stack (LWIP) and a webserver (NGINX).
+CheriOS was initially developed on CHERI-MIPS (which is still the most mature).
+There is a basic CHERI-RISCV port (see below), and the intention is to deprecate the MIPS version as the RISCV version becomes mature.
 
 ### Building CheriOS
 
 You need a Cheri SDK to build CheriOS. 
 
-The easiest way to get a CheriOS to work is by using [cheribuild], which will automically fetch all dependencies:
+The easiest way to get a CheriOS to work is by using [cheribuild], which will automically fetch all dependencies if the `-d` flag is provided:
 
 ```sh
-$ cheribuild.py cherios -d
+$ cheribuild.py cherios-mips64 -d
 ```
 
-This will, by default, build for QEMU 128, single core, without networking. Use the --cherios/smp-cores=X option to control the number of cores (1 and 2 have both been tested, but more should work). Use --cherios/build-net to enable networking.
+This will, by default, build for QEMU, single-core, without networking.
+By default, this will checkout all the projects to `$HOME/cheri` but this can be changed with `--source-root` or by using a JSON config file (`echo '{ "source-root": "/foo/bar" }' > ~/.config/cheribuild.json`).
+For more details see [the cheribuild README](https://github.com/CTSRD-CHERI/cheribuild/blob/master/README.md).
 
-By default this will checkout all the projects to `$HOME/cheri` but this can be changed with `--source-root` or by using a JSON config file (`echo '{ "source-root": "/foo/bar" }' > ~/.config/cheribuild.json`). For more details see [the cheribuild README](https://github.com/CTSRD-CHERI/cheribuild/blob/master/README.md).
+Use the `--cherios/smp-cores=X` option to control the number of cores (1 and 2 have both been tested, but more should work).
+
+Use `--cherios/build-net` to enable networking.
+
+The `cherios-riscv64` and `run-cherios-riscv64` targets will build and run for RISCV rather than MIPS. See RISCV progress for more.
 
 Building some CheriOS components requires python3 and some extra python modules listed in requirements.txt in the root cherios directory. Run:
 
@@ -30,68 +46,116 @@ CheriOS can be run on QEMU or FPGA.
 
 The following snipset shows how to use CheriBuild to run CheriOS on [cheri-qemu]:
 ```sh
-$ cheribuild.py run-cherios -d
+$ cheribuild.py run-cherios-mips64 -d
 ```
 
 The command line options are currently based on the default cherios target.
+
+Cheribuild will offer to create a file that represents the block device used by QEMU.
+You can resize this if desired.
+Running CheriOS once will cause CheriOS to format it as a FAT filesystem.
+Once this is done, you can mount it on the host as well.
+I would suggest _not_ mounting it concurrent to CheriOS operating.
 
 ### Running CheriOS with networking
 
 Build and run cherios with networking:
 
 ```sh
-$ cheribuild.py cherios --cherios/build-net
-$ cheribuild.py run-cherios --cherios/build-net
+$ cheribuild.py cherios-mips64 --cherios/build-net
+$ cheribuild.py run-cherios-mips64 --cherios/build-net
 ```
 
-You should already have a tap device set up called cherios_tap before running QEMU. Configuration for the GUEST can be found in cherios/system/lwip/include/hostconfig.h. You should select appropriate values.
+You should already have a tap device set up on the HOST called cherios_tap, before running QEMU.
+Configuration for the GUEST can be found in cherios/system/lwip/include/hostconfig.h.
+You should select appropriate values so your guest and host are on the same subnet etc.
 
 ### Code organisation
 
-CheriOS has most of its programs at the top level. The nano kernel and boot code are in the boot directory. All OS related things are in the cherios directory. You probably only care about the following:
+CheriOS has most of its non-system programs in its root directory.
+The nanokernel and boot code are in the boot directory.
+All OS related programs are in the cherios directory.
+The following are important:
 
-* __boot__: boot code. ALSO still contains the init code. If you want to disable things see the list in /boot/src/init/init.c
-* __boot/nanokernel__: nano kernel code
+* __boot__: boot code. ALSO still contains the init program. If you want to disable/enable programs being loaded during init, see the list in /boot/src/init/init.c
+* __boot/nanokernel__: nanokernel code. Provides reservations, foundations, CPU contexts, and wraps access to the architecture for the kernel.
 
-* __cherios/kernel__: kernel
+
+* __cherios/kernel__: kernel. Handles exceptions/interrupts, scheduling, and message-passing between activations. 
+
 
 * __cherios/core/namespace__: provides a directory of registered activations (see /include/namespace.h)
-* __cherios/core/memmgt__: provides the system-wide mmap (see /include/sys.mman.h)
+* __cherios/core/memmgt__: provides the system-wide memory map (see /include/sys.mman.h)
 * __cherios/core/proc_manager__: provides the process model for c/c++ programs (see include/thread.h)
+
+
 * __cherios/system/fatfs__: simple FAT filesystem module (see use include/cheristd.h for wrappers)
 * __cherios/system/lwip__: Web stack (see include/net.h for wrappers)
+* __cherios/system/libsocket__: The socket library. Most processes link agaist this as a dynamic library for their sockets.
+* __cherios/system/dylink__: The dynamic linker. CheriOS dynamic linking works by dynamic libraries statically building in a dynamic-linking server.
 
-
-* __libuser__: all modules are linked againt it. Provides several libc function as well as cherios-related functions
+* __libuser__: all modules are linked againt it. Provides several libc function as well as cherios-related functions.
 
 
 ### Writing a program
 
-There is handy template folder at the top level which you can copy and paste to create a new program. You will then need to add add_subdirectory(my_folder_name) to the top level CMakeLists.txt. This will generate an elf called my_folder_name.elf and also add it to the static file system. To run it during init, add an B_DENTRY(m_user, "my_folder_name.elf", 0,	1) entry to the list in /boot/src/init/init.c. 
+There is handy template folder at the top level which you can copy and paste to create a new program.
+You will then need to add add_subdirectory(my_folder_name) to the top level CMakeLists.txt.
+This will generate an elf called my_folder_name.elf and also add it to the static file system embedded in init.
+To run it during init, add an B_DENTRY(m_user, "my_folder_name.elf", 0,	1) entry to the list in /boot/src/init/init.c. 
 
-You can also copy and paste the secure_template, which automatically gets loaded into a foundation, uses temporally safe stacks, and distrusting calls by default. You will need to use m_secure rather than m_user in the list in init.
+You can also copy and paste the secure_template, which automatically gets loaded into a foundation, uses temporally safe stacks, and distrusting calls by default.
+You will need to use m_secure rather than m_user in the list in init.
 
 ### Getting reservations in userspace
 
-Reservations are a very heavily used feature, and many interfaces require a res_t. Get them using cap_malloc. Malloc is wrapper for cap_malloc that will convert the reservation to a memory capability. As well as malloc and free, there is now also a claim function. See /include/sys.mman.h about claiming. 
+Reservations (a type representing the right to 'request' some specific region of memory) are a very heavily used feature in CheriOS, and many interfaces require a res_t.
+Get them using cap_malloc, which has the same interface as malloc.
+Malloc is wrapper for cap_malloc that will convert the reservation to a memory capability.
+As well as malloc and free, there is now also a claim function.
+See /include/sys/mman.h about claiming at a page granularity.
+Malloc's malloc/claim/free work similarly but at an object granularity.
 
 ### Notes
 
-CheriOS-microkernel is still in a early state. It is liable to crash on startup on occasion. Some annoyances you might hit:
+CheriOS-microkernel is still in a early state. It is liable to crash on occasion. Some annoyances you might hit:
 
-* There is currently no distinction as to which programs are cruical to system operation. A crashing program (on in fact any user assert) will print a backtrace, and then just panic the kernel.
-* There is currently no dynamic-linker, all dynamic linking is performed by hand written / macro generated code. See cheriplt.h for helpful macros.
-* The block cache does not write back. If you want a persistant file store, remove the cache.
-* There is no interpreter. If you want input use the filesystem and/or TCP.
+* There is currently no distinction as to which programs are crucial to system operation. Some crashing programs will panic the system, but it is possible for an important service to die and leave the system broken.
+* Generic dynamic linking supported was added to CheriOS relatively late. However, some important processes (and even the microkernel itself!) are dynamic libraries. Dynamic linking of these older programs is performed by hand-written / macro-generated code. See cheriplt.h for helpful macros. These need migrating.
+* The block cache can, but has no trigger to write back. If you want a persistent file store, remove the cache, or manually trigger a writeback by sending the appropriate message to the cache.
+* There is no interpreter. If you want input use the filesystem (cheribuild creates a file that represents the block device QEMU uses) and/or TCP.
+* CheriOS can take any memory mapped ELF object (passed as a char*) to load a new program. Currently, every ELF object is just bundled into the 'init' ELF, which contains a list of programs to load. Some core-programs might need loading this way, but others should be migrated to be loaded from the filesystem.
+
+### RISCV Progress
+
+The RISCV port requires a [different branch] of the llvm compiler in order to work.
+
+* There are many `TODO RISCV` comments scattered about that need to be addressed.
+* Basic porting of the nanokernel, microkernel, and core services is done.
+* Multicore probably will not work.
+* Timer interrupts work, but no others do.
+* The only driver that is tested and working is the uart_16550.
+* Manual dynamic linking works. Generic does not. Changes to server.c and client.c will be required for general dynamic linking to work.
+* Secure loading of programs with foundations is functional (But the SHA256 has not been tested).
+* Safe stacks have been disabled. The CheriOS RISCV LLVM branch will insert the extra prolog/epilog code for safe stacks, but CheriOS does nothing with them. Getting safe stacks working would require changes in temporal.c
+* User exception delivery is not implemented (in the nanokernel and userspace)
+* Revocation is not implemented (in the nanokernel)
+* Proper backtracing does not work.
 
 ### Tips and tricks
 
-There is a HW_TRACE_ON and HW_TRACE_OFF macro to turn instruction level tracing on/off. If a section of code faults, it can be useful to surround with these macros. TRACE_ON / TRACE_OFF does a similar thing in assembly.
+There is a HW_TRACE_ON and HW_TRACE_OFF macro to turn instruction level tracing on/off.
+If a section of code faults, it can be useful to surround with these macros.
+TRACE_ON / TRACE_OFF does a similar thing in assembly.
 
-As debugging tools are limited, it is often useful to break all sandboxing. The obtain_super_powers nanokernel function will unbound the program counter to the entire address space, allow access to system registers, and also return a read/write capabilities to the entire address sace.
+As debugging tools are limited, it is often useful to break all sandboxing.
+The obtain_super_powers nanokernel function will unbound the program counter to the entire address space, allow access to system registers, and also return a read/write capabilities to the entire address space.
+It is not intended a system would ever be released with such a facility.
 
 If you want the kernel to go faster you can turn off a lot of debugging, or enable a LITE version in cherios/kernel/include/kernel.h.
 
    [cheri-qemu]: <https://github.com/CTSRD-CHERI/qemu>
    [LLVM]: <http://github.com/CTSRD-CHERI/llvm-project>
    [cheribuild]: <https://github.com/CTSRD-CHERI/cheribuild>
+   [CheriOS]: <https://www.cl.cam.ac.uk/techreports/UCAM-CL-TR-961.pdf>
+   [different branch]: <https://github.com/CTSRD-CHERI/llvm-project/tree/cherios_riscv>
