@@ -57,6 +57,12 @@ Running CheriOS once will cause CheriOS to format it as a FAT filesystem.
 Once this is done, you can mount it on the host as well.
 I would suggest _not_ mounting it concurrent to CheriOS operating.
 
+### Developer documentation
+
+Some more developer information can be found in the [docs](docs/docs_index.md) directory.
+You can also read more about [CheriOS] in the tech report.
+
+
 ### Running CheriOS with networking
 
 Build and run cherios with networking:
@@ -69,33 +75,6 @@ $ cheribuild.py run-cherios-mips64 --cherios/build-net
 You should already have a tap device set up on the HOST called cherios_tap, before running QEMU.
 Configuration for the GUEST can be found in cherios/system/lwip/include/hostconfig.h.
 You should select appropriate values so your guest and host are on the same subnet etc.
-
-### Code organisation
-
-CheriOS has most of its non-system programs in its root directory.
-The nanokernel and boot code are in the boot directory.
-All OS related programs are in the cherios directory.
-The following are important:
-
-* __boot__: boot code. ALSO still contains the init program. If you want to disable/enable programs being loaded during init, see the list in /boot/src/init/init.c
-* __boot/nanokernel__: nanokernel code. Provides reservations, foundations, CPU contexts, and wraps access to the architecture for the kernel.
-
-
-* __cherios/kernel__: kernel. Handles exceptions/interrupts, scheduling, and message-passing between activations. 
-
-
-* __cherios/core/namespace__: provides a directory of registered activations (see /include/namespace.h)
-* __cherios/core/memmgt__: provides the system-wide memory map (see /include/sys.mman.h)
-* __cherios/core/proc_manager__: provides the process model for c/c++ programs (see include/thread.h)
-
-
-* __cherios/system/fatfs__: simple FAT filesystem module (see use include/cheristd.h for wrappers)
-* __cherios/system/lwip__: Web stack (see include/net.h for wrappers)
-* __cherios/system/libsocket__: The socket library. Most processes link agaist this as a dynamic library for their sockets.
-* __cherios/system/dylink__: The dynamic linker. CheriOS dynamic linking works by dynamic libraries statically building in a dynamic-linking server.
-
-* __libuser__: all modules are linked againt it. Provides several libc function as well as cherios-related functions.
-
 
 ### Writing a program
 
