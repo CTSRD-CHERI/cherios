@@ -24,7 +24,7 @@ The following are important:
 * [__cherios/system/dylink__](dylink.md): The dynamic linker. CheriOS dynamic linking works by dynamic libraries statically building in a dynamic-linking server.
 
 * __libuser__: all modules are linked against it. Provides several libc functions as well as cherios-related functions.
-
+* [__libuser/src/capmalloc/capmalloc_slabs.cpp__](malloc.md) The latest malloc implementation for CheriOS. 
 ## Demos
 
 ## Alice Bob
