@@ -1598,11 +1598,7 @@ void __revoke(void) {
 
 #if(REVOKE_BENCH)
     tracking.revokes_started ++;
-#endif
-
-#if (REVOKE_BENCH && REVOKE_TIME)
     uint64_t before, after;
-
     if(revoke_bench_act) before = syscall_now();
 #endif
 
@@ -1613,13 +1609,11 @@ void __revoke(void) {
     size_t length = nfo.length + RES_META_SIZE;
     tracking.revoked_bytes += length;
     tracking.revokes_finished ++;
-#if(REVOKE_TIME)
     if(revoke_bench_act) {
         after = syscall_now();
 
         message_send(scanned, length, after - before, 0, NULL, NULL, NULL, NULL, revoke_bench_act, SEND, 0);
     }
-#endif
 #endif
 
     if(!cheri_gettag(res)) {
