@@ -195,15 +195,15 @@ init_elem_t init_list[] = {
     B_WAIT_FOR(namespace_num_tcp)
 #endif
 #if (B_BENCH)
-    B_DENTRY(m_user, bench_collect, 0, B_BENCH_COLLECT)
-    B_DENTRY(m_user, ping_dump, 0, B_BENCH_PINGER)
+    B_PENTRY(m_user, bench_collect, 0, B_BENCH_COLLECT)
+    B_PENTRY(m_user, ping_dump, 0, B_BENCH_PINGER)
 #if(B_BENCH_COLLECT)
     B_WAIT_FOR(namespace_num_bench)
 #endif
-    B_DENTRY(m_user, calls, 0, B_BENCH_CALLS)
-    B_DENTRY(m_user, message_send, 0, B_BENCH_MS)
-    B_DENTRY(m_user, exceptions, 0, B_BENCH_EXPS)
-    B_DENTRY(m_user, revoke_bench, 0, B_BENCH_REVOKE)
+    B_PENTRY(m_user, calls, 0, B_BENCH_CALLS)
+    B_PENTRY(m_user, message_send, 0, B_BENCH_MS)
+    B_PENTRY(m_user, exceptions, 0, B_BENCH_EXPS)
+    B_PENTRY(m_user, revoke_bench, 0, B_BENCH_REVOKE)
 #endif
 //	B_DENTRY(m_user,	test1b,		0,	B_T1)
 //	B_PENTRY(m_user,	prga,		1,	B_SO)
