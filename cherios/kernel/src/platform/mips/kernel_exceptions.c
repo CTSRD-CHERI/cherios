@@ -167,6 +167,11 @@ static void handle_exception_loop(context_t* own_context_ptr) {
             case MIPS_CP0_EXCODE_TRAP:
                 kernel_exception_trap(kernel_curr_act);
                 break;
+            case MIPS_CP0_EXCODE_MCHECK:
+                exception_printf(KRED"MCHECK ERROR: Check regdump for more info"KRST"\n");
+                regdump(-1, kernel_curr_act);
+                kernel_freeze();
+                break;
             default:
                 kernel_exception_unknown(excode, kernel_curr_act);
                 break;

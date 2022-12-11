@@ -297,18 +297,18 @@
 #define	MIPS_CP0_EXCODE_RES0	16	/* Reserved */
 #define	MIPS_CP0_EXCODE_RES1	17	/* Reserved */
 #define	MIPS_CP0_EXCODE_C2E	18	/* Capability coprocessor exception */
-#define	MIPS_CP0_EXCODE_RES3	19	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES4	20	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES5	21	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES6	22	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES7	23	/* Reserved */
-#define	MIPS_CP0_EXCODE_WATCH	24	/* Watchpoint exception */
-#define	MIPS_CP0_EXCODE_RES8	25	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES9	26	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES10	27	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES11	28	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES12	29	/* Reserved */
-#define	MIPS_CP0_EXCODE_RES13	30	/* Reserved */
+#define MIPS_CP0_EXCODE_TLBRI   19  /* TLB read-inhibit exception */
+#define MIPS_CP0_EXCODE_TLBXI   20  /* TLB execute-inhibit exception */
+#define MIPS_CP0_EXCODE_MSADIS  21  /* MSA disabled exception */
+#define MIPS_CP0_EXCODE_MDMX    22  /* MDMX exception */
+#define MIPS_CP0_EXCODE_DWATCH   23  /* Data Watchpoint exception */
+#define MIPS_CP0_EXCODE_MCHECK  24  /* Machine Check exception */
+#define MIPS_CP0_EXCODE_THREAD  25  /* Thread exception */
+#define MIPS_CP0_EXCODE_DSPDIS  26  /* DSP Module State Disabled ExceptionReserved */
+#define MIPS_CP0_EXCODE_RES2    27  /* Reserved */
+#define MIPS_CP0_EXCODE_RES3    28  /* Reserved */
+#define MIPS_CP0_EXCODE_RES4    29  /* Reserved */
+#define MIPS_CP0_EXCODE_CACHE   30  /* Cache error */
 #define	MIPS_CP0_EXCODE_VCED	31	/* Virtual coherency data exception */
 
 #define MIPS_CP0_EXCODE_NUM 32
